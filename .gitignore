@@ -1,0 +1,59 @@
+# ===========================
+# Unity generated files
+# ===========================
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+[Mm]emoryCaptures/
+# ===========================
+# IDE / Editor generated files
+# ===========================
+# Visual Studio
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+# VS Code
+.vscode/
+# Rider
+.idea/
+# Visual Studio Code / Visual Studio with Unity
+*.DotSettings.user
+# macOS
+.DS_Store
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+# ===========================
+# NuGet
+# ===========================
+*.nupkg
+**/[Pp]ackages/*
+!**/[Uu]nity[Pp]ackages/*
+!**/[Pp]ackages/manifest.json
+!**/[Pp]ackages/packages-lock.json
+# ===========================
+# Build outputs
+# ===========================
+*.apk
+*.aab
+*.unitypackage
+*.gz
+# ===========================
+# Crash reports
+# ===========================
+*.stackdump
+# ===========================
+# IMPORTANT: .meta files MUST be tracked
+# Do NOT add *.meta to this ignore list!
+# ===========================
