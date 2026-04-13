@@ -5,6 +5,8 @@ using UnityEngine.SceneManagement;
 
 public class GameScene : MonoBehaviour
 {
+    private const float ReferenceHeight = 1080f;
+    private const float PixelsPerUnit = 100f;
     private static bool sHookedSceneLoaded;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -51,6 +53,10 @@ public class GameScene : MonoBehaviour
     private void Start()
     {
         GameManager.CreateInstance();
+        if (Camera.main != null)
+        {
+            SetupMainCamera(Camera.main);
+        }
         CreateCenteredGameBoard();
         Debug.Log("GameScene initialized.");
     }
@@ -88,5 +94,26 @@ public class GameScene : MonoBehaviour
         spriteRenderer.sprite = sprite;
         spriteRenderer.sortingOrder = 0;
         gameBoardObject.transform.position = Vector3.zero;
+        FitSpriteToCamera(spriteRenderer, Camera.main);
+    }
+
+    private static void SetupMainCamera(Camera camera)
+    {
+        camera.orthographic = true;
+        camera.orthographicSize = ReferenceHeight / (2f * PixelsPerUnit);
+    }
+
+    private static void FitSpriteToCamera(SpriteRenderer spriteRenderer, Camera camera)
+    {
+        if (spriteRenderer == null || spriteRenderer.sprite == null || camera == null)
+        {
+            return;
+        }
+
+        var spriteSize = spriteRenderer.sprite.bounds.size;
+        var cameraWorldHeight = 2f * camera.orthographicSize;
+        var cameraWorldWidth = cameraWorldHeight * camera.aspect;
+        var scale = Mathf.Min(cameraWorldWidth / spriteSize.x, cameraWorldHeight / spriteSize.y);
+        spriteRenderer.transform.localScale = new Vector3(scale, scale, 1f);
     }
 }

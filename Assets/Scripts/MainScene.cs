@@ -4,6 +4,8 @@ using UnityEngine.SceneManagement;
 
 public class MainScene : MonoBehaviour
 {
+    private const float ReferenceHeight = 1080f;
+    private const float PixelsPerUnit = 100f;
     private const float MinSwipeDistance = 80f;
     private Vector2 swipeStart;
     private bool trackingSwipe;
@@ -27,6 +29,7 @@ public class MainScene : MonoBehaviour
 
         if (Camera.main != null)
         {
+            SetupMainCamera(Camera.main);
             Camera.main.backgroundColor = new Color(0.1f, 0.15f, 0.25f);
         }
 
@@ -73,6 +76,7 @@ public class MainScene : MonoBehaviour
         spriteRenderer.sprite = sprite;
         spriteRenderer.sortingOrder = -100;
         backgroundObject.transform.position = Vector3.zero;
+        FitSpriteToCamera(spriteRenderer, Camera.main);
     }
 
     private static void CreateCenteredPackage()
@@ -113,6 +117,26 @@ public class MainScene : MonoBehaviour
         spriteRenderer.sprite = sprite;
         spriteRenderer.sortingOrder = 10;
         packageObject.transform.position = Vector3.zero;
+    }
+
+    private static void SetupMainCamera(Camera camera)
+    {
+        camera.orthographic = true;
+        camera.orthographicSize = ReferenceHeight / (2f * PixelsPerUnit);
+    }
+
+    private static void FitSpriteToCamera(SpriteRenderer spriteRenderer, Camera camera)
+    {
+        if (spriteRenderer == null || spriteRenderer.sprite == null || camera == null)
+        {
+            return;
+        }
+
+        var spriteSize = spriteRenderer.sprite.bounds.size;
+        var cameraWorldHeight = 2f * camera.orthographicSize;
+        var cameraWorldWidth = cameraWorldHeight * camera.aspect;
+        var scale = Mathf.Min(cameraWorldWidth / spriteSize.x, cameraWorldHeight / spriteSize.y);
+        spriteRenderer.transform.localScale = new Vector3(scale, scale, 1f);
     }
 
     private void HandleSwipeInput()
