@@ -23,6 +23,8 @@ public class MainScene : MonoBehaviour
 
     private void Start()
     {
+        GameManager.CreateInstance();
+
         if (Camera.main != null)
         {
             Camera.main.backgroundColor = new Color(0.1f, 0.15f, 0.25f);
