@@ -1,24 +1,51 @@
 using System.IO;
+using System;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
 public class GameScene : MonoBehaviour
 {
+    private static bool sHookedSceneLoaded;
+
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Bootstrap()
     {
-        if (SceneManager.GetActiveScene().name != "GameScene")
+        if (!sHookedSceneLoaded)
+        {
+            SceneManager.sceneLoaded += OnSceneLoaded;
+            sHookedSceneLoaded = true;
+        }
+
+        TryBootstrap(SceneManager.GetActiveScene());
+    }
+
+    private static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        TryBootstrap(scene);
+    }
+
+    private static void TryBootstrap(Scene scene)
+    {
+        if (!IsGameScene(scene))
         {
             return;
         }
 
-        if (FindObjectOfType<GameScene>() != null)
+        if (FindObjectOfType<GameScene>() == null)
         {
-            return;
+            var bootstrapObject = new GameObject("GameSceneBootstrap");
+            bootstrapObject.AddComponent<GameScene>();
+        }
+    }
+
+    private static bool IsGameScene(Scene scene)
+    {
+        if (scene.name.Equals("GameScene", StringComparison.Ordinal))
+        {
+            return true;
         }
 
-        var bootstrapObject = new GameObject("GameSceneBootstrap");
-        bootstrapObject.AddComponent<GameScene>();
+        return scene.path.EndsWith("/GameScene.unity", StringComparison.OrdinalIgnoreCase);
     }
 
     private void Start()
