@@ -61,7 +61,12 @@ public class GameManager : MonoBehaviour
 
     public string GetBagFolderPath()
     {
-        return $"Sprites/Bag{mBagId:D3}";
+        return $"Textures/Game{mBagId:D3}";
+    }
+
+    public string GetGameBoard()
+    {
+        return Path.Combine(Application.dataPath, "Textures", $"Game{mBagId:D3}", "GameBoard.png");
     }
 
     public List<List<string>> LoadBagPieces(string bagFolderPath)

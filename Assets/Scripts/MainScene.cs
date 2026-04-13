@@ -47,7 +47,7 @@ public class MainScene : MonoBehaviour
             return;
         }
 
-        var imagePath = Path.Combine(Application.dataPath, "Backgrounds", "MainBg.png");
+        var imagePath = Path.Combine(Application.dataPath, "Textures", "MainBg.png");
         if (!File.Exists(imagePath))
         {
             Debug.LogWarning($"Background image not found: {imagePath}");
@@ -82,15 +82,15 @@ public class MainScene : MonoBehaviour
             return;
         }
 
-        var imagePath = Path.Combine(Application.dataPath, "Sprites", "PackImages", "Package01.png");
+        var imagePath = Path.Combine(Application.dataPath, "Textures", "PackImages", "Package01.png");
         if (!File.Exists(imagePath))
         {
-            imagePath = Path.Combine(Application.dataPath, "Sprites", "PackImages", "Package001.png");
+            imagePath = Path.Combine(Application.dataPath, "Textures", "PackImages", "Package001.png");
         }
 
         if (!File.Exists(imagePath))
         {
-            Debug.LogWarning("Package sprite not found in Assets/Sprites/PackImages.");
+            Debug.LogWarning("Package sprite not found in Assets/Textures/PackImages.");
             return;
         }
 
