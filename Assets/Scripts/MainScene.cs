@@ -82,15 +82,15 @@ public class MainScene : MonoBehaviour
             return;
         }
 
-        var imagePath = Path.Combine(Application.dataPath, "Sprites", "Packages", "Package01.png");
+        var imagePath = Path.Combine(Application.dataPath, "Sprites", "PackImages", "Package01.png");
         if (!File.Exists(imagePath))
         {
-            imagePath = Path.Combine(Application.dataPath, "Sprites", "Packages", "Package001.png");
+            imagePath = Path.Combine(Application.dataPath, "Sprites", "PackImages", "Package001.png");
         }
 
         if (!File.Exists(imagePath))
         {
-            Debug.LogWarning("Package sprite not found in Assets/Sprites/Packages.");
+            Debug.LogWarning("Package sprite not found in Assets/Sprites/PackImages.");
             return;
         }
 
