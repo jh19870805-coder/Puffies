@@ -40,21 +40,27 @@
 - 补充资源有效性检查：
   - 碎片总数为 0 时告警；
   - 底图文件不存在时告警。
+- 在 `Assets/Models` 新增 `GameDefine` 基础定义文件：
+  - 新建 `GameDefine` 静态类，集中声明常用常量（场景名、资源目录、文件名、图片后缀、默认 `BagId`）；
+  - 按当前阶段需求精简为“仅保留宏定义常量”，移除结构体与额外数据声明，降低前置耦合。
 
 ### 3) 变更文件
 - `Assets/Scripts/MainScene.cs`
 - `Assets/Scripts/GameScene.cs`
 - `Assets/Models/GameManager.cs`
+- `Assets/Models/GameDefine.cs`
 - `Documents/ReadMe.md`
 
 ### 4) 自检记录
 - 对 `MainScene.cs`、`GameScene.cs` 与 `GameManager.cs` 执行诊断检查：未发现新增 linter 报错。
+- 对 `GameDefine.cs` 执行诊断检查：未发现新增 linter 报错。
 - 逻辑核对：
   - `MainScene` 已可创建并居中显示 `MainBackground`；
   - `MainScene` 仅在目标场景执行并保持初始化逻辑简洁；
-  - `GameScene` 已按 `GetBagFolderPath -> LoadBagPieces + GetGameBoard` 完成标准资源准备链路。
+  - `GameScene` 已按 `GetBagFolderPath -> LoadBagPieces + GetGameBoard` 完成标准资源准备链路；
+  - `GameDefine` 当前仅提供可复用的宏定义入口，结构体与额外数据定义已移除。
 
 ### 5) 当前状态与下一步
-- 当前状态：主场景具备“初始化 + 背景图显示”，游戏场景具备“初始化 + 卡包资源准备”。
+- 当前状态：主场景具备“初始化 + 背景图显示”，游戏场景具备“初始化 + 卡包资源准备”，模型层新增统一定义入口 `GameDefine`。
 - 下一步建议：在 `GameScene` 资源准备层之上追加拼图对象生成与交互模块，避免资源加载与玩法逻辑耦合。
 
