@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using System;
+using System.IO;
 
 public class MainScene : MonoBehaviour
 {
@@ -64,12 +65,63 @@ public class MainScene : MonoBehaviour
             SetupMainCamera(Camera.main);
         }
 
-        Debug.Log("MainScene init-only bootstrap completed.");
+        CreateCenteredBackground();
+        Debug.Log("MainScene bootstrap completed with centered background.");
     }
 
     private static void SetupMainCamera(Camera camera)
     {
         camera.orthographic = true;
         camera.orthographicSize = ReferenceHeight / (2f * PixelsPerUnit);
+    }
+
+    private static void CreateCenteredBackground()
+    {
+        if (GameObject.Find("MainBackground") != null)
+        {
+            return;
+        }
+
+        var imagePath = Path.Combine(Application.dataPath, "Textures", "MainBg.png");
+        if (!File.Exists(imagePath))
+        {
+            Debug.LogWarning($"Background image not found: {imagePath}");
+            return;
+        }
+
+        var imageBytes = File.ReadAllBytes(imagePath);
+        var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+        if (!texture.LoadImage(imageBytes))
+        {
+            Debug.LogWarning("Failed to load MainBg.png as a texture.");
+            return;
+        }
+
+        var sprite = Sprite.Create(
+            texture,
+            new Rect(0f, 0f, texture.width, texture.height),
+            new Vector2(0.5f, 0.5f),
+            100f);
+
+        var backgroundObject = new GameObject("MainBackground");
+        var spriteRenderer = backgroundObject.AddComponent<SpriteRenderer>();
+        spriteRenderer.sprite = sprite;
+        spriteRenderer.sortingOrder = -100;
+        backgroundObject.transform.position = Vector3.zero;
+        FitSpriteToCamera(spriteRenderer, Camera.main);
+    }
+
+    private static void FitSpriteToCamera(SpriteRenderer spriteRenderer, Camera camera)
+    {
+        if (spriteRenderer == null || spriteRenderer.sprite == null || camera == null)
+        {
+            return;
+        }
+
+        var spriteSize = spriteRenderer.sprite.bounds.size;
+        var cameraWorldHeight = 2f * camera.orthographicSize;
+        var cameraWorldWidth = cameraWorldHeight * camera.aspect;
+        var scale = Mathf.Min(cameraWorldWidth / spriteSize.x, cameraWorldHeight / spriteSize.y);
+        spriteRenderer.transform.localScale = new Vector3(scale, scale, 1f);
     }
 }
