@@ -64,6 +64,11 @@ public class GameManager : MonoBehaviour
         return $"Textures/Game{mBagId:D3}";
     }
 
+    public string GetBagPackagePath()
+    {
+        return $"Textures/PackImages/Package{mBagId:D3}.png";
+    }
+
     public string GetGameBoard()
     {
         return Path.Combine(Application.dataPath, "Textures", $"Game{mBagId:D3}", "GameBoard.png");

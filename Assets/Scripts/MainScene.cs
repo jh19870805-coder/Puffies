@@ -42,12 +42,13 @@ public class MainScene : MonoBehaviour
 
     private static bool IsMainScene(Scene scene)
     {
-        if (scene.name.Equals("MainScene", StringComparison.Ordinal))
+        if (scene.name.Equals("MainScene", StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }
 
-        return scene.path.EndsWith("/MainScene.unity", StringComparison.OrdinalIgnoreCase);
+        var normalizedPath = (scene.path ?? string.Empty).Replace("\\", "/");
+        return normalizedPath.EndsWith("/MainScene.unity", StringComparison.OrdinalIgnoreCase);
     }
 
     private void Start()
@@ -60,13 +61,13 @@ public class MainScene : MonoBehaviour
 
         GameManager.CreateInstance();
 
-        if (Camera.main != null)
+        var targetCamera = Camera.main;
+        if (targetCamera != null)
         {
-            SetupMainCamera(Camera.main);
+            SetupMainCamera(targetCamera);
         }
 
-        CreateCenteredBackground();
-        Debug.Log("MainScene bootstrap completed with centered background.");
+        CreateCenteredBackground(targetCamera);
     }
 
     private static void SetupMainCamera(Camera camera)
@@ -75,7 +76,7 @@ public class MainScene : MonoBehaviour
         camera.orthographicSize = ReferenceHeight / (2f * PixelsPerUnit);
     }
 
-    private static void CreateCenteredBackground()
+    private static void CreateCenteredBackground(Camera targetCamera)
     {
         if (GameObject.Find("MainBackground") != null)
         {
@@ -108,7 +109,7 @@ public class MainScene : MonoBehaviour
         spriteRenderer.sprite = sprite;
         spriteRenderer.sortingOrder = -100;
         backgroundObject.transform.position = Vector3.zero;
-        FitSpriteToCamera(spriteRenderer, Camera.main);
+        FitSpriteToCamera(spriteRenderer, targetCamera);
     }
 
     private static void FitSpriteToCamera(SpriteRenderer spriteRenderer, Camera camera)

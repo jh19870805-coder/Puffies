@@ -19,9 +19,21 @@
   - 在 `Start()` 中于相机初始化后调用 `CreateCenteredBackground()`；
   - 从 `Application.dataPath/Textures/MainBg.png` 读取资源并创建 `MainBackground`；
   - 使用 `FitSpriteToCamera()` 按相机可视区域等比适配并保持居中显示。
+- 针对“启动后看不到背景图”做兼容修复：
+  - 放宽 `IsMainScene` 判定（场景名忽略大小写，路径先做斜杠标准化）；
+  - 增加场景命中失败日志，便于定位是否误判导致初始化被跳过。
+- 针对“仍然看不到背景图”继续做可见性修复：
+  - 移除 `Start()` 的场景销毁分支，避免因场景命名偏差导致初始化提前退出；
+  - 背景图 `z` 坐标改为 `camera.z + 10`，确保位于相机前方可见范围；
+  - 增加背景创建成功日志（含贴图尺寸与 z 值），便于运行时验证是否创建成功。
+- 问题定位后进行代码收敛，移除排查期冗余逻辑：
+  - 恢复 `Start()` 的场景二次校验与非目标场景自销毁；
+  - 移除相机兜底查找与调试日志；
+  - 背景对象位置恢复为 `Vector3.zero`，保留基础相机适配。
 - 在 `GameScene` 中接入标准资源准备链路：
   - 通过 `GameManager.CreateInstance()` 获取实例；
   - 调用 `GetBagFolderPath()` 获取当前卡包目录；
+  - 在 `GameManager` 新增 `GetBagPackagePath()`，按 `bagId` 动态返回 `Textures/PackImages/Package{bagId:D3}.png`；
   - 调用 `GetGameBoard()` 获取底图绝对路径；
   - 调用 `LoadBagPieces(bagFolderPath)` 获取碎片分组列表；
   - 新增 `CountPieces(List<List<string>>)` 统计碎片总数并输出启动日志。
@@ -32,12 +44,14 @@
 ### 3) 变更文件
 - `Assets/Scripts/MainScene.cs`
 - `Assets/Scripts/GameScene.cs`
+- `Assets/Models/GameManager.cs`
 - `Documents/ReadMe.md`
 
 ### 4) 自检记录
-- 对 `MainScene.cs` 与 `GameScene.cs` 执行诊断检查：未发现新增 linter 报错。
+- 对 `MainScene.cs`、`GameScene.cs` 与 `GameManager.cs` 执行诊断检查：未发现新增 linter 报错。
 - 逻辑核对：
   - `MainScene` 已可创建并居中显示 `MainBackground`；
+  - `MainScene` 仅在目标场景执行并保持初始化逻辑简洁；
   - `GameScene` 已按 `GetBagFolderPath -> LoadBagPieces + GetGameBoard` 完成标准资源准备链路。
 
 ### 5) 当前状态与下一步
