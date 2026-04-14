@@ -1,4 +1,3 @@
-using System.IO;
 using System;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -52,49 +51,18 @@ public class GameScene : MonoBehaviour
 
     private void Start()
     {
+        if (!IsGameScene(SceneManager.GetActiveScene()))
+        {
+            Destroy(gameObject);
+            return;
+        }
+
         GameManager.CreateInstance();
         if (Camera.main != null)
         {
             SetupMainCamera(Camera.main);
         }
-        CreateCenteredGameBoard();
-        Debug.Log("GameScene initialized.");
-    }
-
-    private static void CreateCenteredGameBoard()
-    {
-        if (GameObject.Find("GameBoard") != null)
-        {
-            return;
-        }
-
-        var imagePath = GameManager.CreateInstance().GetGameBoard();
-        if (!File.Exists(imagePath))
-        {
-            Debug.LogWarning($"GameBoard image not found: {imagePath}");
-            return;
-        }
-
-        var imageBytes = File.ReadAllBytes(imagePath);
-        var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
-        if (!texture.LoadImage(imageBytes))
-        {
-            Debug.LogWarning($"Failed to load GameBoard texture: {imagePath}");
-            return;
-        }
-
-        var sprite = Sprite.Create(
-            texture,
-            new Rect(0f, 0f, texture.width, texture.height),
-            new Vector2(0.5f, 0.5f),
-            100f);
-
-        var gameBoardObject = new GameObject("GameBoard");
-        var spriteRenderer = gameBoardObject.AddComponent<SpriteRenderer>();
-        spriteRenderer.sprite = sprite;
-        spriteRenderer.sortingOrder = 0;
-        gameBoardObject.transform.position = Vector3.zero;
-        FitSpriteToCamera(spriteRenderer, Camera.main);
+        Debug.Log("GameScene init-only bootstrap completed.");
     }
 
     private static void SetupMainCamera(Camera camera)
@@ -103,17 +71,4 @@ public class GameScene : MonoBehaviour
         camera.orthographicSize = ReferenceHeight / (2f * PixelsPerUnit);
     }
 
-    private static void FitSpriteToCamera(SpriteRenderer spriteRenderer, Camera camera)
-    {
-        if (spriteRenderer == null || spriteRenderer.sprite == null || camera == null)
-        {
-            return;
-        }
-
-        var spriteSize = spriteRenderer.sprite.bounds.size;
-        var cameraWorldHeight = 2f * camera.orthographicSize;
-        var cameraWorldWidth = cameraWorldHeight * camera.aspect;
-        var scale = Mathf.Min(cameraWorldWidth / spriteSize.x, cameraWorldHeight / spriteSize.y);
-        spriteRenderer.transform.localScale = new Vector3(scale, scale, 1f);
-    }
 }
