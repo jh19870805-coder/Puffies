@@ -1,3 +1,28 @@
+using System;
+
+[Serializable]
+public struct PackagePieceData
+{
+    public string Sprite;
+    public int x;
+    public int y;
+    public int z;
+}
+
+[Serializable]
+public struct PackagePieceGroupData
+{
+    public PackagePieceData[] Items;
+}
+
+[Serializable]
+public struct PackageConfigData
+{
+    public string PackageId;
+    public string Board;
+    public PackagePieceGroupData[] Pieces;
+}
+
 public static class GameDefine
 {
     // Scene names
