@@ -41,7 +41,7 @@ public class MainScene : MonoBehaviour
             return;
         }
 
-        GameManager.CreateInstance();
+        GameManager.Initialize();
 
         var targetCamera = Camera.main;
         if (targetCamera != null)
@@ -97,9 +97,7 @@ public class MainScene : MonoBehaviour
     /// </summary>
     private void CreateCenteredPackageSprite()
     {
-        var packagePath = GameManager.Instance != null
-            ? GameManager.Instance.GetBagPackagePath()
-            : $"{GameDefine.TexturesRoot}/{GameDefine.PackImagesFolder}/{GameDefine.PackageFilePrefix}{GameDefine.DefaultBagId:D3}{GameDefine.ImageExtPng}";
+        var packagePath = GameManager.GetBagPackagePath();
 
         mMainPackageRenderer = CreateCenteredSpriteObject(
             MainPackageObjectName,
@@ -193,8 +191,7 @@ public class MainScene : MonoBehaviour
         }
 
         mHasSwitchedToGameScene = true;
-        var gameManager = GameManager.CreateInstance();
-        gameManager.EnterGameScene(MainPackageBagId);
+        GameManager.EnterGameScene(MainPackageBagId);
     }
 
     /// <summary>

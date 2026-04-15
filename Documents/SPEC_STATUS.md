@@ -25,6 +25,7 @@
 - 问题反馈：创建第二组碎片时 gameboard 会闪动。
 - 新需求：整理整个工程，能统一接口的代码尽量合并，删除重复冗余实现。
 - 新需求：添加一个播放游戏动画的工具类。
+- 新需求：将 GameManager 从单例组件模式改为 Unity 常用工具类模式。
 
 ## Progress Snapshot
 
@@ -56,6 +57,8 @@
   - 已将跨场景的“创建 Sprite 对象”逻辑收敛到 `GameCommonUtility.CreateSpriteRendererObject(...)`。
   - 已将鼠标/触屏输入分发模板收敛到 `GameCommonUtility.ProcessPointerInput(...)`。
   - 已删除 MainScene / GameScene 内重复的 `SetupMainCamera` 包装方法，改为直接调用公共接口。
+  - 已删除 MainScene / GameScene 内重复相机初始化中间层，全部直接使用 `GameCommonUtility.SetupOrthographicCamera(...)`。
+  - 已将 `GameManager` 重构为 `static` 工具类，并清理所有 `CreateInstance/Instance` 调用点。
   - 已新增 `GameAnimationUtility`，支持位移、缩放、透明度动画与缓动。
 - 进行中：
   - 等待你回归验证统一接口改造后交互行为保持一致。

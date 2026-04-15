@@ -5,59 +5,32 @@ using System.IO;
 using System.Linq;
 using UnityEngine.SceneManagement;
 
-public class GameManager : MonoBehaviour
+public static class GameManager
 {
-    public static GameManager Instance { get; private set; }
-    public bool IsInitialized { get; private set; }
-    private int mBagId;
+    private static int sBagId = GameDefine.DefaultBagId;
+    private static bool sIsInitialized;
 
     /// <summary>
-    /// 用途：在首个场景加载前预创建 GameManager 单例。返回：无。
+    /// 用途：在首个场景加载前初始化运行时状态。返回：无。
     /// </summary>
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     private static void Bootstrap()
     {
-        CreateInstance();
-    }
-
-    /// <summary>
-    /// 用途：创建或获取 GameManager 单例实例，并确保完成初始化。返回：GameManager 单例对象。
-    /// </summary>
-    /// <returns>返回：可用的 GameManager 实例。</returns>
-    public static GameManager CreateInstance()
-    {
-        if (Instance != null)
-        {
-            return Instance;
-        }
-
-        var existing = FindObjectOfType<GameManager>();
-        if (existing != null)
-        {
-            Instance = existing;
-            Instance.Initialize();
-            return Instance;
-        }
-
-        var gameManagerObject = new GameObject(nameof(GameManager));
-        Instance = gameManagerObject.AddComponent<GameManager>();
-        Instance.Initialize();
-        return Instance;
+        Initialize();
     }
 
     /// <summary>
     /// 用途：初始化运行时默认状态，只在首次调用时生效。返回：无。
     /// </summary>
-    public void Initialize()
+    public static void Initialize()
     {
-        if (IsInitialized)
+        if (sIsInitialized)
         {
             return;
         }
 
-        mBagId = GameDefine.DefaultBagId;
-        IsInitialized = true;
-        DontDestroyOnLoad(gameObject);
+        sBagId = GameDefine.DefaultBagId;
+        sIsInitialized = true;
         Debug.Log("GameManager initialized.");
     }
 
@@ -65,25 +38,25 @@ public class GameManager : MonoBehaviour
     /// 用途：获取当前生效的包编号。返回：包编号整数值。
     /// </summary>
     /// <returns>返回：当前包编号。</returns>
-    public int GetBagId()
+    public static int GetBagId()
     {
-        return mBagId;
+        return sBagId;
     }
 
     /// <summary>
     /// 用途：设置当前使用的包编号。返回：无。
     /// </summary>
     /// <param name="bagId">参数：目标包编号。</param>
-    public void SetBagId(int bagId)
+    public static void SetBagId(int bagId)
     {
-        mBagId = bagId;
+        sBagId = bagId;
     }
 
     /// <summary>
     /// 用途：设置目标卡包编号并切换到游戏场景。返回：无。
     /// </summary>
     /// <param name="bagId">参数：进入游戏场景时要使用的卡包编号。</param>
-    public void EnterGameScene(int bagId)
+    public static void EnterGameScene(int bagId)
     {
         SetBagId(bagId);
         SceneManager.LoadScene(GameDefine.SceneGame);
@@ -93,7 +66,7 @@ public class GameManager : MonoBehaviour
     /// 用途：获取当前包对应的资源文件夹相对路径。返回：包资源目录路径字符串。
     /// </summary>
     /// <returns>返回：形如 Textures/Game001 的相对路径。</returns>
-    public string GetBagFolderPath()
+    public static string GetBagFolderPath()
     {
         return $"{GameDefine.TexturesRoot}/{GetBagFolderName()}";
     }
@@ -102,7 +75,7 @@ public class GameManager : MonoBehaviour
     /// 用途：获取当前包封面图片相对路径。返回：封面图片路径字符串。
     /// </summary>
     /// <returns>返回：形如 Textures/PackImages/Package001.png 的相对路径。</returns>
-    public string GetBagPackagePath()
+    public static string GetBagPackagePath()
     {
         return $"{GameDefine.TexturesRoot}/{GameDefine.PackImagesFolder}/{GameDefine.PackageFilePrefix}{GetBagIdText()}{GameDefine.ImageExtPng}";
     }
@@ -111,7 +84,7 @@ public class GameManager : MonoBehaviour
     /// 用途：获取当前包配置 Json 的相对路径。返回：配置文件路径字符串。
     /// </summary>
     /// <returns>返回：形如 Configs/Package001.json 的相对路径。</returns>
-    public string GetBagConfigPath()
+    public static string GetBagConfigPath()
     {
         return $"{GameDefine.ConfigsRoot}/{GameDefine.PackageFilePrefix}{GetBagIdText()}{GameDefine.ConfigExtJson}";
     }
@@ -120,7 +93,7 @@ public class GameManager : MonoBehaviour
     /// 用途：获取当前包棋盘图片在磁盘上的绝对路径。返回：棋盘图片绝对路径。
     /// </summary>
     /// <returns>返回：GameBoard 图片文件完整路径。</returns>
-    public string GetGameBoard()
+    public static string GetGameBoard()
     {
         return Path.Combine(Application.dataPath, GameDefine.TexturesRoot, GetBagFolderName(), GameDefine.GameBoardFileName);
     }
@@ -131,7 +104,7 @@ public class GameManager : MonoBehaviour
     /// <param name="configPath">参数：配置文件路径，支持绝对路径或相对 Assets 路径。</param>
     /// <param name="packageConfig">参数：输出的包配置结构体，失败时为默认值。</param>
     /// <returns>返回：true 表示解析成功，false 表示失败。</returns>
-    public bool TryLoadPackageConfig(string configPath, out PackageConfigData packageConfig)
+    public static bool TryLoadPackageConfig(string configPath, out PackageConfigData packageConfig)
     {
         packageConfig = default;
         if (string.IsNullOrWhiteSpace(configPath))
@@ -173,7 +146,7 @@ public class GameManager : MonoBehaviour
     /// </summary>
     /// <param name="bagFolderPath">参数：包资源目录路径，支持 Assets 相对路径。</param>
     /// <returns>返回：外层为分组、内层为图片路径的二维列表。</returns>
-    public List<List<string>> LoadBagPieces(string bagFolderPath)
+    public static List<List<string>> LoadBagPieces(string bagFolderPath)
     {
         var pieceGroups = new List<List<string>>();
         if (string.IsNullOrWhiteSpace(bagFolderPath))
@@ -268,16 +241,16 @@ public class GameManager : MonoBehaviour
     /// 用途：获取当前包编号的三位文本表示。返回：三位编号字符串。
     /// </summary>
     /// <returns>返回：形如 001 的编号文本。</returns>
-    private string GetBagIdText()
+    private static string GetBagIdText()
     {
-        return mBagId.ToString("D3");
+        return sBagId.ToString("D3");
     }
 
     /// <summary>
     /// 用途：获取当前包资源目录名。返回：目录名字符串。
     /// </summary>
     /// <returns>返回：形如 Game001 的目录名。</returns>
-    private string GetBagFolderName()
+    private static string GetBagFolderName()
     {
         return $"{GameDefine.GameFolderPrefix}{GetBagIdText()}";
     }
@@ -389,20 +362,5 @@ public class GameManager : MonoBehaviour
         }
 
         return output.ToString();
-    }
-
-    /// <summary>
-    /// 用途：Unity 生命周期回调，确保场景中仅保留一个 GameManager 单例并完成初始化。返回：无。
-    /// </summary>
-    private void Awake()
-    {
-        if (Instance != null && Instance != this)
-        {
-            Destroy(gameObject);
-            return;
-        }
-
-        Instance = this;
-        Initialize();
     }
 }

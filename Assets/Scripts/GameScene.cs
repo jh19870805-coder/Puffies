@@ -63,14 +63,13 @@ public class GameScene : MonoBehaviour
             return;
         }
 
-        var gameManager = GameManager.CreateInstance();
         if (Camera.main != null)
         {
             GameCommonUtility.SetupOrthographicCamera(Camera.main, ReferenceHeight, PixelsPerUnit);
         }
 
-        var selectedBagId = gameManager.GetBagId();
-        PrepareBagResources(gameManager, selectedBagId);
+        var selectedBagId = GameManager.GetBagId();
+        PrepareBagResources(selectedBagId);
         Debug.Log("GameScene bootstrap completed with bag resources prepared.");
     }
 
@@ -88,20 +87,13 @@ public class GameScene : MonoBehaviour
     /// <summary>
     /// 用途：根据当前包配置准备棋盘和拼图碎片资源路径，并输出资源统计信息。返回：无。
     /// </summary>
-    /// <param name="gameManager">参数：用于读取包配置与资源路径的 GameManager 实例。</param>
     /// <param name="bagId">参数：本次进入游戏场景时要加载的卡包编号。</param>
-    private void PrepareBagResources(GameManager gameManager, int bagId)
+    private void PrepareBagResources(int bagId)
     {
-        if (gameManager == null)
-        {
-            Debug.LogWarning("GameManager is null, cannot prepare bag resources.");
-            return;
-        }
-
-        gameManager.SetBagId(bagId);
-        _activeBagFolderPath = gameManager.GetBagFolderPath();
-        var configPath = gameManager.GetBagConfigPath();
-        if (!gameManager.TryLoadPackageConfig(configPath, out _activePackageConfig))
+        GameManager.SetBagId(bagId);
+        _activeBagFolderPath = GameManager.GetBagFolderPath();
+        var configPath = GameManager.GetBagConfigPath();
+        if (!GameManager.TryLoadPackageConfig(configPath, out _activePackageConfig))
         {
             Debug.LogWarning($"Failed to load package config: {configPath}");
             return;
