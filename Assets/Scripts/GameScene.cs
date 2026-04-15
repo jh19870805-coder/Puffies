@@ -27,6 +27,7 @@ public class GameScene : MonoBehaviour
     private PackageConfigData _activePackageConfig;
     private SpriteRenderer _gameBoardRenderer;
     private List<List<SpriteRenderer>> _grooveRenderersByGroup = new List<List<SpriteRenderer>>();
+    private bool _isBoardAndGroovesInitialized;
     private readonly List<DraggablePieceState> _currentGroupDraggables = new List<DraggablePieceState>();
     private int _currentGroupIndex = -1;
     private DraggablePieceState _draggingPiece;
@@ -115,14 +116,13 @@ public class GameScene : MonoBehaviour
         }
 
         _activeGameBoardPath = _activePackageConfig.Board;
-        _gameBoardRenderer = CreateGameBoard(_activePackageConfig.Board);
+        EnsureBoardAndGroovesInitialized();
         if (_gameBoardRenderer == null)
         {
             Debug.LogWarning($"GameBoard create failed: {_activePackageConfig.Board}");
             return;
         }
 
-        _grooveRenderersByGroup = CreateAllPieces(_activePackageConfig, _gameBoardRenderer);
         CreateDraggableGroup(0);
         FitGamePageToCamera(_gameBoardRenderer, CollectCurrentVisibleRenderers());
         _activePieceGroups = ConvertConfigToPieceGroups(_activePackageConfig);
@@ -131,6 +131,26 @@ public class GameScene : MonoBehaviour
         Debug.Log(
             $"GameScene bag resources ready. Folder={_activeBagFolderPath}, " +
             $"Board={_activeGameBoardPath}, Groups={_activePieceGroups?.Count ?? 0}, Pieces={pieceCount}");
+    }
+
+    /// <summary>
+    /// 用途：确保棋盘和凹槽只在单次游戏进入时初始化一次。返回：无。
+    /// </summary>
+    private void EnsureBoardAndGroovesInitialized()
+    {
+        if (_isBoardAndGroovesInitialized)
+        {
+            return;
+        }
+
+        _gameBoardRenderer = CreateGameBoard(_activePackageConfig.Board);
+        if (_gameBoardRenderer == null)
+        {
+            return;
+        }
+
+        _grooveRenderersByGroup = CreateAllPieces(_activePackageConfig, _gameBoardRenderer);
+        _isBoardAndGroovesInitialized = true;
     }
 
     /// <summary>
@@ -308,6 +328,26 @@ public class GameScene : MonoBehaviour
             renderers.Add(_gameBoardRenderer);
         }
 
+        if (_grooveRenderersByGroup != null)
+        {
+            for (var groupIndex = 0; groupIndex < _grooveRenderersByGroup.Count; groupIndex++)
+            {
+                var group = _grooveRenderersByGroup[groupIndex];
+                if (group == null)
+                {
+                    continue;
+                }
+
+                for (var i = 0; i < group.Count; i++)
+                {
+                    if (group[i] != null)
+                    {
+                        renderers.Add(group[i]);
+                    }
+                }
+            }
+        }
+
         for (var i = 0; i < _currentGroupDraggables.Count; i++)
         {
             var pieceRenderer = _currentGroupDraggables[i].PieceRenderer;
@@ -465,7 +505,6 @@ public class GameScene : MonoBehaviour
         if (_activePackageConfig.Pieces != null && nextGroupIndex < _activePackageConfig.Pieces.Length)
         {
             CreateDraggableGroup(nextGroupIndex);
-            FitGamePageToCamera(_gameBoardRenderer, CollectCurrentVisibleRenderers());
             return;
         }
 
