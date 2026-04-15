@@ -16,6 +16,8 @@
 - 新需求：修改 GameScene 创建逻辑，切场景时传入卡包 id（先使用默认值）。
 - 新需求：进入 GameScene 后根据 bagId 创建对应 GameBoard，解析对应 JSON，并将第一组碎片在 GameBoard 左侧一列等距排列。
 - 新需求：设置所有页面运行后都能看到整个页面。
+- 新需求：GameScene 按 JSON 创建所有碎片，并按相对 GameBoard 的 x/y 坐标定位。
+- 坐标系补充：贴图坐标以碎片中心为锚点，左下为原点。
 
 ## Progress Snapshot
 
@@ -35,8 +37,10 @@
   - 已实现按配置第一组碎片在 GameBoard 左侧一列等距排布。
   - 已新增通用相机框选方法 `FitOrthographicCameraToRenderers(...)`。
   - 已在 MainScene 与 GameScene 接入页面内容自动框选，保证页面整体可见。
+  - 已将 GameScene 碎片创建改为“全量分组全量碎片”，并按 JSON 中 x/y 相对棋盘坐标落位。
+  - 已将坐标换算改为“左下原点 + 中心锚点”规则。
 - 进行中：
-  - 等待你验证不同分辨率下页面完整可见效果。
+  - 等待你验证碎片坐标系方向（y 轴上下）与策划数据是否一致。
 - 未完成：
   - 如需进一步调阈值、增加滑动反馈动画或音效，进入下一轮调整。
 
@@ -48,27 +52,30 @@
 
 - MainScene 与 GameScene 运行后都能看到页面完整内容，不出现内容裁切。
 - 在保持现有布局逻辑前提下，增加相机自动框选机制。
-- 验收标准：两页面在运行时均完整可见主要内容。
+- GameScene 需按配置生成全部碎片并正确对齐到棋盘相对坐标。
+- 验收标准：两页面完整可见，且 GameScene 中全部碎片按配置坐标准确显示。
 
 ## P - Plan
 
 - 在 `GameCommonUtility` 增加通用相机框选方法。
 - MainScene：按背景+卡包精灵联合边界自适配相机。
 - GameScene：按棋盘+第一组碎片联合边界自适配相机。
+- GameScene：将“第一组左列展示”替换为“全量碎片按配置坐标展示”。
 
 ## E - Execute
 
 - 已完成：`GameCommonUtility` 新增 `FitOrthographicCameraToRenderers(...)`。
 - 已完成：MainScene 在创建背景与包图后自动框选可视范围。
 - 已完成：GameScene 在创建棋盘与第一组碎片后自动框选可视范围。
+- 已完成：GameScene 读取全部分组碎片，按 `x/y` 相对棋盘坐标创建并定位。
 - 当前状态：功能已完成，等待运行验收。
 
 ## C - Check
 
 - 检查方式：针对 `GameCommonUtility.cs`、`MainScene.cs`、`GameScene.cs` 执行 lints。
 - 检查结果：无新增 linter 报错。
-- 已知风险：若后续新增大量页面元素，可能需要重新定义“哪些元素参与相机框选”。
+- 已知风险：若配置坐标系与当前转换规则不一致（例如 y 轴方向定义不同），需要微调坐标换算。
 
 ## Next Action
 
-- 运行 MainScene 与 GameScene 回归验证完整可见性；如需边距微调可直接给目标值。
+- 运行 MainScene 右滑进入 GameScene，验证全部碎片坐标是否与棋盘期望位置一致；若 y 轴方向反了我可立即调整换算。

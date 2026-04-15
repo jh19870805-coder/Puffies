@@ -8,14 +8,12 @@ public class GameScene : MonoBehaviour
 {
     private const float ReferenceHeight = 1080f;
     private const float PixelsPerUnit = 100f;
-    private const float PieceLeftPadding = 0.5f;
-    private const float PieceVerticalSpacing = 0.2f;
     private const float GamePageCameraPadding = 0.3f;
     private const int GameBoardSortingOrder = 0;
     private const int PieceSortingOrder = 10;
     private const string BootstrapObjectName = "GameSceneBootstrap";
     private const string GameBoardObjectName = "GameBoard";
-    private const string FirstGroupRootObjectName = "FirstGroupPieces";
+    private const string AllPiecesRootObjectName = "AllPieces";
     private static bool sHookedSceneLoaded;
     private string _activeBagFolderPath;
     private string _activeGameBoardPath;
@@ -95,8 +93,8 @@ public class GameScene : MonoBehaviour
             return;
         }
 
-        var firstGroupRenderers = CreateFirstGroupPieces(_activePackageConfig, boardRenderer);
-        FitGamePageToCamera(boardRenderer, firstGroupRenderers);
+        var pieceRenderers = CreateAllPieces(_activePackageConfig, boardRenderer);
+        FitGamePageToCamera(boardRenderer, pieceRenderers);
         _activePieceGroups = ConvertConfigToPieceGroups(_activePackageConfig);
         var pieceCount = CountPieces(_activePieceGroups);
 
@@ -117,11 +115,12 @@ public class GameScene : MonoBehaviour
     }
 
     /// <summary>
-    /// 用途：读取配置第一组碎片并在棋盘左侧按单列等间距创建。返回：无。
+    /// 用途：读取配置中的全部碎片并按相对棋盘坐标创建。返回：已创建碎片渲染器列表。
     /// </summary>
     /// <param name="config">参数：当前卡包配置数据。</param>
     /// <param name="boardRenderer">参数：已创建的棋盘精灵渲染器。</param>
-    private List<SpriteRenderer> CreateFirstGroupPieces(PackageConfigData config, SpriteRenderer boardRenderer)
+    /// <returns>返回：所有成功创建的碎片渲染器。</returns>
+    private List<SpriteRenderer> CreateAllPieces(PackageConfigData config, SpriteRenderer boardRenderer)
     {
         var createdRenderers = new List<SpriteRenderer>();
         if (boardRenderer == null || config.Pieces == null || config.Pieces.Length == 0)
@@ -129,53 +128,65 @@ public class GameScene : MonoBehaviour
             return createdRenderers;
         }
 
-        var firstGroup = config.Pieces[0].Items;
-        if (firstGroup == null || firstGroup.Length == 0)
-        {
-            return createdRenderers;
-        }
-
-        var existingRoot = GameObject.Find(FirstGroupRootObjectName);
+        var existingRoot = GameObject.Find(AllPiecesRootObjectName);
         if (existingRoot != null)
         {
             Destroy(existingRoot);
         }
 
-        var root = new GameObject(FirstGroupRootObjectName);
-        var boardBounds = boardRenderer.bounds;
-        var firstPieceRenderer = CreateSpriteObject($"FirstPiece_0", $"{GameDefine.TexturesRoot}/{firstGroup[0].Sprite}", PieceSortingOrder, root.transform);
-        if (firstPieceRenderer == null)
+        var root = new GameObject(AllPiecesRootObjectName);
+        var boardTextureSize = boardRenderer.sprite.rect.size;
+        for (var groupIndex = 0; groupIndex < config.Pieces.Length; groupIndex++)
         {
-            return createdRenderers;
-        }
-
-        var firstPieceHeight = firstPieceRenderer.bounds.size.y;
-        var firstPieceHalfWidth = firstPieceRenderer.bounds.extents.x;
-        var startX = boardBounds.min.x - PieceLeftPadding - firstPieceHalfWidth;
-        var totalHeight = (firstGroup.Length - 1) * (firstPieceHeight + PieceVerticalSpacing);
-        var startY = boardBounds.center.y + totalHeight * 0.5f;
-
-        firstPieceRenderer.transform.position = new Vector3(startX, startY, 0f);
-        createdRenderers.Add(firstPieceRenderer);
-
-        for (var i = 1; i < firstGroup.Length; i++)
-        {
-            var pieceRenderer = CreateSpriteObject(
-                $"FirstPiece_{i}",
-                $"{GameDefine.TexturesRoot}/{firstGroup[i].Sprite}",
-                PieceSortingOrder,
-                root.transform);
-            if (pieceRenderer == null)
+            var items = config.Pieces[groupIndex].Items;
+            if (items == null || items.Length == 0)
             {
                 continue;
             }
 
-            var y = startY - i * (firstPieceHeight + PieceVerticalSpacing);
-            pieceRenderer.transform.position = new Vector3(startX, y, 0f);
-            createdRenderers.Add(pieceRenderer);
+            for (var itemIndex = 0; itemIndex < items.Length; itemIndex++)
+            {
+                var piece = items[itemIndex];
+                var pieceRenderer = CreateSpriteObject(
+                    $"Piece_{groupIndex}_{itemIndex}",
+                    $"{GameDefine.TexturesRoot}/{piece.Sprite}",
+                    PieceSortingOrder + piece.z,
+                    root.transform,
+                    forceCreate: true);
+                if (pieceRenderer == null)
+                {
+                    continue;
+                }
+
+                pieceRenderer.transform.position = ConvertBoardRelativeToWorldPosition(
+                    boardRenderer.transform.position,
+                    boardTextureSize,
+                    new Vector2(piece.x, piece.y));
+                createdRenderers.Add(pieceRenderer);
+            }
         }
 
         return createdRenderers;
+    }
+
+    /// <summary>
+    /// 用途：将棋盘相对坐标（像素，左下为原点且坐标点为碎片中心）转换为世界坐标。返回：世界坐标。
+    /// </summary>
+    /// <param name="boardWorldCenter">参数：棋盘中心的世界坐标。</param>
+    /// <param name="boardTextureSize">参数：棋盘纹理尺寸（像素）。</param>
+    /// <param name="relativePixelPosition">参数：配置中的相对坐标（x/y）。</param>
+    /// <returns>返回：转换后的世界坐标。</returns>
+    private static Vector3 ConvertBoardRelativeToWorldPosition(
+        Vector3 boardWorldCenter,
+        Vector2 boardTextureSize,
+        Vector2 relativePixelPosition)
+    {
+        var localX = (relativePixelPosition.x - boardTextureSize.x * 0.5f) / PixelsPerUnit;
+        var localY = (relativePixelPosition.y - boardTextureSize.y * 0.5f) / PixelsPerUnit;
+        return new Vector3(
+            boardWorldCenter.x + localX,
+            boardWorldCenter.y + localY,
+            0f);
     }
 
     /// <summary>
@@ -261,12 +272,20 @@ public class GameScene : MonoBehaviour
     /// <param name="sortingOrder">参数：渲染顺序。</param>
     /// <param name="parent">参数：父节点，传 null 表示无父节点。</param>
     /// <returns>返回：创建或已存在的 SpriteRenderer，失败返回 null。</returns>
-    private SpriteRenderer CreateSpriteObject(string objectName, string spritePath, int sortingOrder, Transform parent)
+    private SpriteRenderer CreateSpriteObject(
+        string objectName,
+        string spritePath,
+        int sortingOrder,
+        Transform parent,
+        bool forceCreate = false)
     {
-        var existing = GameObject.Find(objectName);
-        if (existing != null)
+        if (!forceCreate)
         {
-            return existing.GetComponent<SpriteRenderer>();
+            var existing = GameObject.Find(objectName);
+            if (existing != null)
+            {
+                return existing.GetComponent<SpriteRenderer>();
+            }
         }
 
         var sprite = CreateSpriteByPath(spritePath);
