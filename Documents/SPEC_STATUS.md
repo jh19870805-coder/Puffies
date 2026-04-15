@@ -1,6 +1,6 @@
 # SPEC 状态面板
 
-- Task: GameScene 分组拖拽吸附拼图流程
+- Task: 全工程统一接口收敛与冗余删除
 - Status: In Progress
 - Updated At: 2026-04-15
 - Auto-Update Mode: Enabled (Maintained by Codex)
@@ -23,6 +23,7 @@
 - 新需求：创建新组贴图时，保留 gameboard 和已吸附到凹槽的贴图不动。
 - 新需求：每次进游戏后，gameboard 和所有凹槽只创建一次；后续每组贴图创建时不改变它们。
 - 问题反馈：创建第二组碎片时 gameboard 会闪动。
+- 新需求：整理整个工程，能统一接口的代码尽量合并，删除重复冗余实现。
 
 ## Progress Snapshot
 
@@ -49,8 +50,13 @@
   - 已将“已吸附碎片”迁移到独立根节点，切换下一组时不会被清理。
   - 已增加棋盘/凹槽初始化保护，单次进场仅创建一次，后续只刷新左侧待拖拽组。
   - 已修复组切换闪动：移除“每组切换时相机重新适配”步骤，避免画面跳变。
+  - 已将图片加载与屏幕坐标转换收敛到 `GameCommonUtility` 统一接口。
+  - 已删除 `MainScene` / `GameScene` 内重复的 `CreateSpriteByPath` 与 `ScreenToWorld` 实现。
+  - 已将跨场景的“创建 Sprite 对象”逻辑收敛到 `GameCommonUtility.CreateSpriteRendererObject(...)`。
+  - 已将鼠标/触屏输入分发模板收敛到 `GameCommonUtility.ProcessPointerInput(...)`。
+  - 已删除 MainScene / GameScene 内重复的 `SetupMainCamera` 包装方法，改为直接调用公共接口。
 - 进行中：
-  - 等待你验证吸附半径与拖拽手感是否符合预期。
+  - 等待你回归验证统一接口改造后交互行为保持一致。
 - 未完成：
   - 如需进一步调阈值、增加滑动反馈动画或音效，进入下一轮调整。
 
@@ -64,7 +70,8 @@
 - 在保持现有布局逻辑前提下，增加相机自动框选机制。
 - GameScene 需按配置生成全部碎片并正确对齐到棋盘相对坐标。
 - 增加分组拖拽玩法流程：吸附/回弹/自动下一组/全部完成输出游戏结束。
-- 验收标准：可完成全部分组并输出“游戏结束”。
+- 统一重复接口并删除冗余实现，保持功能行为不变。
+- 验收标准：可完成全部分组并输出“游戏结束”，且无新增 lint 报错。
 
 ## P - Plan
 
@@ -73,6 +80,7 @@
 - GameScene：按棋盘+第一组碎片联合边界自适配相机。
 - GameScene：将“第一组左列展示”替换为“全量碎片按配置坐标展示”。
 - 新增拖拽状态机：命中检测、拖拽更新、吸附判定、组完成推进。
+- 将跨场景共用能力（Sprite 加载、屏幕坐标转换）统一抽到 `GameCommonUtility`。
 
 ## E - Execute
 
@@ -81,6 +89,7 @@
 - 已完成：GameScene 在创建棋盘与第一组碎片后自动框选可视范围。
 - 已完成：GameScene 读取全部分组碎片，按 `x/y` 相对棋盘坐标创建并定位。
 - 已完成：GameScene 左侧分组拖拽与吸附流程。
+- 已完成：重复接口统一与冗余实现清理。
 - 当前状态：功能已完成，等待运行验收。
 
 ## C - Check
@@ -91,4 +100,4 @@
 
 ## Next Action
 
-- 运行 MainScene 进入 GameScene，完整体验拖拽吸附与分组推进；如需调整吸附半径或左侧布局间距可直接给目标值。
+- 运行 MainScene 到 GameScene 做一轮回归；确认拖拽、吸附、组推进与通关日志行为正常。

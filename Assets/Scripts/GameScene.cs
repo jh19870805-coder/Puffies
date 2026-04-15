@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -67,7 +66,7 @@ public class GameScene : MonoBehaviour
         var gameManager = GameManager.CreateInstance();
         if (Camera.main != null)
         {
-            SetupMainCamera(Camera.main);
+            GameCommonUtility.SetupOrthographicCamera(Camera.main, ReferenceHeight, PixelsPerUnit);
         }
 
         var selectedBagId = gameManager.GetBagId();
@@ -80,17 +79,10 @@ public class GameScene : MonoBehaviour
     /// </summary>
     private void Update()
     {
-        HandleMouseDragInput();
-        HandleTouchDragInput();
-    }
-
-    /// <summary>
-    /// 用途：将指定相机设置为正交相机并按参考高度计算正交尺寸。返回：无。
-    /// </summary>
-    /// <param name="camera">参数：需要配置的相机对象。</param>
-    private static void SetupMainCamera(Camera camera)
-    {
-        GameCommonUtility.SetupOrthographicCamera(camera, ReferenceHeight, PixelsPerUnit);
+        GameCommonUtility.ProcessPointerInput(
+            TryBeginDrag,
+            UpdateDragging,
+            OnPointerEnd);
     }
 
     /// <summary>
@@ -361,53 +353,12 @@ public class GameScene : MonoBehaviour
     }
 
     /// <summary>
-    /// 用途：处理鼠标拖拽输入。返回：无。
+    /// 用途：统一输入结束阶段回调，转发到拖拽结束逻辑。返回：无。
     /// </summary>
-    private void HandleMouseDragInput()
+    /// <param name="screenPosition">参数：输入结束时的屏幕坐标。</param>
+    private void OnPointerEnd(Vector2 screenPosition)
     {
-        if (Input.GetMouseButtonDown(0))
-        {
-            TryBeginDrag(Input.mousePosition);
-        }
-
-        if (Input.GetMouseButton(0))
-        {
-            UpdateDragging(Input.mousePosition);
-        }
-
-        if (Input.GetMouseButtonUp(0))
-        {
-            EndDragging();
-        }
-    }
-
-    /// <summary>
-    /// 用途：处理触屏拖拽输入（首个触点）。返回：无。
-    /// </summary>
-    private void HandleTouchDragInput()
-    {
-        if (Input.touchCount <= 0)
-        {
-            return;
-        }
-
-        var touch = Input.GetTouch(0);
-        if (touch.phase == TouchPhase.Began)
-        {
-            TryBeginDrag(touch.position);
-            return;
-        }
-
-        if (touch.phase == TouchPhase.Moved || touch.phase == TouchPhase.Stationary)
-        {
-            UpdateDragging(touch.position);
-            return;
-        }
-
-        if (touch.phase == TouchPhase.Ended || touch.phase == TouchPhase.Canceled)
-        {
-            EndDragging();
-        }
+        EndDragging();
     }
 
     /// <summary>
@@ -421,7 +372,7 @@ public class GameScene : MonoBehaviour
             return;
         }
 
-        var world = ScreenToWorld(screenPosition);
+        var world = GameCommonUtility.ScreenToWorld(screenPosition);
         for (var i = _currentGroupDraggables.Count - 1; i >= 0; i--)
         {
             var state = _currentGroupDraggables[i];
@@ -453,7 +404,7 @@ public class GameScene : MonoBehaviour
             return;
         }
 
-        var world = ScreenToWorld(screenPosition);
+        var world = GameCommonUtility.ScreenToWorld(screenPosition);
         _draggingPiece.PieceRenderer.transform.position = new Vector3(
             world.x + _dragOffset.x,
             world.y + _dragOffset.y,
@@ -589,24 +540,6 @@ public class GameScene : MonoBehaviour
     }
 
     /// <summary>
-    /// 用途：将屏幕坐标转换为世界坐标。返回：世界坐标。
-    /// </summary>
-    /// <param name="screenPosition">参数：屏幕坐标。</param>
-    /// <returns>返回：世界坐标，若相机为空则返回零向量。</returns>
-    private static Vector3 ScreenToWorld(Vector2 screenPosition)
-    {
-        var camera = Camera.main;
-        if (camera == null)
-        {
-            return Vector3.zero;
-        }
-
-        var world = camera.ScreenToWorldPoint(new Vector3(screenPosition.x, screenPosition.y, -camera.transform.position.z));
-        world.z = 0f;
-        return world;
-    }
-
-    /// <summary>
     /// 用途：把配置中的碎片分组转换为路径二维列表，便于复用现有统计逻辑。返回：路径二维列表。
     /// </summary>
     /// <param name="config">参数：当前卡包配置数据。</param>
@@ -671,68 +604,13 @@ public class GameScene : MonoBehaviour
         Transform parent,
         bool forceCreate = false)
     {
-        if (!forceCreate)
-        {
-            var existing = GameObject.Find(objectName);
-            if (existing != null)
-            {
-                return existing.GetComponent<SpriteRenderer>();
-            }
-        }
-
-        var sprite = CreateSpriteByPath(spritePath);
-        if (sprite == null)
-        {
-            Debug.LogWarning($"Failed to create sprite from {spritePath}");
-            return null;
-        }
-
-        var go = new GameObject(objectName);
-        if (parent != null)
-        {
-            go.transform.SetParent(parent, worldPositionStays: true);
-        }
-
-        var renderer = go.AddComponent<SpriteRenderer>();
-        renderer.sprite = sprite;
-        renderer.sortingOrder = sortingOrder;
-        return renderer;
-    }
-
-    /// <summary>
-    /// 用途：根据资源路径读取图片并构建 Sprite。返回：Sprite 对象。
-    /// </summary>
-    /// <param name="imageResourcePath">参数：图片资源路径，支持绝对路径或相对 Assets 路径。</param>
-    /// <returns>返回：成功时为 Sprite，失败返回 null。</returns>
-    private static Sprite CreateSpriteByPath(string imageResourcePath)
-    {
-        if (string.IsNullOrWhiteSpace(imageResourcePath))
-        {
-            return null;
-        }
-
-        var imagePathOnDisk = GameCommonUtility.ToDiskPath(imageResourcePath);
-        if (!File.Exists(imagePathOnDisk))
-        {
-            Debug.LogWarning($"CreateSpriteByPath failed: file not found: {imagePathOnDisk}");
-            return null;
-        }
-
-        var imageBytes = File.ReadAllBytes(imagePathOnDisk);
-        var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
-        if (!texture.LoadImage(imageBytes))
-        {
-            Debug.LogWarning($"CreateSpriteByPath failed: invalid image file: {imagePathOnDisk}");
-            return null;
-        }
-
-        var imageSprite = Sprite.Create(
-            texture,
-            new Rect(0f, 0f, texture.width, texture.height),
-            new Vector2(0.5f, 0.5f),
-            PixelsPerUnit);
-        imageSprite.name = Path.GetFileNameWithoutExtension(imagePathOnDisk);
-        return imageSprite;
+        return GameCommonUtility.CreateSpriteRendererObject(
+            objectName,
+            spritePath,
+            sortingOrder,
+            PixelsPerUnit,
+            parent,
+            forceCreate);
     }
 
     /// <summary>

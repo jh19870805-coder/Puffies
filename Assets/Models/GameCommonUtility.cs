@@ -159,4 +159,156 @@ public static class GameCommonUtility
 
         return Path.Combine(Application.dataPath, normalizedPath);
     }
+
+    /// <summary>
+    /// 用途：将屏幕坐标转换为世界坐标。返回：世界坐标。
+    /// </summary>
+    /// <param name="screenPosition">参数：屏幕坐标。</param>
+    /// <param name="camera">参数：用于转换的相机，传 null 时自动使用主相机。</param>
+    /// <returns>返回：转换后的世界坐标，若无可用相机则返回零向量。</returns>
+    public static Vector3 ScreenToWorld(Vector2 screenPosition, Camera camera = null)
+    {
+        var targetCamera = camera != null ? camera : Camera.main;
+        if (targetCamera == null)
+        {
+            return Vector3.zero;
+        }
+
+        var world = targetCamera.ScreenToWorldPoint(new Vector3(screenPosition.x, screenPosition.y, -targetCamera.transform.position.z));
+        world.z = 0f;
+        return world;
+    }
+
+    /// <summary>
+    /// 用途：根据资源路径读取图片并构建 Sprite。返回：Sprite 对象。
+    /// </summary>
+    /// <param name="imageResourcePath">参数：图片资源路径，支持绝对路径或相对 Assets 路径。</param>
+    /// <param name="pixelsPerUnit">参数：构建 Sprite 时使用的 PPU。</param>
+    /// <returns>返回：成功时为 Sprite，失败返回 null。</returns>
+    public static Sprite LoadSpriteByPath(string imageResourcePath, float pixelsPerUnit)
+    {
+        if (string.IsNullOrWhiteSpace(imageResourcePath))
+        {
+            Debug.LogWarning("LoadSpriteByPath failed: imageResourcePath is empty.");
+            return null;
+        }
+
+        var imagePathOnDisk = ToDiskPath(imageResourcePath);
+        if (!File.Exists(imagePathOnDisk))
+        {
+            Debug.LogWarning($"LoadSpriteByPath failed: file not found: {imagePathOnDisk}");
+            return null;
+        }
+
+        var imageBytes = File.ReadAllBytes(imagePathOnDisk);
+        var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+        if (!texture.LoadImage(imageBytes))
+        {
+            Debug.LogWarning($"LoadSpriteByPath failed: invalid image file: {imagePathOnDisk}");
+            return null;
+        }
+
+        var imageSprite = Sprite.Create(
+            texture,
+            new Rect(0f, 0f, texture.width, texture.height),
+            new Vector2(0.5f, 0.5f),
+            pixelsPerUnit);
+        imageSprite.name = Path.GetFileNameWithoutExtension(imagePathOnDisk);
+        return imageSprite;
+    }
+
+    /// <summary>
+    /// 用途：按资源路径创建精灵对象并返回渲染器，可选择复用同名对象。返回：精灵渲染器。
+    /// </summary>
+    /// <param name="objectName">参数：场景对象名。</param>
+    /// <param name="spritePath">参数：精灵资源路径。</param>
+    /// <param name="sortingOrder">参数：渲染顺序。</param>
+    /// <param name="pixelsPerUnit">参数：构建 Sprite 时使用的 PPU。</param>
+    /// <param name="parent">参数：父节点，传 null 表示无父节点。</param>
+    /// <param name="forceCreate">参数：是否强制新建同名对象而不复用。</param>
+    /// <returns>返回：创建或已存在的 SpriteRenderer，失败返回 null。</returns>
+    public static SpriteRenderer CreateSpriteRendererObject(
+        string objectName,
+        string spritePath,
+        int sortingOrder,
+        float pixelsPerUnit,
+        Transform parent = null,
+        bool forceCreate = false)
+    {
+        if (!forceCreate)
+        {
+            var existing = GameObject.Find(objectName);
+            if (existing != null)
+            {
+                return existing.GetComponent<SpriteRenderer>();
+            }
+        }
+
+        var sprite = LoadSpriteByPath(spritePath, pixelsPerUnit);
+        if (sprite == null)
+        {
+            return null;
+        }
+
+        var go = new GameObject(objectName);
+        if (parent != null)
+        {
+            go.transform.SetParent(parent, worldPositionStays: true);
+        }
+
+        var renderer = go.AddComponent<SpriteRenderer>();
+        renderer.sprite = sprite;
+        renderer.sortingOrder = sortingOrder;
+        return renderer;
+    }
+
+    /// <summary>
+    /// 用途：统一分发鼠标与触屏输入事件，按阶段回调 Begin/Move/End。返回：无。
+    /// </summary>
+    /// <param name="onBegin">参数：输入开始时的回调。</param>
+    /// <param name="onMove">参数：输入移动或按住时的回调。</param>
+    /// <param name="onEnd">参数：输入结束时的回调。</param>
+    public static void ProcessPointerInput(
+        Action<Vector2> onBegin,
+        Action<Vector2> onMove,
+        Action<Vector2> onEnd)
+    {
+        if (Input.touchCount > 0)
+        {
+            var touch = Input.GetTouch(0);
+            if (touch.phase == TouchPhase.Began)
+            {
+                onBegin?.Invoke(touch.position);
+                return;
+            }
+
+            if (touch.phase == TouchPhase.Moved || touch.phase == TouchPhase.Stationary)
+            {
+                onMove?.Invoke(touch.position);
+                return;
+            }
+
+            if (touch.phase == TouchPhase.Ended || touch.phase == TouchPhase.Canceled)
+            {
+                onEnd?.Invoke(touch.position);
+            }
+
+            return;
+        }
+
+        if (Input.GetMouseButtonDown(0))
+        {
+            onBegin?.Invoke(Input.mousePosition);
+        }
+
+        if (Input.GetMouseButton(0))
+        {
+            onMove?.Invoke(Input.mousePosition);
+        }
+
+        if (Input.GetMouseButtonUp(0))
+        {
+            onEnd?.Invoke(Input.mousePosition);
+        }
+    }
 }

@@ -1,6 +1,5 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using System.IO;
 
 public class MainScene : MonoBehaviour
 {
@@ -47,7 +46,7 @@ public class MainScene : MonoBehaviour
         var targetCamera = Camera.main;
         if (targetCamera != null)
         {
-            SetupMainCamera(targetCamera);
+            GameCommonUtility.SetupOrthographicCamera(targetCamera, ReferenceHeight, PixelsPerUnit);
         }
 
         var backgroundRenderer = CreateCenteredBackground(targetCamera);
@@ -73,17 +72,10 @@ public class MainScene : MonoBehaviour
             return;
         }
 
-        HandleMouseSwipeInput();
-        HandleTouchSwipeInput();
-    }
-
-    /// <summary>
-    /// 用途：将指定相机设置为正交投影并按参考分辨率计算正交尺寸。返回：无。
-    /// </summary>
-    /// <param name="camera">参数：需要配置的相机对象。</param>
-    private static void SetupMainCamera(Camera camera)
-    {
-        GameCommonUtility.SetupOrthographicCamera(camera, ReferenceHeight, PixelsPerUnit);
+        GameCommonUtility.ProcessPointerInput(
+            TryBeginSwipe,
+            onMove: null,
+            TryCompleteSwipe);
     }
 
     /// <summary>
@@ -133,24 +125,18 @@ public class MainScene : MonoBehaviour
         Camera camera,
         bool fitToCamera)
     {
-        var existingObject = GameObject.Find(objectName);
-        if (existingObject != null)
-        {
-            return existingObject.GetComponent<SpriteRenderer>();
-        }
-
-        var sprite = CreateSpriteByPath(spritePath);
-        if (sprite == null)
+        var spriteRenderer = GameCommonUtility.CreateSpriteRendererObject(
+            objectName,
+            spritePath,
+            sortingOrder,
+            PixelsPerUnit);
+        if (spriteRenderer == null)
         {
             Debug.LogWarning($"Failed to create sprite from {spritePath}.");
             return null;
         }
 
-        var backgroundObject = new GameObject(objectName);
-        var spriteRenderer = backgroundObject.AddComponent<SpriteRenderer>();
-        spriteRenderer.sprite = sprite;
-        spriteRenderer.sortingOrder = sortingOrder;
-        backgroundObject.transform.position = Vector3.zero;
+        spriteRenderer.transform.position = Vector3.zero;
 
         if (fitToCamera)
         {
@@ -161,70 +147,12 @@ public class MainScene : MonoBehaviour
     }
 
     /// <summary>
-    /// 用途：处理鼠标输入下的滑动检测，仅当起点和终点都在包图精灵内时才判定有效。返回：无。
-    /// </summary>
-    private void HandleMouseSwipeInput()
-    {
-        if (Input.GetMouseButtonDown(0))
-        {
-            HandleSwipeInput(true, false, Input.mousePosition);
-        }
-
-        if (Input.GetMouseButtonUp(0))
-        {
-            HandleSwipeInput(false, true, Input.mousePosition);
-        }
-    }
-
-    /// <summary>
-    /// 用途：处理触屏输入下的滑动检测，仅处理首个触点。返回：无。
-    /// </summary>
-    private void HandleTouchSwipeInput()
-    {
-        if (Input.touchCount <= 0)
-        {
-            return;
-        }
-
-        var touch = Input.GetTouch(0);
-        if (touch.phase == TouchPhase.Began)
-        {
-            HandleSwipeInput(true, false, touch.position);
-            return;
-        }
-
-        if (touch.phase == TouchPhase.Ended || touch.phase == TouchPhase.Canceled)
-        {
-            HandleSwipeInput(false, true, touch.position);
-        }
-    }
-
-    /// <summary>
-    /// 用途：统一处理滑动输入的开始与结束阶段分发，减少鼠标与触屏逻辑重复。返回：无。
-    /// </summary>
-    /// <param name="isBegin">参数：是否为滑动开始阶段。</param>
-    /// <param name="isEnd">参数：是否为滑动结束阶段。</param>
-    /// <param name="screenPosition">参数：当前输入对应的屏幕坐标。</param>
-    private void HandleSwipeInput(bool isBegin, bool isEnd, Vector2 screenPosition)
-    {
-        if (isBegin)
-        {
-            TryBeginSwipe(screenPosition);
-        }
-
-        if (isEnd)
-        {
-            TryCompleteSwipe(screenPosition);
-        }
-    }
-
-    /// <summary>
     /// 用途：尝试开始一次滑动记录，只有触点落在包图精灵内部才会启动跟踪。返回：无。
     /// </summary>
     /// <param name="screenPosition">参数：屏幕坐标输入位置。</param>
     private void TryBeginSwipe(Vector2 screenPosition)
     {
-        var worldPosition = ScreenToWorld(screenPosition);
+        var worldPosition = GameCommonUtility.ScreenToWorld(screenPosition);
         if (!IsPointInsideMainPackage(worldPosition))
         {
             mIsSwipeTracking = false;
@@ -247,7 +175,7 @@ public class MainScene : MonoBehaviour
         }
 
         mIsSwipeTracking = false;
-        var worldPosition = ScreenToWorld(screenPosition);
+        var worldPosition = GameCommonUtility.ScreenToWorld(screenPosition);
         if (!IsPointInsideMainPackage(worldPosition))
         {
             return;
@@ -267,24 +195,6 @@ public class MainScene : MonoBehaviour
         mHasSwitchedToGameScene = true;
         var gameManager = GameManager.CreateInstance();
         gameManager.EnterGameScene(MainPackageBagId);
-    }
-
-    /// <summary>
-    /// 用途：将屏幕坐标转换为世界坐标，供精灵范围判定与滑动方向计算使用。返回：世界坐标。
-    /// </summary>
-    /// <param name="screenPosition">参数：屏幕坐标。</param>
-    /// <returns>返回：转换后的世界坐标，未找到相机时返回零向量。</returns>
-    private static Vector3 ScreenToWorld(Vector2 screenPosition)
-    {
-        var camera = Camera.main;
-        if (camera == null)
-        {
-            return Vector3.zero;
-        }
-
-        var worldPosition = camera.ScreenToWorldPoint(new Vector3(screenPosition.x, screenPosition.y, -camera.transform.position.z));
-        worldPosition.z = 0f;
-        return worldPosition;
     }
 
     /// <summary>
@@ -318,41 +228,4 @@ public class MainScene : MonoBehaviour
         spriteRenderer.transform.localScale = new Vector3(scale, scale, 1f);
     }
 
-    /// <summary>
-    /// 用途：根据图片资源路径读取文件并创建 Sprite 资源对象。返回：创建后的 Sprite，失败返回 null。
-    /// </summary>
-    /// <param name="imageResourcePath">参数：图片资源路径，支持绝对路径或相对 Assets 的路径。</param>
-    /// <returns>返回：成功时为有效的 Sprite，失败时为 null。</returns>
-    public Sprite CreateSpriteByPath(string imageResourcePath)
-    {
-        if (string.IsNullOrWhiteSpace(imageResourcePath))
-        {
-            Debug.LogWarning("CreateSpriteByPath failed: imageResourcePath is empty.");
-            return null;
-        }
-
-        var imagePathOnDisk = GameCommonUtility.ToDiskPath(imageResourcePath);
-
-        if (!File.Exists(imagePathOnDisk))
-        {
-            Debug.LogWarning($"CreateSpriteByPath failed: file not found: {imagePathOnDisk}");
-            return null;
-        }
-
-        var imageBytes = File.ReadAllBytes(imagePathOnDisk);
-        var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
-        if (!texture.LoadImage(imageBytes))
-        {
-            Debug.LogWarning($"CreateSpriteByPath failed: invalid image file: {imagePathOnDisk}");
-            return null;
-        }
-
-        var imageSprite = Sprite.Create(
-            texture,
-            new Rect(0f, 0f, texture.width, texture.height),
-            new Vector2(0.5f, 0.5f),
-            PixelsPerUnit);
-        imageSprite.name = Path.GetFileNameWithoutExtension(imagePathOnDisk);
-        return imageSprite;
-    }
 }
