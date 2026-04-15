@@ -87,6 +87,59 @@ public static class GameCommonUtility
     }
 
     /// <summary>
+    /// 用途：根据一组渲染器的包围盒自动调整正交相机，确保页面内容完整可见。返回：无。
+    /// </summary>
+    /// <param name="camera">参数：需要调整的正交相机。</param>
+    /// <param name="padding">参数：在内容边界外额外保留的世界单位边距。</param>
+    /// <param name="renderers">参数：需要纳入可视范围计算的渲染器集合。</param>
+    public static void FitOrthographicCameraToRenderers(Camera camera, float padding, params Renderer[] renderers)
+    {
+        if (camera == null || !camera.orthographic || renderers == null || renderers.Length == 0)
+        {
+            return;
+        }
+
+        var hasBounds = false;
+        var combinedBounds = new Bounds(Vector3.zero, Vector3.zero);
+        for (var i = 0; i < renderers.Length; i++)
+        {
+            var renderer = renderers[i];
+            if (renderer == null)
+            {
+                continue;
+            }
+
+            if (!hasBounds)
+            {
+                combinedBounds = renderer.bounds;
+                hasBounds = true;
+                continue;
+            }
+
+            combinedBounds.Encapsulate(renderer.bounds);
+        }
+
+        if (!hasBounds)
+        {
+            return;
+        }
+
+        var targetPosition = camera.transform.position;
+        targetPosition.x = combinedBounds.center.x;
+        targetPosition.y = combinedBounds.center.y;
+        camera.transform.position = targetPosition;
+
+        var targetHalfHeight = combinedBounds.extents.y + padding;
+        var targetHalfWidth = combinedBounds.extents.x + padding;
+        if (camera.aspect > 0f)
+        {
+            targetHalfHeight = Mathf.Max(targetHalfHeight, targetHalfWidth / camera.aspect);
+        }
+
+        camera.orthographicSize = Mathf.Max(targetHalfHeight, 0.01f);
+    }
+
+    /// <summary>
     /// 用途：将资源路径统一转换为磁盘绝对路径。返回：可用于文件读取的绝对路径。
     /// </summary>
     /// <param name="resourcePath">参数：资源路径，支持绝对路径或相对 Assets 路径。</param>

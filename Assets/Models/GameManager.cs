@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using UnityEngine.SceneManagement;
 
 public class GameManager : MonoBehaviour
 {
@@ -79,6 +80,16 @@ public class GameManager : MonoBehaviour
     }
 
     /// <summary>
+    /// 用途：设置目标卡包编号并切换到游戏场景。返回：无。
+    /// </summary>
+    /// <param name="bagId">参数：进入游戏场景时要使用的卡包编号。</param>
+    public void EnterGameScene(int bagId)
+    {
+        SetBagId(bagId);
+        SceneManager.LoadScene(GameDefine.SceneGame);
+    }
+
+    /// <summary>
     /// 用途：获取当前包对应的资源文件夹相对路径。返回：包资源目录路径字符串。
     /// </summary>
     /// <returns>返回：形如 Textures/Game001 的相对路径。</returns>
@@ -94,6 +105,15 @@ public class GameManager : MonoBehaviour
     public string GetBagPackagePath()
     {
         return $"{GameDefine.TexturesRoot}/{GameDefine.PackImagesFolder}/{GameDefine.PackageFilePrefix}{GetBagIdText()}{GameDefine.ImageExtPng}";
+    }
+
+    /// <summary>
+    /// 用途：获取当前包配置 Json 的相对路径。返回：配置文件路径字符串。
+    /// </summary>
+    /// <returns>返回：形如 Configs/Package001.json 的相对路径。</returns>
+    public string GetBagConfigPath()
+    {
+        return $"{GameDefine.ConfigsRoot}/{GameDefine.PackageFilePrefix}{GetBagIdText()}{GameDefine.ConfigExtJson}";
     }
 
     /// <summary>

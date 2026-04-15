@@ -31,6 +31,7 @@ public static class GameDefine
 
     // Common path tokens
     public const string AssetsRoot = "Assets";
+    public const string ConfigsRoot = "Configs";
     public const string TexturesRoot = "Textures";
     public const string PackImagesFolder = "PackImages";
 
@@ -43,6 +44,7 @@ public static class GameDefine
     public const string ImageExtJpg = ".jpg";
     public const string ImageExtJpeg = ".jpeg";
     public const string ImageExtWebp = ".webp";
+    public const string ConfigExtJson = ".json";
 
     // Default runtime values
     public const int DefaultBagId = 1;

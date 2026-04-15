@@ -1,6 +1,6 @@
 # SPEC 状态面板
 
-- Task: MainScene / GameManager / GameDefine 重复代码合并与冗余清理
+- Task: 所有页面相机自适配完整可见
 - Status: In Progress
 - Updated At: 2026-04-15
 - Auto-Update Mode: Enabled (Maintained by Codex)
@@ -13,6 +13,9 @@
 - 新需求：在 MainScene 创建并居中放置一个精灵，纹理为 `PackImages/Package001.png`，复用现有方法并减少重复代码。
 - 新需求：在 MainScene 上给包图添加交互，要求在精灵范围内完成从左到右滑动后切换到 `GameScene`。
 - 新需求：检查 MainScene、GameManager、GameDefine 三个文件，尝试合并重复代码并删除冗余代码。
+- 新需求：修改 GameScene 创建逻辑，切场景时传入卡包 id（先使用默认值）。
+- 新需求：进入 GameScene 后根据 bagId 创建对应 GameBoard，解析对应 JSON，并将第一组碎片在 GameBoard 左侧一列等距排列。
+- 新需求：设置所有页面运行后都能看到整个页面。
 
 ## Progress Snapshot
 
@@ -27,8 +30,13 @@
   - 已合并鼠标/触屏滑动分发重复逻辑（新增 `HandleSwipeInput(...)`）。
   - 已在 GameManager 中收敛 bagId 格式化与目录命名重复逻辑（`GetBagIdText` / `GetBagFolderName`）。
   - 已删除 GameManager 仅转发的冗余方法 `ToDiskConfigPath(...)`，直接复用 `GameCommonUtility.ToDiskPath(...)`。
+  - 已打通切场景参数链路：MainScene 滑动成功后传入默认 `bagId`，GameScene 按传入 `bagId` 初始化资源。
+  - 已实现 GameScene 进入后按 `bagId` 读取对应 `PackageXXX.json`，并创建对应 `GameBoard`。
+  - 已实现按配置第一组碎片在 GameBoard 左侧一列等距排布。
+  - 已新增通用相机框选方法 `FitOrthographicCameraToRenderers(...)`。
+  - 已在 MainScene 与 GameScene 接入页面内容自动框选，保证页面整体可见。
 - 进行中：
-  - 等待你验证重构后主场景展示与交互行为是否与预期一致。
+  - 等待你验证不同分辨率下页面完整可见效果。
 - 未完成：
   - 如需进一步调阈值、增加滑动反馈动画或音效，进入下一轮调整。
 
@@ -38,30 +46,29 @@
 
 ## S - Scope
 
-- 检查并合并 `MainScene` / `GameManager` / `GameDefine` 中可安全收敛的重复代码。
-- 删除不必要的中转方法和硬编码路径，统一常量来源。
-- 验收标准：脚本行为不变，且无新增 linter 报错。
+- MainScene 与 GameScene 运行后都能看到页面完整内容，不出现内容裁切。
+- 在保持现有布局逻辑前提下，增加相机自动框选机制。
+- 验收标准：两页面在运行时均完整可见主要内容。
 
 ## P - Plan
 
-- MainScene：清理包图路径重复定义并合并输入分发逻辑。
-- GameManager：统一 bagId 文本格式化与目录命名逻辑，移除冗余中转方法。
-- GameDefine：补充可复用命名前缀常量并消除硬编码。
+- 在 `GameCommonUtility` 增加通用相机框选方法。
+- MainScene：按背景+卡包精灵联合边界自适配相机。
+- GameScene：按棋盘+第一组碎片联合边界自适配相机。
 
 ## E - Execute
 
-- 已完成：MainScene 包图路径来源统一改为 `GameManager`。
-- 已完成：MainScene 鼠标与触屏滑动分发逻辑合并。
-- 已完成：GameManager bag 路径构建重复逻辑收敛并删除冗余路径中转方法。
-- 已完成：GameDefine 新增前缀常量并在业务代码中接入。
-- 当前状态：重构完成，等待运行验收。
+- 已完成：`GameCommonUtility` 新增 `FitOrthographicCameraToRenderers(...)`。
+- 已完成：MainScene 在创建背景与包图后自动框选可视范围。
+- 已完成：GameScene 在创建棋盘与第一组碎片后自动框选可视范围。
+- 当前状态：功能已完成，等待运行验收。
 
 ## C - Check
 
-- 检查方式：针对 `MainScene.cs`、`GameManager.cs`、`GameDefine.cs` 执行 lints。
+- 检查方式：针对 `GameCommonUtility.cs`、`MainScene.cs`、`GameScene.cs` 执行 lints。
 - 检查结果：无新增 linter 报错。
-- 已知风险：本次为结构重构，建议在编辑器里回归验证主场景包图显示和右滑切场景流程。
+- 已知风险：若后续新增大量页面元素，可能需要重新定义“哪些元素参与相机框选”。
 
 ## Next Action
 
-- 运行 MainScene 做一次回归验证；若行为 OK，可继续下一轮功能开发。
+- 运行 MainScene 与 GameScene 回归验证完整可见性；如需边距微调可直接给目标值。

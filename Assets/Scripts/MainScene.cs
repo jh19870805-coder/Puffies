@@ -7,6 +7,8 @@ public class MainScene : MonoBehaviour
     private const float ReferenceHeight = 1080f;
     private const float PixelsPerUnit = 100f;
     private const float MinSwipeDistance = 0.5f;
+    private const float MainPageCameraPadding = 0.2f;
+    private const int MainPackageBagId = GameDefine.DefaultBagId;
     private const string BootstrapObjectName = "MainSceneBootstrap";
     private const string MainBackgroundObjectName = "MainBackground";
     private const string MainPackageObjectName = "MainPackage001";
@@ -48,8 +50,17 @@ public class MainScene : MonoBehaviour
             SetupMainCamera(targetCamera);
         }
 
-        CreateCenteredBackground(targetCamera);
+        var backgroundRenderer = CreateCenteredBackground(targetCamera);
         CreateCenteredPackageSprite();
+
+        if (targetCamera != null)
+        {
+            GameCommonUtility.FitOrthographicCameraToRenderers(
+                targetCamera,
+                MainPageCameraPadding,
+                backgroundRenderer,
+                mMainPackageRenderer);
+        }
     }
 
     /// <summary>
@@ -79,9 +90,9 @@ public class MainScene : MonoBehaviour
     /// 用途：在主场景中创建并居中显示背景对象，避免重复创建。返回：无。
     /// </summary>
     /// <param name="targetCamera">参数：用于适配背景显示比例的目标相机。</param>
-    private void CreateCenteredBackground(Camera targetCamera)
+    private SpriteRenderer CreateCenteredBackground(Camera targetCamera)
     {
-        CreateCenteredSpriteObject(
+        return CreateCenteredSpriteObject(
             MainBackgroundObjectName,
             MainBackgroundPath,
             -100,
@@ -254,7 +265,8 @@ public class MainScene : MonoBehaviour
         }
 
         mHasSwitchedToGameScene = true;
-        SceneManager.LoadScene(GameDefine.SceneGame);
+        var gameManager = GameManager.CreateInstance();
+        gameManager.EnterGameScene(MainPackageBagId);
     }
 
     /// <summary>
