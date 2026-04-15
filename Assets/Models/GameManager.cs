@@ -54,7 +54,7 @@ public class GameManager : MonoBehaviour
             return;
         }
 
-        mBagId = 1;
+        mBagId = GameDefine.DefaultBagId;
         IsInitialized = true;
         DontDestroyOnLoad(gameObject);
         Debug.Log("GameManager initialized.");
@@ -84,7 +84,7 @@ public class GameManager : MonoBehaviour
     /// <returns>返回：形如 Textures/Game001 的相对路径。</returns>
     public string GetBagFolderPath()
     {
-        return $"{GameDefine.TexturesRoot}/Game{mBagId:D3}";
+        return $"{GameDefine.TexturesRoot}/{GetBagFolderName()}";
     }
 
     /// <summary>
@@ -93,7 +93,7 @@ public class GameManager : MonoBehaviour
     /// <returns>返回：形如 Textures/PackImages/Package001.png 的相对路径。</returns>
     public string GetBagPackagePath()
     {
-        return $"{GameDefine.TexturesRoot}/{GameDefine.PackImagesFolder}/Package{mBagId:D3}{GameDefine.ImageExtPng}";
+        return $"{GameDefine.TexturesRoot}/{GameDefine.PackImagesFolder}/{GameDefine.PackageFilePrefix}{GetBagIdText()}{GameDefine.ImageExtPng}";
     }
 
     /// <summary>
@@ -102,7 +102,7 @@ public class GameManager : MonoBehaviour
     /// <returns>返回：GameBoard 图片文件完整路径。</returns>
     public string GetGameBoard()
     {
-        return Path.Combine(Application.dataPath, GameDefine.TexturesRoot, $"Game{mBagId:D3}", GameDefine.GameBoardFileName);
+        return Path.Combine(Application.dataPath, GameDefine.TexturesRoot, GetBagFolderName(), GameDefine.GameBoardFileName);
     }
 
     /// <summary>
@@ -120,7 +120,7 @@ public class GameManager : MonoBehaviour
             return false;
         }
 
-        var configOnDisk = ToDiskConfigPath(configPath);
+        var configOnDisk = GameCommonUtility.ToDiskPath(configPath);
         if (!File.Exists(configOnDisk))
         {
             Debug.LogWarning($"Config file does not exist: {configOnDisk}");
@@ -238,20 +238,28 @@ public class GameManager : MonoBehaviour
         var normalizedDataPath = Application.dataPath.Replace("\\", "/");
         if (normalizedFilePath.StartsWith(normalizedDataPath))
         {
-            return $"Assets{normalizedFilePath.Substring(normalizedDataPath.Length)}";
+            return $"{GameDefine.AssetsRoot}{normalizedFilePath.Substring(normalizedDataPath.Length)}";
         }
 
         return normalizedFilePath;
     }
 
     /// <summary>
-    /// 用途：将配置路径统一转换为磁盘绝对路径。返回：可用于文件读取的绝对路径。
+    /// 用途：获取当前包编号的三位文本表示。返回：三位编号字符串。
     /// </summary>
-    /// <param name="configPath">参数：配置路径，支持绝对路径或 Assets 相对路径。</param>
-    /// <returns>返回：配置文件绝对路径。</returns>
-    private static string ToDiskConfigPath(string configPath)
+    /// <returns>返回：形如 001 的编号文本。</returns>
+    private string GetBagIdText()
     {
-        return GameCommonUtility.ToDiskPath(configPath);
+        return mBagId.ToString("D3");
+    }
+
+    /// <summary>
+    /// 用途：获取当前包资源目录名。返回：目录名字符串。
+    /// </summary>
+    /// <returns>返回：形如 Game001 的目录名。</returns>
+    private string GetBagFolderName()
+    {
+        return $"{GameDefine.GameFolderPrefix}{GetBagIdText()}";
     }
 
     /// <summary>

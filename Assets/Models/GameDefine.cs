@@ -35,6 +35,8 @@ public static class GameDefine
     public const string PackImagesFolder = "PackImages";
 
     // Resource file names and suffixes
+    public const string GameFolderPrefix = "Game";
+    public const string PackageFilePrefix = "Package";
     public const string GameBoardFileName = "GameBoard.png";
     public const string MainBackgroundFileName = "MainBg.png";
     public const string ImageExtPng = ".png";

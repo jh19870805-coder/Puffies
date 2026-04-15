@@ -11,7 +11,6 @@ public class MainScene : MonoBehaviour
     private const string MainBackgroundObjectName = "MainBackground";
     private const string MainPackageObjectName = "MainPackage001";
     private static readonly string MainBackgroundPath = $"{GameDefine.TexturesRoot}/{GameDefine.MainBackgroundFileName}";
-    private static readonly string MainPackagePath = $"{GameDefine.TexturesRoot}/{GameDefine.PackImagesFolder}/Package001{GameDefine.ImageExtPng}";
     private static bool sHookedSceneLoaded;
     private SpriteRenderer mMainPackageRenderer;
     private Vector3 mSwipeStartWorldPosition;
@@ -95,9 +94,13 @@ public class MainScene : MonoBehaviour
     /// </summary>
     private void CreateCenteredPackageSprite()
     {
+        var packagePath = GameManager.Instance != null
+            ? GameManager.Instance.GetBagPackagePath()
+            : $"{GameDefine.TexturesRoot}/{GameDefine.PackImagesFolder}/{GameDefine.PackageFilePrefix}{GameDefine.DefaultBagId:D3}{GameDefine.ImageExtPng}";
+
         mMainPackageRenderer = CreateCenteredSpriteObject(
             MainPackageObjectName,
-            MainPackagePath,
+            packagePath,
             0,
             camera: null,
             fitToCamera: false);
@@ -153,12 +156,12 @@ public class MainScene : MonoBehaviour
     {
         if (Input.GetMouseButtonDown(0))
         {
-            TryBeginSwipe(Input.mousePosition);
+            HandleSwipeInput(true, false, Input.mousePosition);
         }
 
         if (Input.GetMouseButtonUp(0))
         {
-            TryCompleteSwipe(Input.mousePosition);
+            HandleSwipeInput(false, true, Input.mousePosition);
         }
     }
 
@@ -175,13 +178,32 @@ public class MainScene : MonoBehaviour
         var touch = Input.GetTouch(0);
         if (touch.phase == TouchPhase.Began)
         {
-            TryBeginSwipe(touch.position);
+            HandleSwipeInput(true, false, touch.position);
             return;
         }
 
         if (touch.phase == TouchPhase.Ended || touch.phase == TouchPhase.Canceled)
         {
-            TryCompleteSwipe(touch.position);
+            HandleSwipeInput(false, true, touch.position);
+        }
+    }
+
+    /// <summary>
+    /// 用途：统一处理滑动输入的开始与结束阶段分发，减少鼠标与触屏逻辑重复。返回：无。
+    /// </summary>
+    /// <param name="isBegin">参数：是否为滑动开始阶段。</param>
+    /// <param name="isEnd">参数：是否为滑动结束阶段。</param>
+    /// <param name="screenPosition">参数：当前输入对应的屏幕坐标。</param>
+    private void HandleSwipeInput(bool isBegin, bool isEnd, Vector2 screenPosition)
+    {
+        if (isBegin)
+        {
+            TryBeginSwipe(screenPosition);
+        }
+
+        if (isEnd)
+        {
+            TryCompleteSwipe(screenPosition);
         }
     }
 

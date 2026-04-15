@@ -1,6 +1,6 @@
 # SPEC 状态面板
 
-- Task: MainScene 包图滑动交互切换到 GameScene
+- Task: MainScene / GameManager / GameDefine 重复代码合并与冗余清理
 - Status: In Progress
 - Updated At: 2026-04-15
 - Auto-Update Mode: Enabled (Maintained by Codex)
@@ -12,6 +12,7 @@
 - 用户希望在另一台设备打开后，Codex 能继续工作并知悉已提需求与当前开发进度。
 - 新需求：在 MainScene 创建并居中放置一个精灵，纹理为 `PackImages/Package001.png`，复用现有方法并减少重复代码。
 - 新需求：在 MainScene 上给包图添加交互，要求在精灵范围内完成从左到右滑动后切换到 `GameScene`。
+- 新需求：检查 MainScene、GameManager、GameDefine 三个文件，尝试合并重复代码并删除冗余代码。
 
 ## Progress Snapshot
 
@@ -22,8 +23,12 @@
   - MainScene 已新增 `Package001` 精灵创建流程，启动后自动居中显示。
   - 通过抽取 `CreateCenteredSpriteObject(...)` 合并了背景与包图创建逻辑，减少重复代码。
   - 已实现包图内滑动交互：起点与终点都在包图区域内，左滑到右且位移达阈值时切换到 `GameScene`。
+  - 已将包图路径来源统一复用 `GameManager.GetBagPackagePath()`，删除 MainScene 内硬编码包图路径常量。
+  - 已合并鼠标/触屏滑动分发重复逻辑（新增 `HandleSwipeInput(...)`）。
+  - 已在 GameManager 中收敛 bagId 格式化与目录命名重复逻辑（`GetBagIdText` / `GetBagFolderName`）。
+  - 已删除 GameManager 仅转发的冗余方法 `ToDiskConfigPath(...)`，直接复用 `GameCommonUtility.ToDiskPath(...)`。
 - 进行中：
-  - 等待你验证鼠标/触屏交互手势在目标设备上的实际体验。
+  - 等待你验证重构后主场景展示与交互行为是否与预期一致。
 - 未完成：
   - 如需进一步调阈值、增加滑动反馈动画或音效，进入下一轮调整。
 
@@ -33,33 +38,30 @@
 
 ## S - Scope
 
-- 在 `MainScene` 启动流程中创建 `Package001` 精灵并居中显示。
-- 复用 `CreateSpriteByPath` 与现有相机/对象创建逻辑，避免新增重复实现。
-- 为 `Package001` 增加“仅精灵内有效”的左到右滑动交互，并切换到 `GameScene`。
-- 验收标准：运行主场景可看到包图，且在包图区域内右滑可切场景，脚本无新增 linter 报错。
+- 检查并合并 `MainScene` / `GameManager` / `GameDefine` 中可安全收敛的重复代码。
+- 删除不必要的中转方法和硬编码路径，统一常量来源。
+- 验收标准：脚本行为不变，且无新增 linter 报错。
 
 ## P - Plan
 
-- 在 `MainScene` 增加 `Package001` 对象名和资源路径常量。
-- 抽取通用创建方法 `CreateCenteredSpriteObject(...)`。
-- 让 `CreateCenteredBackground(...)` 与 `CreateCenteredPackageSprite(...)` 共同复用该方法。
-- 缓存包图 `SpriteRenderer`，基于其 bounds 判断交互范围。
-- 实现鼠标/触屏输入下的开始与结束点检测，并校验左到右滑动方向后切场景。
+- MainScene：清理包图路径重复定义并合并输入分发逻辑。
+- GameManager：统一 bagId 文本格式化与目录命名逻辑，移除冗余中转方法。
+- GameDefine：补充可复用命名前缀常量并消除硬编码。
 
 ## E - Execute
 
-- 已完成：新增 `MainPackageObjectName`、`MainPackagePath` 常量。
-- 已完成：`Start()` 中新增 `CreateCenteredPackageSprite()` 调用。
-- 已完成：抽取 `CreateCenteredSpriteObject(...)`，统一背景图与包图的创建流程。
-- 已完成：新增滑动交互逻辑（`TryBeginSwipe` / `TryCompleteSwipe`），并接入鼠标与触屏输入。
-- 当前状态：功能已完成，等待你在场景中确认交互体验。
+- 已完成：MainScene 包图路径来源统一改为 `GameManager`。
+- 已完成：MainScene 鼠标与触屏滑动分发逻辑合并。
+- 已完成：GameManager bag 路径构建重复逻辑收敛并删除冗余路径中转方法。
+- 已完成：GameDefine 新增前缀常量并在业务代码中接入。
+- 当前状态：重构完成，等待运行验收。
 
 ## C - Check
 
-- 检查方式：针对 `MainScene.cs` 执行 lints。
+- 检查方式：针对 `MainScene.cs`、`GameManager.cs`、`GameDefine.cs` 执行 lints。
 - 检查结果：无新增 linter 报错。
-- 已知风险：滑动阈值当前固定为 `0.5` 世界单位，不同分辨率下可能需要调整。
+- 已知风险：本次为结构重构，建议在编辑器里回归验证主场景包图显示和右滑切场景流程。
 
 ## Next Action
 
-- 在 MainScene 运行验证包图内右滑切场景手势；如需调整阈值或方向判定，直接给我目标规则。
+- 运行 MainScene 做一次回归验证；若行为 OK，可继续下一轮功能开发。
