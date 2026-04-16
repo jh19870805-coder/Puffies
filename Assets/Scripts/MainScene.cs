@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Collections;
 using System.IO;
 using System.Linq;
 using UnityEngine;
@@ -9,8 +10,10 @@ public class MainScene : MonoBehaviour
     private const float ReferenceHeight = 1080f;
     private const float PixelsPerUnit = 100f;
     private const float MinSwipeDistance = 0.5f;
+    private const float MaxTapDistancePixels = 18f;
     private const float MainPageCameraPadding = 0.2f;
     private const float PackageScaleRatio = 0.3f;
+    private const float PackageFocusAnimationDuration = 0.35f;
     private const int PackagesPerRow = 5;
     private const int RowsPerPage = 3;
     private const int MainPackageBagId = GameDefine.DefaultBagId;
@@ -23,6 +26,15 @@ public class MainScene : MonoBehaviour
     private Vector3 mSwipeStartWorldPosition;
     private int mSwipeBagId = GameDefine.InvalidId;
     private SpriteRenderer mSwipeTargetRenderer;
+    private SpriteRenderer mTapCandidateRenderer;
+    private int mTapCandidateBagId = GameDefine.InvalidId;
+    private Vector2 mTapStartScreenPosition;
+    private bool mTapCandidateMoved;
+    private SpriteRenderer mFocusedPackageRenderer;
+    private int mFocusedBagId = GameDefine.InvalidId;
+    private Coroutine mFocusAnimationCoroutine;
+    private bool mIsPackageFocused;
+    private bool mIsFocusAnimating;
     private bool mIsSwipeTracking;
     private bool mHasSwitchedToGameScene;
 
@@ -87,7 +99,7 @@ public class MainScene : MonoBehaviour
 
         GameCommonUtility.ProcessPointerInput(
             TryBeginSwipe,
-            onMove: null,
+            TrackPointerMove,
             TryCompleteSwipe);
     }
 
@@ -294,8 +306,37 @@ public class MainScene : MonoBehaviour
     /// <param name="screenPosition">参数：屏幕坐标输入位置。</param>
     private void TryBeginSwipe(Vector2 screenPosition)
     {
+        if (mIsFocusAnimating)
+        {
+            return;
+        }
+
         var worldPosition = GameCommonUtility.ScreenToWorld(screenPosition);
-        if (!TryGetPackageAtPoint(worldPosition, out var packageEntry))
+        if (!mIsPackageFocused)
+        {
+            if (TryGetPackageAtPoint(worldPosition, out var packageToFocus))
+            {
+                mTapCandidateRenderer = packageToFocus.Renderer;
+                mTapCandidateBagId = packageToFocus.BagId;
+                mTapStartScreenPosition = screenPosition;
+                mTapCandidateMoved = false;
+            }
+            else
+            {
+                mTapCandidateRenderer = null;
+                mTapCandidateBagId = GameDefine.InvalidId;
+                mTapCandidateMoved = false;
+            }
+
+            mIsSwipeTracking = false;
+            mSwipeBagId = GameDefine.InvalidId;
+            mSwipeTargetRenderer = null;
+            return;
+        }
+
+        if (mFocusedPackageRenderer == null
+            || mFocusedPackageRenderer.sprite == null
+            || !mFocusedPackageRenderer.bounds.Contains(worldPosition))
         {
             mIsSwipeTracking = false;
             mSwipeBagId = GameDefine.InvalidId;
@@ -304,9 +345,25 @@ public class MainScene : MonoBehaviour
         }
 
         mSwipeStartWorldPosition = worldPosition;
-        mSwipeBagId = packageEntry.BagId;
-        mSwipeTargetRenderer = packageEntry.Renderer;
+        mSwipeBagId = mFocusedBagId;
+        mSwipeTargetRenderer = mFocusedPackageRenderer;
         mIsSwipeTracking = true;
+    }
+
+    /// <summary>
+    /// 用途：记录按压后的移动距离，用于区分点击与滑动。返回：无。
+    /// </summary>
+    private void TrackPointerMove(Vector2 screenPosition)
+    {
+        if (mIsPackageFocused || mTapCandidateRenderer == null || mTapCandidateMoved)
+        {
+            return;
+        }
+
+        if (Vector2.Distance(mTapStartScreenPosition, screenPosition) > MaxTapDistancePixels)
+        {
+            mTapCandidateMoved = true;
+        }
     }
 
     /// <summary>
@@ -315,6 +372,12 @@ public class MainScene : MonoBehaviour
     /// <param name="screenPosition">参数：屏幕坐标输入位置。</param>
     private void TryCompleteSwipe(Vector2 screenPosition)
     {
+        if (!mIsPackageFocused)
+        {
+            TryCompleteTap(screenPosition);
+            return;
+        }
+
         if (!mIsSwipeTracking)
         {
             return;
@@ -342,6 +405,96 @@ public class MainScene : MonoBehaviour
 
         mHasSwitchedToGameScene = true;
         GameManager.EnterGameScene(mSwipeBagId > 0 ? mSwipeBagId : MainPackageBagId);
+    }
+
+    /// <summary>
+    /// 用途：在抬起阶段确认点击命中后，触发卡包聚焦动画。返回：无。
+    /// </summary>
+    private void TryCompleteTap(Vector2 screenPosition)
+    {
+        if (mTapCandidateRenderer == null || mTapCandidateBagId <= 0 || mIsFocusAnimating)
+        {
+            mTapCandidateRenderer = null;
+            mTapCandidateBagId = GameDefine.InvalidId;
+            mTapCandidateMoved = false;
+            return;
+        }
+
+        var worldPosition = GameCommonUtility.ScreenToWorld(screenPosition);
+        var isTapConfirmed = !mTapCandidateMoved
+            && mTapCandidateRenderer.sprite != null
+            && mTapCandidateRenderer.bounds.Contains(worldPosition);
+        if (isTapConfirmed)
+        {
+            FocusPackage(new PackageEntry
+            {
+                BagId = mTapCandidateBagId,
+                Renderer = mTapCandidateRenderer
+            });
+        }
+
+        mTapCandidateRenderer = null;
+        mTapCandidateBagId = GameDefine.InvalidId;
+        mTapCandidateMoved = false;
+    }
+
+    /// <summary>
+    /// 用途：将选中的卡包缓慢移动到屏幕中心并放大到原始尺寸。返回：无。
+    /// </summary>
+    private void FocusPackage(PackageEntry packageEntry)
+    {
+        if (packageEntry.Renderer == null)
+        {
+            return;
+        }
+
+        if (mFocusAnimationCoroutine != null)
+        {
+            StopCoroutine(mFocusAnimationCoroutine);
+            mFocusAnimationCoroutine = null;
+        }
+
+        mFocusedPackageRenderer = packageEntry.Renderer;
+        mFocusedBagId = packageEntry.BagId;
+        mIsPackageFocused = true;
+        mFocusAnimationCoroutine = StartCoroutine(AnimateFocusPackage(packageEntry.Renderer));
+    }
+
+    /// <summary>
+    /// 用途：播放卡包聚焦动画，结束后允许滑动进入游戏。返回：协程。
+    /// </summary>
+    private IEnumerator AnimateFocusPackage(SpriteRenderer renderer)
+    {
+        if (renderer == null)
+        {
+            yield break;
+        }
+
+        mIsFocusAnimating = true;
+        renderer.sortingOrder = 10;
+        var fromPosition = renderer.transform.position;
+        var fromScale = renderer.transform.localScale;
+        var camera = Camera.main;
+        var targetPosition = camera != null
+            ? new Vector3(camera.transform.position.x, camera.transform.position.y, fromPosition.z)
+            : Vector3.zero;
+        var targetScale = Vector3.one;
+
+        var elapsed = 0f;
+        while (elapsed < PackageFocusAnimationDuration)
+        {
+            elapsed += Time.deltaTime;
+            var t = Mathf.Clamp01(elapsed / PackageFocusAnimationDuration);
+            var eased = Mathf.SmoothStep(0f, 1f, t);
+            renderer.transform.position = Vector3.LerpUnclamped(fromPosition, targetPosition, eased);
+            renderer.transform.localScale = Vector3.LerpUnclamped(fromScale, targetScale, eased);
+            yield return null;
+        }
+
+        renderer.transform.position = targetPosition;
+        renderer.transform.localScale = targetScale;
+        mIsFocusAnimating = false;
+        mFocusAnimationCoroutine = null;
     }
 
     /// <summary>
