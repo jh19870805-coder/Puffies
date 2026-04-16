@@ -57,3 +57,5 @@ Desktop.ini
 # IMPORTANT: .meta files MUST be tracked
 # Do NOT add *.meta to this ignore list!
 # ===========================
+Win32/
+Assets/StreamingAssets/

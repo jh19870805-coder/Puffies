@@ -95,7 +95,7 @@ public static class GameManager
     /// <returns>返回：GameBoard 图片文件完整路径。</returns>
     public static string GetGameBoard()
     {
-        return Path.Combine(Application.dataPath, GameDefine.TexturesRoot, GetBagFolderName(), GameDefine.GameBoardFileName);
+        return GameCommonUtility.ToDiskPath($"{GameDefine.TexturesRoot}/{GetBagFolderName()}/{GameDefine.GameBoardFileName}");
     }
 
     /// <summary>
@@ -160,7 +160,7 @@ public static class GameManager
             normalizedFolderPath = normalizedFolderPath.Substring("Assets/".Length);
         }
 
-        var folderOnDisk = Path.Combine(Application.dataPath, normalizedFolderPath);
+        var folderOnDisk = GameCommonUtility.ToDiskPath(normalizedFolderPath);
         if (!Directory.Exists(folderOnDisk))
         {
             Debug.LogWarning($"Bag folder does not exist: {folderOnDisk}");

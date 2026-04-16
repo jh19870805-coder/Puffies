@@ -157,6 +157,13 @@ public static class GameCommonUtility
             normalizedPath = normalizedPath.Substring("Assets/".Length);
         }
 
+        var streamingAssetsPath = Path.Combine(Application.streamingAssetsPath, normalizedPath);
+        if (File.Exists(streamingAssetsPath) || Directory.Exists(streamingAssetsPath))
+        {
+            return streamingAssetsPath;
+        }
+
+        // Editor 下兼容直接读取 Assets 目录，避免本地调试依赖构建前同步。
         return Path.Combine(Application.dataPath, normalizedPath);
     }
 
