@@ -1,8 +1,8 @@
 # SPEC 状态面板
 
-- Task: 全工程统一接口收敛与冗余删除
+- Task: 主流程交互完善、GameScene 布局改造与工具类重构
 - Status: In Progress
-- Updated At: 2026-04-15
+- Updated At: 2026-04-16
 - Auto-Update Mode: Enabled (Maintained by Codex)
 
 ## Requirement Log
@@ -26,6 +26,13 @@
 - 新需求：整理整个工程，能统一接口的代码尽量合并，删除重复冗余实现。
 - 新需求：添加一个播放游戏动画的工具类。
 - 新需求：将 GameManager 从单例组件模式改为 Unity 常用工具类模式。
+- 新需求：后续资源更新统一放置到源目录并由构建流程同步。
+- 新需求：整理目录结构，功能型类归档到 `Tools`。
+- 新需求：MainScene 卡包布局改为 30% 缩放、左上起排、5 列 x 3 行分页均分。
+- 新需求：MainScene 卡包交互改为“点击（抬起判定）聚焦放大居中，再执行滑动进入游戏”。
+- 新需求：GameScene 新增 `PieceBg`（九宫拉伸），并按规则承载待拖拽贴片。
+- 新需求：贴片层级高于 `PieceBg`，托盘中自适应缩放，拖拽时还原原始尺寸，未吸附回托盘后恢复托盘缩放。
+- 新需求：持续整理冗余代码，通用方法下沉到 `GameCommonUtility`，并收敛状态结构。
 
 ## Progress Snapshot
 
@@ -60,10 +67,21 @@
   - 已删除 MainScene / GameScene 内重复相机初始化中间层，全部直接使用 `GameCommonUtility.SetupOrthographicCamera(...)`。
   - 已将 `GameManager` 重构为 `static` 工具类，并清理所有 `CreateInstance/Instance` 调用点。
   - 已新增 `GameAnimationUtility`，支持位移、缩放、透明度动画与缓动。
+  - 已将 `GameAnimationUtility` 与 `GameCommonUtility` 移入 `Assets/Tools`，并迁移 `WindowAspectController` 到 `Tools` 目录。
+  - 已将构建同步脚本重命名为 `StreamingBuildSync`。
+  - 已完成工作区显示优化：常见构建产物与非日常目录在 `.vscode/settings.json` 中隐藏显示（仅显示层，不影响文件本体）。
+  - 已实现 MainScene 卡包网格化布局：30% 缩放、左上起排、每页 5 列 x 3 行，按背景范围均分坐标。
+  - 已实现 MainScene 两段交互：抬起确认点击后卡包缓动放大并居中；聚焦后滑动进入对应 bagId 的 GameScene。
+  - 已加严点击判定：移动超阈值判为滑动，不触发点击聚焦。
+  - 已实现 GameScene `PieceBg` 创建流程：宽度对齐 `GameBoard`、高度为 `GameBoard` 的 1/4、底部与 `GameBoard` 底部对齐。
+  - 已完成 `PieceBg` 可见性修复方案：九宫边框 + 填充层双层结构，避免仅显示四角点。
+  - 已完成贴片托盘规则：贴片层级高于 `PieceBg`；托盘中自适应（最大高度 90%）；拖拽还原原始尺寸；未吸附回托盘自动恢复托盘缩放。
+  - 已完成第二轮通用方法下沉：`GameScene` 中坐标换算/透明度/托盘缩放/宽度计算已迁移到 `GameCommonUtility`。
+  - 已完成 `GameScene` 状态聚合重构（resources / board / drag）并将状态类型定义迁移到 `GameDefine`。
 - 进行中：
-  - 等待你回归验证统一接口改造后交互行为保持一致。
+  - 等待你运行回归，确认 MainScene 新交互与 GameScene 托盘/拖拽体验符合预期。
 - 未完成：
-  - 如需进一步调阈值、增加滑动反馈动画或音效，进入下一轮调整。
+  - 如需继续调优：卡包聚焦动画时长、拖拽吸附阈值、托盘视觉样式与分页切换交互。
 
 ## Resume Prompt
 
@@ -76,6 +94,8 @@
 - GameScene 需按配置生成全部碎片并正确对齐到棋盘相对坐标。
 - 增加分组拖拽玩法流程：吸附/回弹/自动下一组/全部完成输出游戏结束。
 - 统一重复接口并删除冗余实现，保持功能行为不变。
+- MainScene 需支持网格化卡包布局与“点击聚焦 + 滑动进入”两段交互。
+- GameScene 需提供可视化托盘背景（PieceBg）与托盘内贴片自适应缩放逻辑。
 - 验收标准：可完成全部分组并输出“游戏结束”，且无新增 lint 报错。
 
 ## P - Plan
@@ -86,6 +106,9 @@
 - GameScene：将“第一组左列展示”替换为“全量碎片按配置坐标展示”。
 - 新增拖拽状态机：命中检测、拖拽更新、吸附判定、组完成推进。
 - 将跨场景共用能力（Sprite 加载、屏幕坐标转换）统一抽到 `GameCommonUtility`。
+- MainScene：实现卡包网格布局与点击聚焦后滑动进入的输入状态机。
+- GameScene：新增 PieceBg 双层可视化结构（九宫边框 + 填充层）并承载贴片托盘布局。
+- 重构：将 `GameScene` 离散状态字段聚合为 `resources / board / drag`，并将状态类型定义迁移到 `GameDefine`。
 
 ## E - Execute
 
@@ -95,14 +118,20 @@
 - 已完成：GameScene 读取全部分组碎片，按 `x/y` 相对棋盘坐标创建并定位。
 - 已完成：GameScene 左侧分组拖拽与吸附流程。
 - 已完成：重复接口统一与冗余实现清理。
-- 当前状态：功能已完成，等待运行验收。
+- 已完成：MainScene 网格化卡包布局与点击聚焦/滑动进入两段交互。
+- 已完成：GameScene `PieceBg` 创建、对齐、尺寸与托盘承载规则。
+- 已完成：贴片托盘自适应缩放与拖拽缩放还原机制。
+- 已完成：`GameScene` 状态聚合与状态类型迁移至 `GameDefine`。
+- 当前状态：核心开发已完成，等待你做一轮完整功能回归。
 
 ## C - Check
 
 - 检查方式：针对 `GameCommonUtility.cs`、`MainScene.cs`、`GameScene.cs` 执行 lints。
 - 检查结果：无新增 linter 报错。
-- 已知风险：吸附半径目前为固定值 `0.35` 世界单位，不同资源尺度下可能需要微调。
+- 已知风险：
+  - 吸附半径目前为固定值 `0.35` 世界单位，不同资源尺度下可能需要微调。
+  - 贴片托盘横向布局在未来引入极端宽图时可能需要增加换行或分页策略。
 
 ## Next Action
 
-- 运行 MainScene 到 GameScene 做一轮回归；确认拖拽、吸附、组推进与通关日志行为正常。
+- 运行 MainScene -> GameScene 做完整回归，重点确认：卡包点击聚焦、滑动进入、PieceBg 托盘显示、贴片拖拽吸附/回弹与组推进流程；若体验不理想，按阈值与动画参数做第三轮微调。
