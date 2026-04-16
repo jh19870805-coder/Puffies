@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -8,14 +9,22 @@ public class GameScene : MonoBehaviour
     private const float ReferenceHeight = 1080f;
     private const float PixelsPerUnit = 100f;
     private const float GamePageCameraPadding = 0.3f;
-    private const float DraggableLeftPadding = 0.6f;
-    private const float DraggableVerticalSpacing = 0.2f;
+    private const float DraggableLeftPadding = 0.2f;
+    private const float DraggableHorizontalSpacingPixels = 20f;
+    private const float PieceTrayMaxHeightRatio = 0.9f;
     private const float SnapDistance = 0.35f;
     private const int GameBoardSortingOrder = 0;
+    private const int PieceBgFillSortingOrder = 499;
+    private const int PieceBgSortingOrder = 500;
+    private const float PieceBgAlpha = 1f;
+    private const float PieceBgFillAlpha = 0.3f;
     private const int GrooveSortingOrder = 5;
-    private const int PieceSortingOrder = 20;
+    private const int PieceSortingOrder = 520;
     private const string BootstrapObjectName = "GameSceneBootstrap";
     private const string GameBoardObjectName = "GameBoard";
+    private const string PieceBgFillObjectName = "PieceBgFill";
+    private const string PieceBgObjectName = "PieceBg";
+    private const string PieceBgPath = "Textures/BasicUI/ImgMaskBlack.png";
     private const string AllPiecesRootObjectName = "AllPieces";
     private const string DraggableGroupRootObjectName = "DraggableGroupPieces";
     private const string PlacedPiecesRootObjectName = "PlacedPieces";
@@ -25,6 +34,7 @@ public class GameScene : MonoBehaviour
     private List<List<string>> _activePieceGroups;
     private PackageConfigData _activePackageConfig;
     private SpriteRenderer _gameBoardRenderer;
+    private SpriteRenderer _pieceBgRenderer;
     private List<List<SpriteRenderer>> _grooveRenderersByGroup = new List<List<SpriteRenderer>>();
     private bool _isBoardAndGroovesInitialized;
     private readonly List<DraggablePieceState> _currentGroupDraggables = new List<DraggablePieceState>();
@@ -37,6 +47,8 @@ public class GameScene : MonoBehaviour
         public SpriteRenderer PieceRenderer;
         public SpriteRenderer GrooveRenderer;
         public Vector3 StartPosition;
+        public Vector3 TrayScale;
+        public Vector3 DragScale;
         public bool IsPlaced;
     }
 
@@ -133,6 +145,7 @@ public class GameScene : MonoBehaviour
             return;
         }
 
+        _pieceBgRenderer = CreatePieceBackground(_gameBoardRenderer);
         _grooveRenderersByGroup = CreateAllPieces(_activePackageConfig, _gameBoardRenderer);
         _isBoardAndGroovesInitialized = true;
     }
@@ -146,6 +159,53 @@ public class GameScene : MonoBehaviour
     {
         var boardPath = $"{GameDefine.TexturesRoot}/{boardRelativePath}";
         return CreateCenteredSpriteObject(GameBoardObjectName, boardPath, GameBoardSortingOrder);
+    }
+
+    /// <summary>
+    /// 用途：创建拼图托盘背景（九宫拉伸），宽度贴合页面，高度为棋盘高度的 1/4。返回：背景渲染器。
+    /// </summary>
+    private SpriteRenderer CreatePieceBackground(SpriteRenderer boardRenderer)
+    {
+        if (boardRenderer == null)
+        {
+            return null;
+        }
+
+        var boardWidth = boardRenderer.bounds.size.x;
+        var bgHeight = boardRenderer.bounds.size.y * 0.25f;
+        var boardBottom = boardRenderer.bounds.min.y;
+        var bgCenterY = boardBottom + bgHeight * 0.5f;
+        var bgPosition = new Vector3(boardRenderer.transform.position.x, bgCenterY, -1f);
+
+        var renderer = CreateSpriteObject(
+            PieceBgObjectName,
+            PieceBgPath,
+            PieceBgSortingOrder,
+            parent: null,
+            forceCreate: true);
+        if (renderer == null)
+        {
+            var fallbackObject = new GameObject(PieceBgObjectName);
+            renderer = fallbackObject.AddComponent<SpriteRenderer>();
+        }
+
+        if (renderer.sprite == null)
+        {
+            renderer.sprite = CreateSolidSprite();
+        }
+
+        var slicedSprite = BuildSlicedSprite(renderer.sprite, PieceBgPath);
+        if (slicedSprite != null)
+        {
+            renderer.sprite = slicedSprite;
+        }
+
+        renderer.drawMode = SpriteDrawMode.Sliced;
+        renderer.size = new Vector2(boardWidth, bgHeight);
+        renderer.transform.position = bgPosition;
+        renderer.color = new Color(0f, 0f, 0f, PieceBgAlpha);
+        CreateOrUpdatePieceBgFill(renderer);
+        return renderer;
     }
 
     /// <summary>
@@ -245,22 +305,27 @@ public class GameScene : MonoBehaviour
             return;
         }
 
-        var boardBounds = _gameBoardRenderer.bounds;
-        var firstHalfWidth = firstPieceRenderer.bounds.extents.x;
-        var firstHeight = firstPieceRenderer.bounds.size.y;
-        var startX = boardBounds.min.x - DraggableLeftPadding - firstHalfWidth;
-        var totalHeight = (groupItems.Length - 1) * (firstHeight + DraggableVerticalSpacing);
-        var startY = boardBounds.center.y + totalHeight * 0.5f;
+        var hostBounds = _pieceBgRenderer != null ? _pieceBgRenderer.bounds : _gameBoardRenderer.bounds;
+        var trayScale = CalculateTrayScale(firstPieceRenderer, hostBounds);
+        var firstPieceWidth = GetPieceWidth(firstPieceRenderer, trayScale);
+        var firstHalfWidth = firstPieceWidth * 0.5f;
+        var startX = hostBounds.min.x + DraggableLeftPadding + firstHalfWidth;
+        var startY = hostBounds.center.y;
+        var horizontalSpacing = DraggableHorizontalSpacingPixels / PixelsPerUnit;
 
+        firstPieceRenderer.transform.localScale = trayScale;
         firstPieceRenderer.transform.position = new Vector3(startX, startY, 0f);
         _currentGroupDraggables.Add(new DraggablePieceState
         {
             PieceRenderer = firstPieceRenderer,
             GrooveRenderer = grooveGroup.Count > 0 ? grooveGroup[0] : null,
             StartPosition = firstPieceRenderer.transform.position,
+            TrayScale = trayScale,
+            DragScale = Vector3.one,
             IsPlaced = false
         });
 
+        var nextCenterX = startX + firstHalfWidth + horizontalSpacing;
         for (var i = 1; i < groupItems.Length; i++)
         {
             var pieceRenderer = CreateSpriteObject(
@@ -274,14 +339,23 @@ public class GameScene : MonoBehaviour
                 continue;
             }
 
-            pieceRenderer.transform.position = new Vector3(startX, startY - i * (firstHeight + DraggableVerticalSpacing), 0f);
+            var currentTrayScale = CalculateTrayScale(pieceRenderer, hostBounds);
+            var pieceWidth = GetPieceWidth(pieceRenderer, currentTrayScale);
+            var pieceHalfWidth = pieceWidth * 0.5f;
+            var pieceCenterX = nextCenterX + pieceHalfWidth;
+            pieceRenderer.transform.localScale = currentTrayScale;
+            pieceRenderer.transform.position = new Vector3(pieceCenterX, startY, 0f);
             _currentGroupDraggables.Add(new DraggablePieceState
             {
                 PieceRenderer = pieceRenderer,
                 GrooveRenderer = i < grooveGroup.Count ? grooveGroup[i] : null,
                 StartPosition = pieceRenderer.transform.position,
+                TrayScale = currentTrayScale,
+                DragScale = Vector3.one,
                 IsPlaced = false
             });
+
+            nextCenterX = pieceCenterX + pieceHalfWidth + horizontalSpacing;
         }
     }
 
@@ -310,6 +384,10 @@ public class GameScene : MonoBehaviour
         if (_gameBoardRenderer != null)
         {
             renderers.Add(_gameBoardRenderer);
+        }
+        if (_pieceBgRenderer != null)
+        {
+            renderers.Add(_pieceBgRenderer);
         }
 
         if (_grooveRenderersByGroup != null)
@@ -380,6 +458,7 @@ public class GameScene : MonoBehaviour
 
             _draggingPiece = state;
             _dragOffset = state.PieceRenderer.transform.position - world;
+            state.PieceRenderer.transform.localScale = state.DragScale;
             state.PieceRenderer.sortingOrder = PieceSortingOrder + 100;
             break;
         }
@@ -421,6 +500,7 @@ public class GameScene : MonoBehaviour
             && Vector3.Distance(state.PieceRenderer.transform.position, state.GrooveRenderer.transform.position) <= SnapDistance)
         {
             state.PieceRenderer.transform.position = state.GrooveRenderer.transform.position;
+            state.PieceRenderer.transform.localScale = state.DragScale;
             var placedRoot = GetOrCreatePlacedPiecesRoot();
             state.PieceRenderer.transform.SetParent(placedRoot.transform, worldPositionStays: true);
             state.IsPlaced = true;
@@ -429,6 +509,7 @@ public class GameScene : MonoBehaviour
         }
 
         state.PieceRenderer.transform.position = state.StartPosition;
+        state.PieceRenderer.transform.localScale = state.TrayScale;
     }
 
     /// <summary>
@@ -606,6 +687,101 @@ public class GameScene : MonoBehaviour
     }
 
     /// <summary>
+    /// 用途：基于原图构建带边框的九宫格 Sprite。返回：可用于 Sliced 的 Sprite。
+    /// </summary>
+    private static Sprite BuildSlicedSprite(Sprite sourceSprite, string spritePath)
+    {
+        if (sourceSprite == null)
+        {
+            return null;
+        }
+
+        var imagePathOnDisk = GameCommonUtility.ToDiskPath(spritePath);
+        if (!File.Exists(imagePathOnDisk))
+        {
+            return sourceSprite;
+        }
+
+        var imageBytes = File.ReadAllBytes(imagePathOnDisk);
+        var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+        if (!texture.LoadImage(imageBytes))
+        {
+            return sourceSprite;
+        }
+
+        var borderSize = Mathf.Clamp(Mathf.RoundToInt(Mathf.Min(texture.width, texture.height) * 0.12f), 8, 64);
+        return Sprite.Create(
+            texture,
+            new Rect(0f, 0f, texture.width, texture.height),
+            new Vector2(0.5f, 0.5f),
+            PixelsPerUnit,
+            0,
+            SpriteMeshType.FullRect,
+            new Vector4(borderSize, borderSize, borderSize, borderSize));
+    }
+
+    /// <summary>
+    /// 用途：创建纯色占位精灵，作为背景图加载失败时的兜底显示。返回：纯色精灵。
+    /// </summary>
+    private static Sprite CreateSolidSprite()
+    {
+        var texture = new Texture2D(4, 4, TextureFormat.RGBA32, false);
+        var colors = new Color[16];
+        for (var i = 0; i < colors.Length; i++)
+        {
+            colors[i] = Color.white;
+        }
+
+        texture.SetPixels(colors);
+        texture.Apply();
+        return Sprite.Create(
+            texture,
+            new Rect(0f, 0f, texture.width, texture.height),
+            new Vector2(0.5f, 0.5f),
+            PixelsPerUnit,
+            0,
+            SpriteMeshType.FullRect,
+            new Vector4(1f, 1f, 1f, 1f));
+    }
+
+    /// <summary>
+    /// 用途：创建或更新 PieceBg 的实心填充层，确保背景区域可见。返回：无。
+    /// </summary>
+    private static void CreateOrUpdatePieceBgFill(SpriteRenderer pieceBgRenderer)
+    {
+        if (pieceBgRenderer == null)
+        {
+            return;
+        }
+
+        var fillObject = GameObject.Find(PieceBgFillObjectName);
+        SpriteRenderer fillRenderer;
+        if (fillObject == null)
+        {
+            fillObject = new GameObject(PieceBgFillObjectName);
+            fillRenderer = fillObject.AddComponent<SpriteRenderer>();
+        }
+        else
+        {
+            fillRenderer = fillObject.GetComponent<SpriteRenderer>();
+            if (fillRenderer == null)
+            {
+                fillRenderer = fillObject.AddComponent<SpriteRenderer>();
+            }
+        }
+
+        fillRenderer.sprite = CreateSolidSprite();
+        fillRenderer.drawMode = SpriteDrawMode.Sliced;
+        fillRenderer.size = pieceBgRenderer.size;
+        fillRenderer.sortingOrder = PieceBgFillSortingOrder;
+        fillRenderer.color = new Color(0f, 0f, 0f, PieceBgFillAlpha);
+        fillRenderer.transform.position = new Vector3(
+            pieceBgRenderer.transform.position.x,
+            pieceBgRenderer.transform.position.y,
+            pieceBgRenderer.transform.position.z + 0.01f);
+    }
+
+    /// <summary>
     /// 用途：统计拼图分组中的碎片总数量。返回：碎片总数。
     /// </summary>
     /// <param name="pieceGroups">参数：拼图分组列表，每组包含若干碎片路径。</param>
@@ -624,5 +800,34 @@ public class GameScene : MonoBehaviour
         }
 
         return total;
+    }
+
+    /// <summary>
+    /// 用途：根据 PieceBg 高度计算贴片在托盘中的自适应缩放（最大高度 90%）。返回：缩放向量。
+    /// </summary>
+    private static Vector3 CalculateTrayScale(SpriteRenderer pieceRenderer, Bounds trayBounds)
+    {
+        if (pieceRenderer == null || pieceRenderer.sprite == null)
+        {
+            return Vector3.one;
+        }
+
+        var spriteHeight = Mathf.Max(0.0001f, pieceRenderer.sprite.bounds.size.y);
+        var maxHeight = Mathf.Max(0.0001f, trayBounds.size.y * PieceTrayMaxHeightRatio);
+        var scale = Mathf.Min(1f, maxHeight / spriteHeight);
+        return new Vector3(scale, scale, 1f);
+    }
+
+    /// <summary>
+    /// 用途：根据给定缩放计算贴片世界宽度。返回：宽度值。
+    /// </summary>
+    private static float GetPieceWidth(SpriteRenderer pieceRenderer, Vector3 scale)
+    {
+        if (pieceRenderer == null || pieceRenderer.sprite == null)
+        {
+            return 0.01f;
+        }
+
+        return Mathf.Max(0.01f, pieceRenderer.sprite.bounds.size.x * scale.x);
     }
 }
