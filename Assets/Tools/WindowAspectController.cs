@@ -11,6 +11,8 @@ public class WindowAspectController : MonoBehaviour
     private const int AspectWidth = 16;
     private const int AspectHeight = 9;
     private const int MinWindowWidth = 360;
+    private const int MaxWindowWidth = 1920;
+    private const int MaxWindowHeight = 1080;
     private const float ResizeSettleDelaySeconds = 0.12f;
     private const float AspectTolerance = 0.01f;
     private const int GwlWndProc = -4;
@@ -148,8 +150,9 @@ public class WindowAspectController : MonoBehaviour
     /// <param name="width">参数：目标窗口宽度。</param>
     private void ApplyByWidth(int width)
     {
-        var clampedWidth = Mathf.Max(width, MinWindowWidth);
+        var clampedWidth = Mathf.Clamp(width, MinWindowWidth, MaxWindowWidth);
         var calculatedHeight = Mathf.RoundToInt(clampedWidth * AspectHeight / (float)AspectWidth);
+        calculatedHeight = Mathf.Min(calculatedHeight, MaxWindowHeight);
         ApplyResolution(clampedWidth, calculatedHeight);
     }
 
@@ -159,9 +162,11 @@ public class WindowAspectController : MonoBehaviour
     /// <param name="height">参数：目标窗口高度。</param>
     private void ApplyByHeight(int height)
     {
-        var calculatedWidth = Mathf.RoundToInt(height * AspectWidth / (float)AspectHeight);
-        var clampedWidth = Mathf.Max(calculatedWidth, MinWindowWidth);
+        var clampedHeight = Mathf.Clamp(height, Mathf.CeilToInt(MinWindowWidth * AspectHeight / (float)AspectWidth), MaxWindowHeight);
+        var calculatedWidth = Mathf.RoundToInt(clampedHeight * AspectWidth / (float)AspectHeight);
+        var clampedWidth = Mathf.Clamp(calculatedWidth, MinWindowWidth, MaxWindowWidth);
         var calculatedHeight = Mathf.RoundToInt(clampedWidth * AspectHeight / (float)AspectWidth);
+        calculatedHeight = Mathf.Min(calculatedHeight, MaxWindowHeight);
         ApplyResolution(clampedWidth, calculatedHeight);
     }
 
@@ -291,6 +296,8 @@ public class WindowAspectController : MonoBehaviour
         var ratio = AspectWidth / (float)AspectHeight;
         var minWidth = MinWindowWidth;
         var minHeight = Mathf.CeilToInt(MinWindowWidth / ratio);
+        var maxWidth = MaxWindowWidth;
+        var maxHeight = MaxWindowHeight;
 
         var currentWidth = Math.Max(1, rect.Right - rect.Left);
         var currentHeight = Math.Max(1, rect.Bottom - rect.Top);
@@ -306,17 +313,31 @@ public class WindowAspectController : MonoBehaviour
         if (useWidthAsDriver)
         {
             targetWidth = Math.Max(currentWidth, minWidth);
+            targetWidth = Math.Min(targetWidth, maxWidth);
             targetHeight = Mathf.RoundToInt(targetWidth / ratio);
         }
         else
         {
             targetHeight = Math.Max(currentHeight, minHeight);
+            targetHeight = Math.Min(targetHeight, maxHeight);
             targetWidth = Mathf.RoundToInt(targetHeight * ratio);
             if (targetWidth < minWidth)
             {
                 targetWidth = minWidth;
                 targetHeight = Mathf.RoundToInt(targetWidth / ratio);
             }
+        }
+
+        if (targetHeight > maxHeight)
+        {
+            targetHeight = maxHeight;
+            targetWidth = Mathf.RoundToInt(targetHeight * ratio);
+        }
+
+        if (targetWidth > maxWidth)
+        {
+            targetWidth = maxWidth;
+            targetHeight = Mathf.RoundToInt(targetWidth / ratio);
         }
 
         switch (edge)

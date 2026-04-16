@@ -1,3 +1,6 @@
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -7,16 +10,27 @@ public class MainScene : MonoBehaviour
     private const float PixelsPerUnit = 100f;
     private const float MinSwipeDistance = 0.5f;
     private const float MainPageCameraPadding = 0.2f;
+    private const float PackageScaleRatio = 0.3f;
+    private const int PackagesPerRow = 5;
+    private const int RowsPerPage = 3;
     private const int MainPackageBagId = GameDefine.DefaultBagId;
     private const string BootstrapObjectName = "MainSceneBootstrap";
     private const string MainBackgroundObjectName = "MainBackground";
-    private const string MainPackageObjectName = "MainPackage001";
+    private const string MainPackageObjectPrefix = "MainPackage";
     private static readonly string MainBackgroundPath = $"{GameDefine.TexturesRoot}/{GameDefine.MainBackgroundFileName}";
     private static bool sHookedSceneLoaded;
-    private SpriteRenderer mMainPackageRenderer;
+    private readonly List<PackageEntry> mPackageEntries = new List<PackageEntry>();
     private Vector3 mSwipeStartWorldPosition;
+    private int mSwipeBagId = GameDefine.InvalidId;
+    private SpriteRenderer mSwipeTargetRenderer;
     private bool mIsSwipeTracking;
     private bool mHasSwitchedToGameScene;
+
+    private struct PackageEntry
+    {
+        public int BagId;
+        public SpriteRenderer Renderer;
+    }
 
     /// <summary>
     /// 用途：在场景加载后自动挂接主场景启动逻辑，并尝试对当前活动场景执行引导初始化。返回：无。
@@ -50,15 +64,14 @@ public class MainScene : MonoBehaviour
         }
 
         var backgroundRenderer = CreateCenteredBackground(targetCamera);
-        CreateCenteredPackageSprite();
+        CreatePackageSprites(backgroundRenderer, targetCamera);
 
         if (targetCamera != null)
         {
             GameCommonUtility.FitOrthographicCameraToRenderers(
                 targetCamera,
                 MainPageCameraPadding,
-                backgroundRenderer,
-                mMainPackageRenderer);
+                backgroundRenderer);
         }
     }
 
@@ -93,18 +106,149 @@ public class MainScene : MonoBehaviour
     }
 
     /// <summary>
-    /// 用途：在主场景中创建 Package001 精灵并居中放置，避免重复创建。返回：无。
+    /// 用途：扫描并创建卡包精灵，按每页 5x3 的网格从左上角开始自动平均分布。返回：无。
     /// </summary>
-    private void CreateCenteredPackageSprite()
+    private void CreatePackageSprites(SpriteRenderer backgroundRenderer, Camera targetCamera)
     {
-        var packagePath = GameManager.GetBagPackagePath();
+        mPackageEntries.Clear();
+        var layoutBounds = ResolveLayoutBounds(backgroundRenderer, targetCamera);
+        var packagePaths = LoadPackageSpritePaths();
+        for (var i = 0; i < packagePaths.Count; i++)
+        {
+            var packagePath = packagePaths[i];
+            var bagId = ParseBagId(packagePath);
+            var objectName = $"{MainPackageObjectPrefix}{bagId:D3}";
+            var spriteRenderer = GameCommonUtility.CreateSpriteRendererObject(
+                objectName,
+                packagePath,
+                0,
+                PixelsPerUnit);
+            if (spriteRenderer == null)
+            {
+                continue;
+            }
 
-        mMainPackageRenderer = CreateCenteredSpriteObject(
-            MainPackageObjectName,
-            packagePath,
-            0,
-            camera: null,
-            fitToCamera: false);
+            spriteRenderer.transform.localScale = new Vector3(PackageScaleRatio, PackageScaleRatio, 1f);
+            LayoutPackageSprite(spriteRenderer, i, layoutBounds);
+            mPackageEntries.Add(new PackageEntry
+            {
+                BagId = bagId,
+                Renderer = spriteRenderer
+            });
+        }
+    }
+
+    /// <summary>
+    /// 用途：加载可用于主界面的卡包封面路径，按名称升序排序。返回：资源路径列表。
+    /// </summary>
+    private static List<string> LoadPackageSpritePaths()
+    {
+        var packageFolderRelativePath = $"{GameDefine.TexturesRoot}/{GameDefine.PackImagesFolder}";
+        var packageFolderOnDisk = GameCommonUtility.ToDiskPath(packageFolderRelativePath);
+        if (!Directory.Exists(packageFolderOnDisk))
+        {
+            return new List<string> { GameManager.GetBagPackagePath() };
+        }
+
+        var packagePaths = Directory
+            .GetFiles(packageFolderOnDisk)
+            .Where(IsSupportedImagePath)
+            .OrderBy(Path.GetFileName)
+            .Select(path => $"{packageFolderRelativePath}/{Path.GetFileName(path)}")
+            .ToList();
+        if (packagePaths.Count > 0)
+        {
+            return packagePaths;
+        }
+
+        return new List<string> { GameManager.GetBagPackagePath() };
+    }
+
+    /// <summary>
+    /// 用途：解析卡包布局容器范围，优先使用背景图边界。返回：布局边界。
+    /// </summary>
+    private static Bounds ResolveLayoutBounds(SpriteRenderer backgroundRenderer, Camera targetCamera)
+    {
+        if (backgroundRenderer != null && backgroundRenderer.sprite != null)
+        {
+            return backgroundRenderer.bounds;
+        }
+
+        if (targetCamera != null)
+        {
+            var width = targetCamera.orthographicSize * 2f * targetCamera.aspect;
+            var height = targetCamera.orthographicSize * 2f;
+            return new Bounds(targetCamera.transform.position, new Vector3(width, height, 1f));
+        }
+
+        return new Bounds(Vector3.zero, new Vector3(10f, 10f, 1f));
+    }
+
+    /// <summary>
+    /// 用途：将单个卡包放置到分页网格位置。返回：无。
+    /// </summary>
+    private static void LayoutPackageSprite(SpriteRenderer spriteRenderer, int packageIndex, Bounds layoutBounds)
+    {
+        if (spriteRenderer == null)
+        {
+            return;
+        }
+
+        var spriteSize = spriteRenderer.sprite != null ? spriteRenderer.sprite.bounds.size : Vector3.one;
+        var packageWidth = Mathf.Max(0.01f, spriteSize.x * spriteRenderer.transform.localScale.x);
+        var packageHeight = Mathf.Max(0.01f, spriteSize.y * spriteRenderer.transform.localScale.y);
+
+        var pageWidth = Mathf.Max(packageWidth, layoutBounds.size.x);
+        var pageHeight = Mathf.Max(packageHeight, layoutBounds.size.y);
+        var packagesPerPage = PackagesPerRow * RowsPerPage;
+        var pageIndex = packageIndex / packagesPerPage;
+        var indexInPage = packageIndex % packagesPerPage;
+        var row = indexInPage / PackagesPerRow;
+        var column = indexInPage % PackagesPerRow;
+
+        var horizontalGap = Mathf.Max(0.02f, (pageWidth - packageWidth * PackagesPerRow) / (PackagesPerRow + 1));
+        var verticalGap = Mathf.Max(0.02f, (pageHeight - packageHeight * RowsPerPage) / (RowsPerPage + 1));
+
+        var pageLeft = layoutBounds.min.x + pageIndex * pageWidth;
+        var pageTop = layoutBounds.max.y;
+
+        var x = pageLeft + horizontalGap + packageWidth * 0.5f + column * (packageWidth + horizontalGap);
+        var y = pageTop - verticalGap - packageHeight * 0.5f - row * (packageHeight + verticalGap);
+        spriteRenderer.transform.position = new Vector3(x, y, 0f);
+    }
+
+    /// <summary>
+    /// 用途：根据卡包封面路径解析包编号，失败时回退默认包编号。返回：包编号。
+    /// </summary>
+    private static int ParseBagId(string packagePath)
+    {
+        var fileNameWithoutExtension = Path.GetFileNameWithoutExtension(packagePath);
+        if (string.IsNullOrWhiteSpace(fileNameWithoutExtension))
+        {
+            return MainPackageBagId;
+        }
+
+        var prefixLength = GameDefine.PackageFilePrefix.Length;
+        if (fileNameWithoutExtension.Length <= prefixLength
+            || !fileNameWithoutExtension.StartsWith(GameDefine.PackageFilePrefix))
+        {
+            return MainPackageBagId;
+        }
+
+        var idText = fileNameWithoutExtension.Substring(prefixLength);
+        return int.TryParse(idText, out var bagId) ? bagId : MainPackageBagId;
+    }
+
+    /// <summary>
+    /// 用途：判断路径是否为支持的图片资源。返回：是否支持。
+    /// </summary>
+    private static bool IsSupportedImagePath(string filePath)
+    {
+        var extension = Path.GetExtension(filePath);
+        return extension == GameDefine.ImageExtPng
+            || extension == GameDefine.ImageExtJpg
+            || extension == GameDefine.ImageExtJpeg
+            || extension == GameDefine.ImageExtWebp;
     }
 
     /// <summary>
@@ -151,13 +295,17 @@ public class MainScene : MonoBehaviour
     private void TryBeginSwipe(Vector2 screenPosition)
     {
         var worldPosition = GameCommonUtility.ScreenToWorld(screenPosition);
-        if (!IsPointInsideMainPackage(worldPosition))
+        if (!TryGetPackageAtPoint(worldPosition, out var packageEntry))
         {
             mIsSwipeTracking = false;
+            mSwipeBagId = GameDefine.InvalidId;
+            mSwipeTargetRenderer = null;
             return;
         }
 
         mSwipeStartWorldPosition = worldPosition;
+        mSwipeBagId = packageEntry.BagId;
+        mSwipeTargetRenderer = packageEntry.Renderer;
         mIsSwipeTracking = true;
     }
 
@@ -174,7 +322,9 @@ public class MainScene : MonoBehaviour
 
         mIsSwipeTracking = false;
         var worldPosition = GameCommonUtility.ScreenToWorld(screenPosition);
-        if (!IsPointInsideMainPackage(worldPosition))
+        if (mSwipeTargetRenderer == null
+            || mSwipeTargetRenderer.sprite == null
+            || !mSwipeTargetRenderer.bounds.Contains(worldPosition))
         {
             return;
         }
@@ -191,19 +341,30 @@ public class MainScene : MonoBehaviour
         }
 
         mHasSwitchedToGameScene = true;
-        GameManager.EnterGameScene(MainPackageBagId);
+        GameManager.EnterGameScene(mSwipeBagId > 0 ? mSwipeBagId : MainPackageBagId);
     }
 
     /// <summary>
-    /// 用途：判断指定世界坐标是否位于主场景包图精灵可交互区域内。返回：是否在精灵内。
+    /// 用途：查找指定点命中的卡包条目。返回：是否命中。
     /// </summary>
-    /// <param name="worldPosition">参数：待检测的世界坐标。</param>
-    /// <returns>返回：true 表示点位于包图精灵区域内，false 表示不在区域内。</returns>
-    private bool IsPointInsideMainPackage(Vector3 worldPosition)
+    private bool TryGetPackageAtPoint(Vector3 worldPosition, out PackageEntry packageEntry)
     {
-        return mMainPackageRenderer != null
-            && mMainPackageRenderer.sprite != null
-            && mMainPackageRenderer.bounds.Contains(worldPosition);
+        for (var i = 0; i < mPackageEntries.Count; i++)
+        {
+            var current = mPackageEntries[i];
+            if (current.Renderer == null
+                || current.Renderer.sprite == null
+                || !current.Renderer.bounds.Contains(worldPosition))
+            {
+                continue;
+            }
+
+            packageEntry = current;
+            return true;
+        }
+
+        packageEntry = default;
+        return false;
     }
 
     /// <summary>
