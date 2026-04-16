@@ -164,7 +164,7 @@ public class MainScene : MonoBehaviour
 
         var packagePaths = Directory
             .GetFiles(packageFolderOnDisk)
-            .Where(IsSupportedImagePath)
+            .Where(GameCommonUtility.IsSupportedImageFile)
             .OrderBy(Path.GetFileName)
             .Select(path => $"{packageFolderRelativePath}/{Path.GetFileName(path)}")
             .ToList();
@@ -252,18 +252,6 @@ public class MainScene : MonoBehaviour
     }
 
     /// <summary>
-    /// 用途：判断路径是否为支持的图片资源。返回：是否支持。
-    /// </summary>
-    private static bool IsSupportedImagePath(string filePath)
-    {
-        var extension = Path.GetExtension(filePath);
-        return extension == GameDefine.ImageExtPng
-            || extension == GameDefine.ImageExtJpg
-            || extension == GameDefine.ImageExtJpeg
-            || extension == GameDefine.ImageExtWebp;
-    }
-
-    /// <summary>
     /// 用途：根据对象名和资源路径创建精灵对象并居中放置，可选按相机适配缩放。返回：创建后的精灵渲染器。
     /// </summary>
     /// <param name="objectName">参数：要创建的场景对象名。</param>
@@ -294,7 +282,7 @@ public class MainScene : MonoBehaviour
 
         if (fitToCamera)
         {
-            FitSpriteToCamera(spriteRenderer, camera);
+            GameCommonUtility.FitSpriteToCamera(spriteRenderer, camera);
         }
 
         return spriteRenderer;
@@ -518,25 +506,6 @@ public class MainScene : MonoBehaviour
 
         packageEntry = default;
         return false;
-    }
-
-    /// <summary>
-    /// 用途：将精灵渲染器按相机可视区域进行缩放适配，保证完整显示。返回：无。
-    /// </summary>
-    /// <param name="spriteRenderer">参数：需要调整缩放的精灵渲染器。</param>
-    /// <param name="camera">参数：用于计算可视范围的相机。</param>
-    private static void FitSpriteToCamera(SpriteRenderer spriteRenderer, Camera camera)
-    {
-        if (spriteRenderer == null || spriteRenderer.sprite == null || camera == null)
-        {
-            return;
-        }
-
-        var spriteSize = spriteRenderer.sprite.bounds.size;
-        var cameraWorldHeight = 2f * camera.orthographicSize;
-        var cameraWorldWidth = cameraWorldHeight * camera.aspect;
-        var scale = Mathf.Min(cameraWorldWidth / spriteSize.x, cameraWorldHeight / spriteSize.y);
-        spriteRenderer.transform.localScale = new Vector3(scale, scale, 1f);
     }
 
 }

@@ -318,4 +318,174 @@ public static class GameCommonUtility
             onEnd?.Invoke(Input.mousePosition);
         }
     }
+
+    /// <summary>
+    /// 用途：判断文件路径是否为支持的图片扩展名。返回：是否支持。
+    /// </summary>
+    /// <param name="filePath">参数：待判断的文件路径。</param>
+    /// <returns>返回：true 表示为支持的图片格式。</returns>
+    public static bool IsSupportedImageFile(string filePath)
+    {
+        var extension = Path.GetExtension(filePath);
+        return extension == GameDefine.ImageExtPng
+            || extension == GameDefine.ImageExtJpg
+            || extension == GameDefine.ImageExtJpeg
+            || extension == GameDefine.ImageExtWebp;
+    }
+
+    /// <summary>
+    /// 用途：将精灵按相机可视范围等比缩放，保证完整显示。返回：无。
+    /// </summary>
+    /// <param name="spriteRenderer">参数：目标精灵渲染器。</param>
+    /// <param name="camera">参数：用于计算可视区域的相机。</param>
+    public static void FitSpriteToCamera(SpriteRenderer spriteRenderer, Camera camera)
+    {
+        if (spriteRenderer == null || spriteRenderer.sprite == null || camera == null)
+        {
+            return;
+        }
+
+        var spriteSize = spriteRenderer.sprite.bounds.size;
+        var cameraWorldHeight = 2f * camera.orthographicSize;
+        var cameraWorldWidth = cameraWorldHeight * camera.aspect;
+        var scale = Mathf.Min(cameraWorldWidth / spriteSize.x, cameraWorldHeight / spriteSize.y);
+        spriteRenderer.transform.localScale = new Vector3(scale, scale, 1f);
+    }
+
+    /// <summary>
+    /// 用途：创建纯色占位精灵，常用于兜底显示。返回：纯色精灵。
+    /// </summary>
+    /// <param name="fillColor">参数：填充颜色。</param>
+    /// <param name="pixelsPerUnit">参数：生成精灵使用的 PPU。</param>
+    /// <param name="textureSize">参数：生成纹理边长像素。</param>
+    /// <returns>返回：创建成功的纯色 Sprite。</returns>
+    public static Sprite CreateSolidSprite(Color fillColor, float pixelsPerUnit, int textureSize = 4)
+    {
+        var size = Mathf.Max(2, textureSize);
+        var texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+        var colors = new Color[size * size];
+        for (var i = 0; i < colors.Length; i++)
+        {
+            colors[i] = fillColor;
+        }
+
+        texture.SetPixels(colors);
+        texture.Apply();
+        return Sprite.Create(
+            texture,
+            new Rect(0f, 0f, texture.width, texture.height),
+            new Vector2(0.5f, 0.5f),
+            pixelsPerUnit,
+            0,
+            SpriteMeshType.FullRect,
+            new Vector4(1f, 1f, 1f, 1f));
+    }
+
+    /// <summary>
+    /// 用途：从图片路径构建九宫格可拉伸精灵。返回：九宫格 Sprite。
+    /// </summary>
+    /// <param name="spritePath">参数：精灵资源路径。</param>
+    /// <param name="pixelsPerUnit">参数：生成精灵使用的 PPU。</param>
+    /// <param name="fallbackSprite">参数：读取失败时使用的兜底精灵。</param>
+    /// <returns>返回：成功时返回九宫格 Sprite，失败返回 fallbackSprite。</returns>
+    public static Sprite CreateSlicedSpriteByPath(string spritePath, float pixelsPerUnit, Sprite fallbackSprite = null)
+    {
+        var imagePathOnDisk = ToDiskPath(spritePath);
+        if (!File.Exists(imagePathOnDisk))
+        {
+            return fallbackSprite;
+        }
+
+        var imageBytes = File.ReadAllBytes(imagePathOnDisk);
+        var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+        if (!texture.LoadImage(imageBytes))
+        {
+            return fallbackSprite;
+        }
+
+        var borderSize = Mathf.Clamp(Mathf.RoundToInt(Mathf.Min(texture.width, texture.height) * 0.12f), 8, 64);
+        return Sprite.Create(
+            texture,
+            new Rect(0f, 0f, texture.width, texture.height),
+            new Vector2(0.5f, 0.5f),
+            pixelsPerUnit,
+            0,
+            SpriteMeshType.FullRect,
+            new Vector4(borderSize, borderSize, borderSize, borderSize));
+    }
+
+    /// <summary>
+    /// 用途：将棋盘相对像素坐标转换为世界坐标。返回：世界坐标。
+    /// </summary>
+    /// <param name="boardWorldCenter">参数：棋盘中心世界坐标。</param>
+    /// <param name="boardTextureSize">参数：棋盘纹理尺寸（像素）。</param>
+    /// <param name="relativePixelPosition">参数：棋盘左下原点下的相对像素坐标。</param>
+    /// <param name="pixelsPerUnit">参数：每单位像素数。</param>
+    /// <returns>返回：转换后的世界坐标。</returns>
+    public static Vector3 ConvertBoardRelativeToWorldPosition(
+        Vector3 boardWorldCenter,
+        Vector2 boardTextureSize,
+        Vector2 relativePixelPosition,
+        float pixelsPerUnit)
+    {
+        var localX = (relativePixelPosition.x - boardTextureSize.x * 0.5f) / pixelsPerUnit;
+        var localY = (relativePixelPosition.y - boardTextureSize.y * 0.5f) / pixelsPerUnit;
+        return new Vector3(
+            boardWorldCenter.x + localX,
+            boardWorldCenter.y + localY,
+            0f);
+    }
+
+    /// <summary>
+    /// 用途：设置精灵渲染器透明度。返回：无。
+    /// </summary>
+    /// <param name="renderer">参数：目标渲染器。</param>
+    /// <param name="alpha">参数：透明度（0~1）。</param>
+    public static void SetRendererAlpha(SpriteRenderer renderer, float alpha)
+    {
+        if (renderer == null)
+        {
+            return;
+        }
+
+        var color = renderer.color;
+        color.a = Mathf.Clamp01(alpha);
+        renderer.color = color;
+    }
+
+    /// <summary>
+    /// 用途：根据托盘高度限制计算贴片缩放。返回：等比缩放向量。
+    /// </summary>
+    /// <param name="pieceRenderer">参数：贴片渲染器。</param>
+    /// <param name="trayBounds">参数：托盘范围。</param>
+    /// <param name="maxHeightRatio">参数：托盘可用最大高度比例。</param>
+    /// <returns>返回：贴片在托盘中的目标缩放。</returns>
+    public static Vector3 CalculateTrayScale(SpriteRenderer pieceRenderer, Bounds trayBounds, float maxHeightRatio)
+    {
+        if (pieceRenderer == null || pieceRenderer.sprite == null)
+        {
+            return Vector3.one;
+        }
+
+        var spriteHeight = Mathf.Max(0.0001f, pieceRenderer.sprite.bounds.size.y);
+        var maxHeight = Mathf.Max(0.0001f, trayBounds.size.y * maxHeightRatio);
+        var scale = Mathf.Min(1f, maxHeight / spriteHeight);
+        return new Vector3(scale, scale, 1f);
+    }
+
+    /// <summary>
+    /// 用途：按指定缩放计算贴片世界宽度。返回：宽度值。
+    /// </summary>
+    /// <param name="pieceRenderer">参数：贴片渲染器。</param>
+    /// <param name="scale">参数：缩放向量。</param>
+    /// <returns>返回：贴片世界宽度。</returns>
+    public static float GetPieceWidth(SpriteRenderer pieceRenderer, Vector3 scale)
+    {
+        if (pieceRenderer == null || pieceRenderer.sprite == null)
+        {
+            return 0.01f;
+        }
+
+        return Mathf.Max(0.01f, pieceRenderer.sprite.bounds.size.x * scale.x);
+    }
 }

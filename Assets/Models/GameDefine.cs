@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using UnityEngine;
 
 [Serializable]
 public struct PackagePieceData
@@ -21,6 +23,40 @@ public struct PackageConfigData
     public string PackageId;
     public string Board;
     public PackagePieceGroupData[] Pieces;
+}
+
+public sealed class DraggablePieceState
+{
+    public SpriteRenderer PieceRenderer;
+    public SpriteRenderer GrooveRenderer;
+    public Vector3 StartPosition;
+    public Vector3 TrayScale;
+    public Vector3 DragScale;
+    public bool IsPlaced;
+}
+
+public sealed class SceneResourcesState
+{
+    public string ActiveBagFolderPath;
+    public string ActiveGameBoardPath;
+    public List<List<string>> ActivePieceGroups;
+    public PackageConfigData ActivePackageConfig;
+}
+
+public sealed class BoardState
+{
+    public SpriteRenderer GameBoardRenderer;
+    public SpriteRenderer PieceBgRenderer;
+    public List<List<SpriteRenderer>> GrooveRenderersByGroup = new List<List<SpriteRenderer>>();
+    public bool IsBoardAndGroovesInitialized;
+}
+
+public sealed class DragState
+{
+    public readonly List<DraggablePieceState> CurrentGroupDraggables = new List<DraggablePieceState>();
+    public int CurrentGroupIndex = -1;
+    public DraggablePieceState DraggingPiece;
+    public Vector3 DragOffset;
 }
 
 public static class GameDefine
