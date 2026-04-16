@@ -45,6 +45,6 @@
     "**/PuffiesDebug.keystore": true,
     "**/UniversalRenderPipelineGlobalSettings.asset": true,
     "**/Puffies_BurstDebugInformation_DoNotShip/**": true,
-    "**/Assets/Scenes/*.unity": true
+    "**/Assets/Scenes/**": true
   }
 }
