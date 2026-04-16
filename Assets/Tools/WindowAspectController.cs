@@ -5,9 +5,9 @@ using UnityEngine;
 /// <summary>
 /// 用途：在 Windows 窗口模式下锁定窗口为固定宽高比，拖拽缩放时自动纠偏。返回：无。
 /// </summary>
-public class WindowAspectRatioController : MonoBehaviour
+public class WindowAspectController : MonoBehaviour
 {
-    private const string BootstrapObjectName = "WindowAspectRatioControllerBootstrap";
+    private const string BootstrapObjectName = "WindowAspectControllerBootstrap";
     private const int AspectWidth = 16;
     private const int AspectHeight = 9;
     private const int MinWindowWidth = 360;
@@ -63,7 +63,7 @@ public class WindowAspectRatioController : MonoBehaviour
 
         var host = new GameObject(BootstrapObjectName);
         DontDestroyOnLoad(host);
-        host.AddComponent<WindowAspectRatioController>();
+        host.AddComponent<WindowAspectController>();
         sInitialized = true;
     }
 
@@ -227,7 +227,7 @@ public class WindowAspectRatioController : MonoBehaviour
 
         if (_windowHandle == IntPtr.Zero)
         {
-            Debug.LogWarning("WindowAspectRatioController: failed to get window handle, fallback to polling mode.");
+            Debug.LogWarning("WindowAspectController: failed to get window handle, fallback to polling mode.");
             return;
         }
 
@@ -236,7 +236,7 @@ public class WindowAspectRatioController : MonoBehaviour
         _originalWndProc = SetWindowLongPtr(_windowHandle, GwlWndProc, newWndProcPtr);
         if (_originalWndProc == IntPtr.Zero)
         {
-            Debug.LogWarning("WindowAspectRatioController: failed to install native sizing hook, fallback to polling mode.");
+            Debug.LogWarning("WindowAspectController: failed to install native sizing hook, fallback to polling mode.");
             return;
         }
 

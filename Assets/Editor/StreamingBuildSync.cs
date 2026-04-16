@@ -7,7 +7,7 @@ using UnityEngine;
 /// <summary>
 /// 用途：构建前自动将运行时直读资源同步到 StreamingAssets，保证打包后可被文件接口读取。返回：无。
 /// </summary>
-public class StreamingAssetsBuildSync : IPreprocessBuildWithReport
+public class StreamingBuildSync : IPreprocessBuildWithReport
 {
     public int callbackOrder => 0;
 
