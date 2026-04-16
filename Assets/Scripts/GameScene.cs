@@ -99,8 +99,8 @@ public class GameScene : MonoBehaviour
             return;
         }
 
-        CreateDraggableGroup(0);
         FitGamePageToCamera(_board.GameBoardRenderer, CollectCurrentVisibleRenderers());
+        CreateDraggableGroup(0);
         _resources.ActivePieceGroups = ConvertConfigToPieceGroups(_resources.ActivePackageConfig);
         var pieceCount = CountPieces(_resources.ActivePieceGroups);
 
@@ -274,6 +274,7 @@ public class GameScene : MonoBehaviour
             return;
         }
 
+        AlignBoardToCurrentGroupGrooves(grooveGroup);
         var root = new GameObject(DraggableGroupRootObjectName);
         var firstPieceRenderer = CreateSpriteObject(
             $"DraggablePiece_{groupIndex}_0",
@@ -665,6 +666,145 @@ public class GameScene : MonoBehaviour
             pieceBgRenderer.transform.position.x,
             pieceBgRenderer.transform.position.y,
             pieceBgRenderer.transform.position.z + 0.01f);
+    }
+
+    /// <summary>
+    /// 用途：根据当前组凹槽区域将棋盘相关内容整体平移，使凹槽中心尽量对齐屏幕中心。返回：无。
+    /// </summary>
+    private void AlignBoardToCurrentGroupGrooves(List<SpriteRenderer> currentGroupGrooves)
+    {
+        if (currentGroupGrooves == null || currentGroupGrooves.Count == 0)
+        {
+            return;
+        }
+
+        var camera = Camera.main;
+        if (camera == null)
+        {
+            return;
+        }
+
+        var grooveBounds = BuildGroupBounds(currentGroupGrooves);
+        if (!grooveBounds.HasValue)
+        {
+            return;
+        }
+
+        var cameraCenter = new Vector3(camera.transform.position.x, camera.transform.position.y, 0f);
+        var delta = cameraCenter - grooveBounds.Value.center;
+        if (delta.sqrMagnitude <= 0.000001f)
+        {
+            return;
+        }
+
+        TranslateBoardWorld(delta);
+    }
+
+    /// <summary>
+    /// 用途：对一组凹槽渲染器计算联合包围盒。返回：可选包围盒。
+    /// </summary>
+    private static Bounds? BuildGroupBounds(List<SpriteRenderer> groupRenderers)
+    {
+        Bounds? combined = null;
+        for (var i = 0; i < groupRenderers.Count; i++)
+        {
+            var renderer = groupRenderers[i];
+            if (renderer == null || renderer.sprite == null)
+            {
+                continue;
+            }
+
+            if (!combined.HasValue)
+            {
+                combined = renderer.bounds;
+            }
+            else
+            {
+                var value = combined.Value;
+                value.Encapsulate(renderer.bounds);
+                combined = value;
+            }
+        }
+
+        return combined;
+    }
+
+    /// <summary>
+    /// 用途：平移棋盘、凹槽、托盘背景与已放置碎片，保持整体相对布局不变。返回：无。
+    /// </summary>
+    private void TranslateBoardWorld(Vector3 delta)
+    {
+        TranslateRenderer(_board.GameBoardRenderer, delta);
+        TranslateRenderer(_board.PieceBgRenderer, delta);
+        TranslatePieceBgFill(delta);
+        TranslateAllGrooves(delta);
+        TranslatePlacedPieces(delta);
+    }
+
+    /// <summary>
+    /// 用途：平移指定渲染器对象。返回：无。
+    /// </summary>
+    private static void TranslateRenderer(SpriteRenderer renderer, Vector3 delta)
+    {
+        if (renderer == null)
+        {
+            return;
+        }
+
+        renderer.transform.position += delta;
+    }
+
+    /// <summary>
+    /// 用途：平移 PieceBg 填充层对象，保持与边框对齐。返回：无。
+    /// </summary>
+    private static void TranslatePieceBgFill(Vector3 delta)
+    {
+        var fillObject = GameObject.Find(PieceBgFillObjectName);
+        if (fillObject == null)
+        {
+            return;
+        }
+
+        fillObject.transform.position += delta;
+    }
+
+    /// <summary>
+    /// 用途：平移全部分组凹槽对象，确保凹槽与棋盘保持相对位置。返回：无。
+    /// </summary>
+    private void TranslateAllGrooves(Vector3 delta)
+    {
+        if (_board.GrooveRenderersByGroup == null)
+        {
+            return;
+        }
+
+        for (var groupIndex = 0; groupIndex < _board.GrooveRenderersByGroup.Count; groupIndex++)
+        {
+            var group = _board.GrooveRenderersByGroup[groupIndex];
+            if (group == null)
+            {
+                continue;
+            }
+
+            for (var i = 0; i < group.Count; i++)
+            {
+                TranslateRenderer(group[i], delta);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 用途：平移已吸附碎片根节点，确保已放置碎片继续对齐对应凹槽。返回：无。
+    /// </summary>
+    private static void TranslatePlacedPieces(Vector3 delta)
+    {
+        var placedRoot = GameObject.Find(PlacedPiecesRootObjectName);
+        if (placedRoot == null)
+        {
+            return;
+        }
+
+        placedRoot.transform.position += delta;
     }
 
     /// <summary>
