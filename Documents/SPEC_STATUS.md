@@ -2,7 +2,7 @@
 
 - Task: 主流程交互完善、GameScene 布局改造与工具类重构
 - Status: In Progress
-- Updated At: 2026-04-16
+- Updated At: 2026-04-17
 - Auto-Update Mode: Enabled (Maintained by Codex)
 
 ## Requirement Log
@@ -78,8 +78,9 @@
   - 已完成贴片托盘规则：贴片层级高于 `PieceBg`；托盘中自适应（最大高度 90%）；拖拽还原原始尺寸；未吸附回托盘自动恢复托盘缩放。
   - 已完成第二轮通用方法下沉：`GameScene` 中坐标换算/透明度/托盘缩放/宽度计算已迁移到 `GameCommonUtility`。
   - 已完成 `GameScene` 状态聚合重构（resources / board / drag）并将状态类型定义迁移到 `GameDefine`。
+  - 已完成吸附阈值第三轮微调：`GameScene` 吸附半径由固定值改为“基于碎片尺寸的自适应阈值（含上下限）”。
 - 进行中：
-  - 等待你运行回归，确认 MainScene 新交互与 GameScene 托盘/拖拽体验符合预期。
+  - 等待你运行回归，确认 MainScene 新交互与 GameScene 托盘/拖拽体验符合预期（重点观察不同尺寸碎片的吸附手感）。
 - 未完成：
   - 如需继续调优：卡包聚焦动画时长、拖拽吸附阈值、托盘视觉样式与分页切换交互。
 
@@ -129,9 +130,9 @@
 - 检查方式：针对 `GameCommonUtility.cs`、`MainScene.cs`、`GameScene.cs` 执行 lints。
 - 检查结果：无新增 linter 报错。
 - 已知风险：
-  - 吸附半径目前为固定值 `0.35` 世界单位，不同资源尺度下可能需要微调。
+  - 吸附半径已改为自适应策略；若后续引入极端尺寸碎片，可能仍需微调 `SnapDistanceSizeRatio/Min/Max`。
   - 贴片托盘横向布局在未来引入极端宽图时可能需要增加换行或分页策略。
 
 ## Next Action
 
-- 运行 MainScene -> GameScene 做完整回归，重点确认：卡包点击聚焦、滑动进入、PieceBg 托盘显示、贴片拖拽吸附/回弹与组推进流程；若体验不理想，按阈值与动画参数做第三轮微调。
+- 运行 MainScene -> GameScene 做完整回归，重点确认：卡包点击聚焦、滑动进入、PieceBg 托盘显示、贴片拖拽吸附/回弹与组推进流程；根据手感继续微调点击/滑动阈值与聚焦动画时长。

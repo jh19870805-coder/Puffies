@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -11,7 +12,11 @@ public class GameScene : MonoBehaviour
     private const float DraggableLeftPadding = 0.2f;
     private const float DraggableHorizontalSpacingPixels = 20f;
     private const float PieceTrayMaxHeightRatio = 0.9f;
-    private const float SnapDistance = 0.35f;
+    private const float SnapDistanceMin = 0.2f;
+    private const float SnapDistanceMax = 0.8f;
+    private const float SnapDistanceSizeRatio = 0.22f;
+    private const float PieceBgSlideDuration = 0.25f;
+    private const float PieceBgSlideOutPadding = 0.15f;
     private const int GameBoardSortingOrder = 0;
     private const int PieceBgFillSortingOrder = 499;
     private const int PieceBgSortingOrder = 500;
@@ -31,6 +36,10 @@ public class GameScene : MonoBehaviour
     private readonly SceneResourcesState _resources = new SceneResourcesState();
     private readonly BoardState _board = new BoardState();
     private readonly DragState _drag = new DragState();
+    private Vector3 _pieceBgOriginalPosition;
+    private bool _hasPieceBgOriginalPosition;
+    private bool _isPieceBgHidden;
+    private Coroutine _pieceBgSlideCoroutine;
 
     /// <summary>
     /// 用途：在场景加载后自动挂接游戏场景引导逻辑，并对当前活动场景尝试初始化。返回：无。
@@ -153,9 +162,11 @@ public class GameScene : MonoBehaviour
 
         var boardWidth = boardRenderer.bounds.size.x;
         var bgHeight = boardRenderer.bounds.size.y * 0.25f;
-        var boardBottom = boardRenderer.bounds.min.y;
-        var bgCenterY = boardBottom + bgHeight * 0.5f;
-        var bgPosition = new Vector3(boardRenderer.transform.position.x, bgCenterY, -1f);
+        var camera = Camera.main;
+        var bottomEdge = camera != null ? camera.transform.position.y - camera.orthographicSize : boardRenderer.bounds.min.y;
+        var bgCenterY = bottomEdge + bgHeight * 0.5f;
+        var bgCenterX = camera != null ? camera.transform.position.x : boardRenderer.transform.position.x;
+        var bgPosition = new Vector3(bgCenterX, bgCenterY, -1f);
 
         var renderer = CreateSpriteObject(
             PieceBgObjectName,
@@ -185,6 +196,7 @@ public class GameScene : MonoBehaviour
         renderer.transform.position = bgPosition;
         renderer.color = new Color(0f, 0f, 0f, PieceBgAlpha);
         CreateOrUpdatePieceBgFill(renderer);
+        CachePieceBgOriginalPosition();
         return renderer;
     }
 
@@ -255,6 +267,7 @@ public class GameScene : MonoBehaviour
     /// <param name="groupIndex">参数：要创建的组索引。</param>
     private void CreateDraggableGroup(int groupIndex)
     {
+        SlidePieceBgToOriginalPosition();
         ClearCurrentDraggableGroup();
         _drag.CurrentGroupIndex = groupIndex;
 
@@ -275,6 +288,7 @@ public class GameScene : MonoBehaviour
         }
 
         AlignBoardToCurrentGroupGrooves(grooveGroup);
+        AlignPieceBgToPageBottom();
         var root = new GameObject(DraggableGroupRootObjectName);
         var firstPieceRenderer = CreateSpriteObject(
             $"DraggablePiece_{groupIndex}_0",
@@ -339,6 +353,8 @@ public class GameScene : MonoBehaviour
 
             nextCenterX = pieceCenterX + pieceHalfWidth + horizontalSpacing;
         }
+
+        CachePieceBgOriginalPosition();
     }
 
     /// <summary>
@@ -442,6 +458,10 @@ public class GameScene : MonoBehaviour
             _drag.DragOffset = state.PieceRenderer.transform.position - world;
             state.PieceRenderer.transform.localScale = state.DragScale;
             state.PieceRenderer.sortingOrder = PieceSortingOrder + 100;
+            if (_drag.CurrentGroupDraggables.Count == 1)
+            {
+                SlidePieceBgOutOfScreen();
+            }
             break;
         }
     }
@@ -479,7 +499,7 @@ public class GameScene : MonoBehaviour
         state.PieceRenderer.sortingOrder = PieceSortingOrder;
 
         if (state.GrooveRenderer != null
-            && Vector3.Distance(state.PieceRenderer.transform.position, state.GrooveRenderer.transform.position) <= SnapDistance)
+            && Vector3.Distance(state.PieceRenderer.transform.position, state.GrooveRenderer.transform.position) <= CalculateSnapDistance(state))
         {
             state.PieceRenderer.transform.position = state.GrooveRenderer.transform.position;
             state.PieceRenderer.transform.localScale = state.DragScale;
@@ -492,6 +512,37 @@ public class GameScene : MonoBehaviour
 
         state.PieceRenderer.transform.position = state.StartPosition;
         state.PieceRenderer.transform.localScale = state.TrayScale;
+        SlidePieceBgToOriginalPosition();
+    }
+
+    /// <summary>
+    /// 用途：按当前碎片尺寸计算自适应吸附半径，并限制在安全区间。返回：吸附半径。
+    /// </summary>
+    private static float CalculateSnapDistance(DraggablePieceState state)
+    {
+        if (state == null)
+        {
+            return SnapDistanceMin;
+        }
+
+        var referenceSize = 0f;
+        if (state.GrooveRenderer != null)
+        {
+            referenceSize = Mathf.Max(state.GrooveRenderer.bounds.size.x, state.GrooveRenderer.bounds.size.y);
+        }
+
+        if (referenceSize <= 0f && state.PieceRenderer != null)
+        {
+            referenceSize = Mathf.Max(state.PieceRenderer.bounds.size.x, state.PieceRenderer.bounds.size.y);
+        }
+
+        if (referenceSize <= 0f)
+        {
+            return SnapDistanceMin;
+        }
+
+        var adaptiveDistance = referenceSize * SnapDistanceSizeRatio;
+        return Mathf.Clamp(adaptiveDistance, SnapDistanceMin, SnapDistanceMax);
     }
 
     /// <summary>
@@ -555,6 +606,7 @@ public class GameScene : MonoBehaviour
         }
 
         GameCommonUtility.FitOrthographicCameraToRenderers(camera, GamePageCameraPadding, renderers.ToArray());
+        AlignPieceBgToPageBottom();
     }
 
     /// <summary>
@@ -730,13 +782,11 @@ public class GameScene : MonoBehaviour
     }
 
     /// <summary>
-    /// 用途：平移棋盘、凹槽、托盘背景与已放置碎片，保持整体相对布局不变。返回：无。
+    /// 用途：平移棋盘、凹槽与已放置碎片，保持整体相对布局不变。返回：无。
     /// </summary>
     private void TranslateBoardWorld(Vector3 delta)
     {
         TranslateRenderer(_board.GameBoardRenderer, delta);
-        TranslateRenderer(_board.PieceBgRenderer, delta);
-        TranslatePieceBgFill(delta);
         TranslateAllGrooves(delta);
         TranslatePlacedPieces(delta);
     }
@@ -766,6 +816,165 @@ public class GameScene : MonoBehaviour
         }
 
         fillObject.transform.position += delta;
+    }
+
+    /// <summary>
+    /// 用途：记录 PieceBg 当前原始停靠位置，供隐藏后回弹使用。返回：无。
+    /// </summary>
+    private void CachePieceBgOriginalPosition()
+    {
+        if (_board.PieceBgRenderer == null)
+        {
+            _hasPieceBgOriginalPosition = false;
+            return;
+        }
+
+        _pieceBgOriginalPosition = _board.PieceBgRenderer.transform.position;
+        _hasPieceBgOriginalPosition = true;
+        _isPieceBgHidden = false;
+    }
+
+    /// <summary>
+    /// 用途：将 PieceBg 锚定到游戏页面底部，并同步填充层位置。返回：无。
+    /// </summary>
+    private void AlignPieceBgToPageBottom()
+    {
+        if (_board.PieceBgRenderer == null || _isPieceBgHidden)
+        {
+            return;
+        }
+
+        var camera = Camera.main;
+        if (camera == null)
+        {
+            return;
+        }
+
+        var halfHeight = _board.PieceBgRenderer.bounds.extents.y;
+        var bottomEdge = camera.transform.position.y - camera.orthographicSize;
+        var anchoredPosition = new Vector3(
+            camera.transform.position.x,
+            bottomEdge + halfHeight,
+            _board.PieceBgRenderer.transform.position.z);
+
+        ApplyPieceBgSlidePosition(anchoredPosition, GetPieceBgFillTransform());
+        _pieceBgOriginalPosition = anchoredPosition;
+        _hasPieceBgOriginalPosition = true;
+    }
+
+    /// <summary>
+    /// 用途：当单贴图被拿起时，将 PieceBg 向下滑出屏幕。返回：无。
+    /// </summary>
+    private void SlidePieceBgOutOfScreen()
+    {
+        if (_board.PieceBgRenderer == null || _isPieceBgHidden)
+        {
+            return;
+        }
+
+        if (!_hasPieceBgOriginalPosition)
+        {
+            CachePieceBgOriginalPosition();
+        }
+
+        var camera = Camera.main;
+        if (camera == null)
+        {
+            return;
+        }
+
+        var halfHeight = _board.PieceBgRenderer.bounds.extents.y;
+        var bottomEdge = camera.transform.position.y - camera.orthographicSize;
+        var targetY = bottomEdge - halfHeight - PieceBgSlideOutPadding;
+        var from = _board.PieceBgRenderer.transform.position;
+        var target = new Vector3(from.x, targetY, from.z);
+        StartPieceBgSlide(from, target, true);
+    }
+
+    /// <summary>
+    /// 用途：将 PieceBg 从隐藏状态滑回原始位置。返回：无。
+    /// </summary>
+    private void SlidePieceBgToOriginalPosition()
+    {
+        if (_board.PieceBgRenderer == null || !_hasPieceBgOriginalPosition || !_isPieceBgHidden)
+        {
+            return;
+        }
+
+        StartPieceBgSlide(_board.PieceBgRenderer.transform.position, _pieceBgOriginalPosition, false);
+    }
+
+    /// <summary>
+    /// 用途：启动 PieceBg 及填充层同步滑动动画。返回：无。
+    /// </summary>
+    private void StartPieceBgSlide(Vector3 from, Vector3 to, bool willHidden)
+    {
+        if (_pieceBgSlideCoroutine != null)
+        {
+            StopCoroutine(_pieceBgSlideCoroutine);
+            _pieceBgSlideCoroutine = null;
+        }
+
+        var fillTransform = GetPieceBgFillTransform();
+        _pieceBgSlideCoroutine = StartCoroutine(AnimatePieceBgSlide(from, to, fillTransform, willHidden));
+    }
+
+    /// <summary>
+    /// 用途：执行 PieceBg 与填充层的位移补间，保证视觉保持对齐。返回：协程。
+    /// </summary>
+    private IEnumerator AnimatePieceBgSlide(Vector3 from, Vector3 to, Transform fillTransform, bool willHidden)
+    {
+        var duration = Mathf.Max(0f, PieceBgSlideDuration);
+        if (duration <= 0f)
+        {
+            ApplyPieceBgSlidePosition(to, fillTransform);
+            _isPieceBgHidden = willHidden;
+            _pieceBgSlideCoroutine = null;
+            yield break;
+        }
+
+        var elapsed = 0f;
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            var t = Mathf.Clamp01(elapsed / duration);
+            var eased = Mathf.SmoothStep(0f, 1f, t);
+            var position = Vector3.LerpUnclamped(from, to, eased);
+            ApplyPieceBgSlidePosition(position, fillTransform);
+            yield return null;
+        }
+
+        ApplyPieceBgSlidePosition(to, fillTransform);
+        _isPieceBgHidden = willHidden;
+        _pieceBgSlideCoroutine = null;
+    }
+
+    /// <summary>
+    /// 用途：同步设置 PieceBg 与填充层的位置。返回：无。
+    /// </summary>
+    private void ApplyPieceBgSlidePosition(Vector3 pieceBgPosition, Transform fillTransform)
+    {
+        if (_board.PieceBgRenderer != null)
+        {
+            _board.PieceBgRenderer.transform.position = pieceBgPosition;
+        }
+
+        if (fillTransform != null)
+        {
+            fillTransform.position = new Vector3(
+                pieceBgPosition.x,
+                pieceBgPosition.y,
+                pieceBgPosition.z + 0.01f);
+        }
+    }
+
+    /// <summary>
+    /// 用途：获取 PieceBg 填充层 Transform。返回：Transform。
+    /// </summary>
+    private static Transform GetPieceBgFillTransform()
+    {
+        var fillObject = GameObject.Find(PieceBgFillObjectName);
+        return fillObject != null ? fillObject.transform : null;
     }
 
     /// <summary>
