@@ -7,6 +7,7 @@ using UnityEngine;
 /// </summary>
 public class WindowAspectController : MonoBehaviour
 {
+    private const bool EnableAspectLock = false;
     private const string BootstrapObjectName = "WindowAspectControllerBootstrap";
     private const int AspectWidth = 16;
     private const int AspectHeight = 9;
@@ -140,6 +141,11 @@ public class WindowAspectController : MonoBehaviour
     /// </summary>
     private static bool ShouldRun()
     {
+        if (!EnableAspectLock)
+        {
+            return false;
+        }
+
         return Application.platform == RuntimePlatform.WindowsPlayer
             && Screen.fullScreenMode == FullScreenMode.Windowed;
     }
