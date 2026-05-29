@@ -10,7 +10,6 @@ public class MainScene : MonoBehaviour
     private const float ReferenceHeight = 1080f;
     private const float PixelsPerUnit = 100f;
     private const float MaxTapDistancePixels = 18f;
-    private const float MainPageCameraPadding = 0.2f;
     private const float PackageScaleRatio = 0.3f;
     private const float PackageClickScaleRatio = 1.15f;
     private const float PackageClickAnimDuration = 0.12f;
@@ -18,9 +17,7 @@ public class MainScene : MonoBehaviour
     private const int RowsPerPage = 3;
     private const int MainPackageBagId = GameDefine.DefaultBagId;
     private const string BootstrapObjectName = "MainSceneBootstrap";
-    private const string MainBackgroundObjectName = "MainBackground";
     private const string MainPackageObjectPrefix = "MainPackage";
-    private static readonly string MainBackgroundPath = $"{GameDefine.TexturesRoot}/{GameDefine.MainBackgroundFileName}";
     private static bool sHookedSceneLoaded;
     private readonly List<PackageEntry> mPackageEntries = new List<PackageEntry>();
     private SpriteRenderer mTapCandidateRenderer;
@@ -50,7 +47,7 @@ public class MainScene : MonoBehaviour
     }
 
     /// <summary>
-    /// 用途：主场景组件启动入口，完成管理器初始化、主相机设置与背景创建。返回：无。
+    /// 用途：主场景组件启动入口，完成管理器初始化、主相机设置与卡包创建。返回：无。
     /// </summary>
     private void Start()
     {
@@ -68,16 +65,7 @@ public class MainScene : MonoBehaviour
             GameCommonUtility.SetupOrthographicCamera(targetCamera, ReferenceHeight, PixelsPerUnit);
         }
 
-        var backgroundRenderer = CreateCenteredBackground(targetCamera);
-        CreatePackageSprites(backgroundRenderer, targetCamera);
-
-        if (targetCamera != null)
-        {
-            GameCommonUtility.FitOrthographicCameraToRenderers(
-                targetCamera,
-                MainPageCameraPadding,
-                backgroundRenderer);
-        }
+        CreatePackageSprites(targetCamera);
     }
 
     /// <summary>
@@ -97,26 +85,12 @@ public class MainScene : MonoBehaviour
     }
 
     /// <summary>
-    /// 用途：在主场景中创建并居中显示背景对象，避免重复创建。返回：无。
-    /// </summary>
-    /// <param name="targetCamera">参数：用于适配背景显示比例的目标相机。</param>
-    private SpriteRenderer CreateCenteredBackground(Camera targetCamera)
-    {
-        return CreateCenteredSpriteObject(
-            MainBackgroundObjectName,
-            MainBackgroundPath,
-            -100,
-            targetCamera,
-            fitToCamera: true);
-    }
-
-    /// <summary>
     /// 用途：扫描并创建卡包精灵，按每页 5x3 的网格从左上角开始自动平均分布。返回：无。
     /// </summary>
-    private void CreatePackageSprites(SpriteRenderer backgroundRenderer, Camera targetCamera)
+    private void CreatePackageSprites(Camera targetCamera)
     {
         mPackageEntries.Clear();
-        var layoutBounds = ResolveLayoutBounds(backgroundRenderer, targetCamera);
+        var layoutBounds = ResolveLayoutBounds(targetCamera);
         var packagePaths = LoadPackageSpritePaths();
         for (var i = 0; i < packagePaths.Count; i++)
         {
@@ -170,15 +144,10 @@ public class MainScene : MonoBehaviour
     }
 
     /// <summary>
-    /// 用途：解析卡包布局容器范围，优先使用背景图边界。返回：布局边界。
+    /// 用途：解析卡包布局容器范围，使用主相机视口作为布局区域。返回：布局边界。
     /// </summary>
-    private static Bounds ResolveLayoutBounds(SpriteRenderer backgroundRenderer, Camera targetCamera)
+    private static Bounds ResolveLayoutBounds(Camera targetCamera)
     {
-        if (backgroundRenderer != null && backgroundRenderer.sprite != null)
-        {
-            return backgroundRenderer.bounds;
-        }
-
         if (targetCamera != null)
         {
             var width = targetCamera.orthographicSize * 2f * targetCamera.aspect;
@@ -242,43 +211,6 @@ public class MainScene : MonoBehaviour
 
         var idText = fileNameWithoutExtension.Substring(prefixLength);
         return int.TryParse(idText, out var bagId) ? bagId : MainPackageBagId;
-    }
-
-    /// <summary>
-    /// 用途：根据对象名和资源路径创建精灵对象并居中放置，可选按相机适配缩放。返回：创建后的精灵渲染器。
-    /// </summary>
-    /// <param name="objectName">参数：要创建的场景对象名。</param>
-    /// <param name="spritePath">参数：精灵资源路径。</param>
-    /// <param name="sortingOrder">参数：渲染层级。</param>
-    /// <param name="camera">参数：用于适配缩放的相机，未适配时可为空。</param>
-    /// <param name="fitToCamera">参数：是否按相机视口适配精灵缩放。</param>
-    /// <returns>返回：创建或已存在对象上的 SpriteRenderer，失败返回 null。</returns>
-    private SpriteRenderer CreateCenteredSpriteObject(
-        string objectName,
-        string spritePath,
-        int sortingOrder,
-        Camera camera,
-        bool fitToCamera)
-    {
-        var spriteRenderer = GameCommonUtility.CreateSpriteRendererObject(
-            objectName,
-            spritePath,
-            sortingOrder,
-            PixelsPerUnit);
-        if (spriteRenderer == null)
-        {
-            Debug.LogWarning($"Failed to create sprite from {spritePath}.");
-            return null;
-        }
-
-        spriteRenderer.transform.position = Vector3.zero;
-
-        if (fitToCamera)
-        {
-            GameCommonUtility.FitSpriteToCamera(spriteRenderer, camera);
-        }
-
-        return spriteRenderer;
     }
 
     /// <summary>

@@ -1,8 +1,8 @@
 # SPEC 状态面板
 
-- Task: 主流程交互完善、GameScene 布局改造与工具类重构
+- Task: 主流程 3D 卡包动画接入与交互改造
 - Status: In Progress
-- Updated At: 2026-04-23 13:50
+- Updated At: 2026-05-29 17:00
 - Auto-Update Mode: Enabled (Maintained by Codex)
 
 ## Requirement Log
@@ -38,6 +38,9 @@
 - 新需求：Win32 平台取消游戏窗口 `16:9` 锁定，允许自由拖拽调整窗口尺寸。
 - 新需求：Win32 平台增加自定义鼠标（`BasicUi/ImgHand.png`），仅在背景范围内替换系统鼠标，超出范围切回系统鼠标并保留自定义鼠标最后位置。
 - 问题反馈：自定义鼠标与系统鼠标未对齐，且背景范围判定偏小。
+- 新需求：MainScene 卡包点击后播放 3D 开包动画（`mesh_ani_cardPack_XXX`），动画结束后自动进入对应 `GameScene`。
+- 新需求：入库 3D 卡包美术资源（FBX 模型、Prefab、特效 Prefab、Shader/材质），并新增 `effect.unity` 特效调试场景。
+- 新需求：`GameAnimationUtility` 扩展卡包动画播放、时长估算与 URP 材质兼容处理。
 
 ## Progress Snapshot
 
@@ -89,11 +92,18 @@
   - 已完成 Win32 窗口策略调整：`WindowAspectController` 关闭 `16:9` 强制锁定，窗口支持任意尺寸拖拽。
   - 已完成 Win32 自定义鼠标控制：背景范围内显示 `ImgHand`，范围外恢复系统鼠标并保持自定义鼠标停留在最后位置。
   - 已完成鼠标体验修复：自定义鼠标改为像素坐标直跟，命中范围改为屏幕矩形判定并增加边界补偿。
+  - 已入库 `Assets/ArtRes`：6 套卡包 FBX/皮肤 Prefab、开包动画 FBX、特效 Prefab（`fx_chai_w_001`）及配套 Shader/材质。
+  - 已扩展 `GameAnimationUtility`：新增 `PlayCardPackAnimation`、`GetCardPackPlayDuration`、`GetAvailableCardPackAnimationFileNames`；编辑器下自动实例化皮肤 Prefab 并对齐卡包锚点；不支持材质自动替换为 URP Lit。
+  - 已改造 MainScene 主流程交互：点击卡包 → 播放 3D 开包动画（无动画时回退 2D 缩放脉冲）→ 动画结束后自动 `EnterGameScene`；移除“聚焦放大 + 滑动进入”两段式交互。
+  - 已新增 `Assets/Scenes/effect.unity` 供特效与卡包动画离线调试。
+  - 已验证：卡包动画在编辑器中可正常播放（commit `动画播放正常执行`）。
 - 进行中：
-  - 已尝试在当前环境执行 Unity 自动化回归，但未检测到 Unity Editor 可执行文件，无法直接启动 MainScene/GameScene 进行交互验证。
-  - 等待你在本机运行回归，确认 MainScene 新交互、GameScene 托盘/拖拽体验与 Win32 鼠标/窗口行为符合预期。
+  - 等待本机完整回归：MainScene 点击开包动画 → GameScene 拼图全流程，以及 Win32 窗口/自定义鼠标行为。
+  - 卡包 3D 动画在打包构建（非 Editor）环境下的运行时实例化路径尚未实现，当前 `TryCreateEditorAnimator` 仅在 `#if UNITY_EDITOR` 下生效。
 - 未完成：
-  - 如需继续调优：卡包聚焦动画时长、拖拽吸附阈值、托盘视觉样式与分页切换交互。
+  - 多页卡包分页切换交互（网格已支持分页坐标，但无翻页 UI/手势）。
+  - 构建版卡包 3D 动画运行时加载与销毁策略。
+  - 可选调优：拖拽吸附阈值、托盘视觉样式、开包动画时长与镜头表现。
 
 ## Resume Prompt
 
@@ -106,7 +116,7 @@
 - GameScene 需按配置生成全部碎片并正确对齐到棋盘相对坐标。
 - 增加分组拖拽玩法流程：吸附/回弹/自动下一组/全部完成输出游戏结束。
 - 统一重复接口并删除冗余实现，保持功能行为不变。
-- MainScene 需支持网格化卡包布局与“点击聚焦 + 滑动进入”两段交互。
+- MainScene 需支持网格化卡包布局与“点击播放 3D 开包动画后自动进入游戏”交互。
 - GameScene 需提供可视化托盘背景（PieceBg）与托盘内贴片自适应缩放逻辑。
 - 验收标准：可完成全部分组并输出“游戏结束”，且无新增 lint 报错。
 
@@ -118,7 +128,8 @@
 - GameScene：将“第一组左列展示”替换为“全量碎片按配置坐标展示”。
 - 新增拖拽状态机：命中检测、拖拽更新、吸附判定、组完成推进。
 - 将跨场景共用能力（Sprite 加载、屏幕坐标转换）统一抽到 `GameCommonUtility`。
-- MainScene：实现卡包网格布局与点击聚焦后滑动进入的输入状态机。
+- MainScene：实现卡包网格布局与点击播放 3D 动画后自动切场景的输入状态机。
+- `GameAnimationUtility`：接入卡包 FBX 动画播放、时长估算与 URP 材质兼容。
 - GameScene：新增 PieceBg 双层可视化结构（九宫边框 + 填充层）并承载贴片托盘布局。
 - 重构：将 `GameScene` 离散状态字段聚合为 `resources / board / drag`，并将状态类型定义迁移到 `GameDefine`。
 
@@ -130,11 +141,13 @@
 - 已完成：GameScene 读取全部分组碎片，按 `x/y` 相对棋盘坐标创建并定位。
 - 已完成：GameScene 左侧分组拖拽与吸附流程。
 - 已完成：重复接口统一与冗余实现清理。
-- 已完成：MainScene 网格化卡包布局与点击聚焦/滑动进入两段交互。
+- 已完成：MainScene 网格化卡包布局与点击播放 3D 开包动画后自动切场景。
+- 已完成：`GameAnimationUtility` 卡包动画播放链路与 URP 材质替换。
+- 已完成：`ArtRes` 3D 卡包与特效资源入库及 `effect.unity` 调试场景。
 - 已完成：GameScene `PieceBg` 创建、对齐、尺寸与托盘承载规则。
 - 已完成：贴片托盘自适应缩放与拖拽缩放还原机制。
 - 已完成：`GameScene` 状态聚合与状态类型迁移至 `GameDefine`。
-- 当前状态：核心开发已完成，等待你做一轮完整功能回归。
+- 当前状态：3D 开包动画主流程已在编辑器跑通，等待完整回归与构建版运行时支持。
 
 ## C - Check
 
@@ -145,7 +158,8 @@
   - 吸附半径已改为自适应策略；若后续引入极端尺寸碎片，可能仍需微调 `SnapDistanceSizeRatio/Min/Max`。
   - 贴片托盘横向布局在未来引入极端宽图时可能需要增加换行或分页策略。
   - 自定义鼠标当前命中基于背景屏幕矩形，若后续背景改为非矩形可交互区域，需升级为像素级或多边形命中。
+  - 卡包 3D 动画实例化目前依赖 Editor API（`AssetDatabase` / `Instantiate(prefab)`），打包后若无运行时 Prefab 加载方案将回退 2D 脉冲动画。
 
 ## Next Action
 
-- 在本机 Unity Editor 运行 MainScene -> GameScene 做完整回归，重点确认：卡包点击聚焦、滑动进入、`PieceBg` 底部锚定与单贴图下滑/回位、贴片拖拽吸附/回弹与组推进；并在 Win32 验证窗口可自由缩放与自定义鼠标范围切换。回归后反馈异常点（含复现步骤），我继续按问题逐项修复。
+- 在本机 Unity Editor 运行 MainScene -> GameScene 做完整回归，重点确认：卡包点击 3D 开包动画、动画结束后自动切场景、`PieceBg` 底部锚定与单贴图下滑/回位、贴片拖拽吸附/回弹与组推进；并在 Win32 验证窗口可自由缩放与自定义鼠标范围切换。若需支持打包构建，下一步实现卡包 Prefab 运行时加载。回归后反馈异常点（含复现步骤），我继续按问题逐项修复。
