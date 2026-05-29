@@ -5,6 +5,8 @@ using UnityEngine.SceneManagement;
 
 public static class GameCommonUtility
 {
+    private static Material sSpriteUnlitMaterial;
+
     /// <summary>
     /// 用途：为指定场景组件注册一次场景加载引导逻辑，并在当前活动场景立即尝试创建组件。返回：无。
     /// </summary>
@@ -247,7 +249,9 @@ public static class GameCommonUtility
             var existing = GameObject.Find(objectName);
             if (existing != null)
             {
-                return existing.GetComponent<SpriteRenderer>();
+                var existingRenderer = existing.GetComponent<SpriteRenderer>();
+                ApplySpriteUnlitMaterial(existingRenderer);
+                return existingRenderer;
             }
         }
 
@@ -266,7 +270,47 @@ public static class GameCommonUtility
         var renderer = go.AddComponent<SpriteRenderer>();
         renderer.sprite = sprite;
         renderer.sortingOrder = sortingOrder;
+        ApplySpriteUnlitMaterial(renderer);
         return renderer;
+    }
+
+    /// <summary>
+    /// 用途：为运行时创建的 SpriteRenderer 指定 URP 2D 无光照材质，避免未命中 Light2D 时整页发黑。返回：无。
+    /// </summary>
+    private static void ApplySpriteUnlitMaterial(SpriteRenderer renderer)
+    {
+        if (renderer == null)
+        {
+            return;
+        }
+
+        var unlitMaterial = GetSpriteUnlitMaterial();
+        if (unlitMaterial != null)
+        {
+            renderer.sharedMaterial = unlitMaterial;
+        }
+    }
+
+    private static Material GetSpriteUnlitMaterial()
+    {
+        if (sSpriteUnlitMaterial != null)
+        {
+            return sSpriteUnlitMaterial;
+        }
+
+        var shader = Shader.Find("Universal Render Pipeline/2D/Sprite-Unlit-Default");
+        if (shader == null)
+        {
+            shader = Shader.Find("Sprites/Default");
+        }
+
+        if (shader == null)
+        {
+            return null;
+        }
+
+        sSpriteUnlitMaterial = new Material(shader);
+        return sSpriteUnlitMaterial;
     }
 
     /// <summary>

@@ -9,11 +9,11 @@ public class MainScene : MonoBehaviour
 {
     private const float ReferenceHeight = 1080f;
     private const float PixelsPerUnit = 100f;
-    private const float MinSwipeDistance = 0.5f;
     private const float MaxTapDistancePixels = 18f;
     private const float MainPageCameraPadding = 0.2f;
     private const float PackageScaleRatio = 0.3f;
-    private const float PackageFocusAnimationDuration = 0.35f;
+    private const float PackageClickScaleRatio = 1.15f;
+    private const float PackageClickAnimDuration = 0.12f;
     private const int PackagesPerRow = 5;
     private const int RowsPerPage = 3;
     private const int MainPackageBagId = GameDefine.DefaultBagId;
@@ -23,20 +23,13 @@ public class MainScene : MonoBehaviour
     private static readonly string MainBackgroundPath = $"{GameDefine.TexturesRoot}/{GameDefine.MainBackgroundFileName}";
     private static bool sHookedSceneLoaded;
     private readonly List<PackageEntry> mPackageEntries = new List<PackageEntry>();
-    private Vector3 mSwipeStartWorldPosition;
-    private int mSwipeBagId = GameDefine.InvalidId;
-    private SpriteRenderer mSwipeTargetRenderer;
     private SpriteRenderer mTapCandidateRenderer;
     private int mTapCandidateBagId = GameDefine.InvalidId;
     private Vector2 mTapStartScreenPosition;
     private bool mTapCandidateMoved;
-    private SpriteRenderer mFocusedPackageRenderer;
-    private int mFocusedBagId = GameDefine.InvalidId;
-    private Coroutine mFocusAnimationCoroutine;
-    private bool mIsPackageFocused;
-    private bool mIsFocusAnimating;
-    private bool mIsSwipeTracking;
+    private bool mIsPlayingAnimation;
     private bool mHasSwitchedToGameScene;
+    private Coroutine mPlayAnimationCoroutine;
 
     private struct PackageEntry
     {
@@ -88,7 +81,7 @@ public class MainScene : MonoBehaviour
     }
 
     /// <summary>
-    /// 用途：主场景每帧轮询输入，检测是否在包图精灵内完成从左到右滑动并触发场景切换。返回：无。
+    /// 用途：主场景每帧轮询输入，点击卡包后直接播放对应动画。返回：无。
     /// </summary>
     private void Update()
     {
@@ -98,9 +91,9 @@ public class MainScene : MonoBehaviour
         }
 
         GameCommonUtility.ProcessPointerInput(
-            TryBeginSwipe,
+            TryBeginTap,
             TrackPointerMove,
-            TryCompleteSwipe);
+            TryCompleteTap);
     }
 
     /// <summary>
@@ -289,53 +282,30 @@ public class MainScene : MonoBehaviour
     }
 
     /// <summary>
-    /// 用途：尝试开始一次滑动记录，只有触点落在包图精灵内部才会启动跟踪。返回：无。
+    /// 用途：记录点击开始点，仅在卡包命中时进入点击候选。返回：无。
     /// </summary>
     /// <param name="screenPosition">参数：屏幕坐标输入位置。</param>
-    private void TryBeginSwipe(Vector2 screenPosition)
+    private void TryBeginTap(Vector2 screenPosition)
     {
-        if (mIsFocusAnimating)
+        if (mIsPlayingAnimation)
         {
             return;
         }
 
         var worldPosition = GameCommonUtility.ScreenToWorld(screenPosition);
-        if (!mIsPackageFocused)
+        if (TryGetPackageAtPoint(worldPosition, out var packageToPlay))
         {
-            if (TryGetPackageAtPoint(worldPosition, out var packageToFocus))
-            {
-                mTapCandidateRenderer = packageToFocus.Renderer;
-                mTapCandidateBagId = packageToFocus.BagId;
-                mTapStartScreenPosition = screenPosition;
-                mTapCandidateMoved = false;
-            }
-            else
-            {
-                mTapCandidateRenderer = null;
-                mTapCandidateBagId = GameDefine.InvalidId;
-                mTapCandidateMoved = false;
-            }
-
-            mIsSwipeTracking = false;
-            mSwipeBagId = GameDefine.InvalidId;
-            mSwipeTargetRenderer = null;
-            return;
+            mTapCandidateRenderer = packageToPlay.Renderer;
+            mTapCandidateBagId = packageToPlay.BagId;
+            mTapStartScreenPosition = screenPosition;
+            mTapCandidateMoved = false;
         }
-
-        if (mFocusedPackageRenderer == null
-            || mFocusedPackageRenderer.sprite == null
-            || !mFocusedPackageRenderer.bounds.Contains(worldPosition))
+        else
         {
-            mIsSwipeTracking = false;
-            mSwipeBagId = GameDefine.InvalidId;
-            mSwipeTargetRenderer = null;
-            return;
+            mTapCandidateRenderer = null;
+            mTapCandidateBagId = GameDefine.InvalidId;
+            mTapCandidateMoved = false;
         }
-
-        mSwipeStartWorldPosition = worldPosition;
-        mSwipeBagId = mFocusedBagId;
-        mSwipeTargetRenderer = mFocusedPackageRenderer;
-        mIsSwipeTracking = true;
     }
 
     /// <summary>
@@ -343,7 +313,7 @@ public class MainScene : MonoBehaviour
     /// </summary>
     private void TrackPointerMove(Vector2 screenPosition)
     {
-        if (mIsPackageFocused || mTapCandidateRenderer == null || mTapCandidateMoved)
+        if (mTapCandidateRenderer == null || mTapCandidateMoved)
         {
             return;
         }
@@ -355,56 +325,20 @@ public class MainScene : MonoBehaviour
     }
 
     /// <summary>
-    /// 用途：尝试完成一次滑动记录，满足左到右且位移足够时切换到游戏场景。返回：无。
+    /// 用途：在抬起阶段确认点击命中后，直接播放对应卡包动画。返回：无。
     /// </summary>
     /// <param name="screenPosition">参数：屏幕坐标输入位置。</param>
-    private void TryCompleteSwipe(Vector2 screenPosition)
-    {
-        if (!mIsPackageFocused)
-        {
-            TryCompleteTap(screenPosition);
-            return;
-        }
-
-        if (!mIsSwipeTracking)
-        {
-            return;
-        }
-
-        mIsSwipeTracking = false;
-        var worldPosition = GameCommonUtility.ScreenToWorld(screenPosition);
-        if (mSwipeTargetRenderer == null
-            || mSwipeTargetRenderer.sprite == null
-            || !mSwipeTargetRenderer.bounds.Contains(worldPosition))
-        {
-            return;
-        }
-
-        var delta = worldPosition - mSwipeStartWorldPosition;
-        if (delta.x < MinSwipeDistance)
-        {
-            return;
-        }
-
-        if (Mathf.Abs(delta.x) < Mathf.Abs(delta.y))
-        {
-            return;
-        }
-
-        mHasSwitchedToGameScene = true;
-        GameManager.EnterGameScene(mSwipeBagId > 0 ? mSwipeBagId : MainPackageBagId);
-    }
-
-    /// <summary>
-    /// 用途：在抬起阶段确认点击命中后，触发卡包聚焦动画。返回：无。
-    /// </summary>
     private void TryCompleteTap(Vector2 screenPosition)
     {
-        if (mTapCandidateRenderer == null || mTapCandidateBagId <= 0 || mIsFocusAnimating)
+        if (mIsPlayingAnimation)
         {
-            mTapCandidateRenderer = null;
-            mTapCandidateBagId = GameDefine.InvalidId;
-            mTapCandidateMoved = false;
+            ClearTapCandidate();
+            return;
+        }
+
+        if (mTapCandidateRenderer == null || mTapCandidateBagId <= 0)
+        {
+            ClearTapCandidate();
             return;
         }
 
@@ -414,75 +348,20 @@ public class MainScene : MonoBehaviour
             && mTapCandidateRenderer.bounds.Contains(worldPosition);
         if (isTapConfirmed)
         {
-            FocusPackage(new PackageEntry
+            var bagId = mTapCandidateBagId;
+            var renderer = mTapCandidateRenderer;
+            ClearTapCandidate();
+
+            if (mPlayAnimationCoroutine != null)
             {
-                BagId = mTapCandidateBagId,
-                Renderer = mTapCandidateRenderer
-            });
-        }
+                StopCoroutine(mPlayAnimationCoroutine);
+            }
 
-        mTapCandidateRenderer = null;
-        mTapCandidateBagId = GameDefine.InvalidId;
-        mTapCandidateMoved = false;
-    }
-
-    /// <summary>
-    /// 用途：将选中的卡包缓慢移动到屏幕中心并放大到原始尺寸。返回：无。
-    /// </summary>
-    private void FocusPackage(PackageEntry packageEntry)
-    {
-        if (packageEntry.Renderer == null)
-        {
+            mPlayAnimationCoroutine = StartCoroutine(PlayPackageInteraction(bagId, renderer));
             return;
         }
 
-        if (mFocusAnimationCoroutine != null)
-        {
-            StopCoroutine(mFocusAnimationCoroutine);
-            mFocusAnimationCoroutine = null;
-        }
-
-        mFocusedPackageRenderer = packageEntry.Renderer;
-        mFocusedBagId = packageEntry.BagId;
-        mIsPackageFocused = true;
-        mFocusAnimationCoroutine = StartCoroutine(AnimateFocusPackage(packageEntry.Renderer));
-    }
-
-    /// <summary>
-    /// 用途：播放卡包聚焦动画，结束后允许滑动进入游戏。返回：协程。
-    /// </summary>
-    private IEnumerator AnimateFocusPackage(SpriteRenderer renderer)
-    {
-        if (renderer == null)
-        {
-            yield break;
-        }
-
-        mIsFocusAnimating = true;
-        renderer.sortingOrder = 10;
-        var fromPosition = renderer.transform.position;
-        var fromScale = renderer.transform.localScale;
-        var camera = Camera.main;
-        var targetPosition = camera != null
-            ? new Vector3(camera.transform.position.x, camera.transform.position.y, fromPosition.z)
-            : Vector3.zero;
-        var targetScale = Vector3.one;
-
-        var elapsed = 0f;
-        while (elapsed < PackageFocusAnimationDuration)
-        {
-            elapsed += Time.deltaTime;
-            var t = Mathf.Clamp01(elapsed / PackageFocusAnimationDuration);
-            var eased = Mathf.SmoothStep(0f, 1f, t);
-            renderer.transform.position = Vector3.LerpUnclamped(fromPosition, targetPosition, eased);
-            renderer.transform.localScale = Vector3.LerpUnclamped(fromScale, targetScale, eased);
-            yield return null;
-        }
-
-        renderer.transform.position = targetPosition;
-        renderer.transform.localScale = targetScale;
-        mIsFocusAnimating = false;
-        mFocusAnimationCoroutine = null;
+        ClearTapCandidate();
     }
 
     /// <summary>
@@ -506,6 +385,69 @@ public class MainScene : MonoBehaviour
 
         packageEntry = default;
         return false;
+    }
+
+    private void ClearTapCandidate()
+    {
+        mTapCandidateRenderer = null;
+        mTapCandidateBagId = GameDefine.InvalidId;
+        mTapCandidateMoved = false;
+    }
+
+    private IEnumerator PlayPackageClickFallback(SpriteRenderer renderer)
+    {
+        if (renderer == null)
+        {
+            yield break;
+        }
+
+        var originalScale = renderer.transform.localScale;
+        var targetScale = originalScale * PackageClickScaleRatio;
+        var elapsed = 0f;
+        while (elapsed < PackageClickAnimDuration)
+        {
+            elapsed += Time.deltaTime;
+            var t = Mathf.Clamp01(elapsed / PackageClickAnimDuration);
+            renderer.transform.localScale = Vector3.LerpUnclamped(originalScale, targetScale, Mathf.SmoothStep(0f, 1f, t));
+            yield return null;
+        }
+
+        elapsed = 0f;
+        while (elapsed < PackageClickAnimDuration)
+        {
+            elapsed += Time.deltaTime;
+            var t = Mathf.Clamp01(elapsed / PackageClickAnimDuration);
+            renderer.transform.localScale = Vector3.LerpUnclamped(targetScale, originalScale, Mathf.SmoothStep(0f, 1f, t));
+            yield return null;
+        }
+
+        renderer.transform.localScale = originalScale;
+    }
+
+    private IEnumerator PlayPackageInteraction(int bagId, SpriteRenderer renderer)
+    {
+        mIsPlayingAnimation = true;
+        var resolvedBagId = bagId > 0 ? bagId : MainPackageBagId;
+        var animationFileName = $"mesh_ani_cardPack_{resolvedBagId:D3}.FBX";
+        var anchor = renderer != null ? renderer.transform : null;
+        var hasPlayed = GameAnimationUtility.PlayCardPackAnimation(animationFileName, anchor);
+        if (hasPlayed)
+        {
+            var duration = GameAnimationUtility.GetCardPackPlayDuration(animationFileName, anchor);
+            if (duration > 0f)
+            {
+                yield return new WaitForSeconds(duration);
+            }
+        }
+        else if (renderer != null)
+        {
+            yield return PlayPackageClickFallback(renderer);
+        }
+
+        mIsPlayingAnimation = false;
+        mPlayAnimationCoroutine = null;
+        mHasSwitchedToGameScene = true;
+        GameManager.EnterGameScene(resolvedBagId);
     }
 
 }

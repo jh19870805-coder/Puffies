@@ -1,9 +1,21 @@
 using System;
 using System.Collections;
+using System.IO;
+using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 public static class GameAnimationUtility
 {
+    private const string DefaultCardPackStateName = "Take 001";
+    private const string CardPackAniPrefix = "mesh_ani_";
+    private const string CardPackSkinPrefix = "mesh_skin_";
+    private const string CardPackAnimationFolder = "Assets/ArtRes/Effect/Fbx/c";
+    private static readonly Dictionary<string, Animator> sEditorSpawnedAnimators = new Dictionary<string, Animator>();
+
     public enum EaseType
     {
         Linear,
@@ -112,6 +124,99 @@ public static class GameAnimationUtility
             onComplete));
     }
 
+    /// <summary>
+    /// 用途：按动画文件名播放对应卡包动画。返回：是否成功触发播放。
+    /// </summary>
+    /// <param name="animationFileName">参数：动画文件名或状态名，例如 mesh_ani_cardPack_001.FBX。</param>
+    /// <param name="searchRoot">参数：查找对象的根节点；传 null 时在全场景查找。</param>
+    /// <returns>返回：true 表示播放成功，false 表示未找到目标或播放失败。</returns>
+    public static bool PlayCardPackAnimation(string animationFileName, Transform searchRoot = null)
+    {
+        if (string.IsNullOrWhiteSpace(animationFileName))
+        {
+            Debug.LogWarning("PlayCardPackAnimation failed: animationFileName is empty.");
+            return false;
+        }
+
+        var objectName = ResolveCardPackTargetObjectName(animationFileName);
+        var animator = FindAnimatorByObjectName(objectName, searchRoot);
+        if (animator == null)
+        {
+            animator = TryCreateEditorAnimator(objectName, searchRoot);
+        }
+
+        if (animator == null)
+        {
+            return false;
+        }
+
+        var stateName = ResolveCardPackStateName(animationFileName);
+        animator.Rebind();
+        animator.Update(0f);
+        animator.Play(stateName, 0, 0f);
+        animator.Update(0f);
+        return true;
+    }
+
+    /// <summary>
+    /// 用途：估算卡包动画播放时长，供主场景在切页前等待。返回：时长大于 0 表示有效。
+    /// </summary>
+    public static float GetCardPackPlayDuration(string animationFileName, Transform searchRoot = null)
+    {
+        if (string.IsNullOrWhiteSpace(animationFileName))
+        {
+            return 0f;
+        }
+
+        var objectName = ResolveCardPackTargetObjectName(animationFileName);
+        var animator = FindAnimatorByObjectName(objectName, searchRoot);
+        if (animator == null)
+        {
+            animator = TryCreateEditorAnimator(objectName, searchRoot);
+        }
+
+        if (animator == null || animator.runtimeAnimatorController == null)
+        {
+            return 0f;
+        }
+
+        var stateName = ResolveCardPackStateName(animationFileName);
+        var clips = animator.runtimeAnimatorController.animationClips;
+        for (var i = 0; i < clips.Length; i++)
+        {
+            var clip = clips[i];
+            if (clip != null && clip.name.Equals(stateName, StringComparison.OrdinalIgnoreCase))
+            {
+                return clip.length;
+            }
+        }
+
+        return clips.Length > 0 && clips[0] != null ? clips[0].length : 0f;
+    }
+
+    /// <summary>
+    /// 用途：获取工程中实际存在的卡包动画文件名列表（仅含文件名）。返回：按名称升序的文件名集合。
+    /// </summary>
+    /// <returns>返回：例如 mesh_ani_cardPack_001.FBX。</returns>
+    public static List<string> GetAvailableCardPackAnimationFileNames()
+    {
+        var result = new List<string>();
+#if UNITY_EDITOR
+        if (!Directory.Exists(CardPackAnimationFolder))
+        {
+            return result;
+        }
+
+        result = Directory
+            .GetFiles(CardPackAnimationFolder, $"{CardPackAniPrefix}*.FBX")
+            .Select(Path.GetFileName)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+#endif
+        return result;
+    }
+
     private static IEnumerator Animate(
         float duration,
         EaseType ease,
@@ -162,6 +267,121 @@ public static class GameAnimationUtility
             case EaseType.Linear:
             default:
                 return t;
+        }
+    }
+
+    private static Animator FindAnimatorByObjectName(string objectName, Transform searchRoot)
+    {
+        if (searchRoot != null)
+        {
+            var target = FindDeepChild(searchRoot, objectName);
+            return target != null ? target.GetComponentInChildren<Animator>(true) : null;
+        }
+
+        var sceneObject = GameObject.Find(objectName);
+        return sceneObject != null ? sceneObject.GetComponentInChildren<Animator>(true) : null;
+    }
+
+    private static string ResolveCardPackTargetObjectName(string animationFileName)
+    {
+        var normalizedName = Path.GetFileNameWithoutExtension(animationFileName.Trim());
+        if (normalizedName.StartsWith(CardPackAniPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return CardPackSkinPrefix + normalizedName.Substring(CardPackAniPrefix.Length);
+        }
+
+        return normalizedName;
+    }
+
+    private static string ResolveCardPackStateName(string animationFileName)
+    {
+        var normalizedName = Path.GetFileNameWithoutExtension(animationFileName.Trim());
+        return normalizedName.Equals(DefaultCardPackStateName, StringComparison.OrdinalIgnoreCase)
+            ? normalizedName
+            : DefaultCardPackStateName;
+    }
+
+    private static Transform FindDeepChild(Transform root, string childName)
+    {
+        if (root == null)
+        {
+            return null;
+        }
+
+        if (string.Equals(root.name, childName, StringComparison.OrdinalIgnoreCase))
+        {
+            return root;
+        }
+
+        for (var i = 0; i < root.childCount; i++)
+        {
+            var result = FindDeepChild(root.GetChild(i), childName);
+            if (result != null)
+            {
+                return result;
+            }
+        }
+
+        return null;
+    }
+
+    private static Animator TryCreateEditorAnimator(string objectName, Transform anchor)
+    {
+#if UNITY_EDITOR
+        if (string.IsNullOrWhiteSpace(objectName) || anchor == null)
+        {
+            return null;
+        }
+
+        if (sEditorSpawnedAnimators.TryGetValue(objectName, out var cachedAnimator) && cachedAnimator != null)
+        {
+            ApplyPreviewPose(cachedAnimator, anchor);
+            return cachedAnimator;
+        }
+
+        var prefabPath = $"Assets/ArtRes/Effect/Prefab/CardPack/{objectName}.prefab";
+        var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+        if (prefab == null)
+        {
+            return null;
+        }
+
+        var instance = UnityEngine.Object.Instantiate(prefab);
+        instance.name = objectName;
+        var animator = instance.GetComponentInChildren<Animator>(true);
+        if (animator == null)
+        {
+            UnityEngine.Object.Destroy(instance);
+            return null;
+        }
+
+        ApplyPreviewPose(animator, anchor);
+        sEditorSpawnedAnimators[objectName] = animator;
+        return animator;
+#else
+        return null;
+#endif
+    }
+
+    private static void ApplyPreviewPose(Animator animator, Transform anchor)
+    {
+        if (animator == null || anchor == null)
+        {
+            return;
+        }
+
+        var targetTransform = animator.transform;
+        targetTransform.position = new Vector3(anchor.position.x, anchor.position.y, -1f);
+        targetTransform.rotation = Quaternion.identity;
+        targetTransform.localScale = Vector3.one * 0.6f;
+
+        var renderers = animator.GetComponentsInChildren<Renderer>(true);
+        for (var i = 0; i < renderers.Length; i++)
+        {
+            if (renderers[i] != null)
+            {
+                renderers[i].enabled = true;
+            }
         }
     }
 }

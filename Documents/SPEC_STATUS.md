@@ -2,7 +2,7 @@
 
 - Task: 主流程交互完善、GameScene 布局改造与工具类重构
 - Status: In Progress
-- Updated At: 2026-04-17 10:35
+- Updated At: 2026-04-23 13:50
 - Auto-Update Mode: Enabled (Maintained by Codex)
 
 ## Requirement Log
@@ -90,7 +90,8 @@
   - 已完成 Win32 自定义鼠标控制：背景范围内显示 `ImgHand`，范围外恢复系统鼠标并保持自定义鼠标停留在最后位置。
   - 已完成鼠标体验修复：自定义鼠标改为像素坐标直跟，命中范围改为屏幕矩形判定并增加边界补偿。
 - 进行中：
-  - 等待你运行回归，确认 MainScene 新交互、GameScene 托盘/拖拽体验与 Win32 鼠标/窗口行为符合预期。
+  - 已尝试在当前环境执行 Unity 自动化回归，但未检测到 Unity Editor 可执行文件，无法直接启动 MainScene/GameScene 进行交互验证。
+  - 等待你在本机运行回归，确认 MainScene 新交互、GameScene 托盘/拖拽体验与 Win32 鼠标/窗口行为符合预期。
 - 未完成：
   - 如需继续调优：卡包聚焦动画时长、拖拽吸附阈值、托盘视觉样式与分页切换交互。
 
@@ -139,6 +140,7 @@
 
 - 检查方式：针对 `GameCommonUtility.cs`、`MainScene.cs`、`GameScene.cs` 执行 lints。
 - 检查结果：无新增 linter 报错。
+- 自动化回归补充：当前会话环境缺少 Unity Editor 可执行程序，无法通过 batchmode 或编辑器命令完成场景级交互回归。
 - 已知风险：
   - 吸附半径已改为自适应策略；若后续引入极端尺寸碎片，可能仍需微调 `SnapDistanceSizeRatio/Min/Max`。
   - 贴片托盘横向布局在未来引入极端宽图时可能需要增加换行或分页策略。
@@ -146,4 +148,4 @@
 
 ## Next Action
 
-- 运行 MainScene -> GameScene 做完整回归，重点确认：卡包点击聚焦、滑动进入、`PieceBg` 底部锚定与单贴图下滑/回位、贴片拖拽吸附/回弹与组推进；并在 Win32 验证窗口可自由缩放与自定义鼠标范围切换。
+- 在本机 Unity Editor 运行 MainScene -> GameScene 做完整回归，重点确认：卡包点击聚焦、滑动进入、`PieceBg` 底部锚定与单贴图下滑/回位、贴片拖拽吸附/回弹与组推进；并在 Win32 验证窗口可自由缩放与自定义鼠标范围切换。回归后反馈异常点（含复现步骤），我继续按问题逐项修复。
