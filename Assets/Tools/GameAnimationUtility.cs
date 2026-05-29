@@ -14,7 +14,9 @@ public static class GameAnimationUtility
     private const string CardPackAniPrefix = "mesh_ani_";
     private const string CardPackSkinPrefix = "mesh_skin_";
     private const string CardPackAnimationFolder = "Assets/ArtRes/Effect/Fbx/c";
+    private const string CardPackMaterialPath = "Assets/ArtRes/Effect/Texture/Materials/001.mat";
     private static readonly Dictionary<string, Animator> sEditorSpawnedAnimators = new Dictionary<string, Animator>();
+    private static Material sCardPackLitMaterial;
 
     public enum EaseType
     {
@@ -143,6 +145,14 @@ public static class GameAnimationUtility
         if (animator == null)
         {
             animator = TryCreateEditorAnimator(objectName, searchRoot);
+        }
+        else if (searchRoot != null)
+        {
+            ApplyPreviewPose(animator, searchRoot);
+        }
+        else
+        {
+            ApplyCardPackMaterials(animator.GetComponentsInChildren<Renderer>(true));
         }
 
         if (animator == null)
@@ -383,5 +393,84 @@ public static class GameAnimationUtility
                 renderers[i].enabled = true;
             }
         }
+
+        ApplyCardPackMaterials(renderers);
+    }
+
+    /// <summary>
+    /// 用途：将卡包模型上不兼容 URP 的内置管线材质替换为可用的 Lit 材质。返回：无。
+    /// </summary>
+    private static void ApplyCardPackMaterials(Renderer[] renderers)
+    {
+        var litMaterial = GetCardPackLitMaterial();
+        if (litMaterial == null || renderers == null)
+        {
+            return;
+        }
+
+        for (var i = 0; i < renderers.Length; i++)
+        {
+            var renderer = renderers[i];
+            if (renderer == null)
+            {
+                continue;
+            }
+
+            var materials = renderer.sharedMaterials;
+            var changed = false;
+            for (var j = 0; j < materials.Length; j++)
+            {
+                if (!IsSupportedCardPackMaterial(materials[j]))
+                {
+                    materials[j] = litMaterial;
+                    changed = true;
+                }
+            }
+
+            if (changed)
+            {
+                renderer.sharedMaterials = materials;
+            }
+        }
+    }
+
+    private static bool IsSupportedCardPackMaterial(Material material)
+    {
+        if (material == null || material.shader == null)
+        {
+            return false;
+        }
+
+        return material.shader.isSupported
+            && material.shader.name.IndexOf("InternalError", StringComparison.OrdinalIgnoreCase) < 0
+            && material.shader.name.IndexOf("ASESampleShaders", StringComparison.OrdinalIgnoreCase) < 0;
+    }
+
+    private static Material GetCardPackLitMaterial()
+    {
+        if (sCardPackLitMaterial != null)
+        {
+            return sCardPackLitMaterial;
+        }
+
+#if UNITY_EDITOR
+        sCardPackLitMaterial = AssetDatabase.LoadAssetAtPath<Material>(CardPackMaterialPath);
+        if (sCardPackLitMaterial != null)
+        {
+            return sCardPackLitMaterial;
+        }
+#endif
+
+        var shader = Shader.Find("Universal Render Pipeline/Lit");
+        if (shader == null)
+        {
+            return null;
+        }
+
+        sCardPackLitMaterial = new Material(shader)
+        {
+            name = "CardPackRuntimeLit"
+        };
+        return sCardPackLitMaterial;
     }
 }
