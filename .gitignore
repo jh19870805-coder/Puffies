@@ -47,7 +47,7 @@ Desktop.ini
 # ===========================
 *.apk
 *.aab
-*.unitypackage
+#*.unitypackage
 *.gz
 # ===========================
 # Crash reports
