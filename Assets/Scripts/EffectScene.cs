@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 #if UNITY_EDITOR
@@ -7,7 +8,13 @@ using UnityEditor;
 public class EffectScene : MonoBehaviour
 {
     private const string BootstrapObjectName = "EffectSceneBootstrap";
+    private const string PlaneChildPrefix = "Plane";
+    private const int PlaneCount = 4;
+    private const float GridSpacing = 0.55f;
     private static bool sHookedSceneLoaded;
+    private readonly List<Transform> mPlaneParts = new List<Transform>(PlaneCount);
+    private readonly Vector3[] mGroupedLocalPositions = new Vector3[PlaneCount];
+    private GameObject mPlaneGroupRoot;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Bootstrap()
@@ -35,7 +42,97 @@ public class EffectScene : MonoBehaviour
 
         planeGroup.transform.position = Vector3.zero;
         ApplyPlaneGroupMaterials(planeGroup);
+        CachePlaneParts(planeGroup);
+        ShowGroupedLayout();
         FrameCameraToObject(planeGroup);
+        mPlaneGroupRoot = planeGroup;
+    }
+
+    private void Update()
+    {
+        if (mPlaneGroupRoot == null)
+        {
+            return;
+        }
+
+        if (Input.GetKeyDown(KeyCode.Alpha0) || Input.GetKeyDown(KeyCode.Keypad0))
+        {
+            ShowGroupedLayout();
+            FrameCameraToObject(mPlaneGroupRoot);
+            return;
+        }
+
+        if (Input.GetKeyDown(KeyCode.G))
+        {
+            ShowGridLayout();
+            FrameCameraToObject(mPlaneGroupRoot);
+            return;
+        }
+
+        for (var i = 0; i < PlaneCount; i++)
+        {
+            if (Input.GetKeyDown(KeyCode.Alpha1 + i) || Input.GetKeyDown(KeyCode.Keypad1 + i))
+            {
+                ShowSinglePlane(i);
+                FrameCameraToObject(mPlaneParts[i].gameObject);
+            }
+        }
+    }
+
+    private void CachePlaneParts(GameObject planeGroup)
+    {
+        mPlaneParts.Clear();
+        for (var i = 0; i < PlaneCount; i++)
+        {
+            var child = planeGroup.transform.Find($"{PlaneChildPrefix}{i + 1:D3}");
+            if (child == null)
+            {
+                continue;
+            }
+
+            mGroupedLocalPositions[mPlaneParts.Count] = child.localPosition;
+            mPlaneParts.Add(child);
+        }
+    }
+
+    private void ShowGroupedLayout()
+    {
+        for (var i = 0; i < mPlaneParts.Count; i++)
+        {
+            var part = mPlaneParts[i];
+            part.gameObject.SetActive(true);
+            part.localPosition = mGroupedLocalPositions[i];
+        }
+    }
+
+    private void ShowGridLayout()
+    {
+        for (var i = 0; i < mPlaneParts.Count; i++)
+        {
+            var part = mPlaneParts[i];
+            part.gameObject.SetActive(true);
+            var column = i - (PlaneCount - 1) * 0.5f;
+            part.localPosition = new Vector3(column * GridSpacing, mGroupedLocalPositions[i].y, 0f);
+        }
+    }
+
+    private void ShowSinglePlane(int planeIndex)
+    {
+        if (planeIndex < 0 || planeIndex >= mPlaneParts.Count)
+        {
+            return;
+        }
+
+        for (var i = 0; i < mPlaneParts.Count; i++)
+        {
+            var part = mPlaneParts[i];
+            var isVisible = i == planeIndex;
+            part.gameObject.SetActive(isVisible);
+            if (isVisible)
+            {
+                part.localPosition = Vector3.zero;
+            }
+        }
     }
 
     private static GameObject LoadPlaneGroupPrefab()
