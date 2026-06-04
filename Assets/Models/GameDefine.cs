@@ -64,6 +64,12 @@ public static class GameDefine
     // Scene names
     public const string SceneMain = "MainScene";
     public const string SceneGame = "GameScene";
+    public const string SceneEffect = "effect";
+
+    public const string PlaneGroupPrefabEditorPath = "Assets/ArtRes/PlaneGroup/Prefab/mesh_PlaneGroup_001.prefab";
+    public const string PlaneGroupMaterialEditorPath = "Assets/ArtRes/PlaneGroup/Materials/002.mat";
+    public const string PlaneGroupPrefabResourcesPath = "PlaneGroup/mesh_PlaneGroup_001";
+    public const string PlaneGroupMaterialResourcesPath = "PlaneGroup/002";
 
     // Common path tokens
     public const string AssetsRoot = "Assets";

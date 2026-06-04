@@ -14,8 +14,11 @@ public static class GameAnimationUtility
     private const string CardPackAniPrefix = "mesh_ani_";
     private const string CardPackSkinPrefix = "mesh_skin_";
     private const string CardPackAnimationFolder = "Assets/ArtRes/Effect/Fbx/c";
-    private const string CardPackMaterialPath = "Assets/ArtRes/Effect/Texture/Materials/001.mat";
-    private static readonly Dictionary<string, Animator> sEditorSpawnedAnimators = new Dictionary<string, Animator>();
+    private const string CardPackPrefabEditorFolder = "Assets/ArtRes/Effect/Prefab/CardPack";
+    private const string CardPackMaterialEditorPath = "Assets/ArtRes/Effect/Texture/Materials/001.mat";
+    private const string CardPackPrefabResourcesPath = "CardPack/";
+    private const string CardPackMaterialResourcesPath = "CardPack/001";
+    private static readonly Dictionary<string, Animator> sSpawnedAnimators = new Dictionary<string, Animator>();
     private static Material sCardPackLitMaterial;
 
     public enum EaseType
@@ -144,7 +147,7 @@ public static class GameAnimationUtility
         var animator = FindAnimatorByObjectName(objectName, searchRoot);
         if (animator == null)
         {
-            animator = TryCreateEditorAnimator(objectName, searchRoot);
+            animator = TrySpawnCardPackAnimator(objectName, searchRoot);
         }
         else if (searchRoot != null)
         {
@@ -182,7 +185,7 @@ public static class GameAnimationUtility
         var animator = FindAnimatorByObjectName(objectName, searchRoot);
         if (animator == null)
         {
-            animator = TryCreateEditorAnimator(objectName, searchRoot);
+            animator = TrySpawnCardPackAnimator(objectName, searchRoot);
         }
 
         if (animator == null || animator.runtimeAnimatorController == null)
@@ -335,22 +338,20 @@ public static class GameAnimationUtility
         return null;
     }
 
-    private static Animator TryCreateEditorAnimator(string objectName, Transform anchor)
+    private static Animator TrySpawnCardPackAnimator(string objectName, Transform anchor)
     {
-#if UNITY_EDITOR
         if (string.IsNullOrWhiteSpace(objectName) || anchor == null)
         {
             return null;
         }
 
-        if (sEditorSpawnedAnimators.TryGetValue(objectName, out var cachedAnimator) && cachedAnimator != null)
+        if (sSpawnedAnimators.TryGetValue(objectName, out var cachedAnimator) && cachedAnimator != null)
         {
             ApplyPreviewPose(cachedAnimator, anchor);
             return cachedAnimator;
         }
 
-        var prefabPath = $"Assets/ArtRes/Effect/Prefab/CardPack/{objectName}.prefab";
-        var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+        var prefab = LoadCardPackPrefab(objectName);
         if (prefab == null)
         {
             return null;
@@ -366,11 +367,21 @@ public static class GameAnimationUtility
         }
 
         ApplyPreviewPose(animator, anchor);
-        sEditorSpawnedAnimators[objectName] = animator;
+        sSpawnedAnimators[objectName] = animator;
         return animator;
-#else
-        return null;
+    }
+
+    private static GameObject LoadCardPackPrefab(string objectName)
+    {
+#if UNITY_EDITOR
+        var editorPath = $"{CardPackPrefabEditorFolder}/{objectName}.prefab";
+        var editorPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(editorPath);
+        if (editorPrefab != null)
+        {
+            return editorPrefab;
+        }
 #endif
+        return Resources.Load<GameObject>($"{CardPackPrefabResourcesPath}{objectName}");
     }
 
     private static void ApplyPreviewPose(Animator animator, Transform anchor)
@@ -453,8 +464,14 @@ public static class GameAnimationUtility
             return sCardPackLitMaterial;
         }
 
+        sCardPackLitMaterial = Resources.Load<Material>(CardPackMaterialResourcesPath);
+        if (sCardPackLitMaterial != null)
+        {
+            return sCardPackLitMaterial;
+        }
+
 #if UNITY_EDITOR
-        sCardPackLitMaterial = AssetDatabase.LoadAssetAtPath<Material>(CardPackMaterialPath);
+        sCardPackLitMaterial = AssetDatabase.LoadAssetAtPath<Material>(CardPackMaterialEditorPath);
         if (sCardPackLitMaterial != null)
         {
             return sCardPackLitMaterial;

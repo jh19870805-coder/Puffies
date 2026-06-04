@@ -158,8 +158,8 @@
   - 吸附半径已改为自适应策略；若后续引入极端尺寸碎片，可能仍需微调 `SnapDistanceSizeRatio/Min/Max`。
   - 贴片托盘横向布局在未来引入极端宽图时可能需要增加换行或分页策略。
   - 自定义鼠标当前命中基于背景屏幕矩形，若后续背景改为非矩形可交互区域，需升级为像素级或多边形命中。
-  - 卡包 3D 动画实例化目前依赖 Editor API（`AssetDatabase` / `Instantiate(prefab)`），打包后若无运行时 Prefab 加载方案将回退 2D 脉冲动画。
+  - 卡包 Prefab 已同步到 `Assets/Resources/CardPack`，运行时通过 `Resources.Load` 加载；Editor 仍优先 `AssetDatabase`。
 
 ## Next Action
 
-- 在本机 Unity Editor 运行 MainScene -> GameScene 做完整回归，重点确认：卡包点击 3D 开包动画、动画结束后自动切场景、`PieceBg` 底部锚定与单贴图下滑/回位、贴片拖拽吸附/回弹与组推进；并在 Win32 验证窗口可自由缩放与自定义鼠标范围切换。若需支持打包构建，下一步实现卡包 Prefab 运行时加载。回归后反馈异常点（含复现步骤），我继续按问题逐项修复。
+- 在本机 Unity Editor 运行 MainScene -> GameScene 做完整回归，重点确认：卡包点击 3D 开包动画、动画结束后自动切场景、`PieceBg` 底部锚定与单贴图下滑/回位、贴片拖拽吸附/回弹与组推进；并做一次 **Build 后运行** 验证 Resources 卡包动画是否正常。回归后反馈异常点（含复现步骤），我继续按问题逐项修复。

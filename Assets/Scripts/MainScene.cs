@@ -362,6 +362,13 @@ public class MainScene : MonoBehaviour
         var resolvedBagId = bagId > 0 ? bagId : MainPackageBagId;
         var animationFileName = $"mesh_ani_cardPack_{resolvedBagId:D3}.FBX";
         var anchor = renderer != null ? renderer.transform : null;
+        var hidCoverSprite = false;
+        if (renderer != null && renderer.enabled)
+        {
+            renderer.enabled = false;
+            hidCoverSprite = true;
+        }
+
         var hasPlayed = GameAnimationUtility.PlayCardPackAnimation(animationFileName, anchor);
         if (hasPlayed)
         {
@@ -371,9 +378,17 @@ public class MainScene : MonoBehaviour
                 yield return new WaitForSeconds(duration);
             }
         }
-        else if (renderer != null)
+        else
         {
-            yield return PlayPackageClickFallback(renderer);
+            if (renderer != null && hidCoverSprite)
+            {
+                renderer.enabled = true;
+            }
+
+            if (renderer != null)
+            {
+                yield return PlayPackageClickFallback(renderer);
+            }
         }
 
         mIsPlayingAnimation = false;
