@@ -392,9 +392,15 @@ public static class GameAnimationUtility
         }
 
         var targetTransform = animator.transform;
-        targetTransform.position = new Vector3(anchor.position.x, anchor.position.y, -1f);
-        targetTransform.rotation = Quaternion.identity;
-        targetTransform.localScale = Vector3.one * 0.6f;
+        var prefabRotation = targetTransform.rotation;
+        var targetPosition = anchor.position;
+        targetPosition.z = -0.1f;
+        targetTransform.position = targetPosition;
+        targetTransform.rotation = prefabRotation;
+
+        var anchorScale = Mathf.Max(anchor.lossyScale.x, anchor.lossyScale.y, 0.01f);
+        targetTransform.localScale = Vector3.one * Mathf.Max(1.2f, anchorScale * 4f);
+        targetTransform.gameObject.SetActive(true);
 
         var renderers = animator.GetComponentsInChildren<Renderer>(true);
         for (var i = 0; i < renderers.Length; i++)

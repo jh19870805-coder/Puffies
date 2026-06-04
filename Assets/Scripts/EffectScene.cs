@@ -10,11 +10,18 @@ public class EffectScene : MonoBehaviour
     private const string BootstrapObjectName = "EffectSceneBootstrap";
     private const string PlaneChildPrefix = "Plane";
     private const int PlaneCount = 4;
-    private const float GridSpacing = 0.55f;
+    private const float PreviewRootScale = 5f;
+    private const float SeparateGapRatio = 0.42f;
+    private const float CameraFitPadding = 1.2f;
+    private const float MinCameraDistance = 2f;
     private static bool sHookedSceneLoaded;
+    private static Material sPlaneGroupPreviewMaterial;
     private readonly List<Transform> mPlaneParts = new List<Transform>(PlaneCount);
     private readonly Vector3[] mGroupedLocalPositions = new Vector3[PlaneCount];
     private GameObject mPlaneGroupRoot;
+    private Transform mDraggingPlane;
+    private Vector3 mDragWorldOffset;
+    private float mDragScreenDepth;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Bootstrap()
@@ -41,9 +48,11 @@ public class EffectScene : MonoBehaviour
         }
 
         planeGroup.transform.position = Vector3.zero;
-        ApplyPlaneGroupMaterials(planeGroup);
+        planeGroup.transform.localScale = Vector3.one * PreviewRootScale;
         CachePlaneParts(planeGroup);
-        ShowGroupedLayout();
+        ApplyPlaneGroupMaterials(planeGroup);
+        EnsurePlaneColliders();
+        ShowSeparatedLayout();
         FrameCameraToObject(planeGroup);
         mPlaneGroupRoot = planeGroup;
     }
@@ -51,6 +60,13 @@ public class EffectScene : MonoBehaviour
     private void Update()
     {
         if (mPlaneGroupRoot == null)
+        {
+            return;
+        }
+
+        GameCommonUtility.ProcessPointerInput(TryBeginDrag, UpdateDrag, EndDrag);
+
+        if (mDraggingPlane != null)
         {
             return;
         }
@@ -64,7 +80,7 @@ public class EffectScene : MonoBehaviour
 
         if (Input.GetKeyDown(KeyCode.G))
         {
-            ShowGridLayout();
+            ShowSeparatedLayout();
             FrameCameraToObject(mPlaneGroupRoot);
             return;
         }
@@ -95,6 +111,29 @@ public class EffectScene : MonoBehaviour
         }
     }
 
+    private void EnsurePlaneColliders()
+    {
+        for (var i = 0; i < mPlaneParts.Count; i++)
+        {
+            var part = mPlaneParts[i];
+            var meshFilter = part.GetComponentInChildren<MeshFilter>();
+            if (meshFilter == null || meshFilter.sharedMesh == null)
+            {
+                continue;
+            }
+
+            var colliderTarget = meshFilter.gameObject;
+            var meshCollider = colliderTarget.GetComponent<MeshCollider>();
+            if (meshCollider == null)
+            {
+                meshCollider = colliderTarget.AddComponent<MeshCollider>();
+            }
+
+            meshCollider.sharedMesh = meshFilter.sharedMesh;
+            meshCollider.convex = false;
+        }
+    }
+
     private void ShowGroupedLayout()
     {
         for (var i = 0; i < mPlaneParts.Count; i++)
@@ -105,15 +144,39 @@ public class EffectScene : MonoBehaviour
         }
     }
 
-    private void ShowGridLayout()
+    private void ShowSeparatedLayout()
     {
         for (var i = 0; i < mPlaneParts.Count; i++)
         {
-            var part = mPlaneParts[i];
-            part.gameObject.SetActive(true);
-            var column = i - (PlaneCount - 1) * 0.5f;
-            part.localPosition = new Vector3(column * GridSpacing, mGroupedLocalPositions[i].y, 0f);
+            mPlaneParts[i].gameObject.SetActive(true);
         }
+
+        var spacing = ResolveSeparateSpacing();
+        for (var i = 0; i < mPlaneParts.Count; i++)
+        {
+            var part = mPlaneParts[i];
+            var column = i - (mPlaneParts.Count - 1) * 0.5f;
+            var grouped = mGroupedLocalPositions[i];
+            part.localPosition = new Vector3(column * spacing, grouped.y, grouped.z);
+        }
+    }
+
+    private float ResolveSeparateSpacing()
+    {
+        var maxWidth = 0.2f;
+        for (var i = 0; i < mPlaneParts.Count; i++)
+        {
+            var meshFilter = mPlaneParts[i].GetComponentInChildren<MeshFilter>();
+            if (meshFilter == null || meshFilter.sharedMesh == null)
+            {
+                continue;
+            }
+
+            var meshSize = meshFilter.sharedMesh.bounds.size;
+            maxWidth = Mathf.Max(maxWidth, meshSize.x, meshSize.z);
+        }
+
+        return maxWidth * SeparateGapRatio;
     }
 
     private void ShowSinglePlane(int planeIndex)
@@ -135,6 +198,79 @@ public class EffectScene : MonoBehaviour
         }
     }
 
+    private void TryBeginDrag(Vector2 screenPosition)
+    {
+        var camera = Camera.main;
+        if (camera == null)
+        {
+            return;
+        }
+
+        var ray = camera.ScreenPointToRay(screenPosition);
+        if (!Physics.Raycast(ray, out var hit))
+        {
+            return;
+        }
+
+        var planePart = ResolvePlanePart(hit.transform);
+        if (planePart == null)
+        {
+            return;
+        }
+
+        mDraggingPlane = planePart;
+        mDragScreenDepth = camera.WorldToScreenPoint(planePart.position).z;
+        var pointerWorld = ScreenToWorldAtDepth(screenPosition, mDragScreenDepth, camera);
+        mDragWorldOffset = planePart.position - pointerWorld;
+    }
+
+    private void UpdateDrag(Vector2 screenPosition)
+    {
+        if (mDraggingPlane == null)
+        {
+            return;
+        }
+
+        var camera = Camera.main;
+        if (camera == null)
+        {
+            return;
+        }
+
+        var pointerWorld = ScreenToWorldAtDepth(screenPosition, mDragScreenDepth, camera);
+        mDraggingPlane.position = pointerWorld + mDragWorldOffset;
+    }
+
+    private void EndDrag(Vector2 screenPosition)
+    {
+        mDraggingPlane = null;
+    }
+
+    private Transform ResolvePlanePart(Transform hitTransform)
+    {
+        if (hitTransform == null)
+        {
+            return null;
+        }
+
+        for (var i = 0; i < mPlaneParts.Count; i++)
+        {
+            var part = mPlaneParts[i];
+            if (hitTransform == part || hitTransform.IsChildOf(part))
+            {
+                return part;
+            }
+        }
+
+        return null;
+    }
+
+    private static Vector3 ScreenToWorldAtDepth(Vector2 screenPosition, float screenDepth, Camera camera)
+    {
+        var screenPoint = new Vector3(screenPosition.x, screenPosition.y, screenDepth);
+        return camera.ScreenToWorldPoint(screenPoint);
+    }
+
     private static GameObject LoadPlaneGroupPrefab()
     {
 #if UNITY_EDITOR
@@ -150,7 +286,7 @@ public class EffectScene : MonoBehaviour
 
     private static void ApplyPlaneGroupMaterials(GameObject planeGroup)
     {
-        var material = LoadPlaneGroupMaterial();
+        var material = CreatePlaneGroupPreviewMaterial(LoadPlaneGroupMaterial());
         if (material == null)
         {
             return;
@@ -187,6 +323,37 @@ public class EffectScene : MonoBehaviour
         return Resources.Load<Material>(GameDefine.PlaneGroupMaterialResourcesPath);
     }
 
+    private static Material CreatePlaneGroupPreviewMaterial(Material source)
+    {
+        if (sPlaneGroupPreviewMaterial != null)
+        {
+            return sPlaneGroupPreviewMaterial;
+        }
+
+        var unlitShader = Shader.Find("Universal Render Pipeline/Unlit");
+        if (unlitShader == null)
+        {
+            return source;
+        }
+
+        var previewMaterial = new Material(unlitShader);
+        if (source != null)
+        {
+            if (source.HasProperty("_BaseMap"))
+            {
+                previewMaterial.SetTexture("_BaseMap", source.GetTexture("_BaseMap"));
+            }
+
+            if (source.HasProperty("_BaseColor"))
+            {
+                previewMaterial.SetColor("_BaseColor", source.GetColor("_BaseColor"));
+            }
+        }
+
+        sPlaneGroupPreviewMaterial = previewMaterial;
+        return sPlaneGroupPreviewMaterial;
+    }
+
     private static void FrameCameraToObject(GameObject target)
     {
         var camera = Camera.main;
@@ -204,19 +371,16 @@ public class EffectScene : MonoBehaviour
         var bounds = renderers[0].bounds;
         for (var i = 1; i < renderers.Length; i++)
         {
-            if (renderers[i] != null)
+            var renderer = renderers[i];
+            if (renderer != null)
             {
-                bounds.Encapsulate(renderers[i].bounds);
+                bounds.Encapsulate(renderer.bounds);
             }
         }
 
         var center = bounds.center;
         var size = bounds.size;
         var viewAxis = ResolveThinnestAxis(size);
-        var faceExtent = Mathf.Max(
-            0.5f,
-            viewAxis == 0 ? Mathf.Max(size.y, size.z) : viewAxis == 1 ? Mathf.Max(size.x, size.z) : Mathf.Max(size.x, size.y));
-        var distance = faceExtent * 1.85f;
         var viewDirection = viewAxis switch
         {
             0 => Vector3.right,
@@ -224,15 +388,30 @@ public class EffectScene : MonoBehaviour
             _ => Vector3.forward
         };
 
+        var faceSize = viewAxis switch
+        {
+            0 => Mathf.Max(size.y, size.z),
+            1 => Mathf.Max(size.x, size.z),
+            _ => Mathf.Max(size.x, size.y)
+        };
+        var spreadSize = Mathf.Max(size.x, size.y, size.z);
+        var distance = Mathf.Max(MinCameraDistance, faceSize, spreadSize * 0.65f) * CameraFitPadding;
+
+        if (!camera.orthographic)
+        {
+            var fovRad = camera.fieldOfView * Mathf.Deg2Rad;
+            var aspect = Mathf.Max(camera.aspect, 0.01f);
+            var verticalFit = spreadSize / (2f * Mathf.Tan(fovRad * 0.5f));
+            var horizontalFit = spreadSize / (2f * Mathf.Tan(fovRad * 0.5f) * aspect);
+            distance = Mathf.Max(distance, verticalFit, horizontalFit) * CameraFitPadding;
+        }
+
         camera.transform.position = center - viewDirection * distance;
         camera.transform.LookAt(center);
         camera.nearClipPlane = 0.01f;
         camera.farClipPlane = Mathf.Max(100f, distance * 10f);
     }
 
-    /// <summary>
-    /// 用途：取包围盒最薄轴作为观察方向，让相机正对最大平面。返回：0=x，1=y，2=z。
-    /// </summary>
     private static int ResolveThinnestAxis(Vector3 size)
     {
         if (size.z <= size.x && size.z <= size.y)

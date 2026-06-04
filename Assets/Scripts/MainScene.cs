@@ -326,6 +326,18 @@ public class MainScene : MonoBehaviour
         mTapCandidateMoved = false;
     }
 
+    private static IEnumerator WaitForCardPackAnimation(string animationFileName, Transform anchor)
+    {
+        var duration = GameAnimationUtility.GetCardPackPlayDuration(animationFileName, anchor);
+        if (duration > 0f)
+        {
+            yield return new WaitForSeconds(duration);
+            yield break;
+        }
+
+        yield return new WaitForSeconds(1.5f);
+    }
+
     private IEnumerator PlayPackageClickFallback(SpriteRenderer renderer)
     {
         if (renderer == null)
@@ -362,29 +374,19 @@ public class MainScene : MonoBehaviour
         var resolvedBagId = bagId > 0 ? bagId : MainPackageBagId;
         var animationFileName = $"mesh_ani_cardPack_{resolvedBagId:D3}.FBX";
         var anchor = renderer != null ? renderer.transform : null;
-        var hidCoverSprite = false;
-        if (renderer != null && renderer.enabled)
-        {
-            renderer.enabled = false;
-            hidCoverSprite = true;
-        }
-
         var hasPlayed = GameAnimationUtility.PlayCardPackAnimation(animationFileName, anchor);
         if (hasPlayed)
         {
-            var duration = GameAnimationUtility.GetCardPackPlayDuration(animationFileName, anchor);
-            if (duration > 0f)
+            if (renderer != null)
             {
-                yield return new WaitForSeconds(duration);
+                renderer.enabled = false;
             }
+
+            yield return WaitForCardPackAnimation(animationFileName, anchor);
         }
         else
         {
-            if (renderer != null && hidCoverSprite)
-            {
-                renderer.enabled = true;
-            }
-
+            Debug.LogWarning($"Card pack animation not played: {animationFileName}");
             if (renderer != null)
             {
                 yield return PlayPackageClickFallback(renderer);
