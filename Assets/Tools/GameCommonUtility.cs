@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 
 public static class GameCommonUtility
 {
@@ -142,6 +143,127 @@ public static class GameCommonUtility
     }
 
     /// <summary>
+    /// 用途：根据世界空间包围盒自动调整正交相机，确保内容完整可见。返回：无。
+    /// </summary>
+    public static void FitOrthographicCameraToWorldBounds(Camera camera, float padding, Bounds bounds)
+    {
+        if (camera == null || !camera.orthographic || bounds.size.sqrMagnitude <= 0f)
+        {
+            return;
+        }
+
+        var targetPosition = camera.transform.position;
+        targetPosition.x = bounds.center.x;
+        targetPosition.y = bounds.center.y;
+        camera.transform.position = targetPosition;
+
+        var targetHalfHeight = bounds.extents.y + padding;
+        var targetHalfWidth = bounds.extents.x + padding;
+        if (camera.aspect > 0f)
+        {
+            targetHalfHeight = Mathf.Max(targetHalfHeight, targetHalfWidth / camera.aspect);
+        }
+
+        camera.orthographicSize = Mathf.Max(targetHalfHeight, 0.01f);
+    }
+
+    /// <summary>
+    /// 用途：仅根据世界空间包围盒调整正交相机视野大小，不移动相机位置。返回：无。
+    /// </summary>
+    public static void FitOrthographicCameraSizeOnly(Camera camera, float padding, Bounds bounds)
+    {
+        if (camera == null || !camera.orthographic || bounds.size.sqrMagnitude <= 0f)
+        {
+            return;
+        }
+
+        var targetHalfHeight = bounds.extents.y + padding;
+        var targetHalfWidth = bounds.extents.x + padding;
+        if (camera.aspect > 0f)
+        {
+            targetHalfHeight = Mathf.Max(targetHalfHeight, targetHalfWidth / camera.aspect);
+        }
+
+        camera.orthographicSize = Mathf.Max(targetHalfHeight, 0.01f);
+    }
+
+    /// <summary>
+    /// 用途：计算 RectTransform 在世界空间中的包围盒。返回：世界包围盒。
+    /// </summary>
+    public static Bounds GetRectTransformWorldBounds(RectTransform rectTransform)
+    {
+        if (rectTransform == null)
+        {
+            return new Bounds(Vector3.zero, Vector3.zero);
+        }
+
+        var corners = new Vector3[4];
+        rectTransform.GetWorldCorners(corners);
+        var bounds = new Bounds(corners[0], Vector3.zero);
+        for (var i = 1; i < corners.Length; i++)
+        {
+            bounds.Encapsulate(corners[i]);
+        }
+
+        return bounds;
+    }
+
+    /// <summary>
+    /// 用途：将 UI RectTransform 的包围盒转换到指定相机的世界坐标系。返回：相机世界包围盒。
+    /// </summary>
+    public static Bounds GetRectTransformCameraWorldBounds(RectTransform rectTransform, Camera camera, float worldDepth = 0f)
+    {
+        if (rectTransform == null || camera == null)
+        {
+            return new Bounds(Vector3.zero, Vector3.zero);
+        }
+
+        var canvas = rectTransform.GetComponentInParent<Canvas>();
+        var eventCamera = canvas != null && canvas.renderMode == RenderMode.ScreenSpaceOverlay
+            ? null
+            : canvas != null ? canvas.worldCamera ?? camera : camera;
+        var corners = new Vector3[4];
+        rectTransform.GetWorldCorners(corners);
+        var distance = Mathf.Abs(camera.transform.position.z - worldDepth);
+        var bounds = new Bounds(
+            ConvertUiCornerToCameraWorld(corners[0], eventCamera, camera, distance, worldDepth),
+            Vector3.zero);
+        for (var i = 1; i < corners.Length; i++)
+        {
+            bounds.Encapsulate(ConvertUiCornerToCameraWorld(corners[i], eventCamera, camera, distance, worldDepth));
+        }
+
+        return bounds;
+    }
+
+    /// <summary>
+    /// 用途：把相机世界坐标偏移转换为 Canvas anchoredPosition 偏移。返回：anchoredPosition 偏移量。
+    /// </summary>
+    public static Vector2 WorldDeltaToCanvasAnchoredDelta(
+        RectTransform referenceRect,
+        Camera camera,
+        Vector2 worldDelta,
+        float worldDepth = 0f)
+    {
+        if (referenceRect == null || camera == null)
+        {
+            return worldDelta;
+        }
+
+        var worldBounds = GetRectTransformCameraWorldBounds(referenceRect, camera, worldDepth);
+        var localWidth = Mathf.Max(0.01f, referenceRect.rect.width);
+        var localHeight = Mathf.Max(0.01f, referenceRect.rect.height);
+        if (worldBounds.size.x <= 0.001f || worldBounds.size.y <= 0.001f)
+        {
+            return worldDelta;
+        }
+
+        return new Vector2(
+            worldDelta.x * localWidth / worldBounds.size.x,
+            worldDelta.y * localHeight / worldBounds.size.y);
+    }
+
+    /// <summary>
     /// 用途：将资源路径统一转换为磁盘绝对路径。返回：可用于文件读取的绝对路径。
     /// </summary>
     /// <param name="resourcePath">参数：资源路径，支持绝对路径或相对 Assets 路径。</param>
@@ -243,6 +365,65 @@ public static class GameCommonUtility
         canvas.planeDistance = Mathf.Abs(camera.transform.position.z - worldDepth) + 1f;
     }
 
+    /// <summary>
+    /// 用途：配置游戏场景 Canvas，使 UI 像素尺寸与 PPU=100 的世界坐标拼图一致。返回：无。
+    /// </summary>
+    public static void ConfigureCanvasForGameplay(
+        Canvas canvas,
+        Camera camera,
+        float referenceWidth,
+        float referenceHeight,
+        float pixelsPerUnit,
+        float worldDepth = 0f)
+    {
+        if (canvas == null || camera == null)
+        {
+            return;
+        }
+
+        if (canvas.transform.parent == camera.transform)
+        {
+            canvas.transform.SetParent(null, worldPositionStays: true);
+        }
+
+        var scaler = canvas.GetComponent<CanvasScaler>();
+        if (scaler != null)
+        {
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(referenceWidth, referenceHeight);
+            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+            scaler.matchWidthOrHeight = 0.5f;
+            scaler.referencePixelsPerUnit = pixelsPerUnit;
+        }
+
+        canvas.renderMode = RenderMode.ScreenSpaceCamera;
+        canvas.worldCamera = camera;
+        canvas.planeDistance = Mathf.Max(0.01f, Mathf.Abs(camera.transform.position.z - worldDepth));
+    }
+
+    /// <summary>
+    /// 用途：将 Sprite 在指定 PPU 下的世界尺寸转换为 Canvas 本地像素偏移。返回：Canvas 偏移量。
+    /// </summary>
+    public static Vector2 WorldSizeToCanvasDelta(RectTransform referenceRect, Vector2 worldDelta)
+    {
+        if (referenceRect == null)
+        {
+            return worldDelta;
+        }
+
+        var worldBounds = GetRectTransformWorldBounds(referenceRect);
+        var localWidth = Mathf.Max(0.01f, referenceRect.rect.width);
+        var localHeight = Mathf.Max(0.01f, referenceRect.rect.height);
+        if (worldBounds.size.x <= 0.001f || worldBounds.size.y <= 0.001f)
+        {
+            return worldDelta;
+        }
+
+        return new Vector2(
+            worldDelta.x * localWidth / worldBounds.size.x,
+            worldDelta.y * localHeight / worldBounds.size.y);
+    }
+
     private static Vector2 RectTransformToScreenPoint(RectTransform rectTransform)
     {
         var canvas = rectTransform.GetComponentInParent<Canvas>();
@@ -251,6 +432,19 @@ public static class GameCommonUtility
             : canvas != null ? canvas.worldCamera : null;
         var worldCenter = rectTransform.TransformPoint(rectTransform.rect.center);
         return RectTransformUtility.WorldToScreenPoint(eventCamera, worldCenter);
+    }
+
+    private static Vector3 ConvertUiCornerToCameraWorld(
+        Vector3 uiWorldCorner,
+        Camera eventCamera,
+        Camera camera,
+        float distance,
+        float worldDepth)
+    {
+        var screenPoint = RectTransformUtility.WorldToScreenPoint(eventCamera, uiWorldCorner);
+        var worldPosition = camera.ScreenToWorldPoint(new Vector3(screenPoint.x, screenPoint.y, distance));
+        worldPosition.z = worldDepth;
+        return worldPosition;
     }
 
     /// <summary>

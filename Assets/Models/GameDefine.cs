@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 
 [Serializable]
 public struct PackagePieceData
@@ -28,7 +29,8 @@ public struct PackageConfigData
 public sealed class DraggablePieceState
 {
     public SpriteRenderer PieceRenderer;
-    public SpriteRenderer GrooveRenderer;
+    public Image GrooveImage;
+    public RectTransform GrooveRect;
     public Vector3 StartPosition;
     public Vector3 TrayScale;
     public Vector3 DragScale;
@@ -45,9 +47,10 @@ public sealed class SceneResourcesState
 
 public sealed class BoardState
 {
-    public SpriteRenderer GameBoardRenderer;
+    public Image GameBoardImage;
+    public RectTransform BackgroundRect;
     public SpriteRenderer PieceBgRenderer;
-    public List<List<SpriteRenderer>> GrooveRenderersByGroup = new List<List<SpriteRenderer>>();
+    public List<List<Image>> GrooveImagesByGroup = new List<List<Image>>();
     public bool IsBoardAndGroovesInitialized;
 }
 
@@ -81,6 +84,11 @@ public static class GameDefine
     public const string GameFolderPrefix = "Game";
     public const string PackageFilePrefix = "Package";
     public const string GameBoardFileName = "GameBoard.png";
+    public const string GameBoardObjectName = "GameBoard";
+    public const string BackgroundObjectName = "Background";
+    public const string PieceObjectPrefix = "Piece";
+    public const string PieceBgObjectName = "PieceBg";
+    public const string PieceSpritePrefix = "Pieces";
     public const string MainBackgroundFileName = "MainBg.png";
     public const string ImageExtPng = ".png";
     public const string ImageExtJpg = ".jpg";
