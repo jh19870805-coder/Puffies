@@ -189,6 +189,71 @@ public static class GameCommonUtility
     }
 
     /// <summary>
+    /// 用途：将 UI RectTransform 中心点转换到指定相机的世界坐标。返回：世界坐标。
+    /// </summary>
+    public static Vector3 RectTransformToCameraWorld(RectTransform rectTransform, Camera camera, float worldDepth = 0f)
+    {
+        if (rectTransform == null || camera == null)
+        {
+            return Vector3.zero;
+        }
+
+        var screenPoint = RectTransformToScreenPoint(rectTransform);
+        var distance = Mathf.Abs(camera.transform.position.z - worldDepth);
+        var worldPosition = camera.ScreenToWorldPoint(new Vector3(screenPoint.x, screenPoint.y, distance));
+        worldPosition.z = worldDepth;
+        return worldPosition;
+    }
+
+    /// <summary>
+    /// 用途：估算 UI 元素在相机世界空间中的可视高度。返回：世界单位高度。
+    /// </summary>
+    public static float GetRectTransformWorldHeight(RectTransform rectTransform, Camera camera, float worldDepth = 0f)
+    {
+        if (rectTransform == null || camera == null)
+        {
+            return 0f;
+        }
+
+        var screenPoint = RectTransformToScreenPoint(rectTransform);
+        var canvas = rectTransform.GetComponentInParent<Canvas>();
+        var halfHeight = rectTransform.rect.height * (canvas != null ? canvas.scaleFactor : 1f) * 0.5f;
+        var distance = Mathf.Abs(camera.transform.position.z - worldDepth);
+        var top = camera.ScreenToWorldPoint(new Vector3(screenPoint.x, screenPoint.y + halfHeight, distance));
+        var bottom = camera.ScreenToWorldPoint(new Vector3(screenPoint.x, screenPoint.y - halfHeight, distance));
+        return Vector3.Distance(top, bottom);
+    }
+
+    /// <summary>
+    /// 用途：让 Screen Space Overlay 的 Canvas 改为相机空间，使 3D 卡包动画能显示在 UI 前方。返回：无。
+    /// </summary>
+    public static void ConfigureCanvasForWorldCardPack(Canvas canvas, Camera camera, float worldDepth = 0f)
+    {
+        if (canvas == null || camera == null)
+        {
+            return;
+        }
+
+        if (canvas.renderMode != RenderMode.ScreenSpaceCamera || canvas.worldCamera != camera)
+        {
+            canvas.renderMode = RenderMode.ScreenSpaceCamera;
+            canvas.worldCamera = camera;
+        }
+
+        canvas.planeDistance = Mathf.Abs(camera.transform.position.z - worldDepth) + 1f;
+    }
+
+    private static Vector2 RectTransformToScreenPoint(RectTransform rectTransform)
+    {
+        var canvas = rectTransform.GetComponentInParent<Canvas>();
+        var eventCamera = canvas != null && canvas.renderMode == RenderMode.ScreenSpaceOverlay
+            ? null
+            : canvas != null ? canvas.worldCamera : null;
+        var worldCenter = rectTransform.TransformPoint(rectTransform.rect.center);
+        return RectTransformUtility.WorldToScreenPoint(eventCamera, worldCenter);
+    }
+
+    /// <summary>
     /// 用途：根据资源路径读取图片并构建 Sprite。返回：Sprite 对象。
     /// </summary>
     /// <param name="imageResourcePath">参数：图片资源路径，支持绝对路径或相对 Assets 路径。</param>

@@ -393,13 +393,25 @@ public static class GameAnimationUtility
 
         var targetTransform = animator.transform;
         var prefabRotation = targetTransform.rotation;
-        var targetPosition = anchor.position;
-        targetPosition.z = -0.1f;
+        var camera = Camera.main;
+        const float worldDepth = 0f;
+        Vector3 targetPosition;
+        float anchorSize;
+        if (anchor is RectTransform rectTransform && camera != null)
+        {
+            targetPosition = GameCommonUtility.RectTransformToCameraWorld(rectTransform, camera, worldDepth);
+            anchorSize = GameCommonUtility.GetRectTransformWorldHeight(rectTransform, camera, worldDepth);
+        }
+        else
+        {
+            targetPosition = anchor.position;
+            targetPosition.z = worldDepth;
+            anchorSize = Mathf.Max(anchor.lossyScale.x, anchor.lossyScale.y, 0.01f) * 4f;
+        }
+
         targetTransform.position = targetPosition;
         targetTransform.rotation = prefabRotation;
-
-        var anchorScale = Mathf.Max(anchor.lossyScale.x, anchor.lossyScale.y, 0.01f);
-        targetTransform.localScale = Vector3.one * Mathf.Max(1.2f, anchorScale * 4f);
+        targetTransform.localScale = Vector3.one * Mathf.Max(1.2f, anchorSize * 0.55f);
         targetTransform.gameObject.SetActive(true);
 
         var renderers = animator.GetComponentsInChildren<Renderer>(true);
