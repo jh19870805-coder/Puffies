@@ -753,44 +753,8 @@ public class GameScene : MonoBehaviour
             return;
         }
 
-        GameCommonUtility.FitOrthographicCameraSizeOnly(camera, GamePageCameraPadding, pageBounds);
-        CenterCameraOnGrooveGroup(camera, GetGrooveGroup(_drag.CurrentGroupIndex >= 0 ? _drag.CurrentGroupIndex : 0), pageBounds);
+        GameCommonUtility.FitOrthographicCameraToWorldBounds(camera, GamePageCameraPadding, pageBounds);
         AlignPieceBgToPageBottom();
-    }
-
-    private void CenterCameraOnGrooveGroup(Camera camera, List<Image> grooveGroup, Bounds fallbackBounds)
-    {
-        if (camera == null)
-        {
-            return;
-        }
-
-        var targetCenter = fallbackBounds.center;
-        if (grooveGroup != null && grooveGroup.Count > 0)
-        {
-            var grooveBounds = BuildUIGroupBounds(grooveGroup, camera);
-            if (grooveBounds.HasValue)
-            {
-                targetCenter = grooveBounds.Value.center;
-            }
-        }
-
-        var cameraPosition = camera.transform.position;
-        cameraPosition.x = targetCenter.x;
-        cameraPosition.y = targetCenter.y;
-        camera.transform.position = cameraPosition;
-    }
-
-    private List<Image> GetGrooveGroup(int groupIndex)
-    {
-        if (_board.GrooveImagesByGroup == null
-            || groupIndex < 0
-            || groupIndex >= _board.GrooveImagesByGroup.Count)
-        {
-            return null;
-        }
-
-        return _board.GrooveImagesByGroup[groupIndex];
     }
 
     private Bounds BuildPageBounds(bool includeDraggables, bool includeInactiveGrooves = false)
