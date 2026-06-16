@@ -6,8 +6,8 @@ using UnityEngine.UI;
 
 public class MainScene : MonoBehaviour
 {
-    private const float ReferenceHeight = 1080f;
-    private const float PixelsPerUnit = 100f;
+    private const float ReferenceHeight = GameDefine.DesignHeight;
+    private const float PixelsPerUnit = GameDefine.PixelsPerUnit;
     private const float PackageClickScaleRatio = 1.15f;
     private const float PackageClickAnimDuration = 0.12f;
     private const int MainPackageBagId = GameDefine.DefaultBagId;

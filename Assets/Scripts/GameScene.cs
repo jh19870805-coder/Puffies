@@ -8,8 +8,8 @@ using UnityEngine.UI;
 
 public class GameScene : MonoBehaviour
 {
-    private const float ReferenceHeight = 1080f;
-    private const float PixelsPerUnit = 100f;
+    private const float ReferenceHeight = GameDefine.DesignHeight;
+    private const float PixelsPerUnit = GameDefine.PixelsPerUnit;
     private const float WorldGameplayDepth = -0.5f;
     private const float GamePageCameraPadding = 0.3f;
     private const float DraggableLeftPadding = 0.2f;
@@ -28,7 +28,7 @@ public class GameScene : MonoBehaviour
     private const string BootstrapObjectName = "GameSceneBootstrap";
     private const string PieceBgFillObjectName = "PieceBgFill";
     private const string PieceBgObjectName = "PieceBg";
-    private const string PieceBgPath = "Textures/BasicUI/ImgMaskBlack.png";
+    private const string PieceBgPath = GameDefine.ArtResRoot + "/BasicUI/ImgMaskBlack.png";
     private const string DraggableGroupRootObjectName = "DraggableGroupPieces";
     private const string PlacedPiecesRootObjectName = "PlacedPieces";
     private static bool sHookedSceneLoaded;
@@ -459,7 +459,7 @@ public class GameScene : MonoBehaviour
         var root = new GameObject(DraggableGroupRootObjectName);
         var firstPieceRenderer = CreateSpriteObject(
             $"DraggablePiece_{groupIndex}_0",
-            $"{GameDefine.TexturesRoot}/{groupItems[0].Sprite}",
+            $"{GameDefine.ArtResRoot}/{groupItems[0].Sprite}",
             PieceSortingOrder,
             root.transform,
             forceCreate: true);
@@ -497,7 +497,7 @@ public class GameScene : MonoBehaviour
         {
             var pieceRenderer = CreateSpriteObject(
                 $"DraggablePiece_{groupIndex}_{i}",
-                $"{GameDefine.TexturesRoot}/{groupItems[i].Sprite}",
+                $"{GameDefine.ArtResRoot}/{groupItems[i].Sprite}",
                 PieceSortingOrder,
                 root.transform,
                 forceCreate: true);
@@ -859,7 +859,7 @@ public class GameScene : MonoBehaviour
             {
                 for (var j = 0; j < items.Length; j++)
                 {
-                    group.Add($"{GameDefine.TexturesRoot}/{items[j].Sprite}");
+                    group.Add($"{GameDefine.ArtResRoot}/{items[j].Sprite}");
                 }
             }
 

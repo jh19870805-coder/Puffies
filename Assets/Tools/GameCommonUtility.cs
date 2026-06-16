@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -281,14 +282,41 @@ public static class GameCommonUtility
             normalizedPath = normalizedPath.Substring("Assets/".Length);
         }
 
-        var streamingAssetsPath = Path.Combine(Application.streamingAssetsPath, normalizedPath);
-        if (File.Exists(streamingAssetsPath) || Directory.Exists(streamingAssetsPath))
+        var candidates = BuildResourcePathCandidates(normalizedPath);
+        for (var i = 0; i < candidates.Count; i++)
         {
-            return streamingAssetsPath;
+            var candidate = candidates[i];
+            var streamingAssetsPath = Path.Combine(Application.streamingAssetsPath, candidate);
+            if (File.Exists(streamingAssetsPath) || Directory.Exists(streamingAssetsPath))
+            {
+                return streamingAssetsPath;
+            }
+
+#if UNITY_EDITOR
+            var assetsPath = Path.Combine(Application.dataPath, candidate);
+            if (File.Exists(assetsPath) || Directory.Exists(assetsPath))
+            {
+                return assetsPath;
+            }
+#endif
         }
 
-        // Editor 下兼容直接读取 Assets 目录，避免本地调试依赖构建前同步。
         return Path.Combine(Application.dataPath, normalizedPath);
+    }
+
+    private static List<string> BuildResourcePathCandidates(string normalizedPath)
+    {
+        var candidates = new List<string> { normalizedPath };
+        if (normalizedPath.StartsWith("ArtRes/", StringComparison.OrdinalIgnoreCase))
+        {
+            candidates.Add("Textures/" + normalizedPath.Substring("ArtRes/".Length));
+        }
+        else if (normalizedPath.StartsWith("Textures/", StringComparison.OrdinalIgnoreCase))
+        {
+            candidates.Add("ArtRes/" + normalizedPath.Substring("Textures/".Length));
+        }
+
+        return candidates;
     }
 
     /// <summary>

@@ -77,7 +77,7 @@ public static class GameDefine
     // Common path tokens
     public const string AssetsRoot = "Assets";
     public const string ConfigsRoot = "Configs";
-    public const string TexturesRoot = "Textures";
+    public const string ArtResRoot = "ArtRes";
     public const string PackImagesFolder = "PackImages";
 
     // Resource file names and suffixes
@@ -99,4 +99,9 @@ public static class GameDefine
     // Default runtime values
     public const int DefaultBagId = 1;
     public const int InvalidId = -1;
+
+    // Design resolution (1920×1080, PPU 100)
+    public const float DesignWidth = 1920f;
+    public const float DesignHeight = 1080f;
+    public const float PixelsPerUnit = 100f;
 }

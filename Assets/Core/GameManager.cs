@@ -1,8 +1,6 @@
 using UnityEngine;
 using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using UnityEngine.SceneManagement;
 
 public static class GameManager
@@ -65,19 +63,19 @@ public static class GameManager
     /// <summary>
     /// 用途：获取当前包对应的资源文件夹相对路径。返回：包资源目录路径字符串。
     /// </summary>
-    /// <returns>返回：形如 Textures/Game001 的相对路径。</returns>
+    /// <returns>返回：形如 ArtRes/Game001 的相对路径。</returns>
     public static string GetBagFolderPath()
     {
-        return $"{GameDefine.TexturesRoot}/{GetBagFolderName()}";
+        return $"{GameDefine.ArtResRoot}/{GetBagFolderName()}";
     }
 
     /// <summary>
     /// 用途：获取当前包封面图片相对路径。返回：封面图片路径字符串。
     /// </summary>
-    /// <returns>返回：形如 Textures/PackImages/Package001.png 的相对路径。</returns>
+    /// <returns>返回：形如 ArtRes/PackImages/Package001.png 的相对路径。</returns>
     public static string GetBagPackagePath()
     {
-        return $"{GameDefine.TexturesRoot}/{GameDefine.PackImagesFolder}/{GameDefine.PackageFilePrefix}{GetBagIdText()}{GameDefine.ImageExtPng}";
+        return $"{GameDefine.ArtResRoot}/{GameDefine.PackImagesFolder}/{GameDefine.PackageFilePrefix}{GetBagIdText()}{GameDefine.ImageExtPng}";
     }
 
     /// <summary>
@@ -87,15 +85,6 @@ public static class GameManager
     public static string GetBagConfigPath()
     {
         return $"{GameDefine.ConfigsRoot}/{GameDefine.PackageFilePrefix}{GetBagIdText()}{GameDefine.ConfigExtJson}";
-    }
-
-    /// <summary>
-    /// 用途：获取当前包棋盘图片在磁盘上的绝对路径。返回：棋盘图片绝对路径。
-    /// </summary>
-    /// <returns>返回：GameBoard 图片文件完整路径。</returns>
-    public static string GetGameBoard()
-    {
-        return GameCommonUtility.ToDiskPath($"{GameDefine.TexturesRoot}/{GetBagFolderName()}/{GameDefine.GameBoardFileName}");
     }
 
     /// <summary>
@@ -139,102 +128,6 @@ public static class GameManager
         }
 
         return !string.IsNullOrWhiteSpace(packageConfig.PackageId);
-    }
-
-    /// <summary>
-    /// 用途：扫描包目录并按子目录分组加载碎片图片资源路径。返回：分组后的碎片路径列表。
-    /// </summary>
-    /// <param name="bagFolderPath">参数：包资源目录路径，支持 Assets 相对路径。</param>
-    /// <returns>返回：外层为分组、内层为图片路径的二维列表。</returns>
-    public static List<List<string>> LoadBagPieces(string bagFolderPath)
-    {
-        var pieceGroups = new List<List<string>>();
-        if (string.IsNullOrWhiteSpace(bagFolderPath))
-        {
-            return pieceGroups;
-        }
-
-        var normalizedFolderPath = bagFolderPath.Replace("\\", "/");
-        if (normalizedFolderPath.StartsWith("Assets/"))
-        {
-            normalizedFolderPath = normalizedFolderPath.Substring("Assets/".Length);
-        }
-
-        var folderOnDisk = GameCommonUtility.ToDiskPath(normalizedFolderPath);
-        if (!Directory.Exists(folderOnDisk))
-        {
-            Debug.LogWarning($"Bag folder does not exist: {folderOnDisk}");
-            return pieceGroups;
-        }
-
-        var subFolders = Directory
-            .GetDirectories(folderOnDisk)
-            .OrderBy(Path.GetFileName);
-
-        foreach (var subFolder in subFolders)
-        {
-            var groupedFiles = Directory
-                .GetFiles(subFolder)
-                .Where(IsSupportedImageFile)
-                .OrderBy(Path.GetFileName)
-                .Select(ToAssetRelativePath)
-                .ToList();
-
-            if (groupedFiles.Count > 0)
-            {
-                pieceGroups.Add(groupedFiles);
-            }
-        }
-
-        if (pieceGroups.Count > 0)
-        {
-            return pieceGroups;
-        }
-
-        var rootFiles = Directory
-            .GetFiles(folderOnDisk)
-            .Where(IsSupportedImageFile)
-            .OrderBy(Path.GetFileName)
-            .Select(ToAssetRelativePath)
-            .ToList();
-
-        if (rootFiles.Count > 0)
-        {
-            pieceGroups.Add(rootFiles);
-        }
-
-        return pieceGroups;
-    }
-
-    /// <summary>
-    /// 用途：判断文件是否为支持的图片扩展名。返回：是否支持。
-    /// </summary>
-    /// <param name="filePath">参数：待检查的文件路径。</param>
-    /// <returns>返回：true 表示是支持的图片格式。</returns>
-    private static bool IsSupportedImageFile(string filePath)
-    {
-        var extension = Path.GetExtension(filePath);
-        return extension == GameDefine.ImageExtPng
-            || extension == GameDefine.ImageExtJpg
-            || extension == GameDefine.ImageExtJpeg
-            || extension == GameDefine.ImageExtWebp;
-    }
-
-    /// <summary>
-    /// 用途：将磁盘绝对路径转换为 Unity 的 Assets 相对路径。返回：转换后的资源路径。
-    /// </summary>
-    /// <param name="filePath">参数：待转换的文件路径。</param>
-    /// <returns>返回：以 Assets 开头的相对路径，或原始标准化路径。</returns>
-    private static string ToAssetRelativePath(string filePath)
-    {
-        var normalizedFilePath = filePath.Replace("\\", "/");
-        var normalizedDataPath = Application.dataPath.Replace("\\", "/");
-        if (normalizedFilePath.StartsWith(normalizedDataPath))
-        {
-            return $"{GameDefine.AssetsRoot}{normalizedFilePath.Substring(normalizedDataPath.Length)}";
-        }
-
-        return normalizedFilePath;
     }
 
     /// <summary>
