@@ -71,8 +71,12 @@ public static class GameDefine
 
     public const string PlaneGroupPrefabEditorPath = "Assets/ArtRes/PlaneGroup/Prefab/mesh_PlaneGroup_001.prefab";
     public const string PlaneGroupMaterialEditorPath = "Assets/ArtRes/PlaneGroup/Materials/002.mat";
-    public const string PlaneGroupPrefabResourcesPath = "PlaneGroup/mesh_PlaneGroup_001";
-    public const string PlaneGroupMaterialResourcesPath = "PlaneGroup/002";
+    public const string PlaneGroupPrefabResourcesPath = "PlaneGroup/Prefabs/mesh_PlaneGroup_001";
+    public const string PlaneGroupMaterialResourcesPath = "PlaneGroup/Materials/PlaneGroupLit";
+
+    public const string CardPackPrefabResourcesFolder = "CardPack/Prefabs/";
+    public const string CardPackMaterialResourcesPath = "CardPack/Materials/CardPackLit";
+    public const string CardPackSkinPrefabPrefix = "mesh_skin_cardPack_";
 
     // Common path tokens
     public const string AssetsRoot = "Assets";

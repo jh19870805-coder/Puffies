@@ -24,6 +24,7 @@
 ## 可选后续
 
 - [ ] 添加 `Configs/Package002.json`（场景已有 Package002）
-- [ ] 清理 `Resources/CardPack/` 中多余的 `mesh_cardPack_*`（旧同步残留）
+- [x] 清理 `Resources/CardPack/` 中多余的 `mesh_cardPack_*`（BuildSync 自动清理 + 子目录规范）
+- [x] `Resources/` 目录规范：`CardPack/Prefabs`、`CardPack/Materials`、`PlaneGroup/Prefabs`、`PlaneGroup/Materials`
 - [ ] MainScene 多页卡包翻页 UI
 - [ ] 构建版 3D 卡包销毁策略

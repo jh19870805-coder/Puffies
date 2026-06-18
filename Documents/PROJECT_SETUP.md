@@ -40,4 +40,29 @@
 ## 6. 已知限制
 
 - Package002 需有 `Configs/Package002.json` 才能正常进入游戏
-- 构建版 3D 卡包依赖 `Resources/CardPack`（由 BuildSync 同步）
+- 构建版 3D 资源由 **Puffies → Sync Build Resources** 同步到 `Assets/Resources/`（勿手改，见下方目录规范）
+
+## 7. Resources 目录规范
+
+`Assets/Resources/` 仅放**构建后运行时**需要的 3D 资源，由 `BuildSync` 从 `ArtRes` 自动同步：
+
+```
+Resources/
+  CardPack/
+    Prefabs/     mesh_skin_cardPack_001.prefab … 006   # 与 ArtRes 同名，供开包动画加载
+    Materials/   CardPackLit.mat                      # 来源 ArtRes/Effect/Texture/Materials/001.mat
+  PlaneGroup/
+    Prefabs/     mesh_PlaneGroup_001.prefab
+    Materials/   PlaneGroupLit.mat                    # 来源 ArtRes/PlaneGroup/Materials/002.mat
+```
+
+**命名约定**
+
+| 类型 | 规则 | 示例 |
+|------|------|------|
+| 卡包皮肤 Prefab | 与 `ArtRes` 源文件同名，前缀 `mesh_skin_cardPack_` | `mesh_skin_cardPack_001` |
+| 卡包材质 | 固定 `CardPackLit` | `CardPack/Materials/CardPackLit` |
+| 平面组 Prefab | 与 ArtRes 同名 | `mesh_PlaneGroup_001` |
+| 平面组材质 | 固定 `PlaneGroupLit` | `PlaneGroup/Materials/PlaneGroupLit` |
+
+**不要**在 `Resources/CardPack/` 根目录堆放 `mesh_cardPack_*`（静态壳体，运行时不用）或 `001.mat` 等旧名文件；同步脚本会自动清理。

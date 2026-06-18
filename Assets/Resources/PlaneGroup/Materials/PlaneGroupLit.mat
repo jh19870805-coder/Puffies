@@ -7,7 +7,7 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: 001
+  m_Name: PlaneGroupLit
   m_Shader: {fileID: 4800000, guid: 933532a4fcc9baf4fa0491de14d08ed7, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
@@ -27,30 +27,30 @@ Material:
     serializedVersion: 3
     m_TexEnvs:
     - _BaseMap:
-        m_Texture: {fileID: 2800000, guid: 71437da5deb21644682305b4eded2069, type: 3}
+        m_Texture: {fileID: 2800000, guid: f325e475330f5c040b9651bac05ac17c, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _BumpMap:
-        m_Texture: {fileID: 2800000, guid: a9487980a3c0c0d448aa2ea6319e676d, type: 3}
+        m_Texture: {fileID: 2800000, guid: 773e3a3396fff09429755441e1e7d79f, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _MainTex:
-        m_Texture: {fileID: 2800000, guid: 71437da5deb21644682305b4eded2069, type: 3}
+        m_Texture: {fileID: 2800000, guid: f325e475330f5c040b9651bac05ac17c, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _OcclusionMap:
-        m_Texture: {fileID: 2800000, guid: 8624829b76b9cc74cae619387b8ad273, type: 3}
+        m_Texture: {fileID: 2800000, guid: d37be258a98dcd14aac52dced69562d8, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     m_Ints:
     - _Cull: 0
     m_Floats:
-    - _Metallic: 0.155
-    - _Smoothness: 0.872
+    - _Metallic: 0.235
+    - _Smoothness: 0.574
     m_Colors:
     - _BaseColor: {r: 1, g: 1, b: 1, a: 1}
   m_BuildTextureStacks: []
---- !u!114 &2921837143312650444
+--- !u!114 &7863807286862430822
 MonoBehaviour:
   m_ObjectHideFlags: 11
   m_CorrespondingSourceObject: {fileID: 0}

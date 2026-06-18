@@ -20,8 +20,12 @@ Assets/
   Configs/                # PackageXXX.json
   Core/                   # GameManager、GameDefine、状态类型
   Resources/              # 构建同步的 3D 运行时资源
-    CardPack/             # mesh_skin_cardPack_*.prefab
+    CardPack/
+      Prefabs/            # mesh_skin_cardPack_*.prefab
+      Materials/          # CardPackLit.mat
     PlaneGroup/
+      Prefabs/            # mesh_PlaneGroup_001.prefab
+      Materials/          # PlaneGroupLit.mat
   StreamingAssets/        # 构建同步的 2D/配置（Editor 下可不存在）
     ArtRes/
     Configs/
@@ -56,7 +60,7 @@ Assets/
 | 环境 | 2D / 配置 | 3D 卡包 |
 |------|----------|---------|
 | Editor Play | `Assets/ArtRes`、`Assets/Configs` | AssetDatabase + Resources |
-| Build | `StreamingAssets/ArtRes`、`StreamingAssets/Configs` | `Resources/CardPack` |
+| Build | `StreamingAssets/ArtRes`、`StreamingAssets/Configs` | `Resources/CardPack`、`Resources/PlaneGroup` |
 
 `ToDiskPath` 支持 `ArtRes` ↔ `Textures` 双向回退（兼容旧 StreamingAssets）。
 

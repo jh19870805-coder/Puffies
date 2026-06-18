@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
 using UnityEditor.Build;
@@ -16,11 +17,17 @@ public class BuildSync : IPreprocessBuildWithReport
 
     private const string CardPackSourceFolder = "Assets/ArtRes/Effect/Prefab/CardPack";
     private const string CardPackMaterialSource = "Assets/ArtRes/Effect/Texture/Materials/001.mat";
-    private const string CardPackResourcesFolder = "Assets/Resources/CardPack";
+    private const string CardPackResourcesRoot = "Assets/Resources/CardPack";
+    private const string CardPackPrefabsFolder = "Assets/Resources/CardPack/Prefabs";
+    private const string CardPackMaterialsFolder = "Assets/Resources/CardPack/Materials";
+    private const string CardPackLitMaterialName = "CardPackLit.mat";
 
     private const string PlaneGroupPrefabSource = "Assets/ArtRes/PlaneGroup/Prefab/mesh_PlaneGroup_001.prefab";
     private const string PlaneGroupMaterialSource = "Assets/ArtRes/PlaneGroup/Materials/002.mat";
-    private const string PlaneGroupResourcesFolder = "Assets/Resources/PlaneGroup";
+    private const string PlaneGroupResourcesRoot = "Assets/Resources/PlaneGroup";
+    private const string PlaneGroupPrefabsFolder = "Assets/Resources/PlaneGroup/Prefabs";
+    private const string PlaneGroupMaterialsFolder = "Assets/Resources/PlaneGroup/Materials";
+    private const string PlaneGroupLitMaterialName = "PlaneGroupLit.mat";
 
     private static readonly string[] ArtResStreamingFolders =
     {
@@ -133,38 +140,50 @@ public class BuildSync : IPreprocessBuildWithReport
     private static void SyncCardPackToResources()
     {
         EnsureFolder("Assets/Resources");
-        EnsureFolder(CardPackResourcesFolder);
+        EnsureFolder(CardPackResourcesRoot);
+        EnsureFolder(CardPackPrefabsFolder);
+        EnsureFolder(CardPackMaterialsFolder);
+        ClearFolderAssets(CardPackPrefabsFolder);
 
-        if (!Directory.Exists(CardPackSourceFolder))
+        if (Directory.Exists(CardPackSourceFolder))
         {
-            return;
-        }
-
-        var guids = AssetDatabase.FindAssets("t:Prefab", new[] { CardPackSourceFolder });
-        for (var i = 0; i < guids.Length; i++)
-        {
-            var sourcePath = AssetDatabase.GUIDToAssetPath(guids[i]);
-            var fileName = Path.GetFileName(sourcePath);
-            if (!fileName.StartsWith("mesh_skin_", System.StringComparison.OrdinalIgnoreCase))
+            var guids = AssetDatabase.FindAssets("t:Prefab", new[] { CardPackSourceFolder });
+            for (var i = 0; i < guids.Length; i++)
             {
-                continue;
-            }
+                var sourcePath = AssetDatabase.GUIDToAssetPath(guids[i]);
+                var fileName = Path.GetFileName(sourcePath);
+                if (!fileName.StartsWith(GameDefine.CardPackSkinPrefabPrefix, System.StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
 
-            CopyOrReplaceAsset(sourcePath, $"{CardPackResourcesFolder}/{fileName}");
+                CopyOrReplaceAsset(sourcePath, $"{CardPackPrefabsFolder}/{fileName}");
+            }
         }
 
         if (File.Exists(CardPackMaterialSource))
         {
-            CopyOrReplaceAsset(CardPackMaterialSource, $"{CardPackResourcesFolder}/001.mat");
+            CopyOrReplaceAsset(CardPackMaterialSource, $"{CardPackMaterialsFolder}/{CardPackLitMaterialName}");
         }
+
+        RemoveLegacyRootAssets(
+            CardPackResourcesRoot,
+            new[] { CardPackPrefabsFolder, CardPackMaterialsFolder });
     }
 
     private static void SyncPlaneGroupToResources()
     {
         EnsureFolder("Assets/Resources");
-        EnsureFolder(PlaneGroupResourcesFolder);
-        CopyOrReplaceAsset(PlaneGroupPrefabSource, $"{PlaneGroupResourcesFolder}/mesh_PlaneGroup_001.prefab");
-        CopyOrReplaceAsset(PlaneGroupMaterialSource, $"{PlaneGroupResourcesFolder}/002.mat");
+        EnsureFolder(PlaneGroupResourcesRoot);
+        EnsureFolder(PlaneGroupPrefabsFolder);
+        EnsureFolder(PlaneGroupMaterialsFolder);
+        ClearFolderAssets(PlaneGroupPrefabsFolder);
+
+        CopyOrReplaceAsset(PlaneGroupPrefabSource, $"{PlaneGroupPrefabsFolder}/mesh_PlaneGroup_001.prefab");
+        CopyOrReplaceAsset(PlaneGroupMaterialSource, $"{PlaneGroupMaterialsFolder}/{PlaneGroupLitMaterialName}");
+        RemoveLegacyRootAssets(
+            PlaneGroupResourcesRoot,
+            new[] { PlaneGroupPrefabsFolder, PlaneGroupMaterialsFolder });
     }
 
     private static void EnsureFolder(string assetFolder)
@@ -180,6 +199,80 @@ public class BuildSync : IPreprocessBuildWithReport
         {
             AssetDatabase.CreateFolder(parent, folderName);
         }
+    }
+
+    private static void ClearFolderAssets(string assetFolder)
+    {
+        if (!AssetDatabase.IsValidFolder(assetFolder))
+        {
+            return;
+        }
+
+        var assetPaths = CollectAssetPaths(assetFolder, recursive: false);
+        for (var i = 0; i < assetPaths.Count; i++)
+        {
+            AssetDatabase.DeleteAsset(assetPaths[i]);
+        }
+    }
+
+    private static void RemoveLegacyRootAssets(string resourceRoot, string[] preservedSubfolders)
+    {
+        if (!AssetDatabase.IsValidFolder(resourceRoot))
+        {
+            return;
+        }
+
+        var preserved = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+        for (var i = 0; i < preservedSubfolders.Length; i++)
+        {
+            preserved.Add(preservedSubfolders[i].Replace("\\", "/"));
+        }
+
+        var assetPaths = CollectAssetPaths(resourceRoot, recursive: false);
+        for (var i = 0; i < assetPaths.Count; i++)
+        {
+            var assetPath = assetPaths[i];
+            if (preserved.Contains(assetPath))
+            {
+                continue;
+            }
+
+            AssetDatabase.DeleteAsset(assetPath);
+        }
+    }
+
+    private static List<string> CollectAssetPaths(string assetFolder, bool recursive)
+    {
+        var results = new List<string>();
+        if (!AssetDatabase.IsValidFolder(assetFolder))
+        {
+            return results;
+        }
+
+        var guids = AssetDatabase.FindAssets(string.Empty, new[] { assetFolder });
+        for (var i = 0; i < guids.Length; i++)
+        {
+            var assetPath = AssetDatabase.GUIDToAssetPath(guids[i]);
+            if (AssetDatabase.IsValidFolder(assetPath))
+            {
+                continue;
+            }
+
+            var parent = Path.GetDirectoryName(assetPath)?.Replace("\\", "/");
+            if (recursive)
+            {
+                if (parent == assetFolder || (parent != null && parent.StartsWith(assetFolder + "/", System.StringComparison.Ordinal)))
+                {
+                    results.Add(assetPath);
+                }
+            }
+            else if (parent == assetFolder)
+            {
+                results.Add(assetPath);
+            }
+        }
+
+        return results;
     }
 
     private static void CopyOrReplaceAsset(string sourcePath, string destinationPath)
