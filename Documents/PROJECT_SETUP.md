@@ -47,6 +47,16 @@ Unity 菜单：**Puffies → Sync Build Resources**
 | 材质 | `CardPackLit` | `Resources/Effects/CardPack/` |
 | 平面组 | `PlaneGroup_001` | `Resources/Effects/PlaneGroup/` |
 
-## 6. 设计分辨率
+## 6. 场景跳转
+
+| 按钮 | 场景 | 说明 |
+|------|------|------|
+| BtnRank | RankScene | 排行榜 |
+| BtnAchieve | AchieveScene | 成就 |
+| BtnReturn | MainScene | 从 Rank/Achieve 返回首页 |
+
+按钮对象名须与 `GameDefine` 常量一致；需挂 `Button` 组件，由控制器运行时绑定 `onClick`。
+
+## 7. 设计分辨率
 
 1920×1080，PPU = 100（见 `GameDefine.DesignWidth/Height`）

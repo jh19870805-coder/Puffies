@@ -69,6 +69,14 @@ public static class GameManager
     }
 
     /// <summary>
+    /// 用途：切换到成就场景。返回：无。
+    /// </summary>
+    public static void EnterAchieveScene()
+    {
+        SceneManager.LoadScene(GameDefine.SceneAchieve);
+    }
+
+    /// <summary>
     /// 用途：返回主场景。返回：无。
     /// </summary>
     public static void EnterMainScene()

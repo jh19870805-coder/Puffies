@@ -68,6 +68,7 @@ public static class GameDefine
     public const string SceneMain = "MainScene";
     public const string SceneGame = "GameScene";
     public const string SceneRank = "RankScene";
+    public const string SceneAchieve = "AchieveScene";
     public const string SceneEffect = "effect";
 
     public const string EffectsRoot = "Assets/Resources/Effects";
@@ -108,6 +109,7 @@ public static class GameDefine
     public const string GameFolderPrefix = "Game";
     public const string PackageFilePrefix = "Package";
     public const string RankButtonObjectName = "BtnRank";
+    public const string AchieveButtonObjectName = "BtnAchieve";
     public const string ReturnButtonObjectName = "BtnReturn";
     public const string GameBoardFileName = "GameBoard.png";
     public const string GameBoardObjectName = "GameBoard";

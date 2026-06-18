@@ -2,13 +2,14 @@
 
 - Task: Puffies 新阶段开发
 - Status: In Progress
-- Updated At: 2026-06-02 12:15
+- Updated At: 2026-06-02 14:00
 - Previous Phase: 工程目录重组（已完成并验证）
 
 ## Requirement Log
 
 - 用户：准备开始新阶段工作。
 - 用户：`.cursor` 目录不要在 Cursor 文件树中显示（已写入 `.vscode/settings.json` files.exclude）。
+- 新需求：成就页 AchieveScene——MainScene `BtnAchieve` 跳转成就页，成就页 `BtnReturn` 返回 MainScene。
 
 ## 基线快照（当前仓库实测）
 
@@ -24,7 +25,8 @@
 |------|------|
 | MainScene | Package001/002/003 卡包 UI |
 | GameScene | 编辑器拼图页 |
-| RankScene | 已加控制器脚本 |
+| RankScene | 排行榜 + 返回 |
+| AchieveScene | 成就页 + 返回（已实现场景跳转） |
 | effect | 特效调试（可选删） |
 
 ### 配置与资源缺口
@@ -53,9 +55,9 @@
 
 ## Next Action
 
-1. 确认本阶段第一个目标（建议：**Package002 可点击进入游戏**）
-2. 若暂无 Game002 美术：先建 `Package002.json` 临时指向 `Game001` 打通流程，或等 `UI/Game002/` 资源到位再写配置
-3. Unity → **Sync Build Resources** → Play 验证
+1. Play 验证：MainScene `BtnAchieve` → AchieveScene → `BtnReturn` → MainScene
+2. 成就列表 UI / Steam 成就数据（待后续）
+3. Package002 配置与其它待办见上方列表
 
 ## Resume Prompt
 

@@ -59,6 +59,7 @@ public class MainScene : MonoBehaviour
         CollectEditorPackageImages();
         ConfigurePackageCanvas(targetCamera);
         ConfigureRankButton();
+        ConfigureAchieveButton();
     }
 
     /// <summary>
@@ -169,6 +170,39 @@ public class MainScene : MonoBehaviour
         }
 
         GameManager.EnterRankScene();
+    }
+
+    /// <summary>
+    /// 用途：为成就按钮绑定点击后跳转 AchieveScene。返回：无。
+    /// </summary>
+    private void ConfigureAchieveButton()
+    {
+        var achieveButtonObject = GameObject.Find(GameDefine.AchieveButtonObjectName);
+        if (achieveButtonObject == null)
+        {
+            Debug.LogWarning($"MainScene: achieve button not found. Expected object named {GameDefine.AchieveButtonObjectName}.");
+            return;
+        }
+
+        var button = achieveButtonObject.GetComponent<Button>();
+        if (button == null)
+        {
+            Debug.LogWarning($"MainScene: {GameDefine.AchieveButtonObjectName} is missing Button component.");
+            return;
+        }
+
+        button.onClick.RemoveListener(OnAchieveButtonClicked);
+        button.onClick.AddListener(OnAchieveButtonClicked);
+    }
+
+    private void OnAchieveButtonClicked()
+    {
+        if (mIsPlayingAnimation)
+        {
+            return;
+        }
+
+        GameManager.EnterAchieveScene();
     }
 
     /// <summary>
