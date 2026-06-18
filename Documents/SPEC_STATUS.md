@@ -1,79 +1,62 @@
 # SPEC 状态面板
 
-- Task: Puffies 工程整理（目录、资源、构建同步）
-- Status: In Progress
-- Updated At: 2026-06-01 23:00
-- Auto-Update Mode: Enabled (Maintained by Codex)
+- Task: Puffies 新阶段开发准备
+- Status: Ready
+- Updated At: 2026-05-29
+- Previous Phase: 工程目录重组（已完成并验证）
 
-## Requirement Log
+## 基线快照（可在此基础上开发）
 
-- （历史需求见下方 Progress Snapshot）
-- 新需求：重新整理整个工程（目录结构、冗余清理、统一资源根与构建同步）。
-- 问题反馈：整理后编译失败——`GameCommonUtility.BuildResourcePathCandidates` 使用 `List<>` 但缺少 `using System.Collections.Generic`；已修复。
+### 目录结构
 
-## Progress Snapshot
+```
+Assets/
+  Scenes/              MainScene、GameScene、effect
+  UI/                  2D 贴图源（PackImages、Game001、BasicUI）
+  Resources/
+    Config/            PackageXXX.json
+    Effects/
+      CardPack/        3D 卡包
+      PlaneGroup/      平面组特效
+  Scripts/             MVC
+    Model/             GameDefine、GameManager、工具类
+    View/              PackageInteractionHandler
+    Controller/        MainScene、GameScene、EffectScene
+    Editor/            BuildSync
+  Prefabs/             预留自定义预制体
+  StreamingAssets/     UI、Config（构建同步产物）
+```
 
-- 已完成：
-  - 历史主流程：编辑器 UI 场景 + Bootstrap 脚本、3D 开包动画、拼图玩法（见 E - Execute 历史项）。
-  - **本轮整理**：
-    - `Textures` → `ArtRes` 合并，路径常量改为 `ArtResRoot`
-    - `Models` → `Core` 重命名
-    - `BuildSync.cs` 统一 Configs / ArtRes / CardPack / PlaneGroup 同步
-    - 删除 `WindowAspectController`、三个旧 Editor 同步脚本、`U3DMake`、`PackageConfigModel.json`
-    - 删除 `LoadBagPieces`、`GetGameBoard`
-    - 新增 `ARCHITECTURE.md`、`PROJECT_SETUP.md`、`CLEANUP_CHECKLIST.md`
-- 进行中：
-  - 等待 Unity Editor 打开验证编译与 Play 回归
-- 未完成：
-  - `Package002.json` 配置
-  - 多页卡包翻页、构建版 3D 动画策略
+### 已验证
 
-## Resume Prompt
+- [x] 编辑器场景 UI 显示正常（GUID 已修复）
+- [x] MainScene / GameScene Play 流程正常（用户确认）
 
-- `继续当前任务，请先读取 Documents/SPEC_STATUS.md，然后按 Next Action 执行`
+### 加载方式
 
-## S - Scope
+| 资源 | 编辑器 | 运行时 |
+|------|--------|--------|
+| 2D 贴图 | `Assets/UI` | `StreamingAssets/UI` |
+| 配置 JSON | `Assets/Resources/Config` | `StreamingAssets/Config` |
+| 3D 特效 | `Assets/Resources/Effects` | `Resources.Load("Effects/...")` |
 
-## 当前状态（2026-05）
+### 构建前
 
-- 工程已按标准 Unity 目录重组：`Models/`、`Materials/`、`Prefabs/`、`UI/`、`Scripts/`、`Resources/`、`StreamingAssets/`
-- `ArtRes/` 已移除；2D 资源在 `UI/`，配置在 `Resources/Config/`
-- `BuildSync` 负责 UI/Config → StreamingAssets，Prefabs/Materials → Resources
-- 脚本统一在 `Assets/Scripts/`（含 Core、Tools、Editor 子目录）
+菜单：**Puffies → Sync Build Resources**
 
-## 待办
+---
 
-1. Unity 内验证三个场景 Play 模式
-2. 补 `Resources/Config/Package002.json`
-3. 补 CardPackAni_002+ 动画资源
-- 保持现有 Bootstrap + 编辑器 UI 架构不变
-- 验收：工程可编译、Play 主流程正常
+## 新阶段待办（按优先级）
 
-## P - Plan
-
-1. 目录与资源合并（已完成）
-2. 代码路径与 BuildSync 更新（已完成）
-3. Unity 打开 → Sync → Play 回归
-
-## E - Execute
-
-- 已完成：`Textures` 物理合并到 `ArtRes`
-- 已完成：`Core/` 替代 `Models/`
-- 已完成：`BuildSync.cs` + 删除旧同步脚本
-- 已完成：删除 `WindowAspectController`、`U3DMake`、死代码
-- 已完成：架构文档三份
-- 待完成：Editor 验证
-- 已修复：CS0246 `List<>` 缺少 using（`GameCommonUtility.cs`）
-
-## C - Check
-
-- 代码：`TexturesRoot` 已移除；`ToDiskPath` 保留 ArtRes/Textures 回退
-- 场景：MainScene/GameScene 使用 Bootstrap，无需改 .unity
-- 风险：场景 Image 若仍引用旧 Textures 路径 GUID 不受影响（Unity 按 GUID 引用）
+1. [ ] `Resources/Config/Package002.json`（场景已有 Package002 卡包）
+2. [ ] CardPackAni_002+ 动画 FBX（当前仅 001，其余走 fallback）
+3. [ ] 多页卡包翻页（如需要）
+4. [ ] 打包构建回归测试
 
 ## Next Action
 
-1. 打开 Unity → 确认编译通过
-2. **Puffies → Sync Build Resources**
-3. Play 测试 MainScene → GameScene
-4. 若 Package002 需 playable，补 `Configs/Package002.json`
+确定新阶段第一个功能目标，然后从上面待办或新需求开始实现。
+
+## Resume Prompt
+
+`继续 Puffies 新阶段开发，请先读取 Documents/SPEC_STATUS.md`
