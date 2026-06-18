@@ -3,29 +3,6 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
-[Serializable]
-public struct PackagePieceData
-{
-    public string Sprite;
-    public int x;
-    public int y;
-    public int z;
-}
-
-[Serializable]
-public struct PackagePieceGroupData
-{
-    public PackagePieceData[] Items;
-}
-
-[Serializable]
-public struct PackageConfigData
-{
-    public string PackageId;
-    public string Board;
-    public PackagePieceGroupData[] Pieces;
-}
-
 public sealed class DraggablePieceState
 {
     public SpriteRenderer PieceRenderer;
@@ -35,14 +12,6 @@ public sealed class DraggablePieceState
     public Vector3 TrayScale;
     public Vector3 DragScale;
     public bool IsPlaced;
-}
-
-public sealed class SceneResourcesState
-{
-    public string ActiveBagFolderPath;
-    public string ActiveGameBoardPath;
-    public List<List<string>> ActivePieceGroups;
-    public PackageConfigData ActivePackageConfig;
 }
 
 public sealed class BoardState
@@ -103,11 +72,9 @@ public static class GameDefine
     // Common path tokens
     public const string AssetsRoot = "Assets";
     public const string UiRoot = "UI";
-    public const string ConfigRoot = "Config";
     public const string PackImagesFolder = "PackImages";
 
     // Resource file names and suffixes
-    public const string GameFolderPrefix = "Game";
     public const string PackageFilePrefix = "Package";
     public const string RankButtonObjectName = "BtnRank";
     public const string AchieveButtonObjectName = "BtnAchieve";
@@ -120,14 +87,12 @@ public static class GameDefine
     public const string BackgroundObjectName = "Background";
     public const string PieceObjectPrefix = "Piece";
     public const string PieceBgObjectName = "PieceBg";
-    public const string PieceSpritePrefix = "Pieces";
     public const string MainBackgroundFileName = "MainBg.png";
     public const string MainBackgroundPath = UiRoot + "/BasicUI/" + MainBackgroundFileName;
     public const string ImageExtPng = ".png";
     public const string ImageExtJpg = ".jpg";
     public const string ImageExtJpeg = ".jpeg";
     public const string ImageExtWebp = ".webp";
-    public const string ConfigExtJson = ".json";
 
     // Default runtime values
     public const int DefaultBagId = 1;

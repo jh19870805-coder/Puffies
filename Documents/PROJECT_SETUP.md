@@ -9,32 +9,31 @@ Assets/
   UI/           2D PNG 源文件
   Scripts/      MVC（Model / View / Controller / Editor）
   Resources/
-    Config/     PackageXXX.json
     Effects/        # 3D 特效
       CardPack/
       PlaneGroup/
-  StreamingAssets/  构建产物（UI、Config）
+  StreamingAssets/  构建产物（UI）
 ```
 
 ## 2. 新增卡包流程
 
-**新增卡包**：复制 Package001，改名为 `Package003`，换贴图即可（需对应 `Resources/Config/Package003.json`）。
+**MainScene 卡包**：复制 `Package001` 对象，改名为 `Package003`，换封面贴图即可。
 
-1. 在 `UI/Game00X/` 放棋盘与碎片贴图
-2. 在 `Resources/Config/` 添加 `Package00X.json`
-3. 在 `UI/PackImages/` 添加封面
-4. 若需 3D 开包：在 `Resources/Effects/CardPack/` 添加 FBX、材质贴图与 `CardPackSkin_XXX.prefab`
+1. 在 `UI/PackImages/` 添加封面
+2. 若需 3D 开包：在 `Resources/Effects/CardPack/` 添加 FBX、材质贴图与 `CardPackSkin_XXX.prefab`
+
+**GameScene 拼图**：在场景中编辑 `GameBoard` 与 `Piece01`、`Piece02`…（Image 组件，命名 `Piece` + 两位数字），摆好位置并指定碎片贴图；运行时自动按编号排序生成凹槽与可拖拽碎片。
 
 ## 3. 构建前同步
 
 Unity 菜单：**Puffies → Sync Build Resources**
 
-会将 UI、Config 写入 StreamingAssets（Effects 已在 Resources 内，无需再同步）。
+会将 UI 写入 StreamingAssets（Effects 已在 Resources 内，无需再同步）。
 
 ## 4. 注意事项
 
 - `Resources` 文件夹名不可改（代码使用 `Resources.Load`）
-- Package002 需有 `Resources/Config/Package002.json` 才能正常进入游戏
+- GameScene 依赖编辑器对象：`GameBoard`、`Piece01`…（无需 JSON 配置）
 - 3D 特效资源统一在 `Resources/Effects/`；编辑器与运行时共用同一路径
 - `Prefabs/` 预留给后期自定义预制体，与特效资源分开
 
@@ -46,6 +45,7 @@ Unity 菜单：**Puffies → Sync Build Resources**
 | 开包动画 FBX | `CardPackAni_001.FBX` | `Resources/Effects/CardPack/` |
 | 材质 | `CardPackLit` | `Resources/Effects/CardPack/` |
 | 平面组 | `PlaneGroup_001` | `Resources/Effects/PlaneGroup/` |
+| 拼图凹槽/碎片 | `Piece01`…`PieceNN` | GameScene 编辑器 Image |
 
 ## 6. 场景跳转
 

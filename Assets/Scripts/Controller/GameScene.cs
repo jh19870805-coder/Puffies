@@ -1,7 +1,6 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.IO;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
@@ -32,7 +31,6 @@ public class GameScene : MonoBehaviour
     private const string DraggableGroupRootObjectName = "DraggableGroupPieces";
     private const string PlacedPiecesRootObjectName = "PlacedPieces";
     private static bool sHookedSceneLoaded;
-    private readonly SceneResourcesState _resources = new SceneResourcesState();
     private readonly BoardState _board = new BoardState();
     private readonly DragState _drag = new DragState();
     private Vector3 _pieceBgOriginalPosition;
@@ -67,9 +65,9 @@ public class GameScene : MonoBehaviour
 
         ConfigureGameplayCanvas(camera);
         var selectedBagId = GameManager.GetBagId();
-        PrepareBagResources(selectedBagId);
+        InitializeGameplay(selectedBagId);
         ConfigureReturnButton();
-        Debug.Log("GameScene bootstrap completed with bag resources prepared.");
+        Debug.Log("GameScene bootstrap completed.");
     }
 
     private void Update()
@@ -80,22 +78,19 @@ public class GameScene : MonoBehaviour
             OnPointerEnd);
     }
 
-    private void PrepareBagResources(int bagId)
+    private void InitializeGameplay(int bagId)
     {
         GameManager.SetBagId(bagId);
-        _resources.ActiveBagFolderPath = GameManager.GetBagFolderPath();
-        var configPath = GameManager.GetBagConfigPath();
-        if (!GameManager.TryLoadPackageConfig(configPath, out _resources.ActivePackageConfig))
-        {
-            Debug.LogWarning($"Failed to load package config: {configPath}");
-            return;
-        }
-
-        _resources.ActiveGameBoardPath = _resources.ActivePackageConfig.Board;
         EnsureBoardAndGroovesInitialized();
         if (_board.GameBoardImage == null)
         {
             Debug.LogWarning("GameBoard not found in scene. Expected editor object named GameBoard.");
+            return;
+        }
+
+        if (_board.GrooveImagesByGroup == null || _board.GrooveImagesByGroup.Count == 0)
+        {
+            Debug.LogWarning("GameScene: no editor groove images found. Expected objects named Piece01, Piece02, ...");
             return;
         }
 
@@ -104,11 +99,9 @@ public class GameScene : MonoBehaviour
         _board.PieceBgRenderer = CreatePieceBackground();
         FitGamePageToCamera();
         CreateDraggableGroup(0);
-        _resources.ActivePieceGroups = ConvertConfigToPieceGroups(_resources.ActivePackageConfig);
-        var pieceCount = CountPieces(_resources.ActivePieceGroups);
         Debug.Log(
-            $"GameScene bag resources ready. Folder={_resources.ActiveBagFolderPath}, " +
-            $"Board={_resources.ActiveGameBoardPath}, Groups={_resources.ActivePieceGroups?.Count ?? 0}, Pieces={pieceCount}");
+            $"GameScene ready. BagId={bagId}, Groups={_board.GrooveImagesByGroup.Count}, " +
+            $"Pieces={CountGrooveImages(_board.GrooveImagesByGroup)}");
     }
 
     private void ConfigureGameplayCanvas(Camera camera)
@@ -179,7 +172,7 @@ public class GameScene : MonoBehaviour
             _hasOriginalBackgroundAnchoredPosition = true;
         }
 
-        _board.GrooveImagesByGroup = CollectEditorGrooveGroups(_resources.ActivePackageConfig);
+        _board.GrooveImagesByGroup = CollectEditorGrooveGroups();
         SyncEditorLayoutToSprites();
         _board.IsBoardAndGroovesInitialized = true;
     }
@@ -196,47 +189,25 @@ public class GameScene : MonoBehaviour
         return sceneObject != null ? sceneObject.GetComponent<Image>() : null;
     }
 
-    private List<List<Image>> CollectEditorGrooveGroups(PackageConfigData config)
+    private static List<List<Image>> CollectEditorGrooveGroups()
     {
-        var groovesByNumber = CollectEditorPieceGrooves();
-        var groups = new List<List<Image>>();
-        if (config.Pieces == null)
+        var sortedGrooves = CollectSortedEditorPieceGrooves();
+        for (var i = 0; i < sortedGrooves.Count; i++)
         {
-            return groups;
+            SetImageAlpha(sortedGrooves[i], 0f);
         }
 
-        for (var groupIndex = 0; groupIndex < config.Pieces.Length; groupIndex++)
+        if (sortedGrooves.Count == 0)
         {
-            var groupImages = new List<Image>();
-            var items = config.Pieces[groupIndex].Items;
-            if (items == null)
-            {
-                groups.Add(groupImages);
-                continue;
-            }
-
-            for (var itemIndex = 0; itemIndex < items.Length; itemIndex++)
-            {
-                var pieceNumber = ParsePieceNumberFromSpritePath(items[itemIndex].Sprite);
-                if (pieceNumber <= 0 || !groovesByNumber.TryGetValue(pieceNumber, out var grooveImage))
-                {
-                    Debug.LogWarning($"Groove container not found for piece: {items[itemIndex].Sprite}");
-                    continue;
-                }
-
-                SetImageAlpha(grooveImage, 0f);
-                groupImages.Add(grooveImage);
-            }
-
-            groups.Add(groupImages);
+            return new List<List<Image>>();
         }
 
-        return groups;
+        return new List<List<Image>> { sortedGrooves };
     }
 
-    private static Dictionary<int, Image> CollectEditorPieceGrooves()
+    private static List<Image> CollectSortedEditorPieceGrooves()
     {
-        var grooves = new Dictionary<int, Image>();
+        var groovesByNumber = new Dictionary<int, Image>();
         var images = UnityEngine.Object.FindObjectsOfType<Image>(true);
         for (var i = 0; i < images.Length; i++)
         {
@@ -246,10 +217,18 @@ public class GameScene : MonoBehaviour
                 continue;
             }
 
-            grooves[pieceNumber] = image;
+            groovesByNumber[pieceNumber] = image;
         }
 
-        return grooves;
+        var numbers = new List<int>(groovesByNumber.Keys);
+        numbers.Sort();
+        var sortedGrooves = new List<Image>(numbers.Count);
+        for (var i = 0; i < numbers.Count; i++)
+        {
+            sortedGrooves.Add(groovesByNumber[numbers[i]]);
+        }
+
+        return sortedGrooves;
     }
 
     private static bool TryParsePieceObjectName(string objectName, out int pieceNumber)
@@ -263,24 +242,6 @@ public class GameScene : MonoBehaviour
 
         var numberText = objectName.Substring(GameDefine.PieceObjectPrefix.Length);
         return int.TryParse(numberText, out pieceNumber) && pieceNumber > 0;
-    }
-
-    private static int ParsePieceNumberFromSpritePath(string spritePath)
-    {
-        if (string.IsNullOrWhiteSpace(spritePath))
-        {
-            return 0;
-        }
-
-        var fileName = Path.GetFileNameWithoutExtension(spritePath);
-        if (string.IsNullOrWhiteSpace(fileName)
-            || !fileName.StartsWith(GameDefine.PieceSpritePrefix, StringComparison.Ordinal))
-        {
-            return 0;
-        }
-
-        var numberText = fileName.Substring(GameDefine.PieceSpritePrefix.Length);
-        return int.TryParse(numberText, out var pieceNumber) ? pieceNumber : 0;
     }
 
     private void SyncEditorLayoutToSprites()
@@ -437,18 +398,15 @@ public class GameScene : MonoBehaviour
         ClearCurrentDraggableGroup();
         _drag.CurrentGroupIndex = groupIndex;
 
-        if (_resources.ActivePackageConfig.Pieces == null
+        if (_board.GrooveImagesByGroup == null
             || groupIndex < 0
-            || groupIndex >= _resources.ActivePackageConfig.Pieces.Length
-            || _board.GrooveImagesByGroup == null
             || groupIndex >= _board.GrooveImagesByGroup.Count)
         {
             return;
         }
 
-        var groupItems = _resources.ActivePackageConfig.Pieces[groupIndex].Items;
         var grooveGroup = _board.GrooveImagesByGroup[groupIndex];
-        if (groupItems == null || groupItems.Length == 0 || grooveGroup == null || grooveGroup.Count == 0)
+        if (grooveGroup == null || grooveGroup.Count == 0)
         {
             return;
         }
@@ -458,67 +416,37 @@ public class GameScene : MonoBehaviour
         AlignPieceBgToPageBottom();
 
         var root = new GameObject(DraggableGroupRootObjectName);
-        var firstPieceRenderer = CreateSpriteObject(
-            $"DraggablePiece_{groupIndex}_0",
-            $"{GameDefine.UiRoot}/{groupItems[0].Sprite}",
-            PieceSortingOrder,
-            root.transform,
-            forceCreate: true);
-        if (firstPieceRenderer == null)
-        {
-            return;
-        }
-
         var hostBounds = _board.PieceBgRenderer != null
             ? _board.PieceBgRenderer.bounds
             : GameCommonUtility.GetRectTransformCameraWorldBounds(_board.GameBoardImage.rectTransform, Camera.main);
-        var trayScale = CalculateTrayScaleForPiece(firstPieceRenderer, hostBounds);
-        var firstPieceWidth = GameCommonUtility.GetPieceWidth(firstPieceRenderer, trayScale);
-        var firstHalfWidth = firstPieceWidth * 0.5f;
-        var startX = hostBounds.min.x + DraggableLeftPadding + firstHalfWidth;
-        var startY = hostBounds.center.y;
         var horizontalSpacing = DraggableHorizontalSpacingPixels / PixelsPerUnit;
+        var nextCenterX = hostBounds.min.x + DraggableLeftPadding;
+        var startY = hostBounds.center.y;
 
-        var firstDragScale = CalculatePieceScaleOnBoard();
-        firstPieceRenderer.transform.localScale = trayScale;
-        firstPieceRenderer.transform.position = new Vector3(startX, startY, WorldGameplayDepth);
-        _drag.CurrentGroupDraggables.Add(new DraggablePieceState
+        for (var i = 0; i < grooveGroup.Count; i++)
         {
-            PieceRenderer = firstPieceRenderer,
-            GrooveImage = grooveGroup[0],
-            GrooveRect = grooveGroup[0].rectTransform,
-            StartPosition = firstPieceRenderer.transform.position,
-            TrayScale = trayScale,
-            DragScale = firstDragScale,
-            IsPlaced = false
-        });
+            var grooveImage = grooveGroup[i];
+            if (grooveImage == null || grooveImage.sprite == null)
+            {
+                Debug.LogWarning($"GameScene: groove image missing sprite at index {i}.");
+                continue;
+            }
 
-        var nextCenterX = startX + firstHalfWidth + horizontalSpacing;
-        for (var i = 1; i < groupItems.Length; i++)
-        {
-            var pieceRenderer = CreateSpriteObject(
+            var pieceRenderer = CreateDraggablePieceFromGroove(
+                grooveImage,
                 $"DraggablePiece_{groupIndex}_{i}",
-                $"{GameDefine.UiRoot}/{groupItems[i].Sprite}",
-                PieceSortingOrder,
-                root.transform,
-                forceCreate: true);
+                root.transform);
             if (pieceRenderer == null)
             {
                 continue;
             }
 
-            var grooveImage = i < grooveGroup.Count ? grooveGroup[i] : null;
-            if (grooveImage == null)
-            {
-                continue;
-            }
-
-            var currentTrayScale = CalculateTrayScaleForPiece(pieceRenderer, hostBounds);
-            var pieceWidth = GameCommonUtility.GetPieceWidth(pieceRenderer, currentTrayScale);
+            var trayScale = CalculateTrayScaleForPiece(pieceRenderer, hostBounds);
+            var pieceWidth = GameCommonUtility.GetPieceWidth(pieceRenderer, trayScale);
             var pieceHalfWidth = pieceWidth * 0.5f;
             var pieceCenterX = nextCenterX + pieceHalfWidth;
             var dragScale = CalculatePieceScaleOnBoard();
-            pieceRenderer.transform.localScale = currentTrayScale;
+            pieceRenderer.transform.localScale = trayScale;
             pieceRenderer.transform.position = new Vector3(pieceCenterX, startY, WorldGameplayDepth);
             _drag.CurrentGroupDraggables.Add(new DraggablePieceState
             {
@@ -526,7 +454,7 @@ public class GameScene : MonoBehaviour
                 GrooveImage = grooveImage,
                 GrooveRect = grooveImage.rectTransform,
                 StartPosition = pieceRenderer.transform.position,
-                TrayScale = currentTrayScale,
+                TrayScale = trayScale,
                 DragScale = dragScale,
                 IsPlaced = false
             });
@@ -535,6 +463,16 @@ public class GameScene : MonoBehaviour
         }
 
         CachePieceBgOriginalPosition();
+    }
+
+    private static SpriteRenderer CreateDraggablePieceFromGroove(Image grooveImage, string objectName, Transform parent)
+    {
+        return GameCommonUtility.CreateSpriteRendererFromSprite(
+            objectName,
+            grooveImage.sprite,
+            PieceSortingOrder,
+            parent,
+            forceCreate: true);
     }
 
     private void UpdateGrooveGroupVisibility(int activeGroupIndex)
@@ -717,7 +655,7 @@ public class GameScene : MonoBehaviour
         }
 
         var nextGroupIndex = _drag.CurrentGroupIndex + 1;
-        if (_resources.ActivePackageConfig.Pieces != null && nextGroupIndex < _resources.ActivePackageConfig.Pieces.Length)
+        if (_board.GrooveImagesByGroup != null && nextGroupIndex < _board.GrooveImagesByGroup.Count)
         {
             CreateDraggableGroup(nextGroupIndex);
             return;
@@ -844,30 +782,20 @@ public class GameScene : MonoBehaviour
         return combinedBounds;
     }
 
-    private static List<List<string>> ConvertConfigToPieceGroups(PackageConfigData config)
+    private static int CountGrooveImages(List<List<Image>> grooveGroups)
     {
-        var groups = new List<List<string>>();
-        if (config.Pieces == null)
+        if (grooveGroups == null)
         {
-            return groups;
+            return 0;
         }
 
-        for (var i = 0; i < config.Pieces.Length; i++)
+        var total = 0;
+        for (var i = 0; i < grooveGroups.Count; i++)
         {
-            var items = config.Pieces[i].Items;
-            var group = new List<string>();
-            if (items != null)
-            {
-                for (var j = 0; j < items.Length; j++)
-                {
-                    group.Add($"{GameDefine.UiRoot}/{items[j].Sprite}");
-                }
-            }
-
-            groups.Add(group);
+            total += grooveGroups[i]?.Count ?? 0;
         }
 
-        return groups;
+        return total;
     }
 
     private SpriteRenderer CreateSpriteObject(
@@ -1176,22 +1104,6 @@ public class GameScene : MonoBehaviour
         var color = image.color;
         color.a = Mathf.Clamp01(alpha);
         image.color = color;
-    }
-
-    private static int CountPieces(List<List<string>> pieceGroups)
-    {
-        if (pieceGroups == null)
-        {
-            return 0;
-        }
-
-        var total = 0;
-        for (var i = 0; i < pieceGroups.Count; i++)
-        {
-            total += pieceGroups[i]?.Count ?? 0;
-        }
-
-        return total;
     }
 
     private void ConfigureReturnButton()

@@ -10,7 +10,6 @@ using UnityEngine;
 public class BuildSync : IPreprocessBuildWithReport
 {
     private const string UiSourceRoot = "Assets/UI";
-    private const string ConfigSourceRoot = "Assets/Resources/Config";
     private const string StreamingRoot = "Assets/StreamingAssets";
 
     private static readonly string[] UiStreamingFolders =
@@ -67,7 +66,6 @@ public class BuildSync : IPreprocessBuildWithReport
         CleanupLegacyAssetFolders();
         RemoveLegacyStreamingRoots();
         SyncUiToStreaming();
-        SyncConfigToStreaming();
 
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
@@ -105,17 +103,6 @@ public class BuildSync : IPreprocessBuildWithReport
 
             CopyDirectory(source, Path.Combine(targetRoot, folderName));
         }
-    }
-
-    private static void SyncConfigToStreaming()
-    {
-        if (!Directory.Exists(ConfigSourceRoot))
-        {
-            Debug.LogWarning($"BuildSync skipped, missing: {ConfigSourceRoot}");
-            return;
-        }
-
-        CopyDirectory(ConfigSourceRoot, Path.Combine(StreamingRoot, GameDefine.ConfigRoot));
     }
 
     private static void RemoveLegacyStreamingRoots()

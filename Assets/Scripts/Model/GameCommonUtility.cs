@@ -588,6 +588,50 @@ public static class GameCommonUtility
     }
 
     /// <summary>
+    /// 用途：用已有 Sprite 创建精灵对象并返回渲染器。返回：精灵渲染器。
+    /// </summary>
+    public static SpriteRenderer CreateSpriteRendererFromSprite(
+        string objectName,
+        Sprite sprite,
+        int sortingOrder,
+        Transform parent = null,
+        bool forceCreate = false)
+    {
+        if (sprite == null)
+        {
+            return null;
+        }
+
+        if (!forceCreate)
+        {
+            var existing = GameObject.Find(objectName);
+            if (existing != null)
+            {
+                var existingRenderer = existing.GetComponent<SpriteRenderer>();
+                if (existingRenderer != null)
+                {
+                    existingRenderer.sprite = sprite;
+                    existingRenderer.sortingOrder = sortingOrder;
+                    ApplySpriteUnlitMaterial(existingRenderer);
+                    return existingRenderer;
+                }
+            }
+        }
+
+        var go = new GameObject(objectName);
+        if (parent != null)
+        {
+            go.transform.SetParent(parent, worldPositionStays: true);
+        }
+
+        var renderer = go.AddComponent<SpriteRenderer>();
+        renderer.sprite = sprite;
+        renderer.sortingOrder = sortingOrder;
+        ApplySpriteUnlitMaterial(renderer);
+        return renderer;
+    }
+
+    /// <summary>
     /// 用途：为运行时创建的 SpriteRenderer 指定 URP 2D 无光照材质，避免未命中 Light2D 时整页发黑。返回：无。
     /// </summary>
     private static void ApplySpriteUnlitMaterial(SpriteRenderer renderer)
