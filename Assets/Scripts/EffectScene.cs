@@ -43,7 +43,7 @@ public class EffectScene : MonoBehaviour
         var planeGroup = LoadPlaneGroupPrefab();
         if (planeGroup == null)
         {
-            Debug.LogError("EffectScene failed: mesh_PlaneGroup_001 prefab not found.");
+            Debug.LogError("EffectScene failed: PlaneGroup_001 prefab not found.");
             return;
         }
 

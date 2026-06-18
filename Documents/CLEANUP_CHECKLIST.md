@@ -25,6 +25,6 @@
 
 - [ ] 添加 `Configs/Package002.json`（场景已有 Package002）
 - [x] `ArtRes/Effect/` 迁入 `Resources/Effect/` 并整理子目录（CardPack、Scene、Shader、Texture）
-- [x] 移除 `Resources/CardPack/` 重复同步目录，卡包改由 `Resources/Effect` 直接维护
+- [x] `ArtRes/PlaneGroup/`、`ArtRes/Shader/` 迁入 `Resources/` 并规范重命名
 - [ ] MainScene 多页卡包翻页 UI
 - [ ] 构建版 3D 卡包销毁策略

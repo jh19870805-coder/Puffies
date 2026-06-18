@@ -30,7 +30,7 @@
 2. 在 `Configs/` 添加 `Package00X.json`
 3. 在 `ArtRes/PackImages/` 添加封面
 4. 若需 3D 开包：在 `Resources/Effect/CardPack/Prefabs/` 添加 `mesh_skin_cardPack_XXX.prefab`，FBX 放 `CardPack/Fbx/`
-5. 执行 **Puffies → Sync Build Resources**（仅同步 2D StreamingAssets 与 PlaneGroup）
+5. 执行 **Puffies → Sync Build Resources**（仅同步 2D 到 StreamingAssets）
 
 ## 5. 测试
 
@@ -40,7 +40,7 @@
 ## 6. 已知限制
 
 - Package002 需有 `Configs/Package002.json` 才能正常进入游戏
-- 构建版 3D 卡包在 `Resources/Effect`；PlaneGroup 由 BuildSync 从 `ArtRes/PlaneGroup` 同步
+- 3D 资源统一在 `Assets/Resources/` 直接维护（Effect、PlaneGroup）
 
 ## 7. Resources 目录规范
 
@@ -50,24 +50,45 @@
 Resources/
   Effect/
     CardPack/
-      Prefabs/     mesh_skin_cardPack_001 … 006    # 开包动画用皮肤模型
-      Fbx/         mesh_ani_cardPack_001.FBX 等     # 动画与源模型
+      Prefabs/     mesh_skin_cardPack_001 …       # 开包皮肤模型
+      Fbx/         mesh_ani_cardPack_001.FBX 等    # 动画与源模型
       Materials/   CardPackLit.mat
     Scene/         fx_chai_w_001.prefab 等
-    Shader/        特效 Shader
+    Shader/
+      TwoSided_01.shader
+      EffectPacket.shader
+      Particle/
+        ParticleFire_AdditiveClip.shader
+        ParticleFire_AlphaClip.shader
     Texture/       特效通用贴图（Trail、Glow、Particle 等）
-  PlaneGroup/      # 由 BuildSync 从 ArtRes 同步
-    Prefabs/       mesh_PlaneGroup_001.prefab
+  PlaneGroup/
+    Prefabs/       PlaneGroup_001.prefab
+    Fbx/           PlaneGroup_001.FBX
     Materials/     PlaneGroupLit.mat
+    Textures/      PlaneGroup_Albedo、Normal、AmbientOcclusion …
 ```
 
-**命名约定**
+**命名对照（旧 → 新）**
+
+| 旧名 | 新名 | 说明 |
+|------|------|------|
+| `mesh_PlaneGroup_001` | `PlaneGroup_001` | 特效场景平面组 |
+| `002.mat` | `PlaneGroupLit.mat` | 平面组材质 |
+| `dscsd.png` | `PlaneGroup_Albedo.png` | 漫反射贴图 |
+| `Material_26_Normal_DirectX.png` | `PlaneGroup_Normal.png` | 法线贴图 |
+| `Material_26_Mixed_AO.png` | `PlaneGroup_AmbientOcclusion.png` | AO 贴图 |
+| `asr.jpg` | `PlaneGroup_Environment.jpg` | 环境贴图 |
+| `2Sided_w_01.shader` | `TwoSided_01.shader` | 双面材质 |
+| `BF_Effect_EffectPacket.shader` | `EffectPacket.shader` | 卡包特效 Shader |
+| `AParticleFireClipAdd10.shader` | `ParticleFire_AdditiveClip.shader` | 粒子加法裁剪 |
+| `AParticleFireClip10.shader` | `ParticleFire_AlphaClip.shader` | 粒子透明裁剪 |
+
+**卡包命名（暂未改，与动画解析逻辑绑定）**
 
 | 类型 | 规则 | 示例 |
 |------|------|------|
-| 卡包皮肤 Prefab | 前缀 `mesh_skin_cardPack_` + 三位编号 | `mesh_skin_cardPack_001` |
-| 卡包动画 FBX | 前缀 `mesh_ani_cardPack_` | `mesh_ani_cardPack_001.FBX` |
-| 卡包材质 | 固定 `CardPackLit` | `Effect/CardPack/Materials/CardPackLit` |
-| 平面组 | 由 BuildSync 同步，材质名 `PlaneGroupLit` | `PlaneGroup/Prefabs/mesh_PlaneGroup_001` |
+| 皮肤 Prefab | `mesh_skin_cardPack_` + 编号 | `mesh_skin_cardPack_001` |
+| 动画 FBX | `mesh_ani_cardPack_` + 编号 | `mesh_ani_cardPack_001.FBX` |
+| 材质 | `CardPackLit` | `Effect/CardPack/Materials/CardPackLit` |
 
-**说明**：`mesh_cardPack_*` 为静态壳体 Prefab，仅编辑器参考，运行时加载 `mesh_skin_*`。
+`mesh_cardPack_*` 为静态壳体，仅参考；运行时加载 `mesh_skin_*`。

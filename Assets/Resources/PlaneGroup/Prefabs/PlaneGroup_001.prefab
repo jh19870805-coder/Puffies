@@ -93,7 +93,7 @@ GameObject:
   m_Component:
   - component: {fileID: 2313192214510297738}
   m_Layer: 0
-  m_Name: mesh_PlaneGroup_001
+  m_Name: PlaneGroup_001
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

@@ -69,10 +69,11 @@ public static class GameDefine
     public const string SceneGame = "GameScene";
     public const string SceneEffect = "effect";
 
-    public const string PlaneGroupPrefabEditorPath = "Assets/ArtRes/PlaneGroup/Prefab/mesh_PlaneGroup_001.prefab";
-    public const string PlaneGroupMaterialEditorPath = "Assets/ArtRes/PlaneGroup/Materials/002.mat";
-    public const string PlaneGroupPrefabResourcesPath = "PlaneGroup/Prefabs/mesh_PlaneGroup_001";
+    public const string PlaneGroupPrefabEditorPath = "Assets/Resources/PlaneGroup/Prefabs/PlaneGroup_001.prefab";
+    public const string PlaneGroupMaterialEditorPath = "Assets/Resources/PlaneGroup/Materials/PlaneGroupLit.mat";
+    public const string PlaneGroupPrefabResourcesPath = "PlaneGroup/Prefabs/PlaneGroup_001";
     public const string PlaneGroupMaterialResourcesPath = "PlaneGroup/Materials/PlaneGroupLit";
+    public const string PlaneGroupFbxEditorFolder = "Assets/Resources/PlaneGroup/Fbx";
 
     public const string EffectEditorRoot = "Assets/Resources/Effect";
     public const string CardPackPrefabResourcesFolder = "Effect/CardPack/Prefabs/";

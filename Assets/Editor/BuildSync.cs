@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
 using UnityEditor.Build;
@@ -6,7 +5,7 @@ using UnityEditor.Build.Reporting;
 using UnityEngine;
 
 /// <summary>
-/// 用途：构建前与菜单统一同步 StreamingAssets 与 Resources。返回：无。
+/// 用途：构建前与菜单统一同步 StreamingAssets。3D 资源直接在 Assets/Resources 维护。返回：无。
 /// </summary>
 public class BuildSync : IPreprocessBuildWithReport
 {
@@ -14,13 +13,6 @@ public class BuildSync : IPreprocessBuildWithReport
     private const string ArtResSourceRoot = "Assets/ArtRes";
     private const string StreamingRoot = "Assets/StreamingAssets";
     private const string LegacyTexturesStreamingFolder = "Textures";
-
-    private const string PlaneGroupPrefabSource = "Assets/ArtRes/PlaneGroup/Prefab/mesh_PlaneGroup_001.prefab";
-    private const string PlaneGroupMaterialSource = "Assets/ArtRes/PlaneGroup/Materials/002.mat";
-    private const string PlaneGroupResourcesRoot = "Assets/Resources/PlaneGroup";
-    private const string PlaneGroupPrefabsFolder = "Assets/Resources/PlaneGroup/Prefabs";
-    private const string PlaneGroupMaterialsFolder = "Assets/Resources/PlaneGroup/Materials";
-    private const string PlaneGroupLitMaterialName = "PlaneGroupLit.mat";
 
     private static readonly string[] ArtResStreamingFolders =
     {
@@ -59,7 +51,6 @@ public class BuildSync : IPreprocessBuildWithReport
         SyncConfigsToStreaming();
         SyncArtResToStreaming();
         RemoveLegacyTexturesStreaming();
-        SyncPlaneGroupToResources();
 
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
@@ -129,21 +120,6 @@ public class BuildSync : IPreprocessBuildWithReport
         }
     }
 
-    private static void SyncPlaneGroupToResources()
-    {
-        EnsureFolder("Assets/Resources");
-        EnsureFolder(PlaneGroupResourcesRoot);
-        EnsureFolder(PlaneGroupPrefabsFolder);
-        EnsureFolder(PlaneGroupMaterialsFolder);
-        ClearFolderAssets(PlaneGroupPrefabsFolder);
-
-        CopyOrReplaceAsset(PlaneGroupPrefabSource, $"{PlaneGroupPrefabsFolder}/mesh_PlaneGroup_001.prefab");
-        CopyOrReplaceAsset(PlaneGroupMaterialSource, $"{PlaneGroupMaterialsFolder}/{PlaneGroupLitMaterialName}");
-        RemoveLegacyRootAssets(
-            PlaneGroupResourcesRoot,
-            new[] { PlaneGroupPrefabsFolder, PlaneGroupMaterialsFolder });
-    }
-
     private static void EnsureFolder(string assetFolder)
     {
         if (AssetDatabase.IsValidFolder(assetFolder))
@@ -156,98 +132,6 @@ public class BuildSync : IPreprocessBuildWithReport
         if (!string.IsNullOrEmpty(parent) && !string.IsNullOrEmpty(folderName))
         {
             AssetDatabase.CreateFolder(parent, folderName);
-        }
-    }
-
-    private static void ClearFolderAssets(string assetFolder)
-    {
-        if (!AssetDatabase.IsValidFolder(assetFolder))
-        {
-            return;
-        }
-
-        var assetPaths = CollectAssetPaths(assetFolder, recursive: false);
-        for (var i = 0; i < assetPaths.Count; i++)
-        {
-            AssetDatabase.DeleteAsset(assetPaths[i]);
-        }
-    }
-
-    private static void RemoveLegacyRootAssets(string resourceRoot, string[] preservedSubfolders)
-    {
-        if (!AssetDatabase.IsValidFolder(resourceRoot))
-        {
-            return;
-        }
-
-        var preserved = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
-        for (var i = 0; i < preservedSubfolders.Length; i++)
-        {
-            preserved.Add(preservedSubfolders[i].Replace("\\", "/"));
-        }
-
-        var assetPaths = CollectAssetPaths(resourceRoot, recursive: false);
-        for (var i = 0; i < assetPaths.Count; i++)
-        {
-            var assetPath = assetPaths[i];
-            if (preserved.Contains(assetPath))
-            {
-                continue;
-            }
-
-            AssetDatabase.DeleteAsset(assetPath);
-        }
-    }
-
-    private static List<string> CollectAssetPaths(string assetFolder, bool recursive)
-    {
-        var results = new List<string>();
-        if (!AssetDatabase.IsValidFolder(assetFolder))
-        {
-            return results;
-        }
-
-        var guids = AssetDatabase.FindAssets(string.Empty, new[] { assetFolder });
-        for (var i = 0; i < guids.Length; i++)
-        {
-            var assetPath = AssetDatabase.GUIDToAssetPath(guids[i]);
-            if (AssetDatabase.IsValidFolder(assetPath))
-            {
-                continue;
-            }
-
-            var parent = Path.GetDirectoryName(assetPath)?.Replace("\\", "/");
-            if (recursive)
-            {
-                if (parent == assetFolder || (parent != null && parent.StartsWith(assetFolder + "/", System.StringComparison.Ordinal)))
-                {
-                    results.Add(assetPath);
-                }
-            }
-            else if (parent == assetFolder)
-            {
-                results.Add(assetPath);
-            }
-        }
-
-        return results;
-    }
-
-    private static void CopyOrReplaceAsset(string sourcePath, string destinationPath)
-    {
-        if (!File.Exists(sourcePath))
-        {
-            return;
-        }
-
-        if (AssetDatabase.LoadAssetAtPath<Object>(destinationPath) != null)
-        {
-            AssetDatabase.DeleteAsset(destinationPath);
-        }
-
-        if (!AssetDatabase.CopyAsset(sourcePath, destinationPath))
-        {
-            Debug.LogWarning($"BuildSync copy failed: {sourcePath} -> {destinationPath}");
         }
     }
 
