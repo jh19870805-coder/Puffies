@@ -65,6 +65,7 @@ public sealed class DragState
 public static class GameDefine
 {
     // Scene names
+    public const string SceneLoading = "LoadingScene";
     public const string SceneMain = "MainScene";
     public const string SceneGame = "GameScene";
     public const string SceneRank = "RankScene";
@@ -111,6 +112,9 @@ public static class GameDefine
     public const string RankButtonObjectName = "BtnRank";
     public const string AchieveButtonObjectName = "BtnAchieve";
     public const string ReturnButtonObjectName = "BtnReturn";
+    public const string LoadingTextObjectName = "TextLoading";
+    public const string LoadingTextFormat = "Loading... {0}%";
+    public const float LoadingDurationSeconds = 5f;
     public const string GameBoardFileName = "GameBoard.png";
     public const string GameBoardObjectName = "GameBoard";
     public const string BackgroundObjectName = "Background";

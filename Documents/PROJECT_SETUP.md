@@ -4,7 +4,7 @@
 
 ```
 Assets/
-  Scenes/       MainScene、GameScene、effect、URP2DSceneTemplate
+  Scenes/       LoadingScene（启动）、MainScene、GameScene、RankScene、AchieveScene
   Prefabs/      自定义预制体（预留）
   UI/           2D PNG 源文件
   Scripts/      MVC（Model / View / Controller / Editor）
@@ -49,13 +49,16 @@ Unity 菜单：**Puffies → Sync Build Resources**
 
 ## 6. 场景跳转
 
-| 按钮 | 场景 | 说明 |
-|------|------|------|
+| 场景/按钮 | 目标 | 说明 |
+|-----------|------|------|
+| **LoadingScene**（启动页） | MainScene | 约 5 秒，`TextLoading` 0%→100% 后自动进入 |
 | BtnRank | RankScene | 排行榜 |
 | BtnAchieve | AchieveScene | 成就 |
-| BtnReturn | MainScene | 从 Rank/Achieve 返回首页 |
+| BtnReturn | MainScene | 从 Game/Rank/Achieve 返回首页 |
 
-按钮对象名须与 `GameDefine` 常量一致；需挂 `Button` 组件，由控制器运行时绑定 `onClick`。
+**Build Settings 顺序**：`LoadingScene` 必须为 Index 0（启动场景）。
+
+加载页对象名：`TextLoading`（`UnityEngine.UI.Text`），文案格式 `Loading... {0}%`。
 
 ## 7. 设计分辨率
 

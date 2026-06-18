@@ -68,6 +68,7 @@ public class GameScene : MonoBehaviour
         ConfigureGameplayCanvas(camera);
         var selectedBagId = GameManager.GetBagId();
         PrepareBagResources(selectedBagId);
+        ConfigureReturnButton();
         Debug.Log("GameScene bootstrap completed with bag resources prepared.");
     }
 
@@ -1191,5 +1192,30 @@ public class GameScene : MonoBehaviour
         }
 
         return total;
+    }
+
+    private void ConfigureReturnButton()
+    {
+        var returnButtonObject = GameObject.Find(GameDefine.ReturnButtonObjectName);
+        if (returnButtonObject == null)
+        {
+            Debug.LogWarning($"GameScene: return button not found. Expected object named {GameDefine.ReturnButtonObjectName}.");
+            return;
+        }
+
+        var button = returnButtonObject.GetComponent<Button>();
+        if (button == null)
+        {
+            Debug.LogWarning($"GameScene: {GameDefine.ReturnButtonObjectName} is missing Button component.");
+            return;
+        }
+
+        button.onClick.RemoveListener(OnReturnButtonClicked);
+        button.onClick.AddListener(OnReturnButtonClicked);
+    }
+
+    private void OnReturnButtonClicked()
+    {
+        GameManager.EnterMainScene();
     }
 }

@@ -2,7 +2,7 @@
 
 - Task: Puffies 新阶段开发
 - Status: In Progress
-- Updated At: 2026-06-02 14:00
+- Updated At: 2026-06-02 16:00
 - Previous Phase: 工程目录重组（已完成并验证）
 
 ## Requirement Log
@@ -10,6 +10,8 @@
 - 用户：准备开始新阶段工作。
 - 用户：`.cursor` 目录不要在 Cursor 文件树中显示（已写入 `.vscode/settings.json` files.exclude）。
 - 新需求：成就页 AchieveScene——MainScene `BtnAchieve` 跳转成就页，成就页 `BtnReturn` 返回 MainScene。
+- 新需求：LoadingScene 为启动页，停留约 5 秒，`TextLoading` 显示 0%→100% 后自动进入 MainScene。
+- 新需求：GameScene `BtnReturn` 点击返回 MainScene（首页）。
 
 ## 基线快照（当前仓库实测）
 
@@ -23,8 +25,9 @@
 
 | 场景 | 状态 |
 |------|------|
+| **LoadingScene** | 启动页，进度条文字后进 MainScene |
 | MainScene | Package001/002/003 卡包 UI |
-| GameScene | 编辑器拼图页 |
+| GameScene | 编辑器拼图页 + 返回首页 |
 | RankScene | 排行榜 + 返回 |
 | AchieveScene | 成就页 + 返回（已实现场景跳转） |
 | effect | 特效调试（可选删） |
@@ -55,9 +58,8 @@
 
 ## Next Action
 
-1. Play 验证：MainScene `BtnAchieve` → AchieveScene → `BtnReturn` → MainScene
-2. 成就列表 UI / Steam 成就数据（待后续）
-3. Package002 配置与其它待办见上方列表
+1. Play 验证：GameScene `BtnReturn` → MainScene；LoadingScene 启动流程
+2. 成就列表 / Package002 等见上方待办
 
 ## Resume Prompt
 
