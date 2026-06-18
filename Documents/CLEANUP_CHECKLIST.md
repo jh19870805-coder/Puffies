@@ -1,34 +1,26 @@
-# 整理清单
+# 清理检查清单
 
-## 已完成（2026-06-01）
+## 已完成
 
-- [x] `Assets/Textures/` 合并入 `Assets/ArtRes/`（PackImages、Game001、BasicUI、MainBg）
-- [x] `GameDefine.TexturesRoot` → `ArtResRoot`，增加设计分辨率常量
-- [x] `Assets/Models/` 重命名为 `Assets/Core/`
-- [x] 三个 Editor 同步脚本合并为 `BuildSync.cs`（菜单 **Puffies → Sync Build Resources**）
-- [x] 删除 `WindowAspectController`
-- [x] 删除 `U3DMake/` 孤立资源
-- [x] 删除 `PackageConfigModel.json` 重复模板
-- [x] 删除 `GameManager.LoadBagPieces`、`GetGameBoard`
-- [x] CardPack 资源规范命名为 `CardPackSkin_*` / `CardPackAni_*` / `CardPackShell_*`
-- [x] 3D 资源迁入 `ArtRes/Resources/`；`BuildSync` 自动清理遗留 `Assets/Resources/` 空目录
-- [x] 删除空目录 `Assets/Textures/`、`Assets/U3DMake/` 及未引用特效资源（Scene/Shader/CardPackShell、fx_chai 等）
-- [x] 删除仓库根目录垃圾 `LinResources/`、`Puffies_BurstDebugInformation_DoNotShip/`、`UpgradeLog*.htm`
-- [x] 文档：`ARCHITECTURE.md`、`PROJECT_SETUP.md`
+- [x] `Models/`、`Materials/`、`Prefabs/CardPack|PlaneGroup` 合并入 `Effects/`
+- [x] 保留空 `Prefabs/` 供后期自定义预制体
+- [x] `ArtRes/` 全部迁出并删除
+- [x] `Configs/` → `Resources/Config/`
+- [x] Scripts 按 MVC 扁平分类：Model / View / Controller / Editor（仅一层）
+- [x] GameDefine 合并数据类型，不再拆 Core/Data
+- [x] `GameDefine` 路径常量更新（`UiRoot`、`ConfigRoot`）
+- [x] `BuildSync` 重写：UI/Config → StreamingAssets，Prefabs → Resources
+- [x] `ToDiskPath` 兼容 UI/Config 与旧 ArtRes/Configs 路径
 
-## 待验证（Unity Editor）
+## 待验证
 
-- [ ] 重新打开工程，确认无编译错误
-- [ ] **Puffies → Sync Build Resources**
-- [ ] Play MainScene：Package001/002 可见、可点击、开包动画
-- [ ] Play GameScene：拼图全流程
-- [ ] Build 后验证 StreamingAssets/ArtRes
+- [ ] Unity 打开工程后执行 **Puffies → Sync Build Resources**
+- [ ] MainScene 卡包点击开包动画
+- [ ] GameScene 拼图加载
+- [ ] effect 场景 PlaneGroup 预览
+- [ ] Build 后验证 StreamingAssets/UI 与 StreamingAssets/Config
 
-## 可选后续
+## 待办
 
-- [ ] 添加 `Configs/Package002.json`（场景已有 Package002）
-- [x] `ArtRes/Effect/` 迁入 `Resources/Effect/` 并整理子目录（CardPack、Scene、Shader、Texture）
-- [x] `ArtRes/PlaneGroup/`、`ArtRes/Shader/` 迁入 `Resources/` 并规范重命名
-- [x] CardPack `mesh_*` 资源重命名为 `CardPackSkin_*` / `CardPackAni_*` / `CardPackShell_*`
-- [ ] MainScene 多页卡包翻页 UI
-- [ ] 构建版 3D 卡包销毁策略
+- [ ] 添加 `Resources/Config/Package002.json`（场景已有 Package002）
+- [ ] 补充 CardPackAni_002+ 动画 FBX（当前仅 001，其余 fallback）

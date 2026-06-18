@@ -34,7 +34,18 @@
 
 ## S - Scope
 
-- 统一资源根为 `ArtRes`，清理冗余目录与脚本
+## 当前状态（2026-05）
+
+- 工程已按标准 Unity 目录重组：`Models/`、`Materials/`、`Prefabs/`、`UI/`、`Scripts/`、`Resources/`、`StreamingAssets/`
+- `ArtRes/` 已移除；2D 资源在 `UI/`，配置在 `Resources/Config/`
+- `BuildSync` 负责 UI/Config → StreamingAssets，Prefabs/Materials → Resources
+- 脚本统一在 `Assets/Scripts/`（含 Core、Tools、Editor 子目录）
+
+## 待办
+
+1. Unity 内验证三个场景 Play 模式
+2. 补 `Resources/Config/Package002.json`
+3. 补 CardPackAni_002+ 动画资源
 - 保持现有 Bootstrap + 编辑器 UI 架构不变
 - 验收：工程可编译、Play 主流程正常
 
