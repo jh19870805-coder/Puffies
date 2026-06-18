@@ -23,7 +23,7 @@
 *.pidb
 *.booproj
 # VS Code
-# .vscode/
+.vscode/
 # Rider
 .idea/
 # Visual Studio Code / Visual Studio with Unity
