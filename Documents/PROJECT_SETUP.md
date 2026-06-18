@@ -29,7 +29,7 @@
 1. 在 `ArtRes/Game00X/` 放棋盘与碎片贴图
 2. 在 `Configs/` 添加 `Package00X.json`
 3. 在 `ArtRes/PackImages/` 添加封面
-4. 若需 3D 开包：在 `Resources/Effect/CardPack/Prefabs/` 添加 `mesh_skin_cardPack_XXX.prefab`，FBX 放 `CardPack/Fbx/`
+4. 若需 3D 开包：在 `Resources/Effect/CardPack/Prefabs/` 添加 `CardPackSkin_XXX.prefab`，FBX 放 `CardPack/Fbx/`
 5. 执行 **Puffies → Sync Build Resources**（仅同步 2D 到 StreamingAssets）
 
 ## 5. 测试
@@ -50,8 +50,8 @@
 Resources/
   Effect/
     CardPack/
-      Prefabs/     mesh_skin_cardPack_001 …       # 开包皮肤模型
-      Fbx/         mesh_ani_cardPack_001.FBX 等    # 动画与源模型
+      Prefabs/     CardPackSkin_001 … CardPackShell_001 …  # 皮肤 / 静态壳体
+      Fbx/         CardPackAni_001.FBX、CardPackSkin_*.FBX 等
       Materials/   CardPackLit.mat
     Scene/         fx_chai_w_001.prefab 等
     Shader/
@@ -82,13 +82,17 @@ Resources/
 | `BF_Effect_EffectPacket.shader` | `EffectPacket.shader` | 卡包特效 Shader |
 | `AParticleFireClipAdd10.shader` | `ParticleFire_AdditiveClip.shader` | 粒子加法裁剪 |
 | `AParticleFireClip10.shader` | `ParticleFire_AlphaClip.shader` | 粒子透明裁剪 |
+| `mesh_skin_cardPack_001` | `CardPackSkin_001` | 开包皮肤 Prefab / FBX |
+| `mesh_ani_cardPack_001` | `CardPackAni_001` | 开包动画 FBX |
+| `mesh_cardPack_001` | `CardPackShell_001` | 静态壳体（仅参考） |
 
-**卡包命名（暂未改，与动画解析逻辑绑定）**
+**卡包命名**
 
 | 类型 | 规则 | 示例 |
 |------|------|------|
-| 皮肤 Prefab | `mesh_skin_cardPack_` + 编号 | `mesh_skin_cardPack_001` |
-| 动画 FBX | `mesh_ani_cardPack_` + 编号 | `mesh_ani_cardPack_001.FBX` |
+| 皮肤 Prefab | `CardPackSkin_` + 三位编号 | `CardPackSkin_001` |
+| 动画 FBX | `CardPackAni_` + 三位编号 | `CardPackAni_001.FBX` |
+| 静态壳体 | `CardPackShell_` + 三位编号 | `CardPackShell_001` |
 | 材质 | `CardPackLit` | `Effect/CardPack/Materials/CardPackLit` |
 
-`mesh_cardPack_*` 为静态壳体，仅参考；运行时加载 `mesh_skin_*`。
+`CardPackShell_*` 为静态壳体，仅参考；运行时加载 `CardPackSkin_*`。

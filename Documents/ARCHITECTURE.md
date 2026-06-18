@@ -21,8 +21,8 @@ Assets/
   Resources/              # 运行时动态加载的 3D 资源（直接维护，不经 BuildSync 复制）
     Effect/
       CardPack/
-        Prefabs/          # mesh_skin_cardPack_*.prefab
-        Fbx/              # mesh_ani_*.FBX、mesh_skin_*.FBX
+        Prefabs/          # CardPackSkin_*.prefab、CardPackShell_*.prefab
+        Fbx/              # CardPackAni_*.FBX、CardPackSkin_*.FBX
         Materials/        # CardPackLit.mat
       Scene/              # fx_chai_w_001.prefab 等
       Shader/

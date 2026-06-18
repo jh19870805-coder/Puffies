@@ -11,8 +11,6 @@ using UnityEditor;
 public static class GameAnimationUtility
 {
     private const string DefaultCardPackStateName = "Take 001";
-    private const string CardPackAniPrefix = "mesh_ani_";
-    private const string CardPackSkinPrefix = "mesh_skin_";
     private const string CardPackAnimationFolder = GameDefine.CardPackAnimationEditorFolder;
     private const string CardPackPrefabEditorFolder = GameDefine.CardPackPrefabEditorFolder;
     private const string CardPackMaterialEditorPath = GameDefine.CardPackMaterialEditorPath;
@@ -132,7 +130,7 @@ public static class GameAnimationUtility
     /// <summary>
     /// 用途：按动画文件名播放对应卡包动画。返回：是否成功触发播放。
     /// </summary>
-    /// <param name="animationFileName">参数：动画文件名或状态名，例如 mesh_ani_cardPack_001.FBX。</param>
+    /// <param name="animationFileName">参数：动画文件名或状态名，例如 CardPackAni_001.FBX。</param>
     /// <param name="searchRoot">参数：查找对象的根节点；传 null 时在全场景查找。</param>
     /// <returns>返回：true 表示播放成功，false 表示未找到目标或播放失败。</returns>
     public static bool PlayCardPackAnimation(string animationFileName, Transform searchRoot = null)
@@ -210,7 +208,7 @@ public static class GameAnimationUtility
     /// <summary>
     /// 用途：获取工程中实际存在的卡包动画文件名列表（仅含文件名）。返回：按名称升序的文件名集合。
     /// </summary>
-    /// <returns>返回：例如 mesh_ani_cardPack_001.FBX。</returns>
+    /// <returns>返回：例如 CardPackAni_001.FBX。</returns>
     public static List<string> GetAvailableCardPackAnimationFileNames()
     {
         var result = new List<string>();
@@ -221,7 +219,7 @@ public static class GameAnimationUtility
         }
 
         result = Directory
-            .GetFiles(CardPackAnimationFolder, $"{CardPackAniPrefix}*.FBX")
+            .GetFiles(CardPackAnimationFolder, $"{GameDefine.CardPackAniPrefix}*.FBX")
             .Select(Path.GetFileName)
             .Where(name => !string.IsNullOrWhiteSpace(name))
             .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
@@ -298,9 +296,14 @@ public static class GameAnimationUtility
     private static string ResolveCardPackTargetObjectName(string animationFileName)
     {
         var normalizedName = Path.GetFileNameWithoutExtension(animationFileName.Trim());
-        if (normalizedName.StartsWith(CardPackAniPrefix, StringComparison.OrdinalIgnoreCase))
+        if (normalizedName.StartsWith(GameDefine.CardPackAniPrefix, StringComparison.OrdinalIgnoreCase))
         {
-            return CardPackSkinPrefix + normalizedName.Substring(CardPackAniPrefix.Length);
+            return GameDefine.CardPackSkinPrefix + normalizedName.Substring(GameDefine.CardPackAniPrefix.Length);
+        }
+
+        if (normalizedName.StartsWith(GameDefine.CardPackSkinPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return normalizedName;
         }
 
         return normalizedName;

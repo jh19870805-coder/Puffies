@@ -216,7 +216,7 @@ public class MainScene : MonoBehaviour
     {
         mIsPlayingAnimation = true;
         var resolvedBagId = bagId > 0 ? bagId : MainPackageBagId;
-        var animationFileName = $"mesh_ani_cardPack_{resolvedBagId:D3}.FBX";
+        var animationFileName = GameDefine.FormatCardPackAnimationFileName(resolvedBagId);
         var anchor = image != null ? image.rectTransform : null;
         var hasPlayed = GameAnimationUtility.PlayCardPackAnimation(animationFileName, anchor);
         if (hasPlayed)

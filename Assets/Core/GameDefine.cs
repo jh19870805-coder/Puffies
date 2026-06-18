@@ -81,7 +81,19 @@ public static class GameDefine
     public const string CardPackPrefabEditorFolder = "Assets/Resources/Effect/CardPack/Prefabs";
     public const string CardPackMaterialEditorPath = "Assets/Resources/Effect/CardPack/Materials/CardPackLit.mat";
     public const string CardPackAnimationEditorFolder = "Assets/Resources/Effect/CardPack/Fbx";
-    public const string CardPackSkinPrefabPrefix = "mesh_skin_cardPack_";
+    public const string CardPackAniPrefix = "CardPackAni_";
+    public const string CardPackSkinPrefix = "CardPackSkin_";
+    public const string CardPackShellPrefix = "CardPackShell_";
+
+    public static string FormatCardPackAnimationFileName(int bagId)
+    {
+        return $"{CardPackAniPrefix}{bagId:D3}.FBX";
+    }
+
+    public static string FormatCardPackSkinPrefabName(int bagId)
+    {
+        return $"{CardPackSkinPrefix}{bagId:D3}";
+    }
 
     // Common path tokens
     public const string AssetsRoot = "Assets";

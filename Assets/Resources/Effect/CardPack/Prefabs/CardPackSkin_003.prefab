@@ -11,7 +11,7 @@ GameObject:
   - component: {fileID: 2061889735774856257}
   - component: {fileID: 1333121446446481701}
   m_Layer: 0
-  m_Name: mesh_skin_cardPack_003
+  m_Name: CardPackSkin_003
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -650,7 +650,7 @@ GameObject:
   - component: {fileID: 5814904178476014731}
   - component: {fileID: 814765695947522873}
   m_Layer: 0
-  m_Name: mesh_skin_cardPack_003
+  m_Name: CardPackSkin_003
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

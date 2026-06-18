@@ -10,7 +10,7 @@
 - [x] 删除 `U3DMake/` 孤立资源
 - [x] 删除 `PackageConfigModel.json` 重复模板
 - [x] 删除 `GameManager.LoadBagPieces`、`GetGameBoard`
-- [x] CardPack Resources 同步仅保留 `mesh_skin_*` prefab
+- [x] CardPack 资源规范命名为 `CardPackSkin_*` / `CardPackAni_*` / `CardPackShell_*`
 - [x] 文档：`ARCHITECTURE.md`、`PROJECT_SETUP.md`
 
 ## 待验证（Unity Editor）
@@ -26,5 +26,6 @@
 - [ ] 添加 `Configs/Package002.json`（场景已有 Package002）
 - [x] `ArtRes/Effect/` 迁入 `Resources/Effect/` 并整理子目录（CardPack、Scene、Shader、Texture）
 - [x] `ArtRes/PlaneGroup/`、`ArtRes/Shader/` 迁入 `Resources/` 并规范重命名
+- [x] CardPack `mesh_*` 资源重命名为 `CardPackSkin_*` / `CardPackAni_*` / `CardPackShell_*`
 - [ ] MainScene 多页卡包翻页 UI
 - [ ] 构建版 3D 卡包销毁策略
