@@ -38,6 +38,8 @@
     "**/ProjectSettings/**": true,
     "**/UserSettings/**": true,
     "**/.vs/**": true,
+    "**/.cursor": true,
+    "**/.cursor/**": true,
     "**/.idea/**": true,
     "**/Win32/**": true,
     "**/Assets/Settings/**": true,
