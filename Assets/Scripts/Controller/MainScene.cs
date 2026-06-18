@@ -58,6 +58,7 @@ public class MainScene : MonoBehaviour
 
         CollectEditorPackageImages();
         ConfigurePackageCanvas(targetCamera);
+        ConfigureRankButton();
     }
 
     /// <summary>
@@ -135,6 +136,39 @@ public class MainScene : MonoBehaviour
         }
 
         handler.Initialize(this, bagId, image);
+    }
+
+    /// <summary>
+    /// 用途：为排行榜按钮绑定点击后跳转 RankScene。返回：无。
+    /// </summary>
+    private void ConfigureRankButton()
+    {
+        var rankButtonObject = GameObject.Find(GameDefine.RankButtonObjectName);
+        if (rankButtonObject == null)
+        {
+            Debug.LogWarning($"MainScene: rank button not found. Expected object named {GameDefine.RankButtonObjectName}.");
+            return;
+        }
+
+        var button = rankButtonObject.GetComponent<Button>();
+        if (button == null)
+        {
+            Debug.LogWarning($"MainScene: {GameDefine.RankButtonObjectName} is missing Button component.");
+            return;
+        }
+
+        button.onClick.RemoveListener(OnRankButtonClicked);
+        button.onClick.AddListener(OnRankButtonClicked);
+    }
+
+    private void OnRankButtonClicked()
+    {
+        if (mIsPlayingAnimation)
+        {
+            return;
+        }
+
+        GameManager.EnterRankScene();
     }
 
     /// <summary>

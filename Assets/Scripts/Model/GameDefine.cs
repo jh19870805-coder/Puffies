@@ -67,6 +67,7 @@ public static class GameDefine
     // Scene names
     public const string SceneMain = "MainScene";
     public const string SceneGame = "GameScene";
+    public const string SceneRank = "RankScene";
     public const string SceneEffect = "effect";
 
     public const string EffectsRoot = "Assets/Resources/Effects";
@@ -106,6 +107,8 @@ public static class GameDefine
     // Resource file names and suffixes
     public const string GameFolderPrefix = "Game";
     public const string PackageFilePrefix = "Package";
+    public const string RankButtonObjectName = "BtnRank";
+    public const string ReturnButtonObjectName = "BtnReturn";
     public const string GameBoardFileName = "GameBoard.png";
     public const string GameBoardObjectName = "GameBoard";
     public const string BackgroundObjectName = "Background";

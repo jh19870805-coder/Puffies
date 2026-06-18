@@ -61,6 +61,22 @@ public static class GameManager
     }
 
     /// <summary>
+    /// 用途：切换到排行榜场景。返回：无。
+    /// </summary>
+    public static void EnterRankScene()
+    {
+        SceneManager.LoadScene(GameDefine.SceneRank);
+    }
+
+    /// <summary>
+    /// 用途：返回主场景。返回：无。
+    /// </summary>
+    public static void EnterMainScene()
+    {
+        SceneManager.LoadScene(GameDefine.SceneMain);
+    }
+
+    /// <summary>
     /// 用途：获取当前包对应的资源文件夹相对路径。返回：包资源目录路径字符串。
     /// </summary>
     /// <returns>返回：形如 UI/Game001 的相对路径。</returns>
