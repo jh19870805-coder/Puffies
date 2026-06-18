@@ -3,46 +3,23 @@
 ## 设计原则
 
 - **编辑器搭建 UI**：MainScene / GameScene 的页面在 Unity 编辑器中摆放（Canvas + Image），脚本通过 Bootstrap 自动挂载并收集场景对象。
-- **单一资源根**：2D 在 `Assets/ArtRes`；3D 在 `Assets/Resources`（`Effect`、`PlaneGroup`）；配置在 `Assets/Configs`。
+- **单一资源根**：2D 与 3D 均在 `Assets/ArtRes`；3D 位于 `ArtRes/Resources/`（`CardPack`、`PlaneGroup`）；配置在 `Assets/Configs`。
 - **统一构建同步**：菜单 **Puffies → Sync Build Resources**（`BuildSync.cs`）仅同步 2D StreamingAssets。
 
 ## 目录结构
 
 ```
 Assets/
-  ArtRes/                 # 全部美术源文件
-    PackImages/           # 卡包封面
-    Game001/              # 棋盘与碎片贴图
-    BasicUI/              # UI 素材
+  ArtRes/                 # 全部美术资源
+    PackImages/           # 卡包封面（2D）
+    Game001/              # 棋盘与碎片贴图（2D）
+    BasicUI/              # UI 素材（2D）
     MainBg.png
-    MainBg.png
+    Resources/            # 3D 运行时加载（Resources.Load）
+      CardPack/           # 开包模型、动画、材质、贴图（扁平，无子目录）
+      PlaneGroup/         # 平面组模型、材质、贴图（扁平）
   Configs/                # PackageXXX.json
-  Core/                   # GameManager、GameDefine、状态类型
-  Resources/              # 运行时动态加载的 3D 资源（直接维护，不经 BuildSync 复制）
-    Effect/
-      CardPack/
-        Prefabs/          # CardPackSkin_*.prefab
-        Fbx/              # CardPackAni_*.FBX、CardPackSkin_*.FBX
-        Materials/        # CardPackLit.mat
-      Texture/            # CardPackLit 用贴图（001.png、Material__25_*）
-    PlaneGroup/
-      Prefabs/            # PlaneGroup_001.prefab
-      Fbx/                # PlaneGroup_001.FBX
-      Materials/          # PlaneGroupLit.mat
-      Textures/           # PlaneGroup_Albedo、Normal、AmbientOcclusion
-  StreamingAssets/        # 构建同步的 2D/配置（Editor 下可不存在）
-    ArtRes/
-    Configs/
-  Scripts/                # 场景控制器
-    MainScene.cs
-    GameScene.cs
-    EffectScene.cs
-    PackageInteractionHandler.cs
-  Tools/                  # 静态工具类
-    GameCommonUtility.cs
-    GameAnimationUtility.cs
-  Editor/
-    BuildSync.cs
+  Core/                   # GameManager、GameDefine
   Scenes/
 ```
 
@@ -63,8 +40,8 @@ Assets/
 
 | 环境 | 2D / 配置 | 3D 卡包 / 特效 |
 |------|----------|----------------|
-| Editor Play | `Assets/ArtRes`、`Assets/Configs` | `Assets/Resources/Effect`（AssetDatabase + Resources） |
-| Build | `StreamingAssets/ArtRes`、`StreamingAssets/Configs` | `Resources/Effect`、`Resources/PlaneGroup` |
+| Editor Play | `Assets/ArtRes`（2D 根目录）、`Assets/Configs` | `Assets/ArtRes/Resources`（AssetDatabase + Resources.Load） |
+| Build | `StreamingAssets/ArtRes`（2D）、`StreamingAssets/Configs` | `Resources/CardPack`、`Resources/PlaneGroup`（Unity 自动打包） |
 
 `ToDiskPath` 支持 `ArtRes` ↔ `Textures` 双向回退（兼容旧 StreamingAssets）。
 

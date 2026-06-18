@@ -11,7 +11,7 @@
 - [x] 删除 `PackageConfigModel.json` 重复模板
 - [x] 删除 `GameManager.LoadBagPieces`、`GetGameBoard`
 - [x] CardPack 资源规范命名为 `CardPackSkin_*` / `CardPackAni_*` / `CardPackShell_*`
-- [x] 删除冗余目录 `Assets/Resources/CardPack/`、`Assets/ArtRes/Effect/`（已迁入 `Resources/Effect/`）
+- [x] 3D 资源迁入 `ArtRes/Resources/`；`BuildSync` 自动清理遗留 `Assets/Resources/` 空目录
 - [x] 删除空目录 `Assets/Textures/`、`Assets/U3DMake/` 及未引用特效资源（Scene/Shader/CardPackShell、fx_chai 等）
 - [x] 删除仓库根目录垃圾 `LinResources/`、`Puffies_BurstDebugInformation_DoNotShip/`、`UpgradeLog*.htm`
 - [x] 文档：`ARCHITECTURE.md`、`PROJECT_SETUP.md`

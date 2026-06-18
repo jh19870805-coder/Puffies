@@ -69,18 +69,21 @@ public static class GameDefine
     public const string SceneGame = "GameScene";
     public const string SceneEffect = "effect";
 
-    public const string PlaneGroupPrefabEditorPath = "Assets/Resources/PlaneGroup/Prefabs/PlaneGroup_001.prefab";
-    public const string PlaneGroupMaterialEditorPath = "Assets/Resources/PlaneGroup/Materials/PlaneGroupLit.mat";
-    public const string PlaneGroupPrefabResourcesPath = "PlaneGroup/Prefabs/PlaneGroup_001";
-    public const string PlaneGroupMaterialResourcesPath = "PlaneGroup/Materials/PlaneGroupLit";
-    public const string PlaneGroupFbxEditorFolder = "Assets/Resources/PlaneGroup/Fbx";
+    public const string RuntimeResourcesRoot = "Assets/ArtRes/Resources";
+    public const string PlaneGroupFolder = "PlaneGroup";
+    public const string CardPackFolder = "CardPack";
 
-    public const string EffectEditorRoot = "Assets/Resources/Effect";
-    public const string CardPackPrefabResourcesFolder = "Effect/CardPack/Prefabs/";
-    public const string CardPackMaterialResourcesPath = "Effect/CardPack/Materials/CardPackLit";
-    public const string CardPackPrefabEditorFolder = "Assets/Resources/Effect/CardPack/Prefabs";
-    public const string CardPackMaterialEditorPath = "Assets/Resources/Effect/CardPack/Materials/CardPackLit.mat";
-    public const string CardPackAnimationEditorFolder = "Assets/Resources/Effect/CardPack/Fbx";
+    public const string PlaneGroupPrefabEditorPath = "Assets/ArtRes/Resources/PlaneGroup/PlaneGroup_001.prefab";
+    public const string PlaneGroupMaterialEditorPath = "Assets/ArtRes/Resources/PlaneGroup/PlaneGroupLit.mat";
+    public const string PlaneGroupPrefabResourcesPath = "PlaneGroup/PlaneGroup_001";
+    public const string PlaneGroupMaterialResourcesPath = "PlaneGroup/PlaneGroupLit";
+    public const string PlaneGroupFbxEditorFolder = "Assets/ArtRes/Resources/PlaneGroup";
+
+    public const string CardPackPrefabResourcesFolder = "CardPack/";
+    public const string CardPackMaterialResourcesPath = "CardPack/CardPackLit";
+    public const string CardPackPrefabEditorFolder = "Assets/ArtRes/Resources/CardPack";
+    public const string CardPackMaterialEditorPath = "Assets/ArtRes/Resources/CardPack/CardPackLit.mat";
+    public const string CardPackAnimationEditorFolder = "Assets/ArtRes/Resources/CardPack";
     public const string CardPackAniPrefix = "CardPackAni_";
     public const string CardPackSkinPrefix = "CardPackSkin_";
 

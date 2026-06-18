@@ -29,7 +29,7 @@
 1. 在 `ArtRes/Game00X/` 放棋盘与碎片贴图
 2. 在 `Configs/` 添加 `Package00X.json`
 3. 在 `ArtRes/PackImages/` 添加封面
-4. 若需 3D 开包：在 `Resources/Effect/CardPack/Prefabs/` 添加 `CardPackSkin_XXX.prefab`，FBX 放 `CardPack/Fbx/`
+4. 若需 3D 开包：在 `ArtRes/Resources/CardPack/` 添加 `CardPackSkin_XXX.prefab` 与对应 FBX
 5. 执行 **Puffies → Sync Build Resources**（仅同步 2D 到 StreamingAssets）
 
 ## 5. 测试
@@ -40,25 +40,21 @@
 ## 6. 已知限制
 
 - Package002 需有 `Configs/Package002.json` 才能正常进入游戏
-- 3D 资源统一在 `Assets/Resources/` 直接维护（Effect、PlaneGroup）
+- 3D 资源统一在 `Assets/ArtRes/Resources/` 维护（`CardPack`、`PlaneGroup` 两个扁平目录）
 
-## 7. Resources 目录规范
+## 7. ArtRes 目录规范
 
-`Assets/Resources/` 放**运行时动态加载**的 3D 资源：
+`Assets/ArtRes/` 放**全部美术资源**：
 
 ```
-Resources/
-  Effect/
-    CardPack/
-      Prefabs/     CardPackSkin_001 … 006          # 开包皮肤（运行时加载）
-      Fbx/         CardPackAni_001.FBX、CardPackSkin_*.FBX
-      Materials/   CardPackLit.mat
-    Texture/       001.png、Material__25_*（CardPackLit 贴图）
-  PlaneGroup/
-    Prefabs/       PlaneGroup_001.prefab
-    Fbx/           PlaneGroup_001.FBX
-    Materials/     PlaneGroupLit.mat
-    Textures/      PlaneGroup_Albedo、Normal、AmbientOcclusion
+ArtRes/
+  PackImages/          # 2D 卡包封面
+  Game001/             # 2D 棋盘与碎片
+  BasicUI/             # 2D UI
+  MainBg.png
+  Resources/           # 3D（Resources.Load，扁平无深层子目录）
+    CardPack/          # CardPackSkin_*.prefab、CardPackAni_*.FBX、CardPackLit.mat、贴图
+    PlaneGroup/        # PlaneGroup_001.prefab/.FBX、PlaneGroupLit.mat、贴图
 ```
 
 **命名对照（旧 → 新）**
@@ -85,6 +81,6 @@ Resources/
 |------|------|------|
 | 皮肤 Prefab | `CardPackSkin_` + 三位编号 | `CardPackSkin_001` |
 | 动画 FBX | `CardPackAni_` + 三位编号 | `CardPackAni_001.FBX` |
-| 材质 | `CardPackLit` | `Effect/CardPack/Materials/CardPackLit` |
+| 材质 | `CardPackLit` | `ArtRes/Resources/CardPack/CardPackLit` |
 
 运行时仅加载 `CardPackSkin_*` 与 `CardPackAni_*`。

@@ -5,7 +5,7 @@ using UnityEditor.Build.Reporting;
 using UnityEngine;
 
 /// <summary>
-/// 用途：构建前与菜单统一同步 StreamingAssets。3D 资源直接在 Assets/Resources 维护。返回：无。
+/// 用途：构建前与菜单统一同步 StreamingAssets。3D 资源在 Assets/ArtRes/Resources 维护。返回：无。
 /// </summary>
 public class BuildSync : IPreprocessBuildWithReport
 {
@@ -13,6 +13,15 @@ public class BuildSync : IPreprocessBuildWithReport
     private const string ArtResSourceRoot = "Assets/ArtRes";
     private const string StreamingRoot = "Assets/StreamingAssets";
     private const string LegacyTexturesStreamingFolder = "Textures";
+    private const string CanonicalRuntimeResourcesRoot = "Assets/ArtRes/Resources";
+
+    private static readonly string[] LegacyAssetFolders =
+    {
+        "Assets/Resources",
+        "Assets/ArtRes/Effect",
+        "Assets/ArtRes/PlaneGroup",
+        "Assets/ArtRes/Shader"
+    };
 
     private static readonly string[] ArtResStreamingFolders =
     {
@@ -48,6 +57,7 @@ public class BuildSync : IPreprocessBuildWithReport
     private static void RunAll(bool logOnComplete)
     {
         EnsureFolder(StreamingRoot);
+        CleanupLegacyAssetFolders();
         SyncConfigsToStreaming();
         SyncArtResToStreaming();
         RemoveLegacyTexturesStreaming();
@@ -107,6 +117,28 @@ public class BuildSync : IPreprocessBuildWithReport
             if (File.Exists(source))
             {
                 File.Copy(source, Path.Combine(targetRoot, fileName), true);
+            }
+        }
+    }
+
+    private static void CleanupLegacyAssetFolders()
+    {
+        if (!AssetDatabase.IsValidFolder(CanonicalRuntimeResourcesRoot))
+        {
+            return;
+        }
+
+        for (var i = 0; i < LegacyAssetFolders.Length; i++)
+        {
+            var legacyFolder = LegacyAssetFolders[i];
+            if (!AssetDatabase.IsValidFolder(legacyFolder))
+            {
+                continue;
+            }
+
+            if (AssetDatabase.DeleteAsset(legacyFolder))
+            {
+                Debug.Log($"BuildSync removed legacy folder: {legacyFolder}");
             }
         }
     }
