@@ -50,22 +50,15 @@
 Resources/
   Effect/
     CardPack/
-      Prefabs/     CardPackSkin_001 … CardPackShell_001 …  # 皮肤 / 静态壳体
-      Fbx/         CardPackAni_001.FBX、CardPackSkin_*.FBX 等
+      Prefabs/     CardPackSkin_001 … 006          # 开包皮肤（运行时加载）
+      Fbx/         CardPackAni_001.FBX、CardPackSkin_*.FBX
       Materials/   CardPackLit.mat
-    Scene/         fx_chai_w_001.prefab 等
-    Shader/
-      TwoSided_01.shader
-      EffectPacket.shader
-      Particle/
-        ParticleFire_AdditiveClip.shader
-        ParticleFire_AlphaClip.shader
-    Texture/       特效通用贴图（Trail、Glow、Particle 等）
+    Texture/       001.png、Material__25_*（CardPackLit 贴图）
   PlaneGroup/
     Prefabs/       PlaneGroup_001.prefab
     Fbx/           PlaneGroup_001.FBX
     Materials/     PlaneGroupLit.mat
-    Textures/      PlaneGroup_Albedo、Normal、AmbientOcclusion …
+    Textures/      PlaneGroup_Albedo、Normal、AmbientOcclusion
 ```
 
 **命名对照（旧 → 新）**
@@ -84,7 +77,7 @@ Resources/
 | `AParticleFireClip10.shader` | `ParticleFire_AlphaClip.shader` | 粒子透明裁剪 |
 | `mesh_skin_cardPack_001` | `CardPackSkin_001` | 开包皮肤 Prefab / FBX |
 | `mesh_ani_cardPack_001` | `CardPackAni_001` | 开包动画 FBX |
-| `mesh_cardPack_001` | `CardPackShell_001` | 静态壳体（仅参考） |
+| `mesh_cardPack_001` | `CardPackShell_001` | 静态壳体（已删除，非运行时资源） |
 
 **卡包命名**
 
@@ -92,7 +85,6 @@ Resources/
 |------|------|------|
 | 皮肤 Prefab | `CardPackSkin_` + 三位编号 | `CardPackSkin_001` |
 | 动画 FBX | `CardPackAni_` + 三位编号 | `CardPackAni_001.FBX` |
-| 静态壳体 | `CardPackShell_` + 三位编号 | `CardPackShell_001` |
 | 材质 | `CardPackLit` | `Effect/CardPack/Materials/CardPackLit` |
 
-`CardPackShell_*` 为静态壳体，仅参考；运行时加载 `CardPackSkin_*`。
+运行时仅加载 `CardPackSkin_*` 与 `CardPackAni_*`。

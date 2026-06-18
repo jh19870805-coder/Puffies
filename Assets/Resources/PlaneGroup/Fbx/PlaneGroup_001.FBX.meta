@@ -7,8 +7,8 @@ ModelImporter:
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
-      name: 002
-    second: {fileID: 2100000, guid: c930ab3b2f4037f4a9ef58a9541b1e47, type: 2}
+      name: PlaneGroupLit
+    second: {fileID: 2100000, guid: c2fec173b9b52d9478f057af8e36258d, type: 2}
   materials:
     materialImportMode: 2
     materialName: 0

@@ -21,20 +21,15 @@ Assets/
   Resources/              # 运行时动态加载的 3D 资源（直接维护，不经 BuildSync 复制）
     Effect/
       CardPack/
-        Prefabs/          # CardPackSkin_*.prefab、CardPackShell_*.prefab
+        Prefabs/          # CardPackSkin_*.prefab
         Fbx/              # CardPackAni_*.FBX、CardPackSkin_*.FBX
         Materials/        # CardPackLit.mat
-      Scene/              # fx_chai_w_001.prefab 等
-      Shader/
-        TwoSided_01.shader
-        EffectPacket.shader
-        Particle/         # ParticleFire_AdditiveClip、ParticleFire_AlphaClip
-      Texture/            # 特效通用贴图库
+      Texture/            # CardPackLit 用贴图（001.png、Material__25_*）
     PlaneGroup/
       Prefabs/            # PlaneGroup_001.prefab
       Fbx/                # PlaneGroup_001.FBX
       Materials/          # PlaneGroupLit.mat
-      Textures/           # PlaneGroup_Albedo、Normal …
+      Textures/           # PlaneGroup_Albedo、Normal、AmbientOcclusion
   StreamingAssets/        # 构建同步的 2D/配置（Editor 下可不存在）
     ArtRes/
     Configs/

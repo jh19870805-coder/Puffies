@@ -83,7 +83,6 @@ public static class GameDefine
     public const string CardPackAnimationEditorFolder = "Assets/Resources/Effect/CardPack/Fbx";
     public const string CardPackAniPrefix = "CardPackAni_";
     public const string CardPackSkinPrefix = "CardPackSkin_";
-    public const string CardPackShellPrefix = "CardPackShell_";
 
     public static string FormatCardPackAnimationFileName(int bagId)
     {
