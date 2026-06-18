@@ -13,9 +13,9 @@ public static class GameAnimationUtility
     private const string DefaultCardPackStateName = "Take 001";
     private const string CardPackAniPrefix = "mesh_ani_";
     private const string CardPackSkinPrefix = "mesh_skin_";
-    private const string CardPackAnimationFolder = "Assets/ArtRes/Effect/Fbx/c";
-    private const string CardPackPrefabEditorFolder = "Assets/ArtRes/Effect/Prefab/CardPack";
-    private const string CardPackMaterialEditorPath = "Assets/ArtRes/Effect/Texture/Materials/001.mat";
+    private const string CardPackAnimationFolder = GameDefine.CardPackAnimationEditorFolder;
+    private const string CardPackPrefabEditorFolder = GameDefine.CardPackPrefabEditorFolder;
+    private const string CardPackMaterialEditorPath = GameDefine.CardPackMaterialEditorPath;
     private const string CardPackPrefabResourcesPath = GameDefine.CardPackPrefabResourcesFolder;
     private const string CardPackMaterialResourcesPath = GameDefine.CardPackMaterialResourcesPath;
     private static readonly Dictionary<string, Animator> sSpawnedAnimators = new Dictionary<string, Animator>();

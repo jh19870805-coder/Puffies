@@ -29,8 +29,8 @@
 1. 在 `ArtRes/Game00X/` 放棋盘与碎片贴图
 2. 在 `Configs/` 添加 `Package00X.json`
 3. 在 `ArtRes/PackImages/` 添加封面
-4. 若需 3D 开包：在 `ArtRes/Effect/Prefab/CardPack/` 添加 `mesh_skin_cardPack_XXX.prefab`
-5. 执行 **Puffies → Sync Build Resources**
+4. 若需 3D 开包：在 `Resources/Effect/CardPack/Prefabs/` 添加 `mesh_skin_cardPack_XXX.prefab`，FBX 放 `CardPack/Fbx/`
+5. 执行 **Puffies → Sync Build Resources**（仅同步 2D StreamingAssets 与 PlaneGroup）
 
 ## 5. 测试
 
@@ -40,29 +40,34 @@
 ## 6. 已知限制
 
 - Package002 需有 `Configs/Package002.json` 才能正常进入游戏
-- 构建版 3D 资源由 **Puffies → Sync Build Resources** 同步到 `Assets/Resources/`（勿手改，见下方目录规范）
+- 构建版 3D 卡包在 `Resources/Effect`；PlaneGroup 由 BuildSync 从 `ArtRes/PlaneGroup` 同步
 
 ## 7. Resources 目录规范
 
-`Assets/Resources/` 仅放**构建后运行时**需要的 3D 资源，由 `BuildSync` 从 `ArtRes` 自动同步：
+`Assets/Resources/` 放**运行时动态加载**的 3D 资源：
 
 ```
 Resources/
-  CardPack/
-    Prefabs/     mesh_skin_cardPack_001.prefab … 006   # 与 ArtRes 同名，供开包动画加载
-    Materials/   CardPackLit.mat                      # 来源 ArtRes/Effect/Texture/Materials/001.mat
-  PlaneGroup/
-    Prefabs/     mesh_PlaneGroup_001.prefab
-    Materials/   PlaneGroupLit.mat                    # 来源 ArtRes/PlaneGroup/Materials/002.mat
+  Effect/
+    CardPack/
+      Prefabs/     mesh_skin_cardPack_001 … 006    # 开包动画用皮肤模型
+      Fbx/         mesh_ani_cardPack_001.FBX 等     # 动画与源模型
+      Materials/   CardPackLit.mat
+    Scene/         fx_chai_w_001.prefab 等
+    Shader/        特效 Shader
+    Texture/       特效通用贴图（Trail、Glow、Particle 等）
+  PlaneGroup/      # 由 BuildSync 从 ArtRes 同步
+    Prefabs/       mesh_PlaneGroup_001.prefab
+    Materials/     PlaneGroupLit.mat
 ```
 
 **命名约定**
 
 | 类型 | 规则 | 示例 |
 |------|------|------|
-| 卡包皮肤 Prefab | 与 `ArtRes` 源文件同名，前缀 `mesh_skin_cardPack_` | `mesh_skin_cardPack_001` |
-| 卡包材质 | 固定 `CardPackLit` | `CardPack/Materials/CardPackLit` |
-| 平面组 Prefab | 与 ArtRes 同名 | `mesh_PlaneGroup_001` |
-| 平面组材质 | 固定 `PlaneGroupLit` | `PlaneGroup/Materials/PlaneGroupLit` |
+| 卡包皮肤 Prefab | 前缀 `mesh_skin_cardPack_` + 三位编号 | `mesh_skin_cardPack_001` |
+| 卡包动画 FBX | 前缀 `mesh_ani_cardPack_` | `mesh_ani_cardPack_001.FBX` |
+| 卡包材质 | 固定 `CardPackLit` | `Effect/CardPack/Materials/CardPackLit` |
+| 平面组 | 由 BuildSync 同步，材质名 `PlaneGroupLit` | `PlaneGroup/Prefabs/mesh_PlaneGroup_001` |
 
-**不要**在 `Resources/CardPack/` 根目录堆放 `mesh_cardPack_*`（静态壳体，运行时不用）或 `001.mat` 等旧名文件；同步脚本会自动清理。
+**说明**：`mesh_cardPack_*` 为静态壳体 Prefab，仅编辑器参考，运行时加载 `mesh_skin_*`。

@@ -15,13 +15,6 @@ public class BuildSync : IPreprocessBuildWithReport
     private const string StreamingRoot = "Assets/StreamingAssets";
     private const string LegacyTexturesStreamingFolder = "Textures";
 
-    private const string CardPackSourceFolder = "Assets/ArtRes/Effect/Prefab/CardPack";
-    private const string CardPackMaterialSource = "Assets/ArtRes/Effect/Texture/Materials/001.mat";
-    private const string CardPackResourcesRoot = "Assets/Resources/CardPack";
-    private const string CardPackPrefabsFolder = "Assets/Resources/CardPack/Prefabs";
-    private const string CardPackMaterialsFolder = "Assets/Resources/CardPack/Materials";
-    private const string CardPackLitMaterialName = "CardPackLit.mat";
-
     private const string PlaneGroupPrefabSource = "Assets/ArtRes/PlaneGroup/Prefab/mesh_PlaneGroup_001.prefab";
     private const string PlaneGroupMaterialSource = "Assets/ArtRes/PlaneGroup/Materials/002.mat";
     private const string PlaneGroupResourcesRoot = "Assets/Resources/PlaneGroup";
@@ -66,7 +59,6 @@ public class BuildSync : IPreprocessBuildWithReport
         SyncConfigsToStreaming();
         SyncArtResToStreaming();
         RemoveLegacyTexturesStreaming();
-        SyncCardPackToResources();
         SyncPlaneGroupToResources();
 
         AssetDatabase.SaveAssets();
@@ -135,40 +127,6 @@ public class BuildSync : IPreprocessBuildWithReport
         {
             Directory.Delete(legacyFolder, true);
         }
-    }
-
-    private static void SyncCardPackToResources()
-    {
-        EnsureFolder("Assets/Resources");
-        EnsureFolder(CardPackResourcesRoot);
-        EnsureFolder(CardPackPrefabsFolder);
-        EnsureFolder(CardPackMaterialsFolder);
-        ClearFolderAssets(CardPackPrefabsFolder);
-
-        if (Directory.Exists(CardPackSourceFolder))
-        {
-            var guids = AssetDatabase.FindAssets("t:Prefab", new[] { CardPackSourceFolder });
-            for (var i = 0; i < guids.Length; i++)
-            {
-                var sourcePath = AssetDatabase.GUIDToAssetPath(guids[i]);
-                var fileName = Path.GetFileName(sourcePath);
-                if (!fileName.StartsWith(GameDefine.CardPackSkinPrefabPrefix, System.StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                CopyOrReplaceAsset(sourcePath, $"{CardPackPrefabsFolder}/{fileName}");
-            }
-        }
-
-        if (File.Exists(CardPackMaterialSource))
-        {
-            CopyOrReplaceAsset(CardPackMaterialSource, $"{CardPackMaterialsFolder}/{CardPackLitMaterialName}");
-        }
-
-        RemoveLegacyRootAssets(
-            CardPackResourcesRoot,
-            new[] { CardPackPrefabsFolder, CardPackMaterialsFolder });
     }
 
     private static void SyncPlaneGroupToResources()

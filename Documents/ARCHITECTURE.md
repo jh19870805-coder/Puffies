@@ -3,8 +3,8 @@
 ## 设计原则
 
 - **编辑器搭建 UI**：MainScene / GameScene 的页面在 Unity 编辑器中摆放（Canvas + Image），脚本通过 Bootstrap 自动挂载并收集场景对象。
-- **单一资源根**：2D 与 3D 美术统一在 `Assets/ArtRes`；配置在 `Assets/Configs`。
-- **统一构建同步**：菜单 **Puffies → Sync Build Resources**（`BuildSync.cs`）。
+- **单一资源根**：2D 在 `Assets/ArtRes`；3D 特效在 `Assets/Resources/Effect`；配置在 `Assets/Configs`。
+- **统一构建同步**：菜单 **Puffies → Sync Build Resources**（`BuildSync.cs`）同步 2D 与 PlaneGroup。
 
 ## 目录结构
 
@@ -15,14 +15,19 @@ Assets/
     Game001/              # 棋盘与碎片贴图
     BasicUI/              # UI 素材
     MainBg.png
-    Effect/               # 3D 卡包、特效
-    PlaneGroup/           # 特效调试模型
+    MainBg.png
+    PlaneGroup/           # 特效调试模型（同步到 Resources/PlaneGroup）
   Configs/                # PackageXXX.json
   Core/                   # GameManager、GameDefine、状态类型
-  Resources/              # 构建同步的 3D 运行时资源
-    CardPack/
-      Prefabs/            # mesh_skin_cardPack_*.prefab
-      Materials/          # CardPackLit.mat
+  Resources/              # 运行时动态加载的 3D 资源
+    Effect/
+      CardPack/
+        Prefabs/          # mesh_skin_cardPack_*.prefab
+        Fbx/              # mesh_ani_*.FBX、mesh_skin_*.FBX
+        Materials/        # CardPackLit.mat
+      Scene/              # fx_chai_w_001.prefab 等特效场景
+      Shader/             # 特效 Shader
+      Texture/            # 特效通用贴图库
     PlaneGroup/
       Prefabs/            # mesh_PlaneGroup_001.prefab
       Materials/          # PlaneGroupLit.mat
@@ -57,10 +62,10 @@ Assets/
 
 ## 资源加载
 
-| 环境 | 2D / 配置 | 3D 卡包 |
-|------|----------|---------|
-| Editor Play | `Assets/ArtRes`、`Assets/Configs` | AssetDatabase + Resources |
-| Build | `StreamingAssets/ArtRes`、`StreamingAssets/Configs` | `Resources/CardPack`、`Resources/PlaneGroup` |
+| 环境 | 2D / 配置 | 3D 卡包 / 特效 |
+|------|----------|----------------|
+| Editor Play | `Assets/ArtRes`、`Assets/Configs` | `Assets/Resources/Effect`（AssetDatabase + Resources） |
+| Build | `StreamingAssets/ArtRes`、`StreamingAssets/Configs` | `Resources/Effect`、`Resources/PlaneGroup` |
 
 `ToDiskPath` 支持 `ArtRes` ↔ `Textures` 双向回退（兼容旧 StreamingAssets）。
 
