@@ -98,6 +98,12 @@ public static class GameDefine
     public const int DefaultBagId = 1;
     public const int InvalidId = -1;
 
+    // Local persistence
+    public const string LocalJsonFileName = "puffies_local.json";
+    public const string LocalSqliteFileName = "puffies.db";
+    public const int LocalStoreSchemaVersion = 1;
+    public const string LocalSqliteCollectionTable = "app_records";
+
     // Design resolution (1920×1080, PPU 100)
     public const float DesignWidth = 1920f;
     public const float DesignHeight = 1080f;

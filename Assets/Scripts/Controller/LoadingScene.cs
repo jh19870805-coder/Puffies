@@ -30,6 +30,7 @@ public class LoadingScene : MonoBehaviour
         }
 
         GameManager.Initialize();
+        InitializeLocalStores();
 
         var targetCamera = Camera.main;
         if (targetCamera != null)
@@ -44,6 +45,19 @@ public class LoadingScene : MonoBehaviour
         }
 
         mLoadingCoroutine = StartCoroutine(RunLoadingProgress());
+    }
+
+    private static void InitializeLocalStores()
+    {
+        var jsonReady = JsonLocalStore.Initialize();
+        var sqliteReady = SqliteLocalStore.Initialize();
+        if (jsonReady && sqliteReady)
+        {
+            Debug.Log("LoadingScene: local stores initialized.");
+            return;
+        }
+
+        Debug.LogWarning($"LoadingScene: local store init incomplete. json={jsonReady}, sqlite={sqliteReady}");
     }
 
     private bool TryResolveLoadingText()

@@ -2,7 +2,7 @@
 
 - Task: Puffies 新阶段开发
 - Status: In Progress
-- Updated At: 2026-06-02 17:00
+- Updated At: 2026-06-02 20:00
 - Previous Phase: 工程目录重组（已完成并验证）
 
 ## Requirement Log
@@ -13,8 +13,26 @@
 - 新需求：LoadingScene 为启动页，停留约 5 秒，`TextLoading` 显示 0%→100% 后自动进入 MainScene。
 - 新需求：GameScene `BtnReturn` 点击返回 MainScene（首页）。
 - 新需求：GameScene 不再读取 Package JSON 配置；凹槽与可拖拽碎片均来自编辑器中 `Piece` 开头的 Image 对象。
+- 架构决策：本地数据存储仅用 **JSON 文件 + SQLite**，不使用 PlayerPrefs。
+- 架构决策：**除非用户特别指定**，JSON / SQLite 选型由开发侧全权决定。
+- 初始化时机：**LoadingScene** `Start` 中调用两存储 `Initialize()`（懒加载仍保留作兜底）。
 
-## 基线快照（当前仓库实测）
+## 本地存储方案（已定）
+
+| 用途 | 方案 | 路径/键示例 |
+|------|------|-------------|
+| 全局设置、轻量快照、整份读写的小对象 | **JSON** | `puffies_local.json` → `settings`、`profile` |
+| 成就、拼图进度、解锁、排行榜缓存等条数多/需查询 | **SQLite** | `puffies.db` → collection 如 `achievements`、`package_progress` |
+
+**选型原则（默认执行）**
+- 单条、低频、结构简单 → JSON
+- 多条、要筛选/排序/按 key 查 → SQLite
+- 用户明确说「放 JSON」或「放 SQLite」时，以其为准
+
+- 根目录：`Application.persistentDataPath`（Windows 约 `AppData/LocalLow/MainTown/Puffies/`）
+- SQLite 插件：sqlite-net（`Assets/Plugins/SQLite/SQLite.cs`）+ `sqlite3.dll`
+- 已实现：`JsonLocalStore`、`SqliteLocalStore`
+
 
 ### 工程状态
 
@@ -53,13 +71,15 @@
 1. [ ] RankScene 功能接线与回归
 2. [ ] 多页卡包翻页（如需要）
 3. [ ] `CardPackAni_002+` FBX（或接受 fallback 到 002/003）
-4. [ ] Steam 成就占位 / Steamworks 接入（物料未齐，可后做）
-5. [ ] 打包构建回归
+4. [x] 本地存储骨架：`JsonLocalStore` + `SqliteLocalStore`
+5. [ ] 业务接入：设置/成就/进度写入上述存储
+6. [ ] Steam 成就占位 / Steamworks 接入（物料未齐，可后做）
+7. [ ] 打包构建回归
 
 ## Next Action
 
-1. Play 验证：MainScene 开包 → GameScene，Piece 拖拽与 `BtnReturn` 返回
-2. 成就列表等见上方待办
+1. 业务层接入本地存储（settings、成就、拼图进度）
+2. Play 验证存储：JSON 与 SQLite CRUD
 
 ## Resume Prompt
 
