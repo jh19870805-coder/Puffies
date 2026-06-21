@@ -2,7 +2,7 @@
 
 - Task: Puffies 新阶段开发
 - Status: In Progress
-- Updated At: 2026-06-02 20:00
+- Updated At: 2026-06-02 20:30
 - Previous Phase: 工程目录重组（已完成并验证）
 
 ## Requirement Log
@@ -16,13 +16,14 @@
 - 架构决策：本地数据存储仅用 **JSON 文件 + SQLite**，不使用 PlayerPrefs。
 - 架构决策：**除非用户特别指定**，JSON / SQLite 选型由开发侧全权决定。
 - 初始化时机：**LoadingScene** `Start` 中调用两存储 `Initialize()`（懒加载仍保留作兜底）。
+- 新需求：本地存储文件统一命名为 `LocalData.json` / `LocalData.db`。
 
 ## 本地存储方案（已定）
 
 | 用途 | 方案 | 路径/键示例 |
 |------|------|-------------|
-| 全局设置、轻量快照、整份读写的小对象 | **JSON** | `puffies_local.json` → `settings`、`profile` |
-| 成就、拼图进度、解锁、排行榜缓存等条数多/需查询 | **SQLite** | `puffies.db` → collection 如 `achievements`、`package_progress` |
+| 全局设置、轻量快照、整份读写的小对象 | **JSON** | `LocalData.json` → `settings`、`profile` |
+| 成就、拼图进度、解锁、排行榜缓存等条数多/需查询 | **SQLite** | `LocalData.db` → collection 如 `achievements`、`package_progress` |
 
 **选型原则（默认执行）**
 - 单条、低频、结构简单 → JSON

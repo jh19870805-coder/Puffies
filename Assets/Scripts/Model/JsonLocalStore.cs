@@ -24,6 +24,11 @@ public static class JsonLocalStore
             try
             {
                 EnsureLoaded();
+                if (!File.Exists(sFilePath))
+                {
+                    TryPersist();
+                }
+
                 Debug.Log($"JsonLocalStore initialized: {sFilePath}");
                 return sIsLoaded;
             }

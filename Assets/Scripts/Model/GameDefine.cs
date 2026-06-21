@@ -98,9 +98,10 @@ public static class GameDefine
     public const int DefaultBagId = 1;
     public const int InvalidId = -1;
 
-    // Local persistence
-    public const string LocalJsonFileName = "puffies_local.json";
-    public const string LocalSqliteFileName = "puffies.db";
+    // Local persistence (runtime: persistentDataPath/LocalData.json & LocalData.db)
+    public const string LocalDataBaseName = "LocalData";
+    public const string LocalJsonFileName = LocalDataBaseName + ".json";
+    public const string LocalSqliteFileName = LocalDataBaseName + ".db";
     public const int LocalStoreSchemaVersion = 1;
     public const string LocalSqliteCollectionTable = "app_records";
 
