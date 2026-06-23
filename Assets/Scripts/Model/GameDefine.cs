@@ -88,6 +88,8 @@ public static class GameDefine
     public const string RankButtonObjectName = "BtnRank";
     public const string AchieveButtonObjectName = "BtnAchieve";
     public const string ReturnButtonObjectName = "BtnReturn";
+    public const string RewardPanelObjectName = "RewardPanel";
+    public const string FinishButtonObjectName = "BtnFinish";
     public const string LoadingTextObjectName = "TextLoading";
     public const string LoadingTextFormat = "Loading... {0}%";
     public const float LoadingDurationSeconds = 5f;

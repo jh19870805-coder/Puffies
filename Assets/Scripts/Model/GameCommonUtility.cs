@@ -74,6 +74,46 @@ public static class GameCommonUtility
     }
 
     /// <summary>
+    /// 用途：按名称查找场景对象（可选包含未激活对象；GameObject.Find 无法找到 inactive）。返回：GameObject 或 null。
+    /// </summary>
+    /// <param name="objectName">参数：目标对象名称。</param>
+    /// <param name="includeInactive">参数：是否包含未激活对象。</param>
+    public static GameObject FindSceneObject(string objectName, bool includeInactive = true)
+    {
+        if (string.IsNullOrEmpty(objectName))
+        {
+            return null;
+        }
+
+        if (!includeInactive)
+        {
+            return GameObject.Find(objectName);
+        }
+
+        var scene = SceneManager.GetActiveScene();
+        if (!scene.IsValid())
+        {
+            return null;
+        }
+
+        var roots = scene.GetRootGameObjects();
+        for (var i = 0; i < roots.Length; i++)
+        {
+            var transforms = roots[i].GetComponentsInChildren<Transform>(true);
+            for (var j = 0; j < transforms.Length; j++)
+            {
+                var transform = transforms[j];
+                if (transform != null && transform.name.Equals(objectName, StringComparison.Ordinal))
+                {
+                    return transform.gameObject;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// 用途：将相机设置为正交相机并按参考高度与像素单位计算正交尺寸。返回：无。
     /// </summary>
     /// <param name="camera">参数：需要配置的相机对象。</param>

@@ -18,7 +18,8 @@
 - 新需求：项目默认设计分辨率改为 **2560×1440**（`GameDefine`、各场景 Canvas、Project Settings）；新建页面须与此一致。
 - 新需求：Canvas 统一分辨率工具 + 新建 CanvasScaler 自动默认 2560×1440。
 - 新需求：默认中文字体 Noto Sans SC；菜单 **Puffies → Fonts → Setup Default Chinese Font**。
-- Updated At: 2026-06-01 21:00
+- 新需求：GameScene 拼图完成后显示 RewardPanel，`BtnFinish` 返回 MainScene。
+- Updated At: 2026-06-01 23:45
 - Previous Phase: 工程目录重组（已完成并验证）
 
 ## Requirement Log
@@ -29,6 +30,9 @@
 - 新需求：LoadingScene 为启动页，停留约 5 秒，`TextLoading` 显示 0%→100% 后自动进入 MainScene。
 - 新需求：GameScene `BtnReturn` 点击返回 MainScene（首页）。
 - 新需求：GameScene 不再读取 Package JSON 配置；凹槽与可拖拽碎片均来自编辑器中 `Piece` 开头的 Image 对象。
+- 新需求：GameScene 全部碎片拼完后显示 `RewardPanel`，点击 `BtnFinish` 回 MainScene。
+- 新需求：GameScene 结算时移除运行时拼图碎片，凹槽 alpha=1 显示完整图替代碎片。
+- 修复：RewardPanel 默认 inactive 时 GameObject.Find 失败 → `FindSceneObject` 含未激活对象。
 - 架构决策：本地数据存储仅用 **JSON 文件 + SQLite**，不使用 PlayerPrefs。
 - 架构决策：**除非用户特别指定**，JSON / SQLite 选型由开发侧全权决定。
 - 初始化时机：**LoadingScene** `Start` 中调用两存储 `Initialize()`（懒加载仍保留作兜底）。
@@ -98,8 +102,9 @@
 
 ## Next Action
 
-1. Play 验证 CardFx 预览修复（正交相机 + Hierarchy 缩放，不再自动拉远相机）
-2. 业务层接入本地存储（settings、成就、拼图进度）
+1. Play 验证 GameScene 拼完拼图后 RewardPanel 盖住碎片、BtnFinish 回 MainScene
+2. Play 验证 CardFx 预览修复
+3. 业务层接入本地存储（settings、成就、拼图进度）
 
 ## Resume Prompt
 

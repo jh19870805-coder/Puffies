@@ -39,6 +39,8 @@ public class GameScene : MonoBehaviour
     private Coroutine _pieceBgSlideCoroutine;
     private Vector2 _originalBackgroundAnchoredPosition;
     private bool _hasOriginalBackgroundAnchoredPosition;
+    private bool _isGameFinished;
+    private GameObject _rewardPanelRoot;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Bootstrap()
@@ -67,6 +69,7 @@ public class GameScene : MonoBehaviour
         var selectedBagId = GameManager.GetBagId();
         InitializeGameplay(selectedBagId);
         ConfigureReturnButton();
+        ConfigureRewardPanel();
         Debug.Log("GameScene bootstrap completed.");
     }
 
@@ -521,6 +524,11 @@ public class GameScene : MonoBehaviour
 
     private void TryBeginDrag(Vector2 screenPosition)
     {
+        if (_isGameFinished)
+        {
+            return;
+        }
+
         if (_drag.DraggingPiece != null)
         {
             return;
@@ -661,7 +669,133 @@ public class GameScene : MonoBehaviour
             return;
         }
 
-        Debug.Log("游戏结束");
+        ShowRewardPanel();
+    }
+
+    private void ConfigureRewardPanel()
+    {
+        _rewardPanelRoot = GameCommonUtility.FindSceneObject(GameDefine.RewardPanelObjectName);
+        if (_rewardPanelRoot == null)
+        {
+            Debug.LogWarning($"GameScene: reward panel not found. Expected object named {GameDefine.RewardPanelObjectName}.");
+            return;
+        }
+
+        _rewardPanelRoot.SetActive(false);
+        _isGameFinished = false;
+
+        var finishButtonObject = GameCommonUtility.FindSceneObject(GameDefine.FinishButtonObjectName);
+        if (finishButtonObject == null)
+        {
+            Debug.LogWarning($"GameScene: finish button not found. Expected object named {GameDefine.FinishButtonObjectName}.");
+            return;
+        }
+
+        var button = finishButtonObject.GetComponent<Button>();
+        if (button == null)
+        {
+            Debug.LogWarning($"GameScene: {GameDefine.FinishButtonObjectName} is missing Button component.");
+            return;
+        }
+
+        button.onClick.RemoveListener(OnFinishButtonClicked);
+        button.onClick.AddListener(OnFinishButtonClicked);
+    }
+
+    private void ShowRewardPanel()
+    {
+        if (_isGameFinished)
+        {
+            return;
+        }
+
+        _isGameFinished = true;
+        EndDragging();
+
+        if (_rewardPanelRoot == null)
+        {
+            _rewardPanelRoot = GameCommonUtility.FindSceneObject(GameDefine.RewardPanelObjectName);
+        }
+
+        if (_rewardPanelRoot == null)
+        {
+            Debug.LogWarning($"GameScene: cannot show reward panel. Expected object named {GameDefine.RewardPanelObjectName}.");
+            return;
+        }
+
+        PrepareBoardForRewardPanel();
+        _rewardPanelRoot.SetActive(true);
+        _rewardPanelRoot.transform.SetAsLastSibling();
+        Debug.Log("GameScene: puzzle completed, RewardPanel shown.");
+    }
+
+    private void PrepareBoardForRewardPanel()
+    {
+        RemoveRuntimePuzzlePieces();
+        RevealAllGroovesOnBoard();
+    }
+
+    private void RemoveRuntimePuzzlePieces()
+    {
+        _drag.DraggingPiece = null;
+        _drag.CurrentGroupDraggables.Clear();
+
+        var draggableRoot = GameObject.Find(DraggableGroupRootObjectName);
+        if (draggableRoot != null)
+        {
+            Destroy(draggableRoot);
+        }
+
+        var placedRoot = GameObject.Find(PlacedPiecesRootObjectName);
+        if (placedRoot != null)
+        {
+            Destroy(placedRoot);
+        }
+
+        if (_board.PieceBgRenderer != null)
+        {
+            _board.PieceBgRenderer.gameObject.SetActive(false);
+        }
+
+        var fillTransform = GetPieceBgFillTransform();
+        if (fillTransform != null)
+        {
+            fillTransform.gameObject.SetActive(false);
+        }
+    }
+
+    private void RevealAllGroovesOnBoard()
+    {
+        if (_board.GrooveImagesByGroup == null)
+        {
+            return;
+        }
+
+        for (var groupIndex = 0; groupIndex < _board.GrooveImagesByGroup.Count; groupIndex++)
+        {
+            var group = _board.GrooveImagesByGroup[groupIndex];
+            if (group == null)
+            {
+                continue;
+            }
+
+            for (var i = 0; i < group.Count; i++)
+            {
+                var grooveImage = group[i];
+                if (grooveImage == null)
+                {
+                    continue;
+                }
+
+                grooveImage.gameObject.SetActive(true);
+                SetImageAlpha(grooveImage, 1f);
+            }
+        }
+    }
+
+    private void OnFinishButtonClicked()
+    {
+        GameManager.EnterMainScene();
     }
 
     private static GameObject GetOrCreatePlacedPiecesRoot()
