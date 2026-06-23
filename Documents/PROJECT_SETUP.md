@@ -66,4 +66,37 @@ Unity 菜单：**Puffies → Sync Build Resources**
 
 ## 7. 设计分辨率
 
-1920×1080，PPU = 100（见 `GameDefine.DesignWidth/Height`）
+**2560×1440**，PPU = 100（见 `GameDefine.DesignWidth` / `DesignHeight`）。
+
+### 统一修改已有 Canvas
+
+编辑器菜单：
+
+| 菜单 | 作用 |
+|------|------|
+| **Puffies → Canvas → Apply Design Resolution (Current Scene)** | 只改当前打开场景里所有 `CanvasScaler` |
+| **Puffies → Canvas → Apply Design Resolution (All Scenes & Prefabs)** | 批量改 `Assets/Scenes` 下场景 + `Assets` 下预制体（跳过 TextMesh Pro 示例） |
+
+在 Inspector 里改的是 **Canvas Scaler → Reference Resolution**，不是 RectTransform 的 Width/Height。
+
+### 新建 Canvas 自动默认 2560×1440
+
+`Assets/Scripts/Editor/CanvasDesignResolutionEditor.cs` 会在编辑器中 **自动监听新加的 `CanvasScaler`**（含 GameObject → UI → Canvas），并套用：
+
+- Reference Resolution：**2560 × 1440**
+- UI Scale Mode：Scale With Screen Size
+- Reference Pixels Per Unit：100
+- Match：0.5
+
+Unity 没有全局 Project Settings 项可改 Canvas 默认值，因此用上述 Editor 脚本实现同等效果。
+
+### 手工检查（可选）
+
+选中 Canvas → **Canvas Scaler** → Reference Resolution 应为 **2560 × 1440**。
+
+| 项 | 值 |
+|----|-----|
+| 代码引用 | `GameDefine.DesignWidth` / `DesignHeight`，勿写死数值 |
+| Game 窗口默认尺寸 | Project Settings → 2560×1440 |
+
+运行时各场景 Controller 已通过 `GameDefine` 配置正交相机与 Canvas，无需在脚本里改分辨率常量。

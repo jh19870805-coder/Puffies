@@ -114,8 +114,8 @@ public static class GameDefine
     public const int LocalStoreSchemaVersion = 1;
     public const string LocalSqliteCollectionTable = "app_records";
 
-    // Design resolution (1920×1080, PPU 100)
-    public const float DesignWidth = 1920f;
-    public const float DesignHeight = 1080f;
+    // Design resolution (2560×1440, PPU 100) — 新建 UI 场景/Canvas 须与此一致
+    public const float DesignWidth = 2560f;
+    public const float DesignHeight = 1440f;
     public const float PixelsPerUnit = 100f;
 }

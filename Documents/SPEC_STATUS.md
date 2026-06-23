@@ -5,7 +5,19 @@
 - 新需求：卡片 UI 特效目录精简为 `Effects/CardFx/`（预制体 + Materials/Textures/Meshes/Shaders）。
 - 新需求：effect 场景改为 CardFx 预览（菜单 Puffies → Preview CardFx Effects）。
 - 问题：CardFx 按钮有效但无画面——Overlay Canvas 下粒子不在相机视野；改世界空间 + UI→世界材质 + maxParticleSize 解除。
-- Updated At: 2026-06-01 19:00
+
+## 设计分辨率（已定）
+
+| 项 | 值 |
+|----|-----|
+| 设计分辨率 | **2560 × 1440** |
+| PPU | 100（`GameDefine.PixelsPerUnit`） |
+| 常量 | `GameDefine.DesignWidth` / `DesignHeight` |
+| 新建 UI 场景 | Canvas Scaler Reference Resolution = 2560×1440；详见 `PROJECT_SETUP.md` §7 |
+| Canvas 批量/默认 | 菜单 **Puffies → Canvas**；新建 CanvasScaler 自动套用（`CanvasDesignResolutionEditor.cs`） |
+- 新需求：项目默认设计分辨率改为 **2560×1440**（`GameDefine`、各场景 Canvas、Project Settings）；新建页面须与此一致。
+- 新需求：Canvas 统一分辨率工具 + 新建 CanvasScaler 自动默认 2560×1440。
+- Updated At: 2026-06-01 20:30
 - Previous Phase: 工程目录重组（已完成并验证）
 
 ## Requirement Log
