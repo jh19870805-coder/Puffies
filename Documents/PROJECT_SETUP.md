@@ -100,3 +100,24 @@ Unity 没有全局 Project Settings 项可改 Canvas 默认值，因此用上述
 | Game 窗口默认尺寸 | Project Settings → 2560×1440 |
 
 运行时各场景 Controller 已通过 `GameDefine` 配置正交相机与 Canvas，无需在脚本里改分辨率常量。
+
+## 8. 默认中文字体
+
+字体文件：`Assets/TextMesh Pro/Resources/Fonts & Materials/NotoSansSC-Regular.ttf`（思源黑体简体）
+
+| 组件类型 | 默认字体 |
+|----------|----------|
+| **TextMeshPro** | `NotoSansSC-Regular SDF`（动态 SDF，需生成一次） |
+| **Unity UI Text** | `NotoSansSC-Regular.ttf` |
+
+### 一键设置（首次或换字体后执行）
+
+Unity 菜单：**Puffies → Fonts → Setup Default Chinese Font**
+
+会自动：
+
+1. 生成 `NotoSansSC-Regular SDF.asset`（若不存在）
+2. 写入 **TMP Settings** 默认字体
+3. 批量更新 `Assets/Scenes` 与 `Assets` 下预制体里的 **Text / TextMeshPro** 组件
+
+代码中请使用 `GameFontUtility.GetDefaultUIFont()` / `GetDefaultTmpFont()`，勿写死字体路径。

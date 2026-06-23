@@ -234,7 +234,8 @@ public class CardFxPreviewScene : MonoBehaviour
         rect.sizeDelta = sizeDelta;
 
         var text = textObject.AddComponent<Text>();
-        text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        text.font = GameFontUtility.GetDefaultUIFont()
+            ?? Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         text.fontSize = fontSize;
         text.color = Color.white;
         text.alignment = TextAnchor.UpperLeft;
@@ -279,7 +280,8 @@ public class CardFxPreviewScene : MonoBehaviour
         textRect.offsetMax = Vector2.zero;
 
         var text = textObject.AddComponent<Text>();
-        text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        text.font = GameFontUtility.GetDefaultUIFont()
+            ?? Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         text.fontSize = 15;
         text.color = Color.white;
         text.alignment = TextAnchor.MiddleCenter;

@@ -17,7 +17,8 @@
 | Canvas 批量/默认 | 菜单 **Puffies → Canvas**；新建 CanvasScaler 自动套用（`CanvasDesignResolutionEditor.cs`） |
 - 新需求：项目默认设计分辨率改为 **2560×1440**（`GameDefine`、各场景 Canvas、Project Settings）；新建页面须与此一致。
 - 新需求：Canvas 统一分辨率工具 + 新建 CanvasScaler 自动默认 2560×1440。
-- Updated At: 2026-06-01 20:30
+- 新需求：默认中文字体 Noto Sans SC；菜单 **Puffies → Fonts → Setup Default Chinese Font**。
+- Updated At: 2026-06-01 21:00
 - Previous Phase: 工程目录重组（已完成并验证）
 
 ## Requirement Log

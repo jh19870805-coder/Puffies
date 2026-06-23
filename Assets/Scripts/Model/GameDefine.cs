@@ -118,4 +118,10 @@ public static class GameDefine
     public const float DesignWidth = 2560f;
     public const float DesignHeight = 1440f;
     public const float PixelsPerUnit = 100f;
+
+    // Default Chinese font (Noto Sans SC) — TMP SDF 由菜单 Puffies → Fonts → Setup Default Chinese Font 生成
+    public const string DefaultChineseFontEditorPath = "Assets/TextMesh Pro/Resources/Fonts & Materials/NotoSansSC-Regular.ttf";
+    public const string DefaultChineseTmpFontEditorPath = "Assets/TextMesh Pro/Resources/Fonts & Materials/NotoSansSC-Regular SDF.asset";
+    public const string DefaultChineseFontResourcesPath = "Fonts & Materials/NotoSansSC-Regular";
+    public const string DefaultChineseTmpFontResourcesPath = "Fonts & Materials/NotoSansSC-Regular SDF";
 }

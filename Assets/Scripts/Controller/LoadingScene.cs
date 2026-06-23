@@ -44,6 +44,8 @@ public class LoadingScene : MonoBehaviour
             return;
         }
 
+        GameFontUtility.ApplyDefaultFont(mLoadingText);
+
         mLoadingCoroutine = StartCoroutine(RunLoadingProgress());
     }
 
