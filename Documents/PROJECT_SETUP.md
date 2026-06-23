@@ -45,6 +45,9 @@ Unity 菜单：**Puffies → Sync Build Resources**
 | 开包动画 FBX | `CardPackAni_001.FBX` | `Resources/Effects/CardPack/` |
 | 材质 | `CardPackLit` | `Resources/Effects/CardPack/` |
 | 平面组 | `PlaneGroup_001` | `Resources/Effects/PlaneGroup/` |
+| 获得新卡特效 | `CardObtain_001` | `Resources/Effects/CardFx/` |
+| 卡片拖尾特效 | `CardTrail_001` | `Resources/Effects/CardFx/` |
+| 卡片特效依赖 | Materials / Textures / Meshes / Shaders | `Resources/Effects/CardFx/` 子目录 |
 | 拼图凹槽/碎片 | `Piece01`…`PieceNN` | GameScene 编辑器 Image |
 
 ## 6. 场景跳转
@@ -55,6 +58,7 @@ Unity 菜单：**Puffies → Sync Build Resources**
 | BtnRank | RankScene | 排行榜 |
 | BtnAchieve | AchieveScene | 成就 |
 | BtnReturn | MainScene | 从 Game/Rank/Achieve 返回首页 |
+| **effect**（调试） | 仅 CardFx 预览 | 菜单 **Puffies → Preview CardFx Effects** |
 
 **Build Settings 顺序**：`LoadingScene` 必须为 Index 0（启动场景）。
 

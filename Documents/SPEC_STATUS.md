@@ -2,7 +2,10 @@
 
 - Task: Puffies 新阶段开发
 - Status: In Progress
-- Updated At: 2026-06-02 20:30
+- 新需求：卡片 UI 特效目录精简为 `Effects/CardFx/`（预制体 + Materials/Textures/Meshes/Shaders）。
+- 新需求：effect 场景改为 CardFx 预览（菜单 Puffies → Preview CardFx Effects）。
+- 问题：CardFx 按钮有效但无画面——Overlay Canvas 下粒子不在相机视野；改世界空间 + UI→世界材质 + maxParticleSize 解除。
+- Updated At: 2026-06-01 19:00
 - Previous Phase: 工程目录重组（已完成并验证）
 
 ## Requirement Log
@@ -17,6 +20,9 @@
 - 架构决策：**除非用户特别指定**，JSON / SQLite 选型由开发侧全权决定。
 - 初始化时机：**LoadingScene** `Start` 中调用两存储 `Initialize()`（懒加载仍保留作兜底）。
 - 新需求：本地存储文件统一命名为 `LocalData.json` / `LocalData.db`。
+- 新需求：获得新卡特效 → `CardObtain_001`；卡片拖尾 → `CardTrail_001`（均在 `Effects/CardFx/`）。
+- 新需求：effect 预览仅展示 CardFx（CardObtain + CardTrail），不含卡包 3D。
+- 问题：CardFx 预览仅见两点——多数层用 UI 粒子 shader；世界空间预览+材质转换+GUI 按钮（2026-06-01 修复）。
 
 ## 本地存储方案（已定）
 
@@ -50,7 +56,7 @@
 | GameScene | 编辑器拼图页（Piece01… 凹槽 + 拖拽），返回首页 |
 | RankScene | 排行榜 + 返回 |
 | AchieveScene | 成就页 + 返回（已实现场景跳转） |
-| effect | 特效调试（可选删） |
+| effect | CardFx 特效预览（CardObtain / CardTrail） |
 
 ### 配置与资源
 
@@ -79,8 +85,8 @@
 
 ## Next Action
 
-1. 业务层接入本地存储（settings、成就、拼图进度）
-2. Play 验证存储：JSON 与 SQLite CRUD
+1. Play 验证 CardFx 预览修复（正交相机 + Hierarchy 缩放，不再自动拉远相机）
+2. 业务层接入本地存储（settings、成就、拼图进度）
 
 ## Resume Prompt
 

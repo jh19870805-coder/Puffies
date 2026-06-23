@@ -44,6 +44,7 @@ public static class GameDefine
     public const string EffectsRoot = "Assets/Resources/Effects";
     public const string CardPackFolder = "CardPack";
     public const string PlaneGroupFolder = "PlaneGroup";
+    public const string CardFxFolder = "CardFx";
 
     public const string PlaneGroupPrefabEditorPath = "Assets/Resources/Effects/PlaneGroup/PlaneGroup_001.prefab";
     public const string PlaneGroupMaterialEditorPath = "Assets/Resources/Effects/PlaneGroup/PlaneGroupLit.mat";
@@ -58,6 +59,14 @@ public static class GameDefine
     public const string CardPackAnimationEditorFolder = "Assets/Resources/Effects/CardPack";
     public const string CardPackAniPrefix = "CardPackAni_";
     public const string CardPackSkinPrefix = "CardPackSkin_";
+    public const string CardObtainPrefabName = "CardObtain_001";
+    public const string CardTrailPrefabName = "CardTrail_001";
+
+    public const string CardObtainPrefabEditorPath = "Assets/Resources/Effects/CardFx/CardObtain_001.prefab";
+    public const string CardTrailPrefabEditorPath = "Assets/Resources/Effects/CardFx/CardTrail_001.prefab";
+    public const string CardObtainPrefabResourcesPath = "Effects/CardFx/CardObtain_001";
+    public const string CardTrailPrefabResourcesPath = "Effects/CardFx/CardTrail_001";
+    public const string CardFxEditorFolder = "Assets/Resources/Effects/CardFx";
 
     public static string FormatCardPackAnimationFileName(int bagId)
     {
