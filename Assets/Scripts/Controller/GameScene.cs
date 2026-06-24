@@ -36,9 +36,12 @@ public class GameScene : MonoBehaviour
     private Vector3 _pieceBgOriginalPosition;
     private bool _hasPieceBgOriginalPosition;
     private bool _isPieceBgHidden;
-    private Coroutine _pieceBgSlideCoroutine;
-    private Vector2 _originalBackgroundAnchoredPosition;
-    private bool _hasOriginalBackgroundAnchoredPosition;
+    private Vector2 _pieceBoardOriginalAnchoredPosition;
+    private bool _hasPieceBoardOriginalAnchoredPosition;
+    private bool _isPieceBoardHidden;
+    private Coroutine _pieceTraySlideCoroutine;
+    private Vector2 _originalGameBoardAnchoredPosition;
+    private bool _hasOriginalGameBoardAnchoredPosition;
     private bool _isGameFinished;
     private GameObject _rewardPanelRoot;
 
@@ -97,10 +100,13 @@ public class GameScene : MonoBehaviour
             return;
         }
 
-        RestoreBackgroundLayout();
-        UpdateGrooveGroupVisibility(0);
-        _board.PieceBgRenderer = CreatePieceBackground();
-        FitGamePageToCamera();
+        EnsureBackgroundCentered();
+        EnsurePieceBoardInitialized();
+        if (_board.PieceBoardRect == null)
+        {
+            _board.PieceBgRenderer = CreatePieceBackground();
+        }
+
         CreateDraggableGroup(0);
         Debug.Log(
             $"GameScene ready. BagId={bagId}, Groups={_board.GrooveImagesByGroup.Count}, " +
@@ -163,16 +169,17 @@ public class GameScene : MonoBehaviour
         }
 
         _board.BackgroundRect = FindBackgroundRect();
+        _board.PieceBoardRect = FindPieceBoardRect();
         _board.GameBoardImage = FindSceneImage(GameDefine.GameBoardObjectName);
         if (_board.GameBoardImage == null)
         {
             return;
         }
 
-        if (_board.BackgroundRect != null && !_hasOriginalBackgroundAnchoredPosition)
+        if (_board.GameBoardImage != null && !_hasOriginalGameBoardAnchoredPosition)
         {
-            _originalBackgroundAnchoredPosition = _board.BackgroundRect.anchoredPosition;
-            _hasOriginalBackgroundAnchoredPosition = true;
+            _originalGameBoardAnchoredPosition = _board.GameBoardImage.rectTransform.anchoredPosition;
+            _hasOriginalGameBoardAnchoredPosition = true;
         }
 
         _board.GrooveImagesByGroup = CollectEditorGrooveGroups();
@@ -184,6 +191,29 @@ public class GameScene : MonoBehaviour
     {
         var background = GameObject.Find(GameDefine.BackgroundObjectName);
         return background != null ? background.GetComponent<RectTransform>() : null;
+    }
+
+    private static RectTransform FindPieceBoardRect()
+    {
+        var pieceBoard = GameObject.Find(GameDefine.PieceBoardObjectName);
+        return pieceBoard != null ? pieceBoard.GetComponent<RectTransform>() : null;
+    }
+
+    private void EnsurePieceBoardInitialized()
+    {
+        if (_board.PieceBoardRect == null)
+        {
+            _board.PieceBoardRect = FindPieceBoardRect();
+        }
+
+        if (_board.PieceBoardRect == null || _hasPieceBoardOriginalAnchoredPosition)
+        {
+            return;
+        }
+
+        _pieceBoardOriginalAnchoredPosition = _board.PieceBoardRect.anchoredPosition;
+        _hasPieceBoardOriginalAnchoredPosition = true;
+        _isPieceBoardHidden = false;
     }
 
     private static Image FindSceneImage(string objectName)
@@ -205,7 +235,119 @@ public class GameScene : MonoBehaviour
             return new List<List<Image>>();
         }
 
-        return new List<List<Image>> { sortedGrooves };
+        var groupsFromHierarchy = CollectGrooveGroupsFromEditorHierarchy();
+        if (groupsFromHierarchy.Count > 0)
+        {
+            return groupsFromHierarchy;
+        }
+
+        return SplitGroovesIntoDefaultGroups(sortedGrooves);
+    }
+
+    private static List<List<Image>> CollectGrooveGroupsFromEditorHierarchy()
+    {
+        var groups = new List<List<Image>>();
+        var gameBoardObject = GameObject.Find(GameDefine.GameBoardObjectName);
+        if (gameBoardObject == null)
+        {
+            return groups;
+        }
+
+        var groupTransforms = new List<Transform>();
+        var boardTransform = gameBoardObject.transform;
+        for (var i = 0; i < boardTransform.childCount; i++)
+        {
+            var child = boardTransform.GetChild(i);
+            if (child.name.StartsWith(GameDefine.PieceGroupObjectPrefix, StringComparison.Ordinal))
+            {
+                groupTransforms.Add(child);
+            }
+        }
+
+        if (groupTransforms.Count == 0)
+        {
+            return groups;
+        }
+
+        groupTransforms.Sort((a, b) => string.Compare(a.name, b.name, StringComparison.Ordinal));
+        for (var groupIndex = 0; groupIndex < groupTransforms.Count; groupIndex++)
+        {
+            var groupTransform = groupTransforms[groupIndex];
+            var images = groupTransform.GetComponentsInChildren<Image>(true);
+            var grooveImages = new List<Image>();
+            for (var i = 0; i < images.Length; i++)
+            {
+                var image = images[i];
+                if (image != null && TryParsePieceObjectName(image.gameObject.name, out _))
+                {
+                    grooveImages.Add(image);
+                }
+            }
+
+            grooveImages.Sort((a, b) => GetPieceNumberFromImage(a).CompareTo(GetPieceNumberFromImage(b)));
+            if (grooveImages.Count > 0)
+            {
+                groups.Add(grooveImages);
+            }
+        }
+
+        return groups;
+    }
+
+    private static List<List<Image>> SplitGroovesIntoDefaultGroups(List<Image> sortedGrooves)
+    {
+        var firstGroup = new List<Image>();
+        var secondGroup = new List<Image>();
+        for (var i = 0; i < sortedGrooves.Count; i++)
+        {
+            var grooveImage = sortedGrooves[i];
+            if (grooveImage == null)
+            {
+                continue;
+            }
+
+            if (GetPieceNumberFromImage(grooveImage) <= GameDefine.DefaultFirstPuzzleGroupMaxPieceNumber)
+            {
+                firstGroup.Add(grooveImage);
+            }
+            else
+            {
+                secondGroup.Add(grooveImage);
+            }
+        }
+
+        var groups = new List<List<Image>>();
+        if (firstGroup.Count > 0)
+        {
+            groups.Add(firstGroup);
+        }
+
+        if (secondGroup.Count > 0)
+        {
+            groups.Add(secondGroup);
+        }
+
+        return groups;
+    }
+
+    private static int GetPieceNumberFromImage(Image image)
+    {
+        if (image == null || !TryParsePieceObjectName(image.gameObject.name, out var pieceNumber))
+        {
+            return int.MaxValue;
+        }
+
+        return pieceNumber;
+    }
+
+    private static int GetPieceNumberFromState(DraggablePieceState state)
+    {
+        if (state?.GrooveImage == null)
+        {
+            return int.MaxValue;
+        }
+
+        return GetPieceNumberFromImage(state.GrooveImage);
     }
 
     private static List<Image> CollectSortedEditorPieceGrooves()
@@ -397,7 +539,7 @@ public class GameScene : MonoBehaviour
 
     private void CreateDraggableGroup(int groupIndex)
     {
-        SlidePieceBgToOriginalPosition();
+        PreparePieceTrayForGroupStart();
         ClearCurrentDraggableGroup();
         _drag.CurrentGroupIndex = groupIndex;
 
@@ -415,16 +557,11 @@ public class GameScene : MonoBehaviour
         }
 
         UpdateGrooveGroupVisibility(groupIndex);
-        AlignBoardToCurrentGroupGrooves(grooveGroup);
-        AlignPieceBgToPageBottom();
+        ResetBoardPanState();
+        FitCameraToActiveGroup(groupIndex);
 
         var root = new GameObject(DraggableGroupRootObjectName);
-        var hostBounds = _board.PieceBgRenderer != null
-            ? _board.PieceBgRenderer.bounds
-            : GameCommonUtility.GetRectTransformCameraWorldBounds(_board.GameBoardImage.rectTransform, Camera.main);
-        var horizontalSpacing = DraggableHorizontalSpacingPixels / PixelsPerUnit;
-        var nextCenterX = hostBounds.min.x + DraggableLeftPadding;
-        var startY = hostBounds.center.y;
+        var hostBounds = GetPieceTrayBounds();
 
         for (var i = 0; i < grooveGroup.Count; i++)
         {
@@ -445,12 +582,8 @@ public class GameScene : MonoBehaviour
             }
 
             var trayScale = CalculateTrayScaleForPiece(pieceRenderer, hostBounds);
-            var pieceWidth = GameCommonUtility.GetPieceWidth(pieceRenderer, trayScale);
-            var pieceHalfWidth = pieceWidth * 0.5f;
-            var pieceCenterX = nextCenterX + pieceHalfWidth;
             var dragScale = CalculatePieceScaleOnBoard();
             pieceRenderer.transform.localScale = trayScale;
-            pieceRenderer.transform.position = new Vector3(pieceCenterX, startY, WorldGameplayDepth);
             _drag.CurrentGroupDraggables.Add(new DraggablePieceState
             {
                 PieceRenderer = pieceRenderer,
@@ -461,11 +594,10 @@ public class GameScene : MonoBehaviour
                 DragScale = dragScale,
                 IsPlaced = false
             });
-
-            nextCenterX = pieceCenterX + pieceHalfWidth + horizontalSpacing;
         }
 
-        CachePieceBgOriginalPosition();
+        LayoutTrayPieces();
+        CachePieceTrayOriginalPosition();
     }
 
     private static SpriteRenderer CreateDraggablePieceFromGroove(Image grooveImage, string objectName, Transform parent)
@@ -553,9 +685,9 @@ public class GameScene : MonoBehaviour
             state.DragScale = CalculatePieceScaleOnBoard();
             state.PieceRenderer.transform.localScale = state.DragScale;
             state.PieceRenderer.sortingOrder = PieceSortingOrder + 100;
-            if (_drag.CurrentGroupDraggables.Count == 1)
+            if (CountUnplacedTrayPieces() == 1)
             {
-                SlidePieceBgOutOfScreen();
+                SlidePieceTrayOutOfScreen();
             }
 
             break;
@@ -596,13 +728,109 @@ public class GameScene : MonoBehaviour
             var placedRoot = GetOrCreatePlacedPiecesRoot();
             state.PieceRenderer.transform.SetParent(placedRoot.transform, worldPositionStays: true);
             state.IsPlaced = true;
+            LayoutTrayPieces();
             TryAdvanceGroup();
             return;
         }
 
         state.PieceRenderer.transform.position = state.StartPosition;
         state.PieceRenderer.transform.localScale = state.TrayScale;
-        SlidePieceBgToOriginalPosition();
+        SlidePieceTrayToOriginalPosition();
+    }
+
+    private int CountUnplacedTrayPieces()
+    {
+        var count = 0;
+        for (var i = 0; i < _drag.CurrentGroupDraggables.Count; i++)
+        {
+            var state = _drag.CurrentGroupDraggables[i];
+            if (state != null && !state.IsPlaced)
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    private Bounds GetPieceTrayBounds()
+    {
+        var camera = Camera.main;
+        if (_board.PieceBoardRect != null && camera != null)
+        {
+            return GameCommonUtility.GetRectTransformCameraWorldBounds(
+                _board.PieceBoardRect,
+                camera,
+                WorldGameplayDepth);
+        }
+
+        if (_board.PieceBgRenderer != null)
+        {
+            return _board.PieceBgRenderer.bounds;
+        }
+
+        if (_board.GameBoardImage != null && camera != null)
+        {
+            return GameCommonUtility.GetRectTransformCameraWorldBounds(_board.GameBoardImage.rectTransform, camera);
+        }
+
+        return new Bounds(Vector3.zero, Vector3.one);
+    }
+
+    private void LayoutTrayPieces()
+    {
+        Canvas.ForceUpdateCanvases();
+        var hostBounds = GetPieceTrayBounds();
+        if (hostBounds.size.sqrMagnitude <= 0f)
+        {
+            return;
+        }
+
+        var horizontalSpacing = DraggableHorizontalSpacingPixels / PixelsPerUnit;
+        var nextCenterX = hostBounds.min.x + DraggableLeftPadding;
+        var unplaced = new List<DraggablePieceState>();
+        for (var i = 0; i < _drag.CurrentGroupDraggables.Count; i++)
+        {
+            var state = _drag.CurrentGroupDraggables[i];
+            if (state == null || state.IsPlaced || state.PieceRenderer == null || state == _drag.DraggingPiece)
+            {
+                continue;
+            }
+
+            unplaced.Add(state);
+        }
+
+        unplaced.Sort((a, b) => GetPieceNumberFromState(a).CompareTo(GetPieceNumberFromState(b)));
+        var trayCenterY = hostBounds.center.y;
+        for (var i = 0; i < unplaced.Count; i++)
+        {
+            var state = unplaced[i];
+            var pieceWidth = GameCommonUtility.GetPieceWidth(state.PieceRenderer, state.TrayScale);
+            var pieceHalfWidth = pieceWidth * 0.5f;
+            var pieceCenterX = nextCenterX + pieceHalfWidth;
+            var position = PlaceTrayPieceAt(state.PieceRenderer, state.TrayScale, pieceCenterX, trayCenterY);
+            state.StartPosition = position;
+            nextCenterX = pieceCenterX + pieceHalfWidth + horizontalSpacing;
+        }
+    }
+
+    private static Vector3 PlaceTrayPieceAt(
+        SpriteRenderer renderer,
+        Vector3 trayScale,
+        float centerX,
+        float trayCenterY)
+    {
+        renderer.transform.localScale = trayScale;
+        renderer.transform.position = new Vector3(centerX, trayCenterY, WorldGameplayDepth);
+        var deltaY = trayCenterY - renderer.bounds.center.y;
+        if (Mathf.Abs(deltaY) > 0.0001f)
+        {
+            var position = renderer.transform.position;
+            position.y += deltaY;
+            renderer.transform.position = position;
+        }
+
+        return renderer.transform.position;
     }
 
     private static Vector3 GetGrooveSnapPosition(RectTransform grooveRect, Camera camera)
@@ -619,7 +847,10 @@ public class GameScene : MonoBehaviour
             return position;
         }
 
-        var worldPosition = GameCommonUtility.RectTransformToCameraWorld(grooveRect, camera, 0f);
+        var worldPosition = GameCommonUtility.RectTransformToCameraWorld(
+            grooveRect,
+            camera,
+            WorldGameplayDepth);
         worldPosition.z = WorldGameplayDepth;
         return worldPosition;
     }
@@ -634,7 +865,10 @@ public class GameScene : MonoBehaviour
         var referenceSize = 0f;
         if (state.GrooveRect != null)
         {
-            var grooveBounds = GameCommonUtility.GetRectTransformCameraWorldBounds(state.GrooveRect, Camera.main);
+            var grooveBounds = GameCommonUtility.GetRectTransformCameraWorldBounds(
+                state.GrooveRect,
+                Camera.main,
+                WorldGameplayDepth);
             referenceSize = Mathf.Max(grooveBounds.size.x, grooveBounds.size.y);
         }
 
@@ -757,6 +991,11 @@ public class GameScene : MonoBehaviour
             _board.PieceBgRenderer.gameObject.SetActive(false);
         }
 
+        if (_board.PieceBoardRect != null)
+        {
+            _board.PieceBoardRect.gameObject.SetActive(false);
+        }
+
         var fillTransform = GetPieceBgFillTransform();
         if (fillTransform != null)
         {
@@ -809,7 +1048,7 @@ public class GameScene : MonoBehaviour
         return new GameObject(PlacedPiecesRootObjectName);
     }
 
-    private void FitGamePageToCamera()
+    private void FitCameraToActiveGroup(int activeGroupIndex)
     {
         var camera = Camera.main;
         if (camera == null || _board.GameBoardImage == null)
@@ -820,17 +1059,17 @@ public class GameScene : MonoBehaviour
         Canvas.ForceUpdateCanvases();
         GameCommonUtility.SetupOrthographicCamera(camera, ReferenceHeight, PixelsPerUnit);
 
-        var pageBounds = BuildPageBounds(includeDraggables: false, includeInactiveGrooves: true);
+        var pageBounds = BuildPageBoundsForActiveGroup(activeGroupIndex);
         if (pageBounds.size.sqrMagnitude <= 0f)
         {
             return;
         }
 
-        GameCommonUtility.FitOrthographicCameraToWorldBounds(camera, GamePageCameraPadding, pageBounds);
-        AlignPieceBgToPageBottom();
+        GameCommonUtility.FitOrthographicCameraSizeOnly(camera, GamePageCameraPadding, pageBounds);
+        AlignPieceTrayToPageBottom();
     }
 
-    private Bounds BuildPageBounds(bool includeDraggables, bool includeInactiveGrooves = false)
+    private Bounds BuildPageBoundsForActiveGroup(int activeGroupIndex)
     {
         var camera = Camera.main;
         var hasBounds = false;
@@ -839,32 +1078,30 @@ public class GameScene : MonoBehaviour
         {
             combinedBounds = GameCommonUtility.GetRectTransformCameraWorldBounds(
                 _board.GameBoardImage.rectTransform,
-                camera);
+                camera,
+                WorldGameplayDepth);
             hasBounds = true;
         }
 
-        if (_board.GrooveImagesByGroup != null && camera != null)
+        if (_board.GrooveImagesByGroup != null && camera != null
+            && activeGroupIndex >= 0
+            && activeGroupIndex < _board.GrooveImagesByGroup.Count)
         {
-            for (var groupIndex = 0; groupIndex < _board.GrooveImagesByGroup.Count; groupIndex++)
+            var group = _board.GrooveImagesByGroup[activeGroupIndex];
+            if (group != null)
             {
-                var group = _board.GrooveImagesByGroup[groupIndex];
-                if (group == null)
-                {
-                    continue;
-                }
-
                 for (var i = 0; i < group.Count; i++)
                 {
                     var grooveImage = group[i];
-                    if (grooveImage == null
-                        || (!includeInactiveGrooves && !grooveImage.gameObject.activeInHierarchy))
+                    if (grooveImage == null || !grooveImage.gameObject.activeInHierarchy)
                     {
                         continue;
                     }
 
                     var grooveBounds = GameCommonUtility.GetRectTransformCameraWorldBounds(
                         grooveImage.rectTransform,
-                        camera);
+                        camera,
+                        WorldGameplayDepth);
                     if (!hasBounds)
                     {
                         combinedBounds = grooveBounds;
@@ -878,7 +1115,23 @@ public class GameScene : MonoBehaviour
             }
         }
 
-        if (_board.PieceBgRenderer != null)
+        if (_board.PieceBoardRect != null && camera != null)
+        {
+            var pieceBoardBounds = GameCommonUtility.GetRectTransformCameraWorldBounds(
+                _board.PieceBoardRect,
+                camera,
+                WorldGameplayDepth);
+            if (!hasBounds)
+            {
+                combinedBounds = pieceBoardBounds;
+                hasBounds = true;
+            }
+            else
+            {
+                combinedBounds.Encapsulate(pieceBoardBounds);
+            }
+        }
+        else if (_board.PieceBgRenderer != null)
         {
             if (!hasBounds)
             {
@@ -891,29 +1144,78 @@ public class GameScene : MonoBehaviour
             }
         }
 
-        if (includeDraggables)
+        var placedRoot = GameObject.Find(PlacedPiecesRootObjectName);
+        if (placedRoot != null)
         {
-            for (var i = 0; i < _drag.CurrentGroupDraggables.Count; i++)
+            var placedRenderers = placedRoot.GetComponentsInChildren<SpriteRenderer>(true);
+            for (var i = 0; i < placedRenderers.Length; i++)
             {
-                var pieceRenderer = _drag.CurrentGroupDraggables[i].PieceRenderer;
-                if (pieceRenderer == null)
+                var renderer = placedRenderers[i];
+                if (renderer == null)
                 {
                     continue;
                 }
 
                 if (!hasBounds)
                 {
-                    combinedBounds = pieceRenderer.bounds;
+                    combinedBounds = renderer.bounds;
                     hasBounds = true;
                 }
                 else
                 {
-                    combinedBounds.Encapsulate(pieceRenderer.bounds);
+                    combinedBounds.Encapsulate(renderer.bounds);
                 }
             }
         }
 
         return combinedBounds;
+    }
+
+    private void ResetBoardPanState()
+    {
+        RestoreGameBoardLayout();
+        ResetPlacedPiecesRootPan();
+    }
+
+    private void RestoreGameBoardLayout()
+    {
+        if (!_hasOriginalGameBoardAnchoredPosition || _board.GameBoardImage == null)
+        {
+            return;
+        }
+
+        _board.GameBoardImage.rectTransform.anchoredPosition = _originalGameBoardAnchoredPosition;
+    }
+
+    private static void ResetPlacedPiecesRootPan()
+    {
+        var placedRoot = GameObject.Find(PlacedPiecesRootObjectName);
+        if (placedRoot == null)
+        {
+            return;
+        }
+
+        var panOffset = placedRoot.transform.position;
+        if (panOffset.sqrMagnitude <= 0.000001f)
+        {
+            return;
+        }
+
+        var renderers = placedRoot.GetComponentsInChildren<SpriteRenderer>(true);
+        var worldPositions = new Vector3[renderers.Length];
+        for (var i = 0; i < renderers.Length; i++)
+        {
+            worldPositions[i] = renderers[i].transform.position;
+        }
+
+        placedRoot.transform.position = Vector3.zero;
+        for (var i = 0; i < renderers.Length; i++)
+        {
+            if (renderers[i] != null)
+            {
+                renderers[i].transform.position = worldPositions[i];
+            }
+        }
     }
 
     private static int CountGrooveImages(List<List<Image>> grooveGroups)
@@ -982,89 +1284,18 @@ public class GameScene : MonoBehaviour
             pieceBgRenderer.transform.position.z + 0.01f);
     }
 
-    private void AlignBoardToCurrentGroupGrooves(List<Image> currentGroupGrooves)
+    private void EnsureBackgroundCentered()
     {
-        if (currentGroupGrooves == null || currentGroupGrooves.Count == 0)
+        if (_board.BackgroundRect == null)
         {
             return;
         }
 
-        var camera = Camera.main;
-        if (camera == null)
-        {
-            return;
-        }
-
-        var grooveBounds = BuildUIGroupBounds(currentGroupGrooves, camera);
-        if (!grooveBounds.HasValue)
-        {
-            return;
-        }
-
-        var cameraCenter = new Vector3(camera.transform.position.x, camera.transform.position.y, 0f);
-        var delta = cameraCenter - grooveBounds.Value.center;
-        if (delta.sqrMagnitude <= 0.000001f)
-        {
-            return;
-        }
-
-        TranslateBoardWorld(delta, camera);
-    }
-
-    private static Bounds? BuildUIGroupBounds(List<Image> groupImages, Camera camera)
-    {
-        if (camera == null)
-        {
-            return null;
-        }
-
-        Bounds? combined = null;
-        for (var i = 0; i < groupImages.Count; i++)
-        {
-            var image = groupImages[i];
-            if (image == null || !image.gameObject.activeInHierarchy)
-            {
-                continue;
-            }
-
-            var bounds = GameCommonUtility.GetRectTransformCameraWorldBounds(image.rectTransform, camera);
-            if (!combined.HasValue)
-            {
-                combined = bounds;
-            }
-            else
-            {
-                var value = combined.Value;
-                value.Encapsulate(bounds);
-                combined = value;
-            }
-        }
-
-        return combined;
-    }
-
-    private void TranslateBoardWorld(Vector3 worldDelta, Camera camera)
-    {
-        if (_board.BackgroundRect != null && _board.GameBoardImage != null && camera != null)
-        {
-            var anchoredDelta = GameCommonUtility.WorldDeltaToCanvasAnchoredDelta(
-                _board.GameBoardImage.rectTransform,
-                camera,
-                new Vector2(worldDelta.x, worldDelta.y));
-            _board.BackgroundRect.anchoredPosition += anchoredDelta;
-        }
-
-        TranslatePlacedPieces(worldDelta);
-    }
-
-    private void RestoreBackgroundLayout()
-    {
-        if (!_hasOriginalBackgroundAnchoredPosition || _board.BackgroundRect == null)
-        {
-            return;
-        }
-
-        _board.BackgroundRect.anchoredPosition = _originalBackgroundAnchoredPosition;
+        var rect = _board.BackgroundRect;
+        rect.anchorMin = new Vector2(0.5f, 0.5f);
+        rect.anchorMax = new Vector2(0.5f, 0.5f);
+        rect.pivot = new Vector2(0.5f, 0.5f);
+        rect.anchoredPosition = Vector2.zero;
     }
 
     private static Vector3 ToGameplayWorld(Vector2 screenPosition)
@@ -1082,6 +1313,18 @@ public class GameScene : MonoBehaviour
             && worldPosition.y <= bounds.max.y;
     }
 
+    private void CachePieceTrayOriginalPosition()
+    {
+        if (_board.PieceBoardRect != null)
+        {
+            _pieceBoardOriginalAnchoredPosition = _board.PieceBoardRect.anchoredPosition;
+            _hasPieceBoardOriginalAnchoredPosition = true;
+            _isPieceBoardHidden = false;
+        }
+
+        CachePieceBgOriginalPosition();
+    }
+
     private void CachePieceBgOriginalPosition()
     {
         if (_board.PieceBgRenderer == null)
@@ -1093,6 +1336,22 @@ public class GameScene : MonoBehaviour
         _pieceBgOriginalPosition = _board.PieceBgRenderer.transform.position;
         _hasPieceBgOriginalPosition = true;
         _isPieceBgHidden = false;
+    }
+
+    private void AlignPieceTrayToPageBottom()
+    {
+        if (_board.PieceBoardRect != null)
+        {
+            if (_isPieceBoardHidden)
+            {
+                return;
+            }
+
+            CachePieceTrayOriginalPosition();
+            return;
+        }
+
+        AlignPieceBgToPageBottom();
     }
 
     private void AlignPieceBgToPageBottom()
@@ -1120,6 +1379,107 @@ public class GameScene : MonoBehaviour
         _hasPieceBgOriginalPosition = true;
     }
 
+    private void SlidePieceTrayOutOfScreen()
+    {
+        if (_board.PieceBoardRect != null)
+        {
+            SlidePieceBoardOutOfScreen();
+            return;
+        }
+
+        SlidePieceBgOutOfScreen();
+    }
+
+    private void PreparePieceTrayForGroupStart()
+    {
+        ResetPieceTrayPosition(instant: true);
+    }
+
+    private void ResetPieceTrayPosition(bool instant)
+    {
+        if (_board.PieceBoardRect != null)
+        {
+            if (_pieceTraySlideCoroutine != null)
+            {
+                StopCoroutine(_pieceTraySlideCoroutine);
+                _pieceTraySlideCoroutine = null;
+            }
+
+            if (!_hasPieceBoardOriginalAnchoredPosition)
+            {
+                CachePieceTrayOriginalPosition();
+            }
+
+            if (instant || !_isPieceBoardHidden)
+            {
+                _board.PieceBoardRect.anchoredPosition = _pieceBoardOriginalAnchoredPosition;
+                _isPieceBoardHidden = false;
+            }
+            else
+            {
+                SlidePieceBoardToOriginalPosition();
+            }
+
+            return;
+        }
+
+        if (instant)
+        {
+            if (_pieceTraySlideCoroutine != null)
+            {
+                StopCoroutine(_pieceTraySlideCoroutine);
+                _pieceTraySlideCoroutine = null;
+            }
+
+            if (_board.PieceBgRenderer != null && _hasPieceBgOriginalPosition)
+            {
+                ApplyPieceBgSlidePosition(_pieceBgOriginalPosition, GetPieceBgFillTransform());
+                _isPieceBgHidden = false;
+            }
+        }
+        else
+        {
+            SlidePieceBgToOriginalPosition();
+        }
+    }
+
+    private void SlidePieceTrayToOriginalPosition()
+    {
+        ResetPieceTrayPosition(instant: false);
+    }
+
+    private void SlidePieceBoardOutOfScreen()
+    {
+        if (_board.PieceBoardRect == null || _isPieceBoardHidden)
+        {
+            return;
+        }
+
+        if (!_hasPieceBoardOriginalAnchoredPosition)
+        {
+            CachePieceTrayOriginalPosition();
+        }
+
+        var slideDistance = _board.PieceBoardRect.rect.height + 80f;
+        var from = _board.PieceBoardRect.anchoredPosition;
+        var target = _pieceBoardOriginalAnchoredPosition - new Vector2(0f, slideDistance);
+        StartPieceTraySlide(from, target, true, usePieceBoard: true);
+    }
+
+    private void SlidePieceBoardToOriginalPosition()
+    {
+        if (_board.PieceBoardRect == null || !_hasPieceBoardOriginalAnchoredPosition || !_isPieceBoardHidden)
+        {
+            return;
+        }
+
+        StartPieceTraySlide(
+            _board.PieceBoardRect.anchoredPosition,
+            _pieceBoardOriginalAnchoredPosition,
+            false,
+            usePieceBoard: true);
+    }
+
     private void SlidePieceBgOutOfScreen()
     {
         if (_board.PieceBgRenderer == null || _isPieceBgHidden)
@@ -1143,7 +1503,7 @@ public class GameScene : MonoBehaviour
         var targetY = bottomEdge - halfHeight - PieceBgSlideOutPadding;
         var from = _board.PieceBgRenderer.transform.position;
         var target = new Vector3(from.x, targetY, from.z);
-        StartPieceBgSlide(from, target, true);
+        StartPieceTraySlide(from, target, true, usePieceBoard: false);
     }
 
     private void SlidePieceBgToOriginalPosition()
@@ -1153,29 +1513,80 @@ public class GameScene : MonoBehaviour
             return;
         }
 
-        StartPieceBgSlide(_board.PieceBgRenderer.transform.position, _pieceBgOriginalPosition, false);
+        StartPieceTraySlide(_board.PieceBgRenderer.transform.position, _pieceBgOriginalPosition, false, usePieceBoard: false);
     }
 
-    private void StartPieceBgSlide(Vector3 from, Vector3 to, bool willHidden)
+    private void StartPieceTraySlide(Vector2 fromAnchored, Vector2 toAnchored, bool willHidden, bool usePieceBoard)
     {
-        if (_pieceBgSlideCoroutine != null)
+        if (_pieceTraySlideCoroutine != null)
         {
-            StopCoroutine(_pieceBgSlideCoroutine);
-            _pieceBgSlideCoroutine = null;
+            StopCoroutine(_pieceTraySlideCoroutine);
+            _pieceTraySlideCoroutine = null;
         }
 
         var fillTransform = GetPieceBgFillTransform();
-        _pieceBgSlideCoroutine = StartCoroutine(AnimatePieceBgSlide(from, to, fillTransform, willHidden));
+        _pieceTraySlideCoroutine = StartCoroutine(
+            AnimatePieceTraySlideAnchored(fromAnchored, toAnchored, fillTransform, willHidden, usePieceBoard));
     }
 
-    private IEnumerator AnimatePieceBgSlide(Vector3 from, Vector3 to, Transform fillTransform, bool willHidden)
+    private void StartPieceTraySlide(Vector3 from, Vector3 to, bool willHidden, bool usePieceBoard)
+    {
+        if (_pieceTraySlideCoroutine != null)
+        {
+            StopCoroutine(_pieceTraySlideCoroutine);
+            _pieceTraySlideCoroutine = null;
+        }
+
+        var fillTransform = GetPieceBgFillTransform();
+        _pieceTraySlideCoroutine = StartCoroutine(
+            AnimatePieceTraySlideWorld(from, to, fillTransform, willHidden, usePieceBoard));
+    }
+
+    private IEnumerator AnimatePieceTraySlideAnchored(
+        Vector2 from,
+        Vector2 to,
+        Transform fillTransform,
+        bool willHidden,
+        bool usePieceBoard)
+    {
+        var duration = Mathf.Max(0f, PieceBgSlideDuration);
+        if (duration <= 0f)
+        {
+            ApplyPieceBoardSlidePosition(to, fillTransform);
+            _isPieceBoardHidden = willHidden;
+            _pieceTraySlideCoroutine = null;
+            yield break;
+        }
+
+        var elapsed = 0f;
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            var t = Mathf.Clamp01(elapsed / duration);
+            var eased = Mathf.SmoothStep(0f, 1f, t);
+            var position = Vector2.LerpUnclamped(from, to, eased);
+            ApplyPieceBoardSlidePosition(position, fillTransform);
+            yield return null;
+        }
+
+        ApplyPieceBoardSlidePosition(to, fillTransform);
+        _isPieceBoardHidden = willHidden;
+        _pieceTraySlideCoroutine = null;
+    }
+
+    private IEnumerator AnimatePieceTraySlideWorld(
+        Vector3 from,
+        Vector3 to,
+        Transform fillTransform,
+        bool willHidden,
+        bool usePieceBoard)
     {
         var duration = Mathf.Max(0f, PieceBgSlideDuration);
         if (duration <= 0f)
         {
             ApplyPieceBgSlidePosition(to, fillTransform);
             _isPieceBgHidden = willHidden;
-            _pieceBgSlideCoroutine = null;
+            _pieceTraySlideCoroutine = null;
             yield break;
         }
 
@@ -1192,7 +1603,15 @@ public class GameScene : MonoBehaviour
 
         ApplyPieceBgSlidePosition(to, fillTransform);
         _isPieceBgHidden = willHidden;
-        _pieceBgSlideCoroutine = null;
+        _pieceTraySlideCoroutine = null;
+    }
+
+    private void ApplyPieceBoardSlidePosition(Vector2 anchoredPosition, Transform fillTransform)
+    {
+        if (_board.PieceBoardRect != null)
+        {
+            _board.PieceBoardRect.anchoredPosition = anchoredPosition;
+        }
     }
 
     private void ApplyPieceBgSlidePosition(Vector3 pieceBgPosition, Transform fillTransform)
@@ -1215,17 +1634,6 @@ public class GameScene : MonoBehaviour
     {
         var fillObject = GameObject.Find(PieceBgFillObjectName);
         return fillObject != null ? fillObject.transform : null;
-    }
-
-    private static void TranslatePlacedPieces(Vector3 delta)
-    {
-        var placedRoot = GameObject.Find(PlacedPiecesRootObjectName);
-        if (placedRoot == null)
-        {
-            return;
-        }
-
-        placedRoot.transform.position += delta;
     }
 
     private static void SetImageAlpha(Image image, float alpha)

@@ -18,6 +18,7 @@ public sealed class BoardState
 {
     public Image GameBoardImage;
     public RectTransform BackgroundRect;
+    public RectTransform PieceBoardRect;
     public SpriteRenderer PieceBgRenderer;
     public List<List<Image>> GrooveImagesByGroup = new List<List<Image>>();
     public bool IsBoardAndGroovesInitialized;
@@ -92,12 +93,14 @@ public static class GameDefine
     public const string FinishButtonObjectName = "BtnFinish";
     public const string LoadingTextObjectName = "TextLoading";
     public const string LoadingTextFormat = "Loading... {0}%";
-    public const float LoadingDurationSeconds = 5f;
+    public const float LoadingDurationSeconds = 2.5f;
     public const string GameBoardFileName = "GameBoard.png";
     public const string GameBoardObjectName = "GameBoard";
     public const string BackgroundObjectName = "Background";
     public const string PieceObjectPrefix = "Piece";
-    public const string PieceBgObjectName = "PieceBg";
+    public const string PieceGroupObjectPrefix = "PieceGroup";
+    public const string PieceBoardObjectName = "PieceBoard";
+    public const int DefaultFirstPuzzleGroupMaxPieceNumber = 4;
     public const string MainBackgroundFileName = "MainBg.png";
     public const string MainBackgroundPath = UiRoot + "/BasicUI/" + MainBackgroundFileName;
     public const string ImageExtPng = ".png";

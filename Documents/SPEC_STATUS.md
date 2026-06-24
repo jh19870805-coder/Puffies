@@ -19,7 +19,8 @@
 - 新需求：Canvas 统一分辨率工具 + 新建 CanvasScaler 自动默认 2560×1440。
 - 新需求：默认中文字体 Noto Sans SC；菜单 **Puffies → Fonts → Setup Default Chinese Font**。
 - 新需求：GameScene 拼图完成后显示 RewardPanel，`BtnFinish` 返回 MainScene。
-- Updated At: 2026-06-01 23:45
+- 修复：开局碎片位置/切组棋盘偏移——取消平移 GameBoard，改为按当前组缩放相机；棋盘复位、已拼碎片与凹槽统一 WorldGameplayDepth。
+- Updated At: 2026-06-02 01:30
 - Previous Phase: 工程目录重组（已完成并验证）
 
 ## Requirement Log
@@ -31,7 +32,7 @@
 - 新需求：GameScene `BtnReturn` 点击返回 MainScene（首页）。
 - 新需求：GameScene 不再读取 Package JSON 配置；凹槽与可拖拽碎片均来自编辑器中 `Piece` 开头的 Image 对象。
 - 新需求：GameScene 全部碎片拼完后显示 `RewardPanel`，点击 `BtnFinish` 回 MainScene。
-- 新需求：GameScene 结算时移除运行时拼图碎片，凹槽 alpha=1 显示完整图替代碎片。
+- 新需求：GameScene 拼图按组创建（PieceGroup 子节点或默认 Piece01–04 / Piece05+）；托盘左对齐刷新；最后一块拿起时 PieceBoard 滑出，放回或下一组时滑入。
 - 修复：RewardPanel 默认 inactive 时 GameObject.Find 失败 → `FindSceneObject` 含未激活对象。
 - 架构决策：本地数据存储仅用 **JSON 文件 + SQLite**，不使用 PlayerPrefs。
 - 架构决策：**除非用户特别指定**，JSON / SQLite 选型由开发侧全权决定。
