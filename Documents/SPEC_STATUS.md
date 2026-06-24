@@ -19,8 +19,8 @@
 - 新需求：Canvas 统一分辨率工具 + 新建 CanvasScaler 自动默认 2560×1440。
 - 新需求：默认中文字体 Noto Sans SC；菜单 **Puffies → Fonts → Setup Default Chinese Font**。
 - 新需求：GameScene 拼图完成后显示 RewardPanel，`BtnFinish` 返回 MainScene。
-- 修复：开局碎片位置/切组棋盘偏移——取消平移 GameBoard，改为按当前组缩放相机；棋盘复位、已拼碎片与凹槽统一 WorldGameplayDepth。
-- Updated At: 2026-06-02 01:30
+- 新需求：每组拼完后切下一组时，移除上一组棋盘碎片并以凹槽 alpha=1 替代显示。
+- Updated At: 2026-06-01
 - Previous Phase: 工程目录重组（已完成并验证）
 
 ## Requirement Log
@@ -40,7 +40,7 @@
 - 新需求：本地存储文件统一命名为 `LocalData.json` / `LocalData.db`。
 - 新需求：获得新卡特效 → `CardObtain_001`；卡片拖尾 → `CardTrail_001`（均在 `Effects/CardFx/`）。
 - 新需求：effect 预览仅展示 CardFx（CardObtain + CardTrail），不含卡包 3D。
-- 问题：CardFx 预览仅见两点——多数层用 UI 粒子 shader；世界空间预览+材质转换+GUI 按钮（2026-06-01 修复）。
+- 新需求：每组拼完后切下一组时，移除上一组棋盘碎片并以凹槽 alpha=1 替代显示（`FinalizeCompletedGroup` + `UpdateGrooveGroupVisibility` 已完成组凹槽）。
 
 ## 本地存储方案（已定）
 
@@ -103,8 +103,9 @@
 
 ## Next Action
 
-1. Play 验证 GameScene 拼完拼图后 RewardPanel 盖住碎片、BtnFinish 回 MainScene
-2. Play 验证 CardFx 预览修复
+1. Play 验证：第一组拼完切第二组时，第一组碎片消失、凹槽显示；第二组正常拖拽
+2. Play 验证：全部拼完 RewardPanel、BtnFinish 回 MainScene
+3. Play 验证 CardFx 预览修复
 3. 业务层接入本地存储（settings、成就、拼图进度）
 
 ## Resume Prompt

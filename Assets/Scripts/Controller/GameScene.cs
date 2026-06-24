@@ -539,6 +539,11 @@ public class GameScene : MonoBehaviour
 
     private void CreateDraggableGroup(int groupIndex)
     {
+        if (groupIndex > 0)
+        {
+            FinalizeCompletedGroup(groupIndex - 1);
+        }
+
         PreparePieceTrayForGroupStart();
         ClearCurrentDraggableGroup();
         _drag.CurrentGroupIndex = groupIndex;
@@ -626,12 +631,28 @@ public class GameScene : MonoBehaviour
             }
 
             var isActiveGroup = groupIndex == activeGroupIndex;
+            var isCompletedGroup = groupIndex < activeGroupIndex;
             for (var i = 0; i < group.Count; i++)
             {
                 var grooveImage = group[i];
-                if (grooveImage != null)
+                if (grooveImage == null)
                 {
-                    grooveImage.gameObject.SetActive(isActiveGroup);
+                    continue;
+                }
+
+                if (isCompletedGroup)
+                {
+                    grooveImage.gameObject.SetActive(true);
+                    SetImageAlpha(grooveImage, 1f);
+                }
+                else if (isActiveGroup)
+                {
+                    grooveImage.gameObject.SetActive(true);
+                    SetImageAlpha(grooveImage, 0f);
+                }
+                else
+                {
+                    grooveImage.gameObject.SetActive(false);
                 }
             }
         }
@@ -969,6 +990,70 @@ public class GameScene : MonoBehaviour
         RevealAllGroovesOnBoard();
     }
 
+    private void FinalizeCompletedGroup(int completedGroupIndex)
+    {
+        RemovePlacedPiecesForGroup(completedGroupIndex);
+    }
+
+    private void RemovePlacedPiecesForGroup(int groupIndex)
+    {
+        for (var i = 0; i < _drag.CurrentGroupDraggables.Count; i++)
+        {
+            var state = _drag.CurrentGroupDraggables[i];
+            if (state == null || !state.IsPlaced || state.PieceRenderer == null)
+            {
+                continue;
+            }
+
+            Destroy(state.PieceRenderer.gameObject);
+            state.PieceRenderer = null;
+        }
+
+        var placedRoot = GameObject.Find(PlacedPiecesRootObjectName);
+        if (placedRoot == null)
+        {
+            return;
+        }
+
+        var pieceNamePrefix = $"DraggablePiece_{groupIndex}_";
+        for (var childIndex = placedRoot.transform.childCount - 1; childIndex >= 0; childIndex--)
+        {
+            var child = placedRoot.transform.GetChild(childIndex);
+            if (child.name.StartsWith(pieceNamePrefix, StringComparison.Ordinal))
+            {
+                Destroy(child.gameObject);
+            }
+        }
+    }
+
+    private void RevealGroovesForGroup(int groupIndex)
+    {
+        if (_board.GrooveImagesByGroup == null
+            || groupIndex < 0
+            || groupIndex >= _board.GrooveImagesByGroup.Count)
+        {
+            return;
+        }
+
+        var group = _board.GrooveImagesByGroup[groupIndex];
+        if (group == null)
+        {
+            return;
+        }
+
+        for (var i = 0; i < group.Count; i++)
+        {
+            var grooveImage = group[i];
+            if (grooveImage == null)
+            {
+                continue;
+            }
+
+            grooveImage.gameObject.SetActive(true);
+            SetImageAlpha(grooveImage, 1f);
+        }
+    }
+
     private void RemoveRuntimePuzzlePieces()
     {
         _drag.DraggingPiece = null;
@@ -1012,23 +1097,7 @@ public class GameScene : MonoBehaviour
 
         for (var groupIndex = 0; groupIndex < _board.GrooveImagesByGroup.Count; groupIndex++)
         {
-            var group = _board.GrooveImagesByGroup[groupIndex];
-            if (group == null)
-            {
-                continue;
-            }
-
-            for (var i = 0; i < group.Count; i++)
-            {
-                var grooveImage = group[i];
-                if (grooveImage == null)
-                {
-                    continue;
-                }
-
-                grooveImage.gameObject.SetActive(true);
-                SetImageAlpha(grooveImage, 1f);
-            }
+            RevealGroovesForGroup(groupIndex);
         }
     }
 
