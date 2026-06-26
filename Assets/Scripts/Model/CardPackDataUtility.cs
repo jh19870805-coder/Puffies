@@ -60,11 +60,27 @@ public static class CardPackDataUtility
         }
 
         sIsInitialized = true;
+        EnsureDefaultPackUnlocked();
         Debug.Log("CardPackDataUtility initialized.");
         return true;
     }
 
     public static bool IsInitialized => sIsInitialized;
+
+    /// <summary>
+    /// 用途：确保默认卡包已解锁，保证新玩家可进入游戏。返回：是否成功。
+    /// </summary>
+    public static bool EnsureDefaultPackUnlocked()
+    {
+        EnsureInitialized();
+        var defaultPackId = GameDefine.DefaultBagId;
+        if (IsPackUnlocked(defaultPackId))
+        {
+            return true;
+        }
+
+        return TryUnlockPack(defaultPackId);
+    }
 
     /// <summary>
     /// 用途：从 CardPacks.csv 读取卡包配置（不写数据库）。返回：是否找到。
@@ -355,6 +371,7 @@ public static class CardPackDataUtility
             return false;
         }
 
+        EnsurePlayedPackState(ref record);
         EnsureUnlockTime(ref record);
         var unlockTime = record.UnlockTime ?? string.Empty;
         var affected = SqliteLocalStore.ExecuteNonQuery(
@@ -475,6 +492,17 @@ public static class CardPackDataUtility
             && TryParseUnlockTime(unlockTime, out _);
     }
 
+    private static void EnsurePlayedPackState(ref CardPackRecord record)
+    {
+        if (!record.IsPlayed)
+        {
+            return;
+        }
+
+        record.IsUnlocked = true;
+        EnsureUnlockTime(ref record);
+    }
+
     private static void EnsureUnlockTime(ref CardPackRecord record)
     {
         if (!record.IsUnlocked || HasUnlockTime(record.UnlockTime))
@@ -488,8 +516,10 @@ public static class CardPackDataUtility
     private static void TryNormalizeAndPersistUnlockTime(ref CardPackRecord record)
     {
         var unlockTimeBefore = record.UnlockTime;
+        var isUnlockedBefore = record.IsUnlocked;
+        EnsurePlayedPackState(ref record);
         EnsureUnlockTime(ref record);
-        if (record.UnlockTime != unlockTimeBefore)
+        if (record.UnlockTime != unlockTimeBefore || record.IsUnlocked != isUnlockedBefore)
         {
             UpsertPackInternal(record);
         }

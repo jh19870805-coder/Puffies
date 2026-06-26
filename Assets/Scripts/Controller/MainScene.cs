@@ -57,6 +57,7 @@ public class MainScene : MonoBehaviour
         }
 
         CollectEditorPackageImages();
+        ApplyUnlockedPackageVisibility();
         ConfigurePackageCanvas(targetCamera);
         ConfigureRankButton();
         ConfigureAchieveButton();
@@ -76,6 +77,12 @@ public class MainScene : MonoBehaviour
     public void HandlePackageGesture(int bagId, Image image)
     {
         if (!CanAcceptPackageInput() || image == null)
+        {
+            return;
+        }
+
+        var resolvedBagId = bagId > 0 ? bagId : MainPackageBagId;
+        if (!CardPackDataUtility.IsPackUnlocked(resolvedBagId))
         {
             return;
         }
@@ -117,6 +124,39 @@ public class MainScene : MonoBehaviour
         {
             Debug.LogWarning("MainScene: no editor package images found. Expected objects named Package001, Package002, ...");
         }
+    }
+
+    /// <summary>
+    /// 用途：根据数据库已解锁卡包数据控制主场景卡包列表显示。返回：无。
+    /// </summary>
+    private void ApplyUnlockedPackageVisibility()
+    {
+        if (!CardPackDataUtility.Initialize())
+        {
+            Debug.LogWarning("MainScene: CardPackDataUtility is not ready, package list visibility skipped.");
+            return;
+        }
+
+        CardPackDataUtility.EnsureDefaultPackUnlocked();
+
+        var visibleCount = 0;
+        for (var i = 0; i < mPackageEntries.Count; i++)
+        {
+            var entry = mPackageEntries[i];
+            if (entry.Image == null)
+            {
+                continue;
+            }
+
+            var isUnlocked = CardPackDataUtility.IsPackUnlocked(entry.BagId);
+            entry.Image.gameObject.SetActive(isUnlocked);
+            if (isUnlocked)
+            {
+                visibleCount++;
+            }
+        }
+
+        Debug.Log($"MainScene: package list refreshed. visible={visibleCount}, total={mPackageEntries.Count}");
     }
 
     /// <summary>
@@ -215,7 +255,22 @@ public class MainScene : MonoBehaviour
             return;
         }
 
-        var canvas = mPackageEntries[0].Image != null ? mPackageEntries[0].Image.canvas : null;
+        Canvas canvas = null;
+        for (var i = 0; i < mPackageEntries.Count; i++)
+        {
+            var image = mPackageEntries[i].Image;
+            if (image == null || !image.gameObject.activeInHierarchy)
+            {
+                continue;
+            }
+
+            canvas = image.canvas;
+            if (canvas != null)
+            {
+                break;
+            }
+        }
+
         if (canvas != null)
         {
             GameCommonUtility.ConfigureCanvasForWorldCardPack(canvas, targetCamera);
