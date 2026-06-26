@@ -5,18 +5,6 @@ using System.IO;
 using UnityEngine;
 
 /// <summary>
-/// 卡包难度（与 CardPacks.csv 的 PackDiff 列数值对应）。
-/// </summary>
-public enum CardPackDiff
-{
-    None = 0,
-    VeryEasy = 1, // 极简单
-    Easy = 2, // 简单
-    Normal = 3, // 一般
-    Hard = 4, // 困难
-}
-
-/// <summary>
 /// 卡包尺寸（与 CardPacks.csv 的 PackSize 列数值对应）。
 /// </summary>
 public enum CardPackSize
@@ -27,6 +15,8 @@ public enum CardPackSize
     M = 3,
     L = 4,
     XL = 5,
+    XXL = 6,
+    XXXL = 7,
 }
 
 /// <summary>
@@ -36,7 +26,6 @@ public enum CardPackSize
 public struct CardPackRecord
 {
     public int PackId;
-    public CardPackDiff PackDiff;
     public CardPackSize PackSize;
     public bool IsUnlocked;
     public string UnlockTime;
@@ -44,7 +33,7 @@ public struct CardPackRecord
 }
 
 /// <summary>
-/// 用途：管理本地 SQLite 卡包表（难度、尺寸、解锁状态与时间）。返回：按方法说明。
+/// 用途：管理本地 SQLite 卡包表（尺寸、解锁状态与时间）。返回：按方法说明。
 /// </summary>
 public static class CardPackDataUtility
 {
@@ -80,10 +69,9 @@ public static class CardPackDataUtility
     /// <summary>
     /// 用途：从 CardPacks.csv 读取卡包配置（不写数据库）。返回：是否找到。
     /// </summary>
-    public static bool TryGetPackConfig(int packId, out CardPackSize packSize, out CardPackDiff packDiff)
+    public static bool TryGetPackConfig(int packId, out CardPackSize packSize)
     {
         packSize = CardPackSize.None;
-        packDiff = CardPackDiff.None;
         if (packId <= 0)
         {
             return false;
@@ -98,7 +86,6 @@ public static class CardPackDataUtility
             }
 
             packSize = sPackConfigs[i].PackSize;
-            packDiff = sPackConfigs[i].PackDiff;
             return true;
         }
 
@@ -118,7 +105,7 @@ public static class CardPackDataUtility
         }
 
         var rows = SqliteLocalStore.Query<CardPackTableRow>(
-            $@"SELECT PackId, PackDiff, PackSize, IsUnlocked, UnlockTime, IsPlayed
+            $@"SELECT PackId, PackSize, IsUnlocked, UnlockTime, IsPlayed
                FROM {GameDefine.LocalSqliteCardPackTable}
                WHERE PackId = ?
                LIMIT 1",
@@ -140,7 +127,7 @@ public static class CardPackDataUtility
     {
         EnsureInitialized();
         var rows = SqliteLocalStore.Query<CardPackTableRow>(
-            $@"SELECT PackId, PackDiff, PackSize, IsUnlocked, UnlockTime, IsPlayed
+            $@"SELECT PackId, PackSize, IsUnlocked, UnlockTime, IsPlayed
                FROM {GameDefine.LocalSqliteCardPackTable}
                ORDER BY PackId");
         var records = new List<CardPackRecord>(rows.Count);
@@ -167,7 +154,7 @@ public static class CardPackDataUtility
 
         if (!TryGetPack(packId, out var record))
         {
-            if (!TryGetPackConfig(packId, out var packSize, out var packDiff))
+            if (!TryGetPackConfig(packId, out var packSize))
             {
                 Debug.LogWarning($"CardPackDataUtility.TryUnlockPack skipped, config not found: {packId}");
                 return false;
@@ -176,7 +163,6 @@ public static class CardPackDataUtility
             record = new CardPackRecord
             {
                 PackId = packId,
-                PackDiff = packDiff,
                 PackSize = packSize,
                 IsUnlocked = false,
                 UnlockTime = string.Empty,
@@ -200,7 +186,7 @@ public static class CardPackDataUtility
             return false;
         }
 
-        if (!TryGetPackConfig(packId, out var packSize, out var packDiff))
+        if (!TryGetPackConfig(packId, out var packSize))
         {
             Debug.LogWarning($"CardPackDataUtility.TryUnlockPackFromTaskReward skipped, config not found: {packId}");
             return false;
@@ -214,7 +200,6 @@ public static class CardPackDataUtility
             };
         }
 
-        record.PackDiff = packDiff;
         record.PackSize = packSize;
         record.IsUnlocked = true;
         record.IsPlayed = false;
@@ -250,7 +235,7 @@ public static class CardPackDataUtility
             return false;
         }
 
-        if (!TryGetPackConfig(packId, out var packSize, out var packDiff))
+        if (!TryGetPackConfig(packId, out var packSize))
         {
             Debug.LogWarning($"CardPackDataUtility.TrySavePackAfterPuzzleComplete skipped, config not found: {packId}");
             return false;
@@ -261,7 +246,6 @@ public static class CardPackDataUtility
             record = new CardPackRecord
             {
                 PackId = packId,
-                PackDiff = packDiff,
                 PackSize = packSize,
                 IsUnlocked = false,
                 UnlockTime = string.Empty,
@@ -270,7 +254,6 @@ public static class CardPackDataUtility
         }
         else
         {
-            record.PackDiff = packDiff;
             record.PackSize = packSize;
         }
 
@@ -291,7 +274,7 @@ public static class CardPackDataUtility
 
         if (!TryGetPack(packId, out var record))
         {
-            if (!TryGetPackConfig(packId, out var packSize, out var packDiff))
+            if (!TryGetPackConfig(packId, out var packSize))
             {
                 Debug.LogWarning($"CardPackDataUtility.TryMarkPackPlayed skipped, config not found: {packId}");
                 return false;
@@ -300,7 +283,6 @@ public static class CardPackDataUtility
             record = new CardPackRecord
             {
                 PackId = packId,
-                PackDiff = packDiff,
                 PackSize = packSize,
                 IsUnlocked = false,
                 UnlockTime = string.Empty,
@@ -377,16 +359,14 @@ public static class CardPackDataUtility
         var unlockTime = record.UnlockTime ?? string.Empty;
         var affected = SqliteLocalStore.ExecuteNonQuery(
             $@"INSERT INTO {GameDefine.LocalSqliteCardPackTable}
-               (PackId, PackDiff, PackSize, IsUnlocked, UnlockTime, IsPlayed)
-               VALUES (?, ?, ?, ?, ?, ?)
+               (PackId, PackSize, IsUnlocked, UnlockTime, IsPlayed)
+               VALUES (?, ?, ?, ?, ?)
                ON CONFLICT(PackId) DO UPDATE SET
-                PackDiff = excluded.PackDiff,
                 PackSize = excluded.PackSize,
                 IsUnlocked = excluded.IsUnlocked,
                 UnlockTime = excluded.UnlockTime,
                 IsPlayed = excluded.IsPlayed",
             record.PackId,
-            (int)record.PackDiff,
             (int)record.PackSize,
             record.IsUnlocked ? 1 : 0,
             unlockTime,
@@ -442,7 +422,7 @@ public static class CardPackDataUtility
         }
 
         var columns = line.Split(',');
-        if (columns.Length < 4)
+        if (columns.Length < 3)
         {
             return false;
         }
@@ -467,8 +447,7 @@ public static class CardPackDataUtility
         {
             Index = index,
             PackId = packId,
-            PackSize = (CardPackSize)TryParseInt(columns[2]),
-            PackDiff = (CardPackDiff)TryParseInt(columns[3])
+            PackSize = (CardPackSize)TryParseInt(columns[2])
         };
         return true;
     }
@@ -483,7 +462,6 @@ public static class CardPackDataUtility
         return new CardPackRecord
         {
             PackId = row.PackId,
-            PackDiff = (CardPackDiff)row.PackDiff,
             PackSize = (CardPackSize)row.PackSize,
             IsUnlocked = row.IsUnlocked != 0,
             UnlockTime = row.UnlockTime ?? string.Empty,
@@ -522,13 +500,11 @@ public static class CardPackDataUtility
         public int Index;
         public int PackId;
         public CardPackSize PackSize;
-        public CardPackDiff PackDiff;
     }
 
     private sealed class CardPackTableRow
     {
         public int PackId { get; set; }
-        public int PackDiff { get; set; }
         public int PackSize { get; set; }
         public int IsUnlocked { get; set; }
         public string UnlockTime { get; set; }

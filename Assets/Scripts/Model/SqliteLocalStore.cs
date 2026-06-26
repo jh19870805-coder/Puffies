@@ -400,7 +400,6 @@ public static class SqliteLocalStore
         sConnection.Execute(
             $@"CREATE TABLE IF NOT EXISTS {GameDefine.LocalSqliteCardPackTable} (
                 PackId INTEGER PRIMARY KEY,
-                PackDiff INTEGER NOT NULL DEFAULT 0,
                 PackSize INTEGER NOT NULL DEFAULT 0,
                 IsUnlocked INTEGER NOT NULL DEFAULT 0,
                 UnlockTime TEXT NOT NULL DEFAULT '',
