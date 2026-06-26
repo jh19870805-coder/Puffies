@@ -10,10 +10,16 @@ public class MainScene : MonoBehaviour
     private const float PixelsPerUnit = GameDefine.PixelsPerUnit;
     private const float PackageClickScaleRatio = 1.15f;
     private const float PackageClickAnimDuration = 0.12f;
+    private const float PackageSlotWidth = 180f;
+    private const float PackageSlotHeight = 200f;
+    private const float PackageHorizontalSpacing = 24f;
+    private const float PackageContentHorizontalPadding = 16f;
     private const int MainPackageBagId = GameDefine.DefaultBagId;
     private const string BootstrapObjectName = "MainSceneBootstrap";
     private static bool sHookedSceneLoaded;
-    private readonly List<PackageEntry> mPackageEntries = new List<PackageEntry>();
+    private readonly Dictionary<int, PackageEntry> mPackageSlotsById = new Dictionary<int, PackageEntry>();
+    private Image mPackageSlotTemplate;
+    private RectTransform mPackageContentRoot;
     private bool mIsPlayingAnimation;
     private bool mHasSwitchedToGameScene;
     private Coroutine mPlayAnimationCoroutine;
@@ -48,6 +54,10 @@ public class MainScene : MonoBehaviour
             return;
         }
 
+        mHasSwitchedToGameScene = false;
+        mIsPlayingAnimation = false;
+        mPlayAnimationCoroutine = null;
+
         GameManager.Initialize();
 
         var targetCamera = Camera.main;
@@ -56,9 +66,16 @@ public class MainScene : MonoBehaviour
             GameCommonUtility.SetupOrthographicCamera(targetCamera, ReferenceHeight, PixelsPerUnit);
         }
 
-        CollectEditorPackageImages();
-        ApplyUnlockedPackageVisibility();
-        ConfigurePackageCanvas(targetCamera);
+        if (!TryResolvePackageSlotTemplate())
+        {
+            Debug.LogWarning("MainScene: package slot template not found. Expected object named Package001.");
+        }
+        else
+        {
+            RefreshPackageList();
+            ConfigurePackageCanvas(targetCamera);
+        }
+
         ConfigureRankButton();
         ConfigureAchieveButton();
     }
@@ -96,67 +113,154 @@ public class MainScene : MonoBehaviour
     }
 
     /// <summary>
-    /// 用途：收集场景中由编辑器放置的卡包 Image（命名 Package001、Package002 等）。返回：无。
+    /// 用途：解析场景中的卡包模板（Package001）及其父级 Content。返回：是否成功。
     /// </summary>
-    private void CollectEditorPackageImages()
+    private bool TryResolvePackageSlotTemplate()
     {
-        mPackageEntries.Clear();
-        var images = FindObjectsOfType<Image>(true);
-        for (var i = 0; i < images.Length; i++)
+        mPackageSlotTemplate = null;
+        mPackageContentRoot = null;
+        mPackageSlotsById.Clear();
+
+        var templateObject = GameObject.Find($"{GameDefine.PackageFilePrefix}{MainPackageBagId:D3}");
+        if (templateObject == null)
         {
-            var image = images[i];
-            if (image == null || !TryParsePackageObjectName(image.gameObject.name, out var bagId))
+            var images = FindObjectsOfType<Image>(true);
+            for (var i = 0; i < images.Length; i++)
             {
-                continue;
+                var image = images[i];
+                if (image != null && TryParsePackageObjectName(image.gameObject.name, out _))
+                {
+                    templateObject = image.gameObject;
+                    break;
+                }
             }
-
-            EnsurePackageInteractionHandler(image, bagId);
-            mPackageEntries.Add(new PackageEntry
-            {
-                BagId = bagId,
-                Image = image,
-                RectTransform = image.rectTransform
-            });
         }
 
-        mPackageEntries.Sort((left, right) => left.BagId.CompareTo(right.BagId));
-        if (mPackageEntries.Count == 0)
+        if (templateObject == null || !templateObject.TryGetComponent(out mPackageSlotTemplate))
         {
-            Debug.LogWarning("MainScene: no editor package images found. Expected objects named Package001, Package002, ...");
+            return false;
         }
+
+        mPackageContentRoot = mPackageSlotTemplate.rectTransform.parent as RectTransform;
+        mPackageSlotTemplate.gameObject.SetActive(false);
+        return mPackageContentRoot != null;
     }
 
     /// <summary>
-    /// 用途：根据数据库已解锁卡包数据控制主场景卡包列表显示。返回：无。
+    /// 用途：根据数据库已解锁卡包刷新列表、动态创建槽位并横向排布。返回：无。
     /// </summary>
-    private void ApplyUnlockedPackageVisibility()
+    private void RefreshPackageList()
     {
-        if (!CardPackDataUtility.Initialize())
+        if (mPackageSlotTemplate == null || mPackageContentRoot == null)
         {
-            Debug.LogWarning("MainScene: CardPackDataUtility is not ready, package list visibility skipped.");
             return;
         }
 
-        CardPackDataUtility.EnsureDefaultPackUnlocked();
-
-        var visibleCount = 0;
-        for (var i = 0; i < mPackageEntries.Count; i++)
+        if (!CardPackDataUtility.Initialize())
         {
-            var entry = mPackageEntries[i];
+            Debug.LogWarning("MainScene: CardPackDataUtility is not ready, package list refresh skipped.");
+            return;
+        }
+
+        var unlockedPackIds = CardPackDataUtility.GetUnlockedPackIds();
+        HideAllPackageSlots();
+
+        for (var i = 0; i < unlockedPackIds.Count; i++)
+        {
+            var packId = unlockedPackIds[i];
+            var entry = GetOrCreatePackageSlot(packId);
             if (entry.Image == null)
             {
                 continue;
             }
 
-            var isUnlocked = CardPackDataUtility.IsPackUnlocked(entry.BagId);
-            entry.Image.gameObject.SetActive(isUnlocked);
-            if (isUnlocked)
-            {
-                visibleCount++;
-            }
+            ApplyPackageSlotVisual(entry, packId);
+            LayoutPackageSlot(entry.RectTransform, i);
+            entry.Image.gameObject.SetActive(true);
+            mPackageSlotsById[packId] = entry;
         }
 
-        Debug.Log($"MainScene: package list refreshed. visible={visibleCount}, total={mPackageEntries.Count}");
+        UpdatePackageContentWidth(unlockedPackIds.Count);
+        Debug.Log($"MainScene: package list refreshed. unlocked={unlockedPackIds.Count}");
+    }
+
+    private void HideAllPackageSlots()
+    {
+        foreach (var pair in mPackageSlotsById)
+        {
+            if (pair.Value.Image != null)
+            {
+                pair.Value.Image.gameObject.SetActive(false);
+            }
+        }
+    }
+
+    private PackageEntry GetOrCreatePackageSlot(int packId)
+    {
+        if (mPackageSlotsById.TryGetValue(packId, out var existing) && existing.Image != null)
+        {
+            return existing;
+        }
+
+        var slotObject = Instantiate(mPackageSlotTemplate.gameObject, mPackageContentRoot);
+        slotObject.name = $"{GameDefine.PackageFilePrefix}{packId:D3}";
+        var image = slotObject.GetComponent<Image>();
+        EnsurePackageInteractionHandler(image, packId);
+        return new PackageEntry
+        {
+            BagId = packId,
+            Image = image,
+            RectTransform = image.rectTransform
+        };
+    }
+
+    private void ApplyPackageSlotVisual(PackageEntry entry, int packId)
+    {
+        if (entry.Image == null)
+        {
+            return;
+        }
+
+        entry.Image.enabled = true;
+        entry.Image.raycastTarget = true;
+        var packImagePath = GameDefine.FormatPackImagePath(packId);
+        var packSprite = GameCommonUtility.LoadSpriteByPath(packImagePath, PixelsPerUnit);
+        if (packSprite != null)
+        {
+            entry.Image.sprite = packSprite;
+        }
+
+        entry.RectTransform.sizeDelta = new Vector2(PackageSlotWidth, PackageSlotHeight);
+        EnsurePackageInteractionHandler(entry.Image, packId);
+    }
+
+    private void LayoutPackageSlot(RectTransform rectTransform, int index)
+    {
+        if (rectTransform == null)
+        {
+            return;
+        }
+
+        rectTransform.anchorMin = new Vector2(0f, 0.5f);
+        rectTransform.anchorMax = new Vector2(0f, 0.5f);
+        rectTransform.pivot = new Vector2(0.5f, 0.5f);
+        var x = PackageContentHorizontalPadding
+            + index * (PackageSlotWidth + PackageHorizontalSpacing)
+            + PackageSlotWidth * 0.5f;
+        rectTransform.anchoredPosition = new Vector2(x, 0f);
+    }
+
+    private void UpdatePackageContentWidth(int visibleCount)
+    {
+        if (mPackageContentRoot == null || visibleCount <= 0)
+        {
+            return;
+        }
+
+        var contentWidth = PackageContentHorizontalPadding * 2f
+            + visibleCount * PackageSlotWidth
+            + Mathf.Max(0, visibleCount - 1) * PackageHorizontalSpacing;
+        mPackageContentRoot.sizeDelta = new Vector2(contentWidth, mPackageContentRoot.sizeDelta.y);
     }
 
     /// <summary>
@@ -250,27 +354,12 @@ public class MainScene : MonoBehaviour
     /// </summary>
     private void ConfigurePackageCanvas(Camera targetCamera)
     {
-        if (targetCamera == null || mPackageEntries.Count == 0)
+        if (targetCamera == null || mPackageSlotTemplate == null)
         {
             return;
         }
 
-        Canvas canvas = null;
-        for (var i = 0; i < mPackageEntries.Count; i++)
-        {
-            var image = mPackageEntries[i].Image;
-            if (image == null || !image.gameObject.activeInHierarchy)
-            {
-                continue;
-            }
-
-            canvas = image.canvas;
-            if (canvas != null)
-            {
-                break;
-            }
-        }
-
+        var canvas = mPackageSlotTemplate.canvas;
         if (canvas != null)
         {
             GameCommonUtility.ConfigureCanvasForWorldCardPack(canvas, targetCamera);

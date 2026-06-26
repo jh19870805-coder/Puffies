@@ -158,6 +158,28 @@ public static class CardPackDataUtility
     }
 
     /// <summary>
+    /// 用途：获取已解锁卡包 Id 列表（含默认卡包）。返回：按 PackId 升序。
+    /// </summary>
+    public static List<int> GetUnlockedPackIds()
+    {
+        EnsureInitialized();
+        EnsureDefaultPackUnlocked();
+
+        var rows = SqliteLocalStore.Query<CardPackIdRow>(
+            $@"SELECT PackId
+               FROM {GameDefine.LocalSqliteCardPackTable}
+               WHERE IsUnlocked = 1
+               ORDER BY PackId");
+        var packIds = new List<int>(rows.Count);
+        for (var i = 0; i < rows.Count; i++)
+        {
+            packIds.Add(rows[i].PackId);
+        }
+
+        return packIds;
+    }
+
+    /// <summary>
     /// 用途：解锁卡包；无记录时按配置创建后解锁。返回：是否成功。
     /// </summary>
     public static bool TryUnlockPack(int packId)
@@ -539,5 +561,10 @@ public static class CardPackDataUtility
         public int IsUnlocked { get; set; }
         public string UnlockTime { get; set; }
         public int IsPlayed { get; set; }
+    }
+
+    private sealed class CardPackIdRow
+    {
+        public int PackId { get; set; }
     }
 }
