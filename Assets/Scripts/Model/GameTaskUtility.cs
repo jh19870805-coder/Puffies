@@ -148,6 +148,44 @@ public static class GameTaskUtility
     }
 
     /// <summary>
+    /// 用途：增加当前任务已完成进度值并写入本地 JSON。返回：是否保存成功。
+    /// </summary>
+    public static bool AddCurrentCompleteValue(int delta = 1)
+    {
+        EnsureInitialized();
+        if (delta <= 0)
+        {
+            Debug.LogWarning($"GameTaskUtility.AddCurrentCompleteValue skipped, invalid delta={delta}");
+            return false;
+        }
+
+        return SetCurrentCompleteValue(sCurrentCompleteValue + delta);
+    }
+
+    /// <summary>
+    /// 用途：当前任务完成后将任务 Id 自动 +1，并将完成进度重置为 0。返回：是否成功。
+    /// </summary>
+    public static bool TryCompleteAndAdvanceTask()
+    {
+        EnsureInitialized();
+        if (!IsCurrentTaskCompleted())
+        {
+            return false;
+        }
+
+        return TryCompleteAndSetNextTaskId(sCurrentTaskId + 1);
+    }
+
+    /// <summary>
+    /// 用途：判断当前任务是否为收集拼图类型。返回：是否为 CollectPuzzle。
+    /// </summary>
+    public static bool IsCurrentTaskCollectPuzzle()
+    {
+        EnsureInitialized();
+        return TryGetCurrentTaskConfig(out var taskConfig) && taskConfig.TaskType == TaskType.CollectPuzzle;
+    }
+
+    /// <summary>
     /// 用途：设置当前任务已完成进度值并写入本地 JSON。返回：是否保存成功。
     /// </summary>
     public static bool SetCurrentCompleteValue(int completeValue)

@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
@@ -29,7 +30,11 @@ public class GameScene : MonoBehaviour
     private const string PieceBgObjectName = "PieceBg";
     private const string PieceBgPath = GameDefine.UiRoot + "/BasicUI/ImgMaskBlack.png";
     private const string DraggableGroupRootObjectName = "DraggableGroupPieces";
-    private const string PlacedPiecesRootObjectName = "PlacedPieces";
+    private const string TaskBg1ObjectName = "TaskBg1";
+    private const string TaskContent1ObjectName = "TaskContent1";
+    private const string TaskBagIconObjectName = "BagIcon";
+    private const string TaskBagRewardCountPath = "TaskBg1/BagBg/Text (TMP)";
+    private const string TaskRewardImgBagPath = "ImgBagBg/ImgBag";
     private static bool sHookedSceneLoaded;
     private readonly BoardState _board = new BoardState();
     private readonly DragState _drag = new DragState();
@@ -43,6 +48,7 @@ public class GameScene : MonoBehaviour
     private Vector2 _originalGameBoardAnchoredPosition;
     private bool _hasOriginalGameBoardAnchoredPosition;
     private bool _isGameFinished;
+    private bool _isCollectPuzzleTaskActive;
     private GameObject _rewardPanelRoot;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -71,6 +77,7 @@ public class GameScene : MonoBehaviour
         ConfigureGameplayCanvas(camera);
         var selectedBagId = GameManager.GetBagId();
         InitializeGameplay(selectedBagId);
+        InitializeTaskTracking();
         ConfigureReturnButton();
         ConfigureRewardPanel();
         Debug.Log("GameScene bootstrap completed.");
@@ -749,6 +756,7 @@ public class GameScene : MonoBehaviour
             var placedRoot = GetOrCreatePlacedPiecesRoot();
             state.PieceRenderer.transform.SetParent(placedRoot.transform, worldPositionStays: true);
             state.IsPlaced = true;
+            TryIncrementCollectPuzzleTaskProgress();
             LayoutTrayPieces();
             TryAdvanceGroup();
             return;
@@ -979,6 +987,7 @@ public class GameScene : MonoBehaviour
         }
 
         PrepareBoardForRewardPanel();
+        ProcessTaskSettlement();
         _rewardPanelRoot.SetActive(true);
         _rewardPanelRoot.transform.SetAsLastSibling();
         Debug.Log("GameScene: puzzle completed, RewardPanel shown.");
@@ -1104,6 +1113,158 @@ public class GameScene : MonoBehaviour
     private void OnFinishButtonClicked()
     {
         GameManager.EnterMainScene();
+    }
+
+    private void InitializeTaskTracking()
+    {
+        GameTaskUtility.Initialize();
+        _isCollectPuzzleTaskActive = GameTaskUtility.IsCurrentTaskCollectPuzzle();
+        if (_isCollectPuzzleTaskActive)
+        {
+            Debug.Log(
+                $"GameScene: CollectPuzzle task active. taskId={GameTaskUtility.GetCurrentTaskId()}, " +
+                $"progress={GameTaskUtility.GetCurrentCompleteValue()}");
+        }
+    }
+
+    private void TryIncrementCollectPuzzleTaskProgress()
+    {
+        if (!_isCollectPuzzleTaskActive)
+        {
+            return;
+        }
+
+        if (GameTaskUtility.AddCurrentCompleteValue(1))
+        {
+            Debug.Log(
+                $"GameScene: puzzle piece collected. progress={GameTaskUtility.GetCurrentCompleteValue()}");
+        }
+    }
+
+    private void ProcessTaskSettlement()
+    {
+        if (_rewardPanelRoot == null)
+        {
+            return;
+        }
+
+        if (!GameTaskUtility.IsCurrentTaskCompleted()
+            || !GameTaskUtility.TryGetCurrentTaskConfig(out var taskConfig))
+        {
+            SetTaskRewardSectionVisible(false);
+            return;
+        }
+
+        OutputTaskReward(taskConfig);
+        if (GameTaskUtility.TryCompleteAndAdvanceTask())
+        {
+            _isCollectPuzzleTaskActive = GameTaskUtility.IsCurrentTaskCollectPuzzle();
+            Debug.Log($"GameScene: task advanced. nextTaskId={GameTaskUtility.GetCurrentTaskId()}");
+        }
+    }
+
+    private void OutputTaskReward(TaskConfigData taskConfig)
+    {
+        SetTaskRewardSectionVisible(true);
+        UpdateTaskRewardPanel(taskConfig);
+
+        var rewardPackId = taskConfig.RewardId > 0 ? taskConfig.RewardId : GameDefine.DefaultBagId;
+        var rewardValue = taskConfig.RewardValue > 0 ? taskConfig.RewardValue : 1;
+        Debug.Log(
+            $"GameScene: task reward granted. type={taskConfig.RewardType}, " +
+            $"rewardId={rewardPackId}, rewardValue={rewardValue}");
+
+        if (taskConfig.RewardType == RewardType.CardPack)
+        {
+            PlayTaskCardPackReward(rewardPackId);
+        }
+    }
+
+    private void SetTaskRewardSectionVisible(bool visible)
+    {
+        if (_rewardPanelRoot == null)
+        {
+            return;
+        }
+
+        var taskBg = _rewardPanelRoot.transform.Find(TaskBg1ObjectName);
+        if (taskBg != null)
+        {
+            taskBg.gameObject.SetActive(visible);
+        }
+    }
+
+    private void UpdateTaskRewardPanel(TaskConfigData taskConfig)
+    {
+        if (_rewardPanelRoot == null)
+        {
+            return;
+        }
+
+        var rewardPackId = taskConfig.RewardId > 0 ? taskConfig.RewardId : GameDefine.DefaultBagId;
+        var rewardValue = taskConfig.RewardValue > 0 ? taskConfig.RewardValue : 1;
+        var packImagePath = GameDefine.FormatPackImagePath(rewardPackId);
+        var packSprite = GameCommonUtility.LoadSpriteByPath(packImagePath, PixelsPerUnit);
+
+        var taskContentObject = GameCommonUtility.FindSceneObject(TaskContent1ObjectName);
+        if (taskContentObject != null
+            && taskContentObject.TryGetComponent(out TextMeshProUGUI taskContentText))
+        {
+            GameFontUtility.ApplyDefaultFont(taskContentText);
+            taskContentText.text =
+                $"完成收集拼图任务（{taskConfig.CompleteValue}/{taskConfig.CompleteValue}），获得卡包奖励！";
+        }
+
+        var bagIconObject = GameCommonUtility.FindSceneObject(TaskBagIconObjectName);
+        if (bagIconObject != null && bagIconObject.TryGetComponent(out Image bagIconImage))
+        {
+            if (packSprite != null)
+            {
+                bagIconImage.sprite = packSprite;
+            }
+        }
+
+        var rewardCountTransform = _rewardPanelRoot.transform.Find(TaskBagRewardCountPath);
+        if (rewardCountTransform != null
+            && rewardCountTransform.TryGetComponent(out TextMeshProUGUI rewardCountText))
+        {
+            GameFontUtility.ApplyDefaultFont(rewardCountText);
+            rewardCountText.text = $"+{rewardValue}";
+        }
+
+        var imgBagTransform = _rewardPanelRoot.transform.Find(TaskRewardImgBagPath);
+        if (imgBagTransform != null && imgBagTransform.TryGetComponent(out Image imgBagImage))
+        {
+            if (packSprite != null)
+            {
+                imgBagImage.sprite = packSprite;
+            }
+        }
+    }
+
+    private void PlayTaskCardPackReward(int rewardPackId)
+    {
+        Transform anchor = null;
+        if (_rewardPanelRoot != null)
+        {
+            var imgBagTransform = _rewardPanelRoot.transform.Find(TaskRewardImgBagPath);
+            if (imgBagTransform != null)
+            {
+                anchor = imgBagTransform;
+            }
+        }
+
+        var canvas = _rewardPanelRoot != null ? _rewardPanelRoot.GetComponentInParent<Canvas>() : null;
+        if (canvas != null && Camera.main != null)
+        {
+            GameCommonUtility.ConfigureCanvasForWorldCardPack(canvas, Camera.main);
+        }
+
+        var animationFileName = GameDefine.FormatCardPackAnimationFileName(rewardPackId);
+        if (!GameAnimationUtility.PlayCardPackAnimation(animationFileName, anchor))
+        {
+            Debug.LogWarning($"GameScene: task reward card pack animation failed: {animationFileName}");
+        }
     }
 
     private static GameObject GetOrCreatePlacedPiecesRoot()

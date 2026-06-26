@@ -79,6 +79,11 @@ public static class GameDefine
         return $"{CardPackSkinPrefix}{bagId:D3}";
     }
 
+    public static string FormatPackImagePath(int packId)
+    {
+        return $"{UiRoot}/{PackImagesFolder}/{PackageFilePrefix}{packId:D3}{ImageExtPng}";
+    }
+
     // Common path tokens
     public const string AssetsRoot = "Assets";
     public const string UiRoot = "UI";
