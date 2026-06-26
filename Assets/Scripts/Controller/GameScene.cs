@@ -30,6 +30,7 @@ public class GameScene : MonoBehaviour
     private const string PieceBgObjectName = "PieceBg";
     private const string PieceBgPath = GameDefine.UiRoot + "/BasicUI/ImgMaskBlack.png";
     private const string DraggableGroupRootObjectName = "DraggableGroupPieces";
+    private const string PlacedPiecesRootObjectName = "PlacedPieces";
     private const string TaskBg1ObjectName = "TaskBg1";
     private const string TaskContent1ObjectName = "TaskContent1";
     private const string TaskBagIconObjectName = "BagIcon";
@@ -987,6 +988,7 @@ public class GameScene : MonoBehaviour
         }
 
         PrepareBoardForRewardPanel();
+        SaveCardPackAfterPuzzleComplete();
         ProcessTaskSettlement();
         _rewardPanelRoot.SetActive(true);
         _rewardPanelRoot.transform.SetAsLastSibling();
@@ -1141,6 +1143,23 @@ public class GameScene : MonoBehaviour
         }
     }
 
+    private void SaveCardPackAfterPuzzleComplete()
+    {
+        var packId = GameManager.GetBagId();
+        if (packId <= 0)
+        {
+            return;
+        }
+
+        if (!CardPackDataUtility.TrySavePackAfterPuzzleComplete(packId))
+        {
+            Debug.LogWarning($"GameScene: failed to save card pack data after puzzle complete. packId={packId}");
+            return;
+        }
+
+        Debug.Log($"GameScene: card pack data saved after puzzle complete. packId={packId}");
+    }
+
     private void ProcessTaskSettlement()
     {
         if (_rewardPanelRoot == null)
@@ -1176,6 +1195,11 @@ public class GameScene : MonoBehaviour
 
         if (taskConfig.RewardType == RewardType.CardPack)
         {
+            if (!CardPackDataUtility.TryUnlockPackFromTaskReward(rewardPackId))
+            {
+                Debug.LogWarning($"GameScene: failed to unlock task reward card pack. packId={rewardPackId}");
+            }
+
             PlayTaskCardPackReward(rewardPackId);
         }
     }

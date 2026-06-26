@@ -93,7 +93,6 @@ public static class GameDefine
     public const string TaskConfigFileName = "TaskConfig.csv";
     public const string TaskConfigEditorPath = "Assets/Resources/Configs/TaskConfig.csv";
     public const string TaskConfigResourcesPath = "Configs/TaskConfig";
-    public const string TaskProgressJsonKey = "task_progress";
     public const int DefaultTaskId = 1;
 
     // Resource file names and suffixes
@@ -128,8 +127,13 @@ public static class GameDefine
     public const string LocalDataBaseName = "LocalData";
     public const string LocalJsonFileName = LocalDataBaseName + ".json";
     public const string LocalSqliteFileName = LocalDataBaseName + ".db";
-    public const int LocalStoreSchemaVersion = 1;
-    public const string LocalSqliteCollectionTable = "app_records";
+    public const string LocalSqliteCollectionTable = "AppRecords";
+    public const string LocalSqliteCardPackTable = "CardPacks";
+    public const string LocalSqliteAppRecordsCollectionIndex = "IdxAppRecordsCollection";
+
+    public const string CardPackConfigFileName = "CardPacks.csv";
+    public const string CardPackConfigEditorPath = "Assets/Resources/Configs/CardPacks.csv";
+    public const string CardPackConfigResourcesPath = "Configs/CardPacks";
 
     // Design resolution (2560×1440, PPU 100) — 新建 UI 场景/Canvas 须与此一致
     public const float DesignWidth = 2560f;

@@ -353,7 +353,7 @@ public static class GameTaskUtility
 
     private static bool TryLoadOrCreateTaskProgress()
     {
-        if (JsonLocalStore.TryRead(GameDefine.TaskProgressJsonKey, out TaskProgressData progress)
+        if (JsonLocalStore.TryReadRoot(out TaskProgressData progress)
             && progress.CurrentTaskId > 0)
         {
             sCurrentTaskId = progress.CurrentTaskId;
@@ -378,6 +378,6 @@ public static class GameTaskUtility
             CurrentTaskId = sCurrentTaskId,
             CurrentCompleteValue = sCurrentCompleteValue
         };
-        return JsonLocalStore.Upsert(GameDefine.TaskProgressJsonKey, progress);
+        return JsonLocalStore.SaveRoot(progress);
     }
 }

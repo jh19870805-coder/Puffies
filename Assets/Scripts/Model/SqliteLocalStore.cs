@@ -81,7 +81,7 @@ public static class SqliteLocalStore
 
             var utcNow = DateTime.UtcNow.ToString("o");
             var affected = sConnection.Execute(
-                $"INSERT INTO {GameDefine.LocalSqliteCollectionTable} (collection, record_key, json_value, created_utc, updated_utc) VALUES (?, ?, ?, ?, ?)",
+                $"INSERT INTO {GameDefine.LocalSqliteCollectionTable} (Collection, RecordKey, JsonValue, CreatedUtc, UpdatedUtc) VALUES (?, ?, ?, ?, ?)",
                 collection,
                 key,
                 value ?? string.Empty,
@@ -113,7 +113,7 @@ public static class SqliteLocalStore
         {
             EnsureInitialized();
             return sConnection.ExecuteScalar<string>(
-                $"SELECT json_value FROM {GameDefine.LocalSqliteCollectionTable} WHERE collection = ? AND record_key = ? LIMIT 1",
+                $"SELECT JsonValue FROM {GameDefine.LocalSqliteCollectionTable} WHERE Collection = ? AND RecordKey = ? LIMIT 1",
                 collection,
                 key);
         }
@@ -163,7 +163,7 @@ public static class SqliteLocalStore
             }
 
             var affected = sConnection.Execute(
-                $"UPDATE {GameDefine.LocalSqliteCollectionTable} SET json_value = ?, updated_utc = ? WHERE collection = ? AND record_key = ?",
+                $"UPDATE {GameDefine.LocalSqliteCollectionTable} SET JsonValue = ?, UpdatedUtc = ? WHERE Collection = ? AND RecordKey = ?",
                 value ?? string.Empty,
                 DateTime.UtcNow.ToString("o"),
                 collection,
@@ -217,7 +217,7 @@ public static class SqliteLocalStore
         {
             EnsureInitialized();
             var affected = sConnection.Execute(
-                $"DELETE FROM {GameDefine.LocalSqliteCollectionTable} WHERE collection = ? AND record_key = ?",
+                $"DELETE FROM {GameDefine.LocalSqliteCollectionTable} WHERE Collection = ? AND RecordKey = ?",
                 collection,
                 key);
             return affected > 0;
@@ -239,7 +239,7 @@ public static class SqliteLocalStore
         {
             EnsureInitialized();
             return sConnection.Execute(
-                $"DELETE FROM {GameDefine.LocalSqliteCollectionTable} WHERE collection = ?",
+                $"DELETE FROM {GameDefine.LocalSqliteCollectionTable} WHERE Collection = ?",
                 collection);
         }
     }
@@ -258,7 +258,7 @@ public static class SqliteLocalStore
         {
             EnsureInitialized();
             var count = sConnection.ExecuteScalar<int>(
-                $"SELECT COUNT(1) FROM {GameDefine.LocalSqliteCollectionTable} WHERE collection = ? AND record_key = ?",
+                $"SELECT COUNT(1) FROM {GameDefine.LocalSqliteCollectionTable} WHERE Collection = ? AND RecordKey = ?",
                 collection,
                 key);
             return count > 0;
@@ -280,18 +280,36 @@ public static class SqliteLocalStore
         {
             EnsureInitialized();
             var rows = sConnection.Query<RecordKeyRow>(
-                $"SELECT record_key FROM {GameDefine.LocalSqliteCollectionTable} WHERE collection = ? ORDER BY record_key",
+                $"SELECT RecordKey FROM {GameDefine.LocalSqliteCollectionTable} WHERE Collection = ? ORDER BY RecordKey",
                 collection);
             for (var i = 0; i < rows.Count; i++)
             {
-                if (!string.IsNullOrWhiteSpace(rows[i].record_key))
+                if (!string.IsNullOrWhiteSpace(rows[i].RecordKey))
                 {
-                    keys.Add(rows[i].record_key);
+                    keys.Add(rows[i].RecordKey);
                 }
             }
         }
 
         return keys;
+    }
+
+    /// <summary>
+    /// 用途：执行自定义查询并返回映射结果列表。返回：结果列表。
+    /// </summary>
+    public static List<T> Query<T>(string sql, params object[] args) where T : new()
+    {
+        if (string.IsNullOrWhiteSpace(sql))
+        {
+            Debug.LogWarning("SqliteLocalStore.Query: sql is null or empty.");
+            return new List<T>();
+        }
+
+        lock (sLock)
+        {
+            EnsureInitialized();
+            return sConnection.Query<T>(sql, args);
+        }
     }
 
     /// <summary>
@@ -365,20 +383,29 @@ public static class SqliteLocalStore
         }
 
         sConnection = new SQLiteConnection(sDatabasePath, SQLiteOpenFlags.ReadWrite | SQLiteOpenFlags.Create);
-        sConnection.Execute($"PRAGMA foreign_keys = ON;");
+        sConnection.Execute("PRAGMA foreign_keys = ON;");
         sConnection.Execute(
             $@"CREATE TABLE IF NOT EXISTS {GameDefine.LocalSqliteCollectionTable} (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                collection TEXT NOT NULL,
-                record_key TEXT NOT NULL,
-                json_value TEXT NOT NULL DEFAULT '',
-                created_utc TEXT NOT NULL,
-                updated_utc TEXT NOT NULL,
-                UNIQUE(collection, record_key)
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                Collection TEXT NOT NULL,
+                RecordKey TEXT NOT NULL,
+                JsonValue TEXT NOT NULL DEFAULT '',
+                CreatedUtc TEXT NOT NULL,
+                UpdatedUtc TEXT NOT NULL,
+                UNIQUE(Collection, RecordKey)
             );");
         sConnection.Execute(
-            $@"CREATE INDEX IF NOT EXISTS idx_{GameDefine.LocalSqliteCollectionTable}_collection
-               ON {GameDefine.LocalSqliteCollectionTable}(collection);");
+            $@"CREATE INDEX IF NOT EXISTS {GameDefine.LocalSqliteAppRecordsCollectionIndex}
+               ON {GameDefine.LocalSqliteCollectionTable}(Collection);");
+        sConnection.Execute(
+            $@"CREATE TABLE IF NOT EXISTS {GameDefine.LocalSqliteCardPackTable} (
+                PackId INTEGER PRIMARY KEY,
+                PackDiff INTEGER NOT NULL DEFAULT 0,
+                PackSize INTEGER NOT NULL DEFAULT 0,
+                IsUnlocked INTEGER NOT NULL DEFAULT 0,
+                UnlockTime TEXT NOT NULL DEFAULT '',
+                IsPlayed INTEGER NOT NULL DEFAULT 0
+            );");
 
         sIsInitialized = true;
         Debug.Log($"SqliteLocalStore initialized: {sDatabasePath}");
@@ -403,6 +430,6 @@ public static class SqliteLocalStore
 
     private sealed class RecordKeyRow
     {
-        public string record_key { get; set; }
+        public string RecordKey { get; set; }
     }
 }

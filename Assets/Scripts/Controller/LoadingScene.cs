@@ -54,14 +54,16 @@ public class LoadingScene : MonoBehaviour
         var jsonReady = JsonLocalStore.Initialize();
         var sqliteReady = SqliteLocalStore.Initialize();
         var taskReady = GameTaskUtility.Initialize();
-        if (jsonReady && sqliteReady && taskReady)
+        var cardPackReady = CardPackDataUtility.Initialize();
+        if (jsonReady && sqliteReady && taskReady && cardPackReady)
         {
             Debug.Log("LoadingScene: local stores initialized.");
             return;
         }
 
         Debug.LogWarning(
-            $"LoadingScene: local store init incomplete. json={jsonReady}, sqlite={sqliteReady}, task={taskReady}");
+            $"LoadingScene: local store init incomplete. json={jsonReady}, sqlite={sqliteReady}, " +
+            $"task={taskReady}, cardPack={cardPackReady}");
     }
 
     private bool TryResolveLoadingText()
