@@ -37,6 +37,7 @@ public struct TaskConfigData
 public struct TaskProgressData
 {
     public int CurrentTaskId;
+    public int CurrentCompleteValue; // 默认 0，对应当前任务完成进度
 }
 
 /// <summary>
@@ -46,6 +47,7 @@ public static class GameTaskUtility
 {
     private static readonly List<TaskConfigData> sTaskConfigs = new List<TaskConfigData>();
     private static int sCurrentTaskId = GameDefine.DefaultTaskId;
+    private static int sCurrentCompleteValue = 0;
     private static bool sIsInitialized;
 
     /// <summary>
@@ -75,7 +77,9 @@ public static class GameTaskUtility
         }
 
         sIsInitialized = true;
-        Debug.Log($"GameTaskUtility initialized. tasks={sTaskConfigs.Count}, currentTaskId={sCurrentTaskId}");
+        Debug.Log(
+            $"GameTaskUtility initialized. tasks={sTaskConfigs.Count}, " +
+            $"currentTaskId={sCurrentTaskId}, currentCompleteValue={sCurrentCompleteValue}");
         return true;
     }
 
@@ -91,7 +95,7 @@ public static class GameTaskUtility
     }
 
     /// <summary>
-    /// 用途：设置当前任务 Id 并写入本地 JSON。返回：是否保存成功。
+    /// 用途：设置当前任务 Id 并写入本地 JSON；切换任务 Id 时将完成进度重置为 0。返回：是否保存成功。
     /// </summary>
     public static bool SetCurrentTaskId(int taskId)
     {
@@ -102,8 +106,89 @@ public static class GameTaskUtility
             return false;
         }
 
+        if (taskId == sCurrentTaskId)
+        {
+            return true;
+        }
+
         sCurrentTaskId = taskId;
+        ResetCurrentCompleteValue();
         return SaveTaskProgress();
+    }
+
+    /// <summary>
+    /// 用途：当前任务完成后切换到下一任务 Id，并将完成进度重置为 0。返回：是否成功。
+    /// </summary>
+    public static bool TryCompleteAndSetNextTaskId(int nextTaskId)
+    {
+        EnsureInitialized();
+        if (!IsCurrentTaskCompleted())
+        {
+            return false;
+        }
+
+        if (nextTaskId <= 0)
+        {
+            Debug.LogWarning($"GameTaskUtility.TryCompleteAndSetNextTaskId skipped, invalid nextTaskId={nextTaskId}");
+            return false;
+        }
+
+        sCurrentTaskId = nextTaskId;
+        ResetCurrentCompleteValue();
+        return SaveTaskProgress();
+    }
+
+    /// <summary>
+    /// 用途：获取当前任务已完成进度值。返回：本地存储的完成值。
+    /// </summary>
+    public static int GetCurrentCompleteValue()
+    {
+        EnsureInitialized();
+        return sCurrentCompleteValue;
+    }
+
+    /// <summary>
+    /// 用途：设置当前任务已完成进度值并写入本地 JSON。返回：是否保存成功。
+    /// </summary>
+    public static bool SetCurrentCompleteValue(int completeValue)
+    {
+        EnsureInitialized();
+        if (completeValue < 0)
+        {
+            Debug.LogWarning($"GameTaskUtility.SetCurrentCompleteValue skipped, invalid value={completeValue}");
+            return false;
+        }
+
+        sCurrentCompleteValue = completeValue;
+        return SaveTaskProgress();
+    }
+
+    /// <summary>
+    /// 用途：判断当前任务是否已完成（CurrentCompleteValue >= CompleteValue）。返回：是否完成。
+    /// </summary>
+    public static bool IsCurrentTaskCompleted()
+    {
+        EnsureInitialized();
+        if (!TryGetTaskConfig(sCurrentTaskId, out var taskConfig))
+        {
+            return false;
+        }
+
+        if (taskConfig.CompleteValue <= 0)
+        {
+            return false;
+        }
+
+        return sCurrentCompleteValue >= taskConfig.CompleteValue;
+    }
+
+    /// <summary>
+    /// 用途：获取当前任务配置。返回：是否找到当前任务。
+    /// </summary>
+    public static bool TryGetCurrentTaskConfig(out TaskConfigData taskConfig)
+    {
+        EnsureInitialized();
+        return TryGetTaskConfig(sCurrentTaskId, out taskConfig);
     }
 
     /// <summary>
@@ -234,18 +319,26 @@ public static class GameTaskUtility
             && progress.CurrentTaskId > 0)
         {
             sCurrentTaskId = progress.CurrentTaskId;
+            sCurrentCompleteValue = progress.CurrentCompleteValue < 0 ? 0 : progress.CurrentCompleteValue;
             return true;
         }
 
         sCurrentTaskId = GameDefine.DefaultTaskId;
+        ResetCurrentCompleteValue();
         return SaveTaskProgress();
+    }
+
+    private static void ResetCurrentCompleteValue()
+    {
+        sCurrentCompleteValue = 0;
     }
 
     private static bool SaveTaskProgress()
     {
         var progress = new TaskProgressData
         {
-            CurrentTaskId = sCurrentTaskId
+            CurrentTaskId = sCurrentTaskId,
+            CurrentCompleteValue = sCurrentCompleteValue
         };
         return JsonLocalStore.Upsert(GameDefine.TaskProgressJsonKey, progress);
     }
