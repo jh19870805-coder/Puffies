@@ -9,9 +9,11 @@ Assets/
   UI/           2D PNG 源文件
   Scripts/      MVC（Model / View / Controller / Editor）
   Resources/
-    Effects/        # 3D 特效
+    Configs/        CardPacks.csv 等
+    Effects/
       CardPack/
       PlaneGroup/
+      CardFx/
   StreamingAssets/  构建产物（UI）
 ```
 
@@ -54,7 +56,7 @@ Unity 菜单：**Puffies → Sync Build Resources**
 
 | 场景/按钮 | 目标 | 说明 |
 |-----------|------|------|
-| **LoadingScene**（启动页） | MainScene | 约 5 秒，`TextLoading` 0%→100% 后自动进入 |
+| **LoadingScene**（启动页） | MainScene | **2.5 秒**（`GameDefine.LoadingDurationSeconds`），`TextLoading` 0%→100% 后自动进入 |
 | BtnRank | RankScene | 排行榜 |
 | BtnAchieve | AchieveScene | 成就 |
 | BtnReturn | MainScene | 从 Game/Rank/Achieve 返回首页 |

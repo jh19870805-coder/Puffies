@@ -53,13 +53,15 @@ public class LoadingScene : MonoBehaviour
     {
         var jsonReady = JsonLocalStore.Initialize();
         var sqliteReady = SqliteLocalStore.Initialize();
-        if (jsonReady && sqliteReady)
+        var taskReady = GameTaskUtility.Initialize();
+        if (jsonReady && sqliteReady && taskReady)
         {
             Debug.Log("LoadingScene: local stores initialized.");
             return;
         }
 
-        Debug.LogWarning($"LoadingScene: local store init incomplete. json={jsonReady}, sqlite={sqliteReady}");
+        Debug.LogWarning(
+            $"LoadingScene: local store init incomplete. json={jsonReady}, sqlite={sqliteReady}, task={taskReady}");
     }
 
     private bool TryResolveLoadingText()

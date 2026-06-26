@@ -82,7 +82,14 @@ public static class GameDefine
     // Common path tokens
     public const string AssetsRoot = "Assets";
     public const string UiRoot = "UI";
+    public const string ConfigsRoot = "Configs";
     public const string PackImagesFolder = "PackImages";
+
+    public const string TaskConfigFileName = "TaskConfig.csv";
+    public const string TaskConfigEditorPath = "Assets/Resources/Configs/TaskConfig.csv";
+    public const string TaskConfigResourcesPath = "Configs/TaskConfig";
+    public const string TaskProgressJsonKey = "task_progress";
+    public const int DefaultTaskId = 1;
 
     // Resource file names and suffixes
     public const string PackageFilePrefix = "Package";

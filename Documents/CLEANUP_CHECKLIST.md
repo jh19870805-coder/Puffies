@@ -1,17 +1,25 @@
 # 清理检查清单
 
-## 已完成（重组阶段）
+## 已完成
 
-- [x] 资源统一到 `UI/`、`Resources/Config/`、`Resources/Effects/{CardPack,PlaneGroup}`
-- [x] Scripts MVC 扁平分类（Model / View / Controller / Editor）
-- [x] `BuildSync`：UI/Config → StreamingAssets
-- [x] 删除迁移脚本、遗留空目录
-- [x] 场景贴图 GUID 修复
-- [x] MainScene / GameScene 编辑器与 Play 验证通过
+- [x] 资源：`UI/`、`Resources/Effects/{CardPack,PlaneGroup,CardFx}`
+- [x] Scripts MVC（Model / View / Controller / Editor）
+- [x] `BuildSync`：UI → StreamingAssets
+- [x] 场景跳转：Loading / Main / Game / Rank / Achieve
+- [x] 本地存储骨架：`JsonLocalStore` + `SqliteLocalStore`
+- [x] 设计分辨率 2560×1440 + Canvas 工具
+- [x] CardFx 预览（effect 场景）
+- [x] 删除一次性迁移脚本 `Tools/*.ps1`
 
-## 新阶段可选任务
+## 待验证 / 待做
 
-- [ ] `Resources/Config/Package002.json`
-- [ ] CardPackAni_002+ 动画资源
-- [ ] Build 后 StreamingAssets 回归
-- [ ] effect 场景 PlaneGroup 预览确认
+- [ ] Play 全场景跳转回归
+- [ ] Build 后 `StreamingAssets/UI` 回归
+- [ ] 业务数据写入本地存储
+- [ ] Rank / Achieve 页面功能填充
+- [ ] `CardPackAni_002+` 动画资源（可选）
+
+## 已废弃（勿再创建）
+
+- `Assets/ArtRes/`、`Assets/Configs/`（Package JSON 配置流）
+- `Resources/Config/Package001.json` 拼图配置方案（改为 GameScene 编辑器摆位）

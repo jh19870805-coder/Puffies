@@ -2,111 +2,137 @@
 
 - Task: Puffies 新阶段开发
 - Status: In Progress
-- 新需求：卡片 UI 特效目录精简为 `Effects/CardFx/`（预制体 + Materials/Textures/Meshes/Shaders）。
-- 新需求：effect 场景改为 CardFx 预览（菜单 Puffies → Preview CardFx Effects）。
-- 问题：CardFx 按钮有效但无画面——Overlay Canvas 下粒子不在相机视野；改世界空间 + UI→世界材质 + maxParticleSize 解除。
+- Updated At: 2026-05-29
+- Previous Phase: 工程目录重组（已完成）
 
-## 设计分辨率（已定）
+---
+
+## 工程基线
+
+### 目录结构
+
+```
+Assets/
+  Scenes/           LoadingScene、MainScene、GameScene、RankScene、AchieveScene、effect
+  UI/               2D 贴图源（PackImages、Game001、BasicUI…）
+  Resources/
+    Effects/
+      CardPack/     3D 卡包
+      PlaneGroup/
+      CardFx/       卡片获得/拖尾特效（预制体 + Materials/Textures/Meshes/Shaders）
+    Configs/        CardPacks.csv 等
+  Scripts/          MVC
+    Model/          GameDefine、GameManager、工具类、本地存储
+    View/           PackageInteractionHandler
+    Controller/     各场景脚本
+    Editor/         BuildSync、Canvas 分辨率、中文字体、CardFx 预览菜单
+  Prefabs/          预留
+  StreamingAssets/  UI（BuildSync 同步）
+```
+
+### 设计分辨率
 
 | 项 | 值 |
 |----|-----|
 | 设计分辨率 | **2560 × 1440** |
-| PPU | 100（`GameDefine.PixelsPerUnit`） |
+| PPU | 100 |
 | 常量 | `GameDefine.DesignWidth` / `DesignHeight` |
-| 新建 UI 场景 | Canvas Scaler Reference Resolution = 2560×1440；详见 `PROJECT_SETUP.md` §7 |
-| Canvas 批量/默认 | 菜单 **Puffies → Canvas**；新建 CanvasScaler 自动套用（`CanvasDesignResolutionEditor.cs`） |
-- 新需求：项目默认设计分辨率改为 **2560×1440**（`GameDefine`、各场景 Canvas、Project Settings）；新建页面须与此一致。
-- 新需求：Canvas 统一分辨率工具 + 新建 CanvasScaler 自动默认 2560×1440。
-- 新需求：默认中文字体 Noto Sans SC；菜单 **Puffies → Fonts → Setup Default Chinese Font**。
-- 新需求：GameScene 拼图完成后显示 RewardPanel，`BtnFinish` 返回 MainScene。
-- 新需求：每组拼完后切下一组时，移除上一组棋盘碎片并以凹槽 alpha=1 替代显示。
-- Updated At: 2026-06-01
-- Previous Phase: 工程目录重组（已完成并验证）
+| Canvas 工具 | **Puffies → Canvas → Apply Design Resolution** |
+| 中文字体 | **Puffies → Fonts → Setup Default Chinese Font**（Noto Sans SC TMP） |
 
-## Requirement Log
+### Build Settings（顺序）
 
-- 用户：准备开始新阶段工作。
-- 用户：`.cursor` 目录不要在 Cursor 文件树中显示（已写入 `.vscode/settings.json` files.exclude）。
-- 新需求：成就页 AchieveScene——MainScene `BtnAchieve` 跳转成就页，成就页 `BtnReturn` 返回 MainScene。
-- 新需求：LoadingScene 为启动页，停留约 5 秒，`TextLoading` 显示 0%→100% 后自动进入 MainScene。
-- 新需求：GameScene `BtnReturn` 点击返回 MainScene（首页）。
-- 新需求：GameScene 不再读取 Package JSON 配置；凹槽与可拖拽碎片均来自编辑器中 `Piece` 开头的 Image 对象。
-- 新需求：GameScene 全部碎片拼完后显示 `RewardPanel`，点击 `BtnFinish` 回 MainScene。
-- 新需求：GameScene 拼图按组创建（PieceGroup 子节点或默认 Piece01–04 / Piece05+）；托盘左对齐刷新；最后一块拿起时 PieceBoard 滑出，放回或下一组时滑入。
-- 修复：RewardPanel 默认 inactive 时 GameObject.Find 失败 → `FindSceneObject` 含未激活对象。
-- 架构决策：本地数据存储仅用 **JSON 文件 + SQLite**，不使用 PlayerPrefs。
-- 架构决策：**除非用户特别指定**，JSON / SQLite 选型由开发侧全权决定。
-- 初始化时机：**LoadingScene** `Start` 中调用两存储 `Initialize()`（懒加载仍保留作兜底）。
-- 新需求：本地存储文件统一命名为 `LocalData.json` / `LocalData.db`。
-- 新需求：获得新卡特效 → `CardObtain_001`；卡片拖尾 → `CardTrail_001`（均在 `Effects/CardFx/`）。
-- 新需求：effect 预览仅展示 CardFx（CardObtain + CardTrail），不含卡包 3D。
-- 新需求：每组拼完后切下一组时，移除上一组棋盘碎片并以凹槽 alpha=1 替代显示（`FinalizeCompletedGroup` + `UpdateGrooveGroupVisibility` 已完成组凹槽）。
+| Index | 场景 |
+|-------|------|
+| 0 | **LoadingScene**（启动场景） |
+| 1 | MainScene |
+| 2 | GameScene |
+| 3 | effect |
+| 4 | RankScene |
+| 5 | AchieveScene |
 
-## 本地存储方案（已定）
+构建前菜单：**Puffies → Sync Build Resources**（`UI` → `StreamingAssets/UI`）
 
-| 用途 | 方案 | 路径/键示例 |
-|------|------|-------------|
-| 全局设置、轻量快照、整份读写的小对象 | **JSON** | `LocalData.json` → `settings`、`profile` |
-| 成就、拼图进度、解锁、排行榜缓存等条数多/需查询 | **SQLite** | `LocalData.db` → collection 如 `achievements`、`package_progress` |
+---
 
-**选型原则（默认执行）**
-- 单条、低频、结构简单 → JSON
-- 多条、要筛选/排序/按 key 查 → SQLite
-- 用户明确说「放 JSON」或「放 SQLite」时，以其为准
+## 场景与跳转（已实现）
 
-- 根目录：`Application.persistentDataPath`（Windows 约 `AppData/LocalLow/MainTown/Puffies/`）
-- SQLite 插件：sqlite-net（`Assets/Plugins/SQLite/SQLite.cs`）+ `sqlite3.dll`
-- 已实现：`JsonLocalStore`、`SqliteLocalStore`
+| 场景 | 脚本 | 说明 |
+|------|------|------|
+| **LoadingScene** | `LoadingScene.cs` | 进度 `TextLoading` 0%→100%，**2.5s** 后进 MainScene；初始化 `JsonLocalStore` + `SqliteLocalStore` |
+| **MainScene** | `MainScene.cs` | 卡包 Package001/002/003；`BtnRank`→Rank；`BtnAchieve`→Achieve |
+| **GameScene** | `GameScene.cs` | 编辑器拼图（`Piece01`…）；`BtnReturn`→Main；拼完 `RewardPanel` + `BtnFinish`→Main |
+| **RankScene** | `RankScene.cs` | `BtnReturn`→Main |
+| **AchieveScene** | `AchieveScene.cs` | `BtnReturn`→Main |
+| **effect** | `CardFxPreviewScene.cs` | CardFx 预览；菜单 **Puffies → Preview CardFx Effects** |
 
+### 按钮对象名约定
 
-### 工程状态
+| 对象名 | 作用 |
+|--------|------|
+| `BtnRank` | MainScene → RankScene |
+| `BtnAchieve` | MainScene → AchieveScene |
+| `BtnReturn` | Rank / Achieve / Game → MainScene |
+| `BtnFinish` | GameScene RewardPanel → MainScene |
+| `TextLoading` | LoadingScene 进度文字 |
+| `Package001`… | MainScene 卡包（可点击开包） |
 
-- 编译：无 `error CS`（Editor.log）
-- 主流程：MainScene → GameScene Play 已验证（用户确认）
-- 结构：MVC（`Scripts/Model|View|Controller|Editor`），2D 资源在 `Assets/UI`
+---
 
-### 场景
+## 脚本清单（19 个）
 
-| 场景 | 状态 |
-|------|------|
-| **LoadingScene** | 启动页，进度条文字后进 MainScene |
-| MainScene | Package001/002/003 卡包 UI |
-| GameScene | 编辑器拼图页（Piece01… 凹槽 + 拖拽），返回首页 |
-| RankScene | 排行榜 + 返回 |
-| AchieveScene | 成就页 + 返回（已实现场景跳转） |
-| effect | CardFx 特效预览（CardObtain / CardTrail） |
+**Controller:** LoadingScene, MainScene, GameScene, RankScene, AchieveScene, CardFxPreviewScene  
+**Model:** GameDefine, GameManager, GameCommonUtility, GameAnimationUtility, GameFontUtility, CardFxRuntimeUtility, JsonLocalStore, SqliteLocalStore  
+**View:** PackageInteractionHandler  
+**Editor:** BuildSync, CanvasDesignResolutionEditor, DefaultChineseFontEditor, CardFxPreviewMenu  
 
-### 配置与资源
+---
 
-| 项 | 现状 |
-|----|------|
-| GameScene 拼图 | 场景内 `GameBoard` + `Piece01`…`PieceNN`（Image，编辑器摆位贴图） |
-| `UI/Game001/` | 拼图贴图源文件（编辑器引用） |
-| MainScene 卡包 | Package001/002/003 封面 UI |
-| `CardPackAni_001.FBX` | 有；002/003 无，点击会走 2D fallback |
+## 本地存储（已定方案）
 
-已删除：`Resources/Config/Package001.json` 及配置同步逻辑。
+| 用途 | 方案 | 运行时路径 |
+|------|------|------------|
+| 轻量 KV、设置快照 | **JSON** | `persistentDataPath/LocalData.json` |
+| 成就、进度等多条查询 | **SQLite** | `persistentDataPath/LocalData.db` |
 
-### 构建
+- 插件：sqlite-net（`Assets/Plugins/SQLite/`）
+- 初始化：**LoadingScene** `Start` 中调用（懒加载兜底保留）
+- **不使用 PlayerPrefs**
 
-菜单：**Puffies → Sync Build Resources**（同步 UI → StreamingAssets）
+---
 
-## 新阶段待办（按优先级）
+## 拼图 / 卡包逻辑要点
 
-1. [ ] RankScene 功能接线与回归
-2. [ ] 多页卡包翻页（如需要）
-3. [ ] `CardPackAni_002+` FBX（或接受 fallback 到 002/003）
-4. [x] 本地存储骨架：`JsonLocalStore` + `SqliteLocalStore`
-5. [ ] 业务接入：设置/成就/进度写入上述存储
-6. [ ] Steam 成就占位 / Steamworks 接入（物料未齐，可后做）
-7. [ ] 打包构建回归
+- **GameScene**：不再读 Package JSON；凹槽与碎片来自场景内 `Piece` 开头 Image；支持 `PieceGroup` 分组；组间切换、RewardPanel 已实现
+- **MainScene**：3D 开包 `CardPackAni_001` 有；002/003 无则 2D fallback
+- **CardFx**：`CardObtain_001`、`CardTrail_001` 在 `Resources/Effects/CardFx/`
+
+---
+
+## 已完成（近期）
+
+- [x] 工程目录重组 + MVC 脚本分类
+- [x] `Resources/Effects/{CardPack,PlaneGroup,CardFx}` 统一
+- [x] LoadingScene 启动链 + 本地存储初始化
+- [x] MainScene ↔ RankScene / AchieveScene 跳转
+- [x] GameScene 返回首页 + 拼图完成 RewardPanel
+- [x] 设计分辨率 2560×1440 + Canvas 批量工具
+- [x] CardFx 特效目录与 effect 预览场景
+- [x] 默认中文字体工具链
+
+## 待办
+
+- [ ] 业务数据接入本地存储（设置、成就、拼图进度）
+- [ ] RankScene / AchieveScene 页面内容与数据展示
+- [ ] `CardPackAni_002+` 或接受 fallback
+- [ ] Steam 成就 / Steamworks（物料未齐可后做）
+- [ ] 打包构建回归（StreamingAssets/UI）
 
 ## Next Action
 
-1. Play 验证：第一组拼完切第二组时，第一组碎片消失、凹槽显示；第二组正常拖拽
-2. Play 验证：全部拼完 RewardPanel、BtnFinish 回 MainScene
-3. Play 验证 CardFx 预览修复
-3. 业务层接入本地存储（settings、成就、拼图进度）
+1. Play 全链路：Loading → Main → Rank/Achieve/Game → 返回
+2. 拼图多组切换 + RewardPanel 回归
+3. 业务层写入 `JsonLocalStore` / `SqliteLocalStore`
 
 ## Resume Prompt
 
