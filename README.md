@@ -1,37 +1,48 @@
-#### 介绍
-{**以下是 Gitee 平台说明，您可以替换此简介**
-Gitee 是 OSCHINA 推出的基于 Git 的代码托管平台（同时支持 SVN）。专为开发者提供稳定、高效、安全的云端软件开发协作平台
-无论是个人、团队、或是企业，都能够用 Gitee 实现代码托管、项目管理、协作开发。企业项目请看 [https://gitee.com/enterprises](https://gitee.com/enterprises)}
+# Puffies
 
-#### 软件架构
-软件架构说明
+Unity 2D / URP 卡包开包、拼图拖拽与任务奖励项目。
 
+## 环境
 
-#### 安装教程
+- Unity **2022.3.62f2c1**
+- URP **14.0.12**
+- 设计分辨率 **2560×1440**，PPU **100**
 
-1.  xxxx
-2.  xxxx
-3.  xxxx
+## 快速结构
 
-#### 使用说明
+```text
+Assets/
+  Scenes/          LoadingScene、MainScene、GameScene、RankScene、AchieveScene、effect
+  Scripts/         Model / View / Controller / Editor
+  UI/              2D 贴图源
+  Resources/       Configs、Effects（CardPack、CardFx…）
+  StreamingAssets/ 构建同步的 UI
+Documents/         项目与开发文档
+```
 
-1.  xxxx
-2.  xxxx
-3.  xxxx
+## 场景流
 
-#### 参与贡献
+`LoadingScene` → `MainScene` →（开包）→ `GameScene`（拼图 + 任务进度）→ `RewardPanel` → `MainScene`（卡包列表刷新）；Rank / Achieve / effect 从 Main 或菜单进入。
 
-1.  Fork 本仓库
-2.  新建 Feat_xxx 分支
-3.  提交代码
-4.  新建 Pull Request
+## 常用菜单
 
+| 菜单 | 用途 |
+|------|------|
+| Puffies → Sync Build Resources | `UI` → StreamingAssets |
+| Puffies → Canvas → Apply Design Resolution | 2560×1440 |
+| Puffies → Fonts → Setup Default Chinese Font | Noto Sans SC |
+| Puffies → Preview CardFx Effects | CardFx 预览场景 |
 
-#### 特技
+## 文档
 
-1.  使用 Readme\_XXX.md 来支持不同的语言，例如 Readme\_en.md, Readme\_zh.md
-2.  Gitee 官方博客 [blog.gitee.com](https://blog.gitee.com)
-3.  你可以 [https://gitee.com/explore](https://gitee.com/explore) 这个地址来了解 Gitee 上的优秀开源项目
-4.  [GVP](https://gitee.com/gvp) 全称是 Gitee 最有价值开源项目，是综合评定出的优秀开源项目
-5.  Gitee 官方提供的使用手册 [https://gitee.com/help](https://gitee.com/help)
-6.  Gitee 封面人物是一档用来展示 Gitee 会员风采的栏目 [https://gitee.com/gitee-stars/](https://gitee.com/gitee-stars/)
+| 文件 | 说明 |
+|------|------|
+| [Documents/PROJECT_SETUP.md](Documents/PROJECT_SETUP.md) | 目录、场景、资源、构建、命名（**主参考**） |
+| [Documents/SPEC_STATUS.md](Documents/SPEC_STATUS.md) | 当前任务与进度 |
+| [Documents/SPEC_WORKFLOW.md](Documents/SPEC_WORKFLOW.md) | SPEC 工作流与新任务模板 |
+
+## 注意
+
+- Build Settings 启动场景必须是 **LoadingScene**。
+- 改名 `Resources` 路径或场景对象名（`GameBoard`、`Piece01`、`BtnReturn` 等）需同步改 `GameDefine` 与加载代码。
+- 文本文件使用 UTF-8。

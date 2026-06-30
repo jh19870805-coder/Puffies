@@ -1,67 +1,93 @@
-# SPEC 工作流（跨设备同步版）
+# SPEC 工作流
 
-> 目标：把开发过程沉淀为可追踪、可恢复、可在任意设备继续的记录。
+> 跨设备开发时，用 Git + 状态文件接力，避免只在聊天里口头同步。
 
-## 1. 机制定义
+## 单一事实源
 
-SPEC 分为 4 个阶段：
+| 文件 | 用途 |
+|------|------|
+| [SPEC_WORKFLOW.md](SPEC_WORKFLOW.md) | 流程规范（本文件） |
+| [SPEC_STATUS.md](SPEC_STATUS.md) | **当前任务**实时状态 |
+| [PROJECT_SETUP.md](PROJECT_SETUP.md) | 工程静态指南（目录、场景、构建） |
 
-- `S - Scope`：需求范围与验收标准
-- `P - Plan`：实现方案与改动清单
-- `E - Execute`：执行进度与已完成项
-- `C - Check`：验证结果、风险与回滚点
+## 四阶段（S / P / E / C）
 
-所有阶段都写入仓库文件，随 Git 同步到不同设备。
+- **S - Scope**：需求范围与验收标准
+- **P - Plan**：实现方案与改动清单
+- **E - Execute**：执行进度、阻塞、变更说明
+- **C - Check**：验证结果、风险、回滚点
 
-## 2. 单一事实源
+## SPEC_STATUS 必填字段
 
-跨设备统一看这 2 个文件：
+- `Task` / `Status`（Draft | In Progress | Blocked | Done）/ `Updated At`
+- **Requirement Log**：用户关键需求
+- **Progress Snapshot**：已完成 / 进行中 / 未完成
+- **Next Action**：下一步可执行动作
+- **Resume Prompt**：新设备续做的一句话
 
-- `Documents/SPEC_WORKFLOW.md`：流程规范（本文件）
-- `Documents/SPEC_STATUS.md`：当前任务实时状态
+任务进行中可另写 S/P/E/C 小节；**静态工程信息**（目录、场景表）放 `PROJECT_SETUP.md`，避免在 STATUS 里重复维护。
 
-## 3. 跨设备接力字段（新增）
+## 执行约束
 
-为保证“另一台设备打开即可续做”，`SPEC_STATUS.md` 必须包含以下交接信息：
+1. 新任务开始：先读 `SPEC_STATUS.md`（久未同步则先 `git pull`）。
+2. 有代码/场景/配置改动：同一轮内回写 STATUS（至少 E + Next Action）。
+3. 架构、路径、命名结论：写入 C 或 `PROJECT_SETUP.md`。
+4. 仅问答、未改仓库：可不更新 STATUS。
+5. 用户明确要求「只解释不改代码」：不强制改 STATUS。
 
-- `Requirement Log`：记录用户关键需求原文或精简版
-- `Progress Snapshot`：记录当前已完成、未完成、进行中
-- `Resume Prompt`：记录下一设备可直接发送给 Codex 的一句话
+## 跨设备同步
 
-> 这三项比 S/P/E/C 更偏“会话接力”，用于减少跨设备上下文损耗。
+- 阶段性完成后小步提交。
+- 切换设备前更新 Progress Snapshot 与 Resume Prompt。
+- 冲突时保留最新 `Updated At`，并注明冲突说明。
 
-## 4. 使用规则（我会遵守）
+## 新任务模板
 
-每次开始新任务时：
+复制以下内容到 `SPEC_STATUS.md` 顶部并填写：
 
-1. 先更新 `SPEC_STATUS.md` 的 `S` 与 `P`
-2. 实施过程中持续更新 `E`（完成项/阻塞项/下一步）
-3. 完成后更新 `C`（验证方式、结果、已知风险）
-4. 若任务关闭，打上 `Status: Done`
+```markdown
+# SPEC 状态面板
 
-## 5. 状态字段约定
+- Task: <任务名称>
+- Status: In Progress
+- Updated At: <YYYY-MM-DD>
 
-`SPEC_STATUS.md` 使用以下字段：
+## Requirement Log
 
-- `Task`：当前任务
-- `Status`：`Draft | In Progress | Blocked | Done`
-- `Updated At`：最后更新时间
-- `S / P / E / C`：四阶段内容
-- `Requirement Log`：需求记录（用于跨设备接力）
-- `Progress Snapshot`：进度快照（用于跨设备接力）
-- `Resume Prompt`：续接提示语（用于跨设备接力）
-- `Next Action`：下一步动作
+- 
 
-## 6. 跨设备同步建议
+## Progress Snapshot
 
-- 每次阶段性完成后提交一次（小步提交）
-- 新设备开始前先 `pull`，优先读取 `SPEC_STATUS.md`
-- 如果发生冲突，保留最新 `Updated At` 内容，并补充冲突说明
-- 在切换设备前，确保 `Progress Snapshot` 与 `Resume Prompt` 已更新。
+- 已完成：
+- 进行中：
+- 未完成：
 
-## 7. 执行约束
+## S - Scope
 
-- 不在聊天里只口头同步，必须回写到 `SPEC_STATUS.md`
-- 结论性变更（架构、路径、命名）必须写入 `C`
-- 若中断，至少保证 `E` 和 `Next Action` 可直接接手
-- 若预计跨设备续做，必须填写 `Requirement Log / Progress Snapshot / Resume Prompt`
+- 背景与目标：
+- 本次范围：
+- 验收标准：
+
+## P - Plan
+
+- 方案概述：
+- 涉及文件：
+- 步骤：
+  - [ ] 
+
+## E - Execute
+
+- 
+
+## C - Check
+
+- 
+
+## Next Action
+
+1. 
+
+## Resume Prompt
+
+继续当前任务，请先读取 Documents/SPEC_STATUS.md，然后按 Next Action 执行。
+```
