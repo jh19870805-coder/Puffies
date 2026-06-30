@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using UnityEngine;
 
 /// <summary>
@@ -45,7 +44,6 @@ public struct TaskProgressData
 /// </summary>
 public static class GameTaskUtility
 {
-    private static readonly List<TaskConfigData> sTaskConfigs = new List<TaskConfigData>();
     private static int sCurrentTaskId = GameDefine.DefaultTaskId;
     private static int sCurrentCompleteValue = 0;
     private static bool sIsInitialized;
@@ -66,19 +64,20 @@ public static class GameTaskUtility
             return false;
         }
 
-        if (!TryLoadTaskConfigCsv())
-        {
-            return false;
-        }
-
         if (!TryLoadOrCreateTaskProgress())
         {
             return false;
         }
 
+        if (!GameConfigRepository.TryGetTaskConfigs(out var taskConfigs))
+        {
+            Debug.LogError("GameTaskUtility.Initialize failed: task config is not ready.");
+            return false;
+        }
+
         sIsInitialized = true;
         Debug.Log(
-            $"GameTaskUtility initialized. tasks={sTaskConfigs.Count}, " +
+            $"GameTaskUtility initialized. tasks={taskConfigs.Count}, " +
             $"currentTaskId={sCurrentTaskId}, currentCompleteValue={sCurrentCompleteValue}");
         return true;
     }
@@ -235,17 +234,7 @@ public static class GameTaskUtility
     public static bool TryGetTaskConfig(int taskId, out TaskConfigData taskConfig)
     {
         EnsureInitialized();
-        for (var i = 0; i < sTaskConfigs.Count; i++)
-        {
-            if (sTaskConfigs[i].TaskId == taskId)
-            {
-                taskConfig = sTaskConfigs[i];
-                return true;
-            }
-        }
-
-        taskConfig = default;
-        return false;
+        return GameConfigRepository.TryGetTaskConfig(taskId, out taskConfig);
     }
 
     /// <summary>
@@ -254,7 +243,7 @@ public static class GameTaskUtility
     public static IReadOnlyList<TaskConfigData> GetAllTaskConfigs()
     {
         EnsureInitialized();
-        return sTaskConfigs;
+        return GameConfigRepository.GetTaskConfigs();
     }
 
     private static void EnsureInitialized()
@@ -263,92 +252,6 @@ public static class GameTaskUtility
         {
             Initialize();
         }
-    }
-
-    private static bool TryLoadTaskConfigCsv()
-    {
-        sTaskConfigs.Clear();
-        var csvText = LoadTaskConfigText();
-        if (string.IsNullOrWhiteSpace(csvText))
-        {
-            Debug.LogError("GameTaskUtility failed to load TaskConfig.csv.");
-            return false;
-        }
-
-        var lines = csvText.Split(new[] { "\r\n", "\n", "\r" }, StringSplitOptions.RemoveEmptyEntries);
-        if (lines.Length <= 1)
-        {
-            Debug.LogWarning("GameTaskUtility: TaskConfig.csv has no data rows.");
-            return true;
-        }
-
-        for (var i = 1; i < lines.Length; i++)
-        {
-            if (!TryParseTaskConfigLine(lines[i], out var taskConfig))
-            {
-                Debug.LogWarning($"GameTaskUtility skipped invalid row: {lines[i]}");
-                continue;
-            }
-
-            sTaskConfigs.Add(taskConfig);
-        }
-
-        return true;
-    }
-
-    private static string LoadTaskConfigText()
-    {
-        var resourcesAsset = Resources.Load<TextAsset>(GameDefine.TaskConfigResourcesPath);
-        if (resourcesAsset != null && !string.IsNullOrWhiteSpace(resourcesAsset.text))
-        {
-            return resourcesAsset.text;
-        }
-
-        var diskPath = GameCommonUtility.ToDiskPath(GameDefine.TaskConfigEditorPath);
-        if (File.Exists(diskPath))
-        {
-            return File.ReadAllText(diskPath);
-        }
-
-        return null;
-    }
-
-    private static bool TryParseTaskConfigLine(string line, out TaskConfigData taskConfig)
-    {
-        taskConfig = default;
-        if (string.IsNullOrWhiteSpace(line))
-        {
-            return false;
-        }
-
-        var columns = line.Split(',');
-        if (columns.Length < 7)
-        {
-            return false;
-        }
-
-        if (!int.TryParse(columns[0].Trim(), out var index)
-            || !int.TryParse(columns[1].Trim(), out var taskId))
-        {
-            return false;
-        }
-
-        taskConfig = new TaskConfigData
-        {
-            Index = index,
-            TaskId = taskId,
-            TaskType = (TaskType)TryParseInt(columns[2]),
-            CompleteValue = TryParseInt(columns[3]),
-            RewardType = (RewardType)TryParseInt(columns[4]),
-            RewardId = TryParseInt(columns[5]),
-            RewardValue = TryParseInt(columns[6])
-        };
-        return taskId > 0;
-    }
-
-    private static int TryParseInt(string text)
-    {
-        return int.TryParse((text ?? string.Empty).Trim(), out var value) ? value : 0;
     }
 
     private static bool TryLoadOrCreateTaskProgress()

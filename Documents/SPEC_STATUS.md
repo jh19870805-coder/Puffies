@@ -21,7 +21,7 @@
 - **已完成**：
   - MVC + 全场景跳转（Loading → Main → Game/Rank/Achieve）
   - 拼图分组、托盘滑入/滑出、RewardPanel
-  - `TaskConfig.csv` + `CardPacks.csv` 读取；Loading 初始化
+  - `TaskConfig.csv` + `CardPacks.csv` 通过 `GameConfigRepository` 统一读取；Loading 初始化
   - 收集拼图任务进度（每拼一块 +1）、完成结算与发奖、任务推进
   - 拼图完成后保存卡包状态；首页卡包列表按解锁刷新
   - 本地存储骨架；Canvas/字体工具；CardFx 预览
@@ -33,11 +33,13 @@
 
 - 最新提交 `7fde54f`（2026-06-30 核对 `git log -1`）：完整游戏流程、任务测试数据、首页卡包自动刷新。
 - 文档整理（2026-06-30）：删除 `ARCHITECTURE` / `CLEANUP_CHECKLIST` / `SPEC_TEMPLATE`，内容并入保留文件；修正卡包流程与存储描述。
+- 数据层整理（2026-06-30）：新增 `CsvTable`、`GameConfigRepository`、`IGameConfigTextSource`，把任务/卡包 CSV 加载与解析从 `GameTaskUtility`、`CardPackDataUtility` 中抽离。
 
 ## C - Check
 
 - 与代码一致：无 Package JSON 拼图配置；GameScene 依赖场景 `Piece*` Image。
 - 任务类型 `CollectPuzzle`（TaskType=1）与 `TaskConfig.csv` 测试行已打通。
+- 配置数据仍来自 `Resources/Configs/*.csv`，但业务工具类不再直接解析 CSV；后续可替换 `IGameConfigTextSource` 为 ScriptableObject / Addressables 数据源。
 - 待 Play：多组切组 + 任务结算 + Main 卡包刷新一条龙。
 
 ## Next Action

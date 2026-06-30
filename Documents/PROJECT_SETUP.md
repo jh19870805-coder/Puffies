@@ -79,7 +79,7 @@ effect（调试）: CardFx 预览，菜单 Puffies → Preview CardFx Effects
 | 项 | 值 |
 |----|-----|
 | 设计分辨率 | **2560 × 1440** |
-| PPU | 100（`GameDefine.DesignWidth` / `DesignHeight`） |
+| PPU | 100（`GameDefine.PixelsPerUnit`） |
 
 | 菜单 | 作用 |
 |------|------|
@@ -94,12 +94,14 @@ effect（调试）: CardFx 预览，菜单 Puffies → Preview CardFx Effects
 
 | 数据 | 来源 | 运行时持久化 |
 |------|------|----------------|
-| 任务配置 | `Resources/Configs/TaskConfig.csv` | —（只读配置） |
+| 任务配置 | `GameConfigRepository` 读取 `Resources/Configs/TaskConfig.csv` | —（只读配置） |
 | 任务进度 | `GameTaskUtility` | `persistentDataPath/LocalData.json` 根对象 **`TaskProgressData`**（`CurrentTaskId`、`CurrentCompleteValue`） |
-| 卡包配置 | `Resources/Configs/CardPacks.csv` | —（只读配置） |
+| 卡包配置 | `GameConfigRepository` 读取 `Resources/Configs/CardPacks.csv` | —（只读配置） |
 | 卡包解锁/游玩状态 | `CardPackDataUtility` | `LocalData.db` 表 **`CardPacks`** |
 | 通用 collection + key 存储 | `SqliteLocalStore` API | `LocalData.db` 表 **`AppRecords`**（成就等扩展用） |
 
+- `GameConfigRepository`：统一加载和缓存任务/卡包配置，当前数据源是 `ResourcesGameConfigTextSource`（优先 `Resources.Load<TextAsset>`，编辑器兜底磁盘路径）。
+- `CsvTable`：统一 CSV 解析，支持表头访问、引号字段和空行过滤；业务层不再直接 `Split(',')`。
 - `JsonLocalStore`：整文件读写**单一根对象**（当前用于任务进度），不是通用 KV 字典。
 - `SqliteLocalStore`：`AppRecords` 为 collection/key 模式；卡包业务使用独立 `CardPacks` 表。
 - **不使用 PlayerPrefs**。

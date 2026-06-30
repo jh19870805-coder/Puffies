@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
 using UnityEngine;
 
 /// <summary>
@@ -40,8 +39,6 @@ public static class CardPackDataUtility
     private const string UnlockTimeFormat = "yyyy-MM-dd HH:mm:ss";
 
     private static bool sIsInitialized;
-    private static List<CardPackConfigData> sPackConfigs;
-    private static bool sPackConfigsLoaded;
 
     /// <summary>
     /// 用途：准备卡包表访问（仅建表，不写入记录）。返回：是否初始化成功。
@@ -93,15 +90,9 @@ public static class CardPackDataUtility
             return false;
         }
 
-        EnsurePackConfigsLoaded();
-        for (var i = 0; i < sPackConfigs.Count; i++)
+        if (GameConfigRepository.TryGetCardPackConfig(packId, out var config))
         {
-            if (sPackConfigs[i].PackId != packId)
-            {
-                continue;
-            }
-
-            packSize = sPackConfigs[i].PackSize;
+            packSize = config.PackSize;
             return true;
         }
 
@@ -374,17 +365,6 @@ public static class CardPackDataUtility
         }
     }
 
-    private static void EnsurePackConfigsLoaded()
-    {
-        if (sPackConfigsLoaded)
-        {
-            return;
-        }
-
-        sPackConfigs = LoadCardPackConfigs();
-        sPackConfigsLoaded = true;
-    }
-
     private static bool UpsertPackInternal(CardPackRecord record)
     {
         if (record.PackId <= 0)
@@ -411,89 +391,6 @@ public static class CardPackDataUtility
             unlockTime,
             record.IsPlayed ? 1 : 0);
         return affected > 0;
-    }
-
-    private static List<CardPackConfigData> LoadCardPackConfigs()
-    {
-        var configs = new List<CardPackConfigData>();
-        var csvText = LoadCardPackConfigText();
-        if (string.IsNullOrWhiteSpace(csvText))
-        {
-            Debug.LogWarning("CardPackDataUtility: CardPacks.csv is empty or missing.");
-            return configs;
-        }
-
-        var lines = csvText.Split(new[] { "\r\n", "\n", "\r" }, StringSplitOptions.RemoveEmptyEntries);
-        for (var i = 1; i < lines.Length; i++)
-        {
-            if (TryParseCardPackConfigLine(lines[i], out var config))
-            {
-                configs.Add(config);
-            }
-        }
-
-        return configs;
-    }
-
-    private static string LoadCardPackConfigText()
-    {
-        var resourcesAsset = Resources.Load<TextAsset>(GameDefine.CardPackConfigResourcesPath);
-        if (resourcesAsset != null && !string.IsNullOrWhiteSpace(resourcesAsset.text))
-        {
-            return resourcesAsset.text;
-        }
-
-        var diskPath = GameCommonUtility.ToDiskPath(GameDefine.CardPackConfigEditorPath);
-        if (File.Exists(diskPath))
-        {
-            return File.ReadAllText(diskPath);
-        }
-
-        return null;
-    }
-
-    private static bool TryParseCardPackConfigLine(string line, out CardPackConfigData config)
-    {
-        config = default;
-        if (string.IsNullOrWhiteSpace(line))
-        {
-            return false;
-        }
-
-        var columns = line.Split(',');
-        if (columns.Length < 3)
-        {
-            return false;
-        }
-
-        if (!int.TryParse(columns[0].Trim(), out var index))
-        {
-            return false;
-        }
-
-        var packId = TryParseInt(columns[1]);
-        if (packId <= 0)
-        {
-            packId = index;
-        }
-
-        if (packId <= 0)
-        {
-            return false;
-        }
-
-        config = new CardPackConfigData
-        {
-            Index = index,
-            PackId = packId,
-            PackSize = (CardPackSize)TryParseInt(columns[2])
-        };
-        return true;
-    }
-
-    private static int TryParseInt(string text)
-    {
-        return int.TryParse((text ?? string.Empty).Trim(), out var value) ? value : 0;
     }
 
     private static CardPackRecord ToRecord(CardPackTableRow row)
@@ -545,13 +442,6 @@ public static class CardPackDataUtility
         {
             UpsertPackInternal(record);
         }
-    }
-
-    private struct CardPackConfigData
-    {
-        public int Index;
-        public int PackId;
-        public CardPackSize PackSize;
     }
 
     private sealed class CardPackTableRow
