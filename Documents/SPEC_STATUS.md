@@ -34,6 +34,7 @@
 - 最新提交 `7fde54f`（2026-06-30 核对 `git log -1`）：完整游戏流程、任务测试数据、首页卡包自动刷新。
 - 文档整理（2026-06-30）：删除 `ARCHITECTURE` / `CLEANUP_CHECKLIST` / `SPEC_TEMPLATE`，内容并入保留文件；修正卡包流程与存储描述。
 - 数据层整理（2026-06-30）：新增 `CsvTable`、`GameConfigRepository`、`IGameConfigTextSource`，把任务/卡包 CSV 加载与解析从 `GameTaskUtility`、`CardPackDataUtility` 中抽离。
+- AchieveScene（2026-07-01）：返回按钮对象名改为 `CloseBtn`，匹配当前场景编辑器对象。
 
 ## C - Check
 

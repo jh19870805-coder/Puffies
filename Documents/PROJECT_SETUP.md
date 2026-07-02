@@ -63,7 +63,8 @@ effect（调试）: CardFx 预览，菜单 Puffies → Preview CardFx Effects
 | 对象名 | 作用 |
 |--------|------|
 | `BtnRank` / `BtnAchieve` | Main → Rank / Achieve |
-| `BtnReturn` | Rank / Achieve / Game → Main |
+| `BtnReturn` | Rank / Game → Main |
+| `CloseBtn` | Achieve → Main |
 | `BtnFinish` | Game RewardPanel → Main |
 | `TextLoading` | Loading 进度文案 |
 | `GameBoard` / `Piece01`… | GameScene 棋盘与凹槽 |

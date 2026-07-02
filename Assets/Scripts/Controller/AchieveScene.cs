@@ -7,6 +7,7 @@ public class AchieveScene : MonoBehaviour
     private const float ReferenceHeight = GameDefine.DesignHeight;
     private const float PixelsPerUnit = GameDefine.PixelsPerUnit;
     private const string BootstrapObjectName = "AchieveSceneBootstrap";
+    private const string CloseButtonObjectName = "CloseBtn";
     private static bool sHookedSceneLoaded;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -37,17 +38,17 @@ public class AchieveScene : MonoBehaviour
 
     private void ConfigureReturnButton()
     {
-        var returnButtonObject = GameObject.Find(GameDefine.ReturnButtonObjectName);
+        var returnButtonObject = GameObject.Find(CloseButtonObjectName);
         if (returnButtonObject == null)
         {
-            Debug.LogWarning($"AchieveScene: return button not found. Expected object named {GameDefine.ReturnButtonObjectName}.");
+            Debug.LogWarning($"AchieveScene: close button not found. Expected object named {CloseButtonObjectName}.");
             return;
         }
 
         var button = returnButtonObject.GetComponent<Button>();
         if (button == null)
         {
-            Debug.LogWarning($"AchieveScene: {GameDefine.ReturnButtonObjectName} is missing Button component.");
+            Debug.LogWarning($"AchieveScene: {CloseButtonObjectName} is missing Button component.");
             return;
         }
 
