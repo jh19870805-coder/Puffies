@@ -34,12 +34,15 @@
 - 最新提交 `7fde54f`（2026-06-30 核对 `git log -1`）：完整游戏流程、任务测试数据、首页卡包自动刷新。
 - 文档整理（2026-06-30）：删除 `ARCHITECTURE` / `CLEANUP_CHECKLIST` / `SPEC_TEMPLATE`，内容并入保留文件；修正卡包流程与存储描述。
 - 数据层整理（2026-06-30）：新增 `CsvTable`、`GameConfigRepository`、`IGameConfigTextSource`，把任务/卡包 CSV 加载与解析从 `GameTaskUtility`、`CardPackDataUtility` 中抽离。
+- AchieveScene（2026-07-01）：返回按钮对象名改为 `CloseBtn`，匹配当前场景编辑器对象。
+- AchieveScene mock（2026-07-02）：进入成就页时使用 `AchieveItem.prefab` 生成 20 条模拟成就，随机解锁状态与未解锁进度，用于暂未接入 Steam 前的页面测试。
 
 ## C - Check
 
 - 与代码一致：无 Package JSON 拼图配置；GameScene 依赖场景 `Piece*` Image。
 - 任务类型 `CollectPuzzle`（TaskType=1）与 `TaskConfig.csv` 测试行已打通。
 - 配置数据仍来自 `Resources/Configs/*.csv`，但业务工具类不再直接解析 CSV；后续可替换 `IGameConfigTextSource` 为 ScriptableObject / Addressables 数据源。
+- AchieveScene 当前为页面 mock 数据展示，非正式 Steam 成就系统；正式接入时应替换 `CreateMockAchievements` 数据源。
 - 待 Play：多组切组 + 任务结算 + Main 卡包刷新一条龙。
 
 ## Next Action
