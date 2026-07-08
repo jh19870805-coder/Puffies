@@ -57,6 +57,8 @@ Desktop.ini
 # IMPORTANT: .meta files MUST be tracked
 # Do NOT add *.meta to this ignore list!
 # ===========================
+!Assets/Plugins/x86/sqlite3.dll
+!Assets/Plugins/x86_64/sqlite3.dll
 Win32/
 Assets/StreamingAssets/
 LinResources/

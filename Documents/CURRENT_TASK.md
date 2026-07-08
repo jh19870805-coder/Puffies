@@ -1,46 +1,44 @@
 # Current Task
 
-- Task: Fix CardBag active-area centering without breaking piece alignment
-- Status: Done
+- Task: Fix missing SQLite native plugin after pulling repository
+- Status: In Progress
 - Updated At: 2026-07-08
 
 ## User Intent
 
-- The active puzzle area inside `CardBag001.prefab` should be relatively centered when switching groups.
-- The fix must not change the world/screen mapping in a way that makes pieces snap to the wrong positions.
+- A freshly pulled copy of the repository on another Windows computer should run in Unity without `DllNotFoundException: sqlite3`.
+- SQLite initialization should find the native `sqlite3` library required by `Assets/Plugins/SQLite/SQLite.cs`.
 
 ## Working Notes
 
-- The previous attempt moved the camera with `FitOrthographicCameraToWorldBounds`.
-- Moving the camera changes the coordinate basis used by UI bounds and drag/snap calculations, which can make originally correct piece positions appear wrong.
-- The corrected approach keeps the camera center stable and moves the loaded `CardBagNNN` prefab root by `anchoredPosition`.
+- `SQLite.cs` imports native functions with `DllImport("sqlite3")`.
+- The native files exist locally at `Assets/Plugins/x86/sqlite3.dll` and `Assets/Plugins/x86_64/sqlite3.dll`.
+- Git was tracking the `.meta` files but not the actual `.dll` files.
+- The DLL files were ignored by the user's global Git ignore rule `*.dll`, not by the project `.gitignore`.
 
 ## Files Changed
 
-- `Assets/Scripts/Controller/GameScene.cs`
+- `.gitignore`
 - `Documents/CURRENT_TASK.md`
 
 ## Decisions
 
-- Cache the loaded `CardBagNNN` root `RectTransform` and its original anchored position.
-- On each group creation, restore the CardBag root to its original position before recalculating.
-- Use the active group's groove bounds as the centering target.
-- Keep camera adjustment to size-only fitting; do not move camera position.
-- Translate the whole CardBag root so grooves and pieces keep their relative local layout.
+- Keep the existing `sqlite-net` C# wrapper.
+- Keep the existing Windows native plugin layout under `Assets/Plugins/x86` and `Assets/Plugins/x86_64`.
+- Add explicit project-level `.gitignore` exceptions so these two SQLite DLLs can be committed even when a developer has a global `*.dll` ignore rule.
 
 ## Validation
 
-- Confirmed `FitCameraToActiveGroup` now uses `FitOrthographicCameraSizeOnly`.
-- Confirmed `CenterCardBagOnActivePage` applies a Canvas anchored-position delta to the loaded CardBag root.
-- Confirmed centering target is the active groove group, not the full board or piece tray.
-- Did not run Unity; this requires play-mode verification.
+- Confirmed `git ls-files Assets/Plugins` only listed the SQLite `.meta` files and C# wrapper before the fix.
+- Confirmed `git check-ignore -v` reported the DLL files were ignored by `C:\Users\Administrator\Documents\gitignore_global.txt`.
+- Unity play mode was not run in this turn.
 
 ## Next Action
 
-1. In Unity, enter PackId 1 and complete the first group.
-2. Verify the second group's target area is visually centered.
-3. Verify dragging/snapping still lands pieces on the correct original grooves.
+1. Add and commit `Assets/Plugins/x86/sqlite3.dll`, `Assets/Plugins/x86_64/sqlite3.dll`, their `.meta` files, `.gitignore`, and this task note.
+2. On the other Windows computer, pull the commit and confirm both DLL files exist.
+3. Reopen Unity or reimport `Assets/Plugins`, then verify `SqliteLocalStore.Initialize` succeeds.
 
 ## Resume Prompt
 
-Continue Puffies CardBag centering work. Read AGENTS.md, Documents/WORKFLOW.md, and Documents/CURRENT_TASK.md first, then verify group switching and snap positions in Unity play mode.
+Continue Puffies SQLite native plugin tracking work. Read AGENTS.md, Documents/WORKFLOW.md, and Documents/CURRENT_TASK.md first, then verify the SQLite DLL files are tracked and Unity can load `sqlite3` on Windows Editor.
