@@ -1,10 +1,58 @@
 # 项目指南
 
-Unity **2022.3** / URP 2D 项目。玩法：卡包开包 → 拼图拖拽 → 任务奖励。本文档涵盖目录、资源、场景、构建与命名规范；**当前开发任务**见 [SPEC_STATUS.md](SPEC_STATUS.md)。
+Unity **2022.3** / URP 2D 项目。玩法：卡包开包 → 拼图拖拽 → 任务奖励。本文档是工程事实与功能需求的主参考；**当前开发任务**见 [SPEC_STATUS.md](SPEC_STATUS.md)。
 
 ---
 
-## 1. 目录与加载策略
+## 1. 功能需求总览
+
+### 核心循环
+
+1. 进入 `LoadingScene` 初始化本地数据、任务配置、卡包配置与持久化存储。
+2. 进入 `MainScene`，根据卡包解锁状态动态显示可玩的卡包列表。
+3. 点击已解锁卡包后播放开包表现，进入 `GameScene`。
+4. 玩家拖拽拼图碎片完成当前卡包拼图。
+5. 拼图完成后弹出 `RewardPanel`，结算任务进度与卡包状态。
+6. 点击 `BtnFinish` 返回 `MainScene`，首页卡包列表按最新解锁状态刷新。
+
+### 场景需求
+
+| 场景 | 功能需求 |
+|------|----------|
+| LoadingScene | 初始化 JSON、SQLite、任务数据、卡包数据；加载结束进入 MainScene |
+| MainScene | 按 `CardPacks.csv` 与 SQLite 解锁状态动态刷新卡包列表；支持 Rank / Achieve / 开包入口 |
+| GameScene | 按 `PieceGroup` 或默认分组组织拼图；组完成后切组并清理上一组碎片；全部完成后显示 RewardPanel |
+| RankScene | 从 Main 进入并可返回 Main |
+| AchieveScene | 当前使用 mock 成就列表；后续 Steam 接入时替换数据源 |
+| effect | 用于 CardFx 预览与调试 |
+
+### 数据与奖励需求
+
+- 任务配置来自 `Resources/Configs/TaskConfig.csv`。
+- 卡包配置来自 `Resources/Configs/CardPacks.csv`。
+- 收集拼图任务类型为 `CollectPuzzle`（`TaskType=1`），每拼上一块拼图进度 +1。
+- 任务完成后发放奖励，并推进到下一任务。
+- 卡包解锁、游玩状态写入 SQLite `CardPacks` 表。
+- 任务进度写入 JSON `TaskProgressData`。
+- 不使用 `PlayerPrefs` 存储业务进度。
+
+### 内容扩展需求
+
+- 新增卡包时，只需保留一个 `Package001` 模板，由 `MainScene` 运行时动态生成槽位。
+- 新增拼图时，在 `GameBoard` 下添加 `Piece01`...`PieceNN`，不再创建 Package JSON。
+- 3D 卡包与 CardFx 资源放在 `Resources/Effects/`，运行时通过 `Resources.Load` 加载。
+- 构建前通过 `Puffies → Sync Build Resources` 同步 `Assets/UI` 到 `StreamingAssets/UI`。
+
+### 待定或未完成需求
+
+- Rank 页面正式内容。
+- Steam 成就系统接入，替换 AchieveScene mock 数据。
+- 正式打包回归。
+- 棋盘滑动对准凹槽中心、凹槽区域描边：曾讨论但未合入，若仍需要应单独小步实现。
+
+---
+
+## 2. 目录与加载策略
 
 ```
 Assets/
@@ -37,7 +85,7 @@ Assets/
 
 ---
 
-## 2. 场景与跳转
+## 3. 场景与跳转
 
 ```
 LoadingScene (2.5s, TextLoading 0%→100%)
@@ -75,7 +123,7 @@ effect（调试）: CardFx 预览，菜单 Puffies → Preview CardFx Effects
 
 ---
 
-## 3. 设计分辨率与字体
+## 4. 设计分辨率与字体
 
 | 项 | 值 |
 |----|-----|
@@ -91,7 +139,7 @@ effect（调试）: CardFx 预览，菜单 Puffies → Preview CardFx Effects
 
 ---
 
-## 4. 数据与配置
+## 5. 数据与配置
 
 | 数据 | 来源 | 运行时持久化 |
 |------|------|----------------|
@@ -110,7 +158,7 @@ effect（调试）: CardFx 预览，菜单 Puffies → Preview CardFx Effects
 
 ---
 
-## 5. 新增内容流程
+## 6. 新增内容流程
 
 ### 卡包（MainScene）
 
@@ -134,7 +182,7 @@ MainScene 按数据库已解锁卡包**动态创建槽位**（`RefreshPackageLis
 
 ---
 
-## 6. 命名规范
+## 7. 命名规范
 
 | 类型 | 命名 | 路径 |
 |------|------|------|
@@ -147,7 +195,7 @@ MainScene 按数据库已解锁卡包**动态创建槽位**（`RefreshPackageLis
 
 ---
 
-## 7. 构建
+## 8. 构建
 
 构建前菜单：**Puffies → Sync Build Resources**（`UI` → `StreamingAssets/UI`）。
 
@@ -155,7 +203,7 @@ Build Settings 顺序建议：LoadingScene → MainScene → GameScene → effec
 
 ---
 
-## 8. Editor 菜单速查
+## 9. Editor 菜单速查
 
 | 菜单 | 作用 |
 |------|------|
@@ -166,7 +214,7 @@ Build Settings 顺序建议：LoadingScene → MainScene → GameScene → effec
 
 ---
 
-## 9. 已废弃（勿再创建）
+## 10. 已废弃（勿再创建）
 
 - `Assets/ArtRes/`、`Assets/Configs/`（旧目录）
 - `Resources/Config/Package001.json` 及 JSON 拼图配置流（已改为场景编辑器摆位）

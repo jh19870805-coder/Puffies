@@ -1,56 +1,75 @@
 # SPEC 状态面板
 
-- Task: Puffies 新阶段开发
-- Status: In Progress
-- Updated At: 2026-06-30
+- Task: Markdown 文档整理与需求合并
+- Status: Done
+- Updated At: 2026-07-08
 
-> 工程目录、场景、构建等静态说明见 [PROJECT_SETUP.md](PROJECT_SETUP.md)。
+> 工程目录、功能需求、场景、构建等静态说明统一维护在 [PROJECT_SETUP.md](PROJECT_SETUP.md)。
 
 ## Requirement Log
 
-- GameScene：按组拼图（`PieceGroup` 或默认分组）；组完成切组时移除上一组棋盘碎片、显示凹槽（`FinalizeCompletedGroup`）。
-- GameScene：拼完 `RewardPanel`；`BtnFinish` 回 Main；拼图进度写入任务与卡包（`GameTaskUtility` / `CardPackDataUtility`）。
-- MainScene：根据 `CardPacks.csv` 解锁状态动态刷新卡包列表（`RefreshPackageList`）。
-- LoadingScene：初始化 JSON、SQLite、任务、卡包数据。
-- 本地存储：JSON + SQLite；不用 PlayerPrefs。
-- CardFx 预览（effect）；设计分辨率 2560×1440。
-- **未合入代码**（曾讨论后回退或未提交）：棋盘滑动对准凹槽中心、凹槽区域描边。
+- 用户要求整理项目 Markdown 文件，合并功能需求，删除冗余 Markdown 文件。
+- 用户要求以后按 `Documents/` 下的 SPEC 工作流维护项目。
 
 ## Progress Snapshot
 
 - **已完成**：
-  - MVC + 全场景跳转（Loading → Main → Game/Rank/Achieve）
-  - 拼图分组、托盘滑入/滑出、RewardPanel
-  - `TaskConfig.csv` + `CardPacks.csv` 通过 `GameConfigRepository` 统一读取；Loading 初始化
-  - 收集拼图任务进度（每拼一块 +1）、完成结算与发奖、任务推进
-  - 拼图完成后保存卡包状态；首页卡包列表按解锁刷新
-  - 本地存储骨架；Canvas/字体工具；CardFx 预览
-  - 文档合并：`PROJECT_SETUP` + `SPEC_WORKFLOW` + `SPEC_STATUS`
-- **进行中**：Play 全链路回归（任务发奖 → 回 Main 见新卡包）
-- **未完成**：Rank/Achieve 页面内容；Steam；正式打包回归；棋盘滑动/描边（若仍需）
+  - 确认当前 Markdown 文件：`README.md`、`AGENTS.md`、`Documents/PROJECT_SETUP.md`、`Documents/SPEC_STATUS.md`、`Documents/SPEC_WORKFLOW.md`。
+  - 将功能需求统一合并到 `Documents/PROJECT_SETUP.md` 的“功能需求总览”。
+  - 将 `README.md` 精简为文档入口和快速约定，避免重复维护工程结构与场景流程。
+  - 将 `SPEC_STATUS.md` 改为当前任务状态面板，不再重复保存完整功能需求。
+  - 保留 `AGENTS.md` 与 `.cursor/rules/spec-workflow.mdc` 作为项目级代理工作流规则。
+- **进行中**：无。
+- **未完成**：无。
+
+## S - Scope
+
+- 背景与目标：减少 Markdown 文档重复内容，明确功能需求的单一维护位置。
+- 本次范围：整理根目录与 `Documents/` 下 Markdown 文档；保留必要的代理规则文件。
+- 验收标准：
+  - 功能需求集中在 `Documents/PROJECT_SETUP.md`。
+  - `README.md` 只作为入口，不复制大量工程事实。
+  - `SPEC_STATUS.md` 只记录当前任务状态、检查与下一步。
+  - 不删除仍承担明确用途的 Markdown 文件。
+
+## P - Plan
+
+- 方案概述：以 `PROJECT_SETUP.md` 作为功能需求与工程事实主参考，`SPEC_WORKFLOW.md` 保留流程规则，`SPEC_STATUS.md` 保留任务状态，`README.md` 保留入口信息。
+- 涉及文件：
+  - `README.md`
+  - `Documents/PROJECT_SETUP.md`
+  - `Documents/SPEC_STATUS.md`
+  - `AGENTS.md`
+  - `.cursor/rules/spec-workflow.mdc`
+- 步骤：
+  - [x] 盘点 Markdown 文件。
+  - [x] 合并功能需求到 `PROJECT_SETUP.md`。
+  - [x] 精简 `README.md`。
+  - [x] 更新 `SPEC_STATUS.md`。
+  - [x] 判断是否存在可删除的冗余 Markdown 文件。
 
 ## E - Execute
 
-- 最新提交 `7fde54f`（2026-06-30 核对 `git log -1`）：完整游戏流程、任务测试数据、首页卡包自动刷新。
-- 文档整理（2026-06-30）：删除 `ARCHITECTURE` / `CLEANUP_CHECKLIST` / `SPEC_TEMPLATE`，内容并入保留文件；修正卡包流程与存储描述。
-- 数据层整理（2026-06-30）：新增 `CsvTable`、`GameConfigRepository`、`IGameConfigTextSource`，把任务/卡包 CSV 加载与解析从 `GameTaskUtility`、`CardPackDataUtility` 中抽离。
-- AchieveScene（2026-07-01）：返回按钮对象名改为 `CloseBtn`，匹配当前场景编辑器对象。
-- AchieveScene mock（2026-07-02）：进入成就页时使用 `AchieveItem.prefab` 生成 20 条模拟成就，随机解锁状态与未解锁进度，用于暂未接入 Steam 前的页面测试。
+- `Documents/PROJECT_SETUP.md` 新增“功能需求总览”，覆盖核心循环、场景需求、数据与奖励需求、内容扩展需求、待定需求。
+- `README.md` 改为文档入口，移除与 `PROJECT_SETUP.md` 重复的结构、场景流、菜单说明。
+- `Documents/SPEC_STATUS.md` 更新为本轮文档整理任务状态。
+- 未删除 Markdown 文件：当前每个 Markdown 文件仍有独立用途，没有发现纯冗余文件。
 
 ## C - Check
 
-- 与代码一致：无 Package JSON 拼图配置；GameScene 依赖场景 `Piece*` Image。
-- 任务类型 `CollectPuzzle`（TaskType=1）与 `TaskConfig.csv` 测试行已打通。
-- 配置数据仍来自 `Resources/Configs/*.csv`，但业务工具类不再直接解析 CSV；后续可替换 `IGameConfigTextSource` 为 ScriptableObject / Addressables 数据源。
-- AchieveScene 当前为页面 mock 数据展示，非正式 Steam 成就系统；正式接入时应替换 `CreateMockAchievements` 数据源。
-- 待 Play：多组切组 + 任务结算 + Main 卡包刷新一条龙。
+- 文档职责：
+  - `PROJECT_SETUP.md`：功能需求与工程事实主参考。
+  - `SPEC_WORKFLOW.md`：工作流规范与模板。
+  - `SPEC_STATUS.md`：当前任务状态。
+  - `README.md`：入口索引。
+  - `AGENTS.md`：代理/AI 项目指令。
+- 风险：`AGENTS.md` 与 `.cursor/rules/spec-workflow.mdc` 内容相近，但服务不同工具入口；暂不删除。
 
 ## Next Action
 
-1. Play：Loading → Main → 开包 → Game 拼完全部 → RewardPanel 任务奖励 → Main 看卡包列表是否更新
-2. 多组拼图：切组后上一组凹槽显示、碎片移除
-3. 若需要棋盘滑动/描边：在稳定基线上单独小步实现
+1. 后续功能开发前，先读 `Documents/SPEC_WORKFLOW.md` 与本文件。
+2. 若开始新任务，按 `Documents/SPEC_WORKFLOW.md` 的模板替换本文件顶部状态内容。
 
 ## Resume Prompt
 
-继续 Puffies 开发，请先读取 Documents/SPEC_STATUS.md，然后按 Next Action 执行。
+继续 Puffies 开发，请先读取 Documents/SPEC_WORKFLOW.md 和 Documents/SPEC_STATUS.md，然后按 Next Action 执行。
