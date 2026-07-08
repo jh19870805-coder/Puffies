@@ -52,6 +52,9 @@ public class GameScene : MonoBehaviour
     private bool _isCollectPuzzleTaskActive;
     private GameObject _rewardPanelRoot;
     private GameObject _loadedCardBagRoot;
+    private RectTransform _loadedCardBagRect;
+    private Vector2 _originalCardBagAnchoredPosition;
+    private bool _hasOriginalCardBagAnchoredPosition;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Bootstrap()
@@ -148,7 +151,10 @@ public class GameScene : MonoBehaviour
         var rectTransform = _loadedCardBagRoot.GetComponent<RectTransform>();
         if (rectTransform != null)
         {
+            _loadedCardBagRect = rectTransform;
             PlaceCardBagAfterBackground(rectTransform);
+            _originalCardBagAnchoredPosition = rectTransform.anchoredPosition;
+            _hasOriginalCardBagAnchoredPosition = true;
         }
 
         _board.IsBoardAndGroovesInitialized = false;
@@ -1359,30 +1365,45 @@ public class GameScene : MonoBehaviour
         Canvas.ForceUpdateCanvases();
         GameCommonUtility.SetupOrthographicCamera(camera, ReferenceHeight, PixelsPerUnit);
 
-        var pageBounds = BuildPageBoundsForActiveGroup(activeGroupIndex);
+        var activeGroupBounds = BuildActiveGroupBounds(activeGroupIndex);
+        var pageBounds = BuildPageBoundsForActiveGroup(activeGroupBounds);
         if (pageBounds.size.sqrMagnitude <= 0f)
         {
             return;
         }
 
         GameCommonUtility.FitOrthographicCameraSizeOnly(camera, GamePageCameraPadding, pageBounds);
+        CenterCardBagOnActivePage(
+            camera,
+            activeGroupBounds.size.sqrMagnitude > 0f ? activeGroupBounds : pageBounds);
         AlignPieceTrayToPageBottom();
     }
 
-    private Bounds BuildPageBoundsForActiveGroup(int activeGroupIndex)
+    private void CenterCardBagOnActivePage(Camera camera, Bounds pageBounds)
+    {
+        if (_loadedCardBagRect == null
+            || !_hasOriginalCardBagAnchoredPosition
+            || pageBounds.size.sqrMagnitude <= 0f)
+        {
+            return;
+        }
+
+        var cameraCenter = new Vector2(camera.transform.position.x, camera.transform.position.y);
+        var pageCenter = new Vector2(pageBounds.center.x, pageBounds.center.y);
+        var worldDelta = cameraCenter - pageCenter;
+        var anchoredDelta = GameCommonUtility.WorldDeltaToCanvasAnchoredDelta(
+            _loadedCardBagRect,
+            camera,
+            worldDelta,
+            WorldGameplayDepth);
+        _loadedCardBagRect.anchoredPosition = _originalCardBagAnchoredPosition + anchoredDelta;
+    }
+
+    private Bounds BuildActiveGroupBounds(int activeGroupIndex)
     {
         var camera = Camera.main;
         var hasBounds = false;
         var combinedBounds = new Bounds(Vector3.zero, Vector3.zero);
-        if (_board.GameBoardImage != null && camera != null)
-        {
-            combinedBounds = GameCommonUtility.GetRectTransformCameraWorldBounds(
-                _board.GameBoardImage.rectTransform,
-                camera,
-                WorldGameplayDepth);
-            hasBounds = true;
-        }
-
         if (_board.GrooveImagesByGroup != null && camera != null
             && activeGroupIndex >= 0
             && activeGroupIndex < _board.GrooveImagesByGroup.Count)
@@ -1413,6 +1434,23 @@ public class GameScene : MonoBehaviour
                     }
                 }
             }
+        }
+
+        return hasBounds ? combinedBounds : new Bounds(Vector3.zero, Vector3.zero);
+    }
+
+    private Bounds BuildPageBoundsForActiveGroup(Bounds activeGroupBounds)
+    {
+        var camera = Camera.main;
+        var hasBounds = activeGroupBounds.size.sqrMagnitude > 0f;
+        var combinedBounds = activeGroupBounds;
+        if (!hasBounds && _board.GameBoardImage != null && camera != null)
+        {
+            combinedBounds = GameCommonUtility.GetRectTransformCameraWorldBounds(
+                _board.GameBoardImage.rectTransform,
+                camera,
+                WorldGameplayDepth);
+            hasBounds = true;
         }
 
         if (_board.PieceBoardRect != null && camera != null)
@@ -1479,6 +1517,11 @@ public class GameScene : MonoBehaviour
 
     private void RestoreGameBoardLayout()
     {
+        if (_loadedCardBagRect != null && _hasOriginalCardBagAnchoredPosition)
+        {
+            _loadedCardBagRect.anchoredPosition = _originalCardBagAnchoredPosition;
+        }
+
         if (!_hasOriginalGameBoardAnchoredPosition || _board.GameBoardImage == null)
         {
             return;
