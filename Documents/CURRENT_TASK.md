@@ -1,59 +1,53 @@
 # Current Task
 
-- Task: Rebuild project workflow for Codex
+- Task: Check UI resource rename references
 - Status: Done
 - Updated At: 2026-07-08
 
 ## User Intent
 
-- The project was previously developed with another AI.
-- The user allowed one thorough rewrite of workflow-related files, including adding files, deleting files, and redefining workflow paths.
-- The workflow should now match Codex preferences for future maintenance.
+- The user renamed a folder and image resources under `Assets/UI` in Unity.
+- Check Git workspace changes and find code/config references that still need updating.
 
 ## Working Notes
 
-- Replaced the old `SPEC_*` workflow naming with a Codex-first structure.
-- Stable project facts now live in `Documents/PROJECT_CONTEXT.md`.
-- Current task state now lives in `Documents/CURRENT_TASK.md`.
-- Workflow rules now live in `Documents/WORKFLOW.md`.
-- `AGENTS.md` is the repository-level AI entry point.
+- Detected old deleted path: `Assets/UI/Game001`.
+- Detected new path: `Assets/UI/CardBag001`.
+- Detected image renames:
+  - `Bag00101/Pieces01`...`Pieces04` -> `Pieces11`...`Pieces14`
+  - `Bag00102/Pieces05`...`Pieces09` -> `Pieces21`...`Pieces25`
+- Confirmed the corresponding `.meta` GUIDs stayed the same, so Unity scene/prefab direct sprite references should remain valid.
 
 ## Files Changed
 
-- `AGENTS.md`
-- `README.md`
+- `Assets/Scripts/Editor/BuildSync.cs`
 - `Documents/PROJECT_CONTEXT.md`
-- `Documents/WORKFLOW.md`
 - `Documents/CURRENT_TASK.md`
-- Removed old workflow files after migration:
-  - `Documents/PROJECT_SETUP.md`
-  - `Documents/SPEC_STATUS.md`
-  - `Documents/SPEC_WORKFLOW.md`
-  - `.cursor/rules/spec-workflow.mdc`
 
 ## Decisions
 
-- Use `PROJECT_CONTEXT.md` instead of `PROJECT_SETUP.md` because the file contains both requirements and engineering facts, not just setup instructions.
-- Use `CURRENT_TASK.md` instead of `SPEC_STATUS.md` to make the status file's role obvious without inherited SPEC terminology.
-- Use one repository-level `AGENTS.md` for AI instructions instead of keeping duplicate Cursor-specific rules.
-- Keep `README.md` as a thin index only.
+- Updated `BuildSync` UI streaming folder whitelist from `Game001` to `CardBag001`.
+- Did not change scene or prefab references because GUIDs match the old assets.
+- Updated project context to document `CardBag001` as the current puzzle texture source.
 
 ## Validation
 
-- Re-read the migrated files after editing.
-- Confirmed the remaining Markdown set is intentionally small:
-  - `README.md`
-  - `AGENTS.md`
-  - `Documents/PROJECT_CONTEXT.md`
-  - `Documents/WORKFLOW.md`
-  - `Documents/CURRENT_TASK.md`
-- Did not run Unity tests; this task changed documentation/workflow files only.
+- Ran `git status --short` and inspected the UI rename set.
+- Searched code, resources, scenes, prefabs, packages, project settings, and docs for old names:
+  - `Game001`
+  - `Bag00101`
+  - `Bag00102`
+  - `Pieces01`...`Pieces09`
+- Found only one code reference requiring change: `BuildSync.cs`.
+- Rechecked old/new `.meta` GUID pairs for `GameBoard.png` and all renamed puzzle pieces; all matched.
+- Did not run Unity; this was a source/config reference check.
 
 ## Next Action
 
-1. For future feature work, start by reading `AGENTS.md`, `Documents/WORKFLOW.md`, and this file.
-2. If a new task starts, replace this file's top task block using the template in `Documents/WORKFLOW.md`.
+1. Open Unity and let it reimport the renamed assets.
+2. Run `Puffies -> Sync Build Resources` so `Assets/StreamingAssets/UI` is regenerated from `Assets/UI/CardBag001`.
+3. Enter GameScene and verify the puzzle sprites still appear through their GUID references.
 
 ## Resume Prompt
 
-Continue Puffies development. Read AGENTS.md, Documents/WORKFLOW.md, and Documents/CURRENT_TASK.md first, then follow Next Action unless the user gives a newer instruction.
+Continue Puffies UI resource rename work. Read AGENTS.md, Documents/WORKFLOW.md, and Documents/CURRENT_TASK.md first, then verify Unity import and StreamingAssets sync.

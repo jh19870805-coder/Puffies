@@ -59,7 +59,7 @@ Current work state is tracked in [CURRENT_TASK.md](CURRENT_TASK.md). Workflow ru
 ```text
 Assets/
   Scenes/           LoadingScene (startup), MainScene, GameScene, RankScene, AchieveScene, effect
-  UI/               2D source textures (PackImages, Game001, BasicUI...)
+  UI/               2D source textures (PackImages, CardBag001, BasicUI...)
   Scripts/          MVC
     Model/          GameDefine, GameManager, utilities, local storage, task/card pack data
     View/           PackageInteractionHandler
@@ -82,7 +82,7 @@ Assets/
 | Build | `StreamingAssets/UI` (`ToDiskPath`) | `Resources.Load("Effects/...")` |
 
 - Do not rename `Resources`; code has hardcoded resource paths.
-- GameScene puzzles are based on scene `Image` objects; `UI/Game001/` is the texture source.
+- GameScene puzzles are based on scene `Image` objects; `UI/CardBag001/` is the current card pack puzzle texture source.
 - 3D effects stay under `Resources/Effects/`; do not duplicate them into StreamingAssets.
 
 ---
@@ -174,9 +174,10 @@ New `CanvasScaler` values are written by `CanvasDesignResolutionEditor.cs`. Use 
 
 ### Puzzles
 
-1. Add `Piece01`...`PieceNN` under `GameBoard` as `Image` objects.
-2. Use `PieceGroup01`... parent nodes for explicit grouping, or rely on default `Piece01-04` / `Piece05+` grouping.
-3. Do not create Package JSON; runtime data comes from scene Images.
+1. Add `Piece01`...`PieceNN` under the scene `GameBoard` as `Image` objects.
+2. Store source textures under `Assets/UI/CardBag001/` using grouped names such as `Pieces11`...`Pieces14` and `Pieces21`...`Pieces25`.
+3. Use `PieceGroup01`... parent nodes for explicit grouping, or rely on default `Piece01-04` / `Piece05+` grouping.
+4. Do not create Package JSON; runtime data comes from scene Images.
 
 ### CardFx
 

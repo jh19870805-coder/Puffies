@@ -15,7 +15,7 @@ public class BuildSync : IPreprocessBuildWithReport
     private static readonly string[] UiStreamingFolders =
     {
         "PackImages",
-        "Game001",
+        "CardBag001",
         "BasicUI"
     };
 
