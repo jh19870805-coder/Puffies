@@ -23,7 +23,7 @@ Current work state is tracked in [CURRENT_TASK.md](CURRENT_TASK.md). Workflow ru
 |------|--------------|
 | LoadingScene | Initialize JSON, SQLite, task data, and card pack data; enter MainScene after loading |
 | MainScene | Refresh card pack list from `CardPacks.csv` plus SQLite unlock state; provide Rank, Achieve, and pack-opening entry points |
-| GameScene | Organize puzzle pieces by `PieceGroup` or default grouping; when a group completes, switch groups and clear previous pieces; show RewardPanel after all pieces complete |
+| GameScene | Load `CardBagNNN` prefab by selected pack id; organize puzzle pieces by `PieceGroup` or default grouping; when a group completes, switch groups and clear previous pieces; show RewardPanel after all pieces complete |
 | RankScene | Enter from Main and return to Main |
 | AchieveScene | Currently displays mock achievements; replace the data source when Steam integration is added |
 | effect | Preview and debug CardFx |
@@ -41,7 +41,7 @@ Current work state is tracked in [CURRENT_TASK.md](CURRENT_TASK.md). Workflow ru
 ### Content Extension Requirements
 
 - New card packs use the existing `Package001` template; `MainScene` dynamically creates runtime slots.
-- New puzzles are created by adding `Piece01`...`PieceNN` under `GameBoard`; do not create Package JSON.
+- New puzzles are created by adding `CardBagNNN` prefabs under `Resources/CardBagPrefabs/`; each prefab contains `GameBoard` and `Piece01`...`PieceNN`; do not create Package JSON.
 - 3D card packs and CardFx assets live under `Resources/Effects/` and are loaded with `Resources.Load`.
 - Before builds, run `Puffies -> Sync Build Resources` to sync `Assets/UI` to `StreamingAssets/UI`.
 
@@ -71,7 +71,8 @@ Assets/
       CardPack/     3D card packs
       PlaneGroup/
       CardFx/       Card obtain/trail prefabs plus Materials/Textures/Meshes/Shaders
-  Prefabs/          Reserved
+    CardBagPrefabs/ CardBagNNN gameplay prefabs loaded by GameScene
+  Prefabs/          Shared UI prefabs
   StreamingAssets/  UI build-sync output
   Plugins/SQLite/   sqlite-net
 ```
@@ -82,7 +83,7 @@ Assets/
 | Build | `StreamingAssets/UI` (`ToDiskPath`) | `Resources.Load("Effects/...")` |
 
 - Do not rename `Resources`; code has hardcoded resource paths.
-- GameScene puzzles are based on scene `Image` objects; `UI/CardBag001/` is the current card pack puzzle texture source.
+- GameScene dynamically loads `Resources/CardBagPrefabs/CardBagNNN.prefab` by selected pack id; `UI/CardBag001/` is the current card pack puzzle texture source.
 - 3D effects stay under `Resources/Effects/`; do not duplicate them into StreamingAssets.
 
 ---
@@ -117,7 +118,8 @@ effect (debug): CardFx preview, menu Puffies -> Preview CardFx Effects
 | `CloseBtn` | Achieve -> Main |
 | `BtnFinish` | Game RewardPanel -> Main |
 | `TextLoading` | Loading progress text |
-| `GameBoard` / `Piece01`... | GameScene board and slots |
+| `CardBagNNN` | Runtime gameplay prefab loaded from `Resources/CardBagPrefabs/` |
+| `GameBoard` / `Piece01`... | Board and slots inside a `CardBagNNN` prefab |
 | `PieceGroup01`... | Optional grouping parent nodes |
 | `PieceBoard` | Puzzle piece tray |
 | `RewardPanel` | Puzzle completion reward panel |
@@ -168,16 +170,18 @@ New `CanvasScaler` values are written by `CanvasDesignResolutionEditor.cs`. Use 
 
 1. Keep exactly one scene template object: `Package001`.
 2. Add a row to `CardPacks.csv` (`PackId`, `PackSize`).
-3. Add the corresponding cover under `UI/PackImages/` using `GameDefine.FormatPackImagePath`.
+3. Add the corresponding cover under `UI/PackImages/` using `PackIconNNN.png` names. `GameDefine.FormatPackImagePath` maps pack id `1` to `UI/PackImages/PackIcon001.png`.
 4. Write unlock/play state through `CardPackDataUtility` into SQLite table `CardPacks`.
 5. Optional 3D assets: `CardPackAni_00N.FBX`, `CardPackSkin_00N.prefab` -> `Resources/Effects/CardPack/`; if missing, use 2D fallback.
 
 ### Puzzles
 
-1. Add `Piece01`...`PieceNN` under the scene `GameBoard` as `Image` objects.
-2. Store source textures under `Assets/UI/CardBag001/` using grouped names such as `Pieces11`...`Pieces14` and `Pieces21`...`Pieces25`.
-3. Use `PieceGroup01`... parent nodes for explicit grouping, or rely on default `Piece01-04` / `Piece05+` grouping.
-4. Do not create Package JSON; runtime data comes from scene Images.
+1. Create a prefab named `CardBagNNN` under `Assets/Resources/CardBagPrefabs/` where `NNN` matches `PackId`.
+2. Put one child object named `GameBoard` inside the prefab.
+3. Add `Piece01`...`PieceNN` under `GameBoard` as `Image` objects.
+4. Store source textures under `Assets/UI/CardBag001/` using grouped names such as `Pieces11`...`Pieces14` and `Pieces21`...`Pieces25`.
+5. Use `PieceGroup01`... parent nodes for explicit grouping, or rely on default `Piece01-04` / `Piece05+` grouping.
+6. Do not create Package JSON; runtime data comes from the loaded prefab's Images.
 
 ### CardFx
 

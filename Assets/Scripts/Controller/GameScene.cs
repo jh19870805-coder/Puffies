@@ -51,6 +51,7 @@ public class GameScene : MonoBehaviour
     private bool _isGameFinished;
     private bool _isCollectPuzzleTaskActive;
     private GameObject _rewardPanelRoot;
+    private GameObject _loadedCardBagRoot;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Bootstrap()
@@ -95,10 +96,13 @@ public class GameScene : MonoBehaviour
     private void InitializeGameplay(int bagId)
     {
         GameManager.SetBagId(bagId);
+        EnsureCardBagLoaded(bagId);
         EnsureBoardAndGroovesInitialized();
         if (_board.GameBoardImage == null)
         {
-            Debug.LogWarning("GameBoard not found in scene. Expected editor object named GameBoard.");
+            Debug.LogWarning(
+                $"GameBoard not found. Expected {GameDefine.FormatCardBagPrefabResourcesPath(bagId)} " +
+                $"to contain an object named {GameDefine.GameBoardObjectName}.");
             return;
         }
 
@@ -119,6 +123,48 @@ public class GameScene : MonoBehaviour
         Debug.Log(
             $"GameScene ready. BagId={bagId}, Groups={_board.GrooveImagesByGroup.Count}, " +
             $"Pieces={CountGrooveImages(_board.GrooveImagesByGroup)}");
+    }
+
+    private void EnsureCardBagLoaded(int bagId)
+    {
+        if (_loadedCardBagRoot != null)
+        {
+            return;
+        }
+
+        var resourcePath = GameDefine.FormatCardBagPrefabResourcesPath(bagId);
+        var prefab = Resources.Load<GameObject>(resourcePath);
+        if (prefab == null)
+        {
+            Debug.LogWarning($"GameScene: card bag prefab not found at Resources/{resourcePath}.");
+            return;
+        }
+
+        var canvas = UnityEngine.Object.FindObjectOfType<Canvas>();
+        var parent = canvas != null ? canvas.transform : null;
+        _loadedCardBagRoot = Instantiate(prefab, parent, false);
+        _loadedCardBagRoot.name = prefab.name;
+
+        var rectTransform = _loadedCardBagRoot.GetComponent<RectTransform>();
+        if (rectTransform != null)
+        {
+            PlaceCardBagAfterBackground(rectTransform);
+        }
+
+        _board.IsBoardAndGroovesInitialized = false;
+        Debug.Log($"GameScene: loaded card bag prefab Resources/{resourcePath}.");
+    }
+
+    private static void PlaceCardBagAfterBackground(RectTransform cardBagRect)
+    {
+        var background = GameObject.Find(GameDefine.BackgroundObjectName);
+        if (background == null || background.transform.parent != cardBagRect.parent)
+        {
+            cardBagRect.SetAsFirstSibling();
+            return;
+        }
+
+        cardBagRect.SetSiblingIndex(background.transform.GetSiblingIndex() + 1);
     }
 
     private void ConfigureGameplayCanvas(Camera camera)

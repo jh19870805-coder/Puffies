@@ -79,9 +79,14 @@ public static class GameDefine
         return $"{CardPackSkinPrefix}{bagId:D3}";
     }
 
+    public static string FormatCardBagPrefabResourcesPath(int bagId)
+    {
+        return $"{CardBagPrefabResourcesFolder}{CardBagPrefabPrefix}{bagId:D3}";
+    }
+
     public static string FormatPackImagePath(int packId)
     {
-        return $"{UiRoot}/{PackImagesFolder}/{PackageFilePrefix}{packId:D3}{ImageExtPng}";
+        return $"{UiRoot}/{PackImagesFolder}/{PackImageFilePrefix}{packId:D3}{ImageExtPng}";
     }
 
     // Common path tokens
@@ -89,6 +94,9 @@ public static class GameDefine
     public const string UiRoot = "UI";
     public const string ConfigsRoot = "Configs";
     public const string PackImagesFolder = "PackImages";
+    public const string PackImageFilePrefix = "PackIcon";
+    public const string CardBagPrefabResourcesFolder = "CardBagPrefabs/";
+    public const string CardBagPrefabPrefix = "CardBag";
 
     public const string TaskConfigFileName = "TaskConfig.csv";
     public const string TaskConfigEditorPath = "Assets/Resources/Configs/TaskConfig.csv";

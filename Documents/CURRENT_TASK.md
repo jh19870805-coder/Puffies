@@ -1,53 +1,52 @@
 # Current Task
 
-- Task: Check UI resource rename references
+- Task: Load CardBag prefab dynamically in GameScene
 - Status: Done
 - Updated At: 2026-07-08
 
 ## User Intent
 
-- The user renamed a folder and image resources under `Assets/UI` in Unity.
-- Check Git workspace changes and find code/config references that still need updating.
+- The user removed `GameBoard` from `GameScene`.
+- When entering GameScene from a card pack, load the matching `CardBagNNN` prefab by dynamic pack id.
+- Keep the existing puzzle gameplay logic and make board movement/adaptation work against the loaded card bag prefab.
 
 ## Working Notes
 
-- Detected old deleted path: `Assets/UI/Game001`.
-- Detected new path: `Assets/UI/CardBag001`.
-- Detected image renames:
-  - `Bag00101/Pieces01`...`Pieces04` -> `Pieces11`...`Pieces14`
-  - `Bag00102/Pieces05`...`Pieces09` -> `Pieces21`...`Pieces25`
-- Confirmed the corresponding `.meta` GUIDs stayed the same, so Unity scene/prefab direct sprite references should remain valid.
+- Runtime path rule: pack id `1` loads `Resources/CardBagPrefabs/CardBag001`.
+- `CardBag001.prefab` now lives under `Assets/Resources/CardBagPrefabs/` so it can be loaded in builds with `Resources.Load`.
+- The loaded prefab is instantiated under the scene Canvas, then placed after `Background` in sibling order when possible.
+- Existing logic still finds the child object named `GameBoard`, collects `Piece01`... images, handles grouping, and drives board movement through `_board.GameBoardImage`.
 
 ## Files Changed
 
-- `Assets/Scripts/Editor/BuildSync.cs`
+- `Assets/Scripts/Controller/GameScene.cs`
+- `Assets/Scripts/Model/GameDefine.cs`
+- `Assets/Resources/CardBagPrefabs.meta`
+- `Assets/Resources/CardBagPrefabs/CardBag001.prefab`
+- `Assets/Resources/CardBagPrefabs/CardBag001.prefab.meta`
 - `Documents/PROJECT_CONTEXT.md`
 - `Documents/CURRENT_TASK.md`
 
 ## Decisions
 
-- Updated `BuildSync` UI streaming folder whitelist from `Game001` to `CardBag001`.
-- Did not change scene or prefab references because GUIDs match the old assets.
-- Updated project context to document `CardBag001` as the current puzzle texture source.
+- Use `Resources/CardBagPrefabs/CardBagNNN.prefab` for now because the project already uses `Resources.Load` and has not introduced Addressables.
+- Keep `GameBoard` as the required child object name inside each `CardBagNNN` prefab to preserve existing puzzle logic.
+- Keep `Piece01`... naming and optional `PieceGroup01`... grouping inside the prefab.
+- Put the loaded card bag after `Background` so it is not hidden behind the background image.
 
 ## Validation
 
-- Ran `git status --short` and inspected the UI rename set.
-- Searched code, resources, scenes, prefabs, packages, project settings, and docs for old names:
-  - `Game001`
-  - `Bag00101`
-  - `Bag00102`
-  - `Pieces01`...`Pieces09`
-- Found only one code reference requiring change: `BuildSync.cs`.
-- Rechecked old/new `.meta` GUID pairs for `GameBoard.png` and all renamed puzzle pieces; all matched.
-- Did not run Unity; this was a source/config reference check.
+- Confirmed `Assets/Resources/CardBagPrefabs/CardBag001.prefab` exists and contains a child object named `GameBoard`.
+- Searched for dynamic loading symbols and verified `GameScene` now calls `EnsureCardBagLoaded(bagId)` before board/groove initialization.
+- Confirmed no `GameBoard` object remains in `GameScene.unity`; it is expected to come from the loaded prefab.
+- Did not run Unity; this was a source and asset-structure change.
 
 ## Next Action
 
-1. Open Unity and let it reimport the renamed assets.
-2. Run `Puffies -> Sync Build Resources` so `Assets/StreamingAssets/UI` is regenerated from `Assets/UI/CardBag001`.
-3. Enter GameScene and verify the puzzle sprites still appear through their GUID references.
+1. Open Unity and let it import `Assets/Resources/CardBagPrefabs/CardBag001.prefab`.
+2. Play from MainScene into PackId 1 and verify the board, grooves, dragging, group switching, and RewardPanel still work.
+3. Add `CardBag002`, `CardBag003`, and `CardBag004` prefabs before making PackIds 2-4 playable, or add a fallback rule if they should reuse CardBag001 temporarily.
 
 ## Resume Prompt
 
-Continue Puffies UI resource rename work. Read AGENTS.md, Documents/WORKFLOW.md, and Documents/CURRENT_TASK.md first, then verify Unity import and StreamingAssets sync.
+Continue Puffies CardBag dynamic loading work. Read AGENTS.md, Documents/WORKFLOW.md, and Documents/CURRENT_TASK.md first, then verify Unity play mode for PackId 1 and add remaining CardBag prefabs or a fallback.
