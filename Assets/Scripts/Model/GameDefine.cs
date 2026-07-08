@@ -117,9 +117,7 @@ public static class GameDefine
     public const string GameBoardObjectName = "GameBoard";
     public const string BackgroundObjectName = "Background";
     public const string PieceObjectPrefix = "Piece";
-    public const string PieceGroupObjectPrefix = "PieceGroup";
     public const string PieceBoardObjectName = "PieceBoard";
-    public const int DefaultFirstPuzzleGroupMaxPieceNumber = 4;
     public const string MainBackgroundFileName = "MainBg.png";
     public const string MainBackgroundPath = UiRoot + "/BasicUI/" + MainBackgroundFileName;
     public const string ImageExtPng = ".png";

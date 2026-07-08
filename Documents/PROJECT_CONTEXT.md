@@ -23,7 +23,7 @@ Current work state is tracked in [CURRENT_TASK.md](CURRENT_TASK.md). Workflow ru
 |------|--------------|
 | LoadingScene | Initialize JSON, SQLite, task data, and card pack data; enter MainScene after loading |
 | MainScene | Refresh card pack list from `CardPacks.csv` plus SQLite unlock state; provide Rank, Achieve, and pack-opening entry points |
-| GameScene | Load `CardBagNNN` prefab by selected pack id; organize puzzle pieces by `PieceGroup` or default grouping; when a group completes, switch groups and clear previous pieces; show RewardPanel after all pieces complete |
+| GameScene | Load `CardBagNNN` prefab by selected pack id; organize puzzle pieces by `PieceNN` group-number naming; when a group completes, switch groups and clear previous pieces; show RewardPanel after all pieces complete |
 | RankScene | Enter from Main and return to Main |
 | AchieveScene | Currently displays mock achievements; replace the data source when Steam integration is added |
 | effect | Preview and debug CardFx |
@@ -120,7 +120,6 @@ effect (debug): CardFx preview, menu Puffies -> Preview CardFx Effects
 | `TextLoading` | Loading progress text |
 | `CardBagNNN` | Runtime gameplay prefab loaded from `Resources/CardBagPrefabs/` |
 | `GameBoard` / `Piece01`... | Board and slots inside a `CardBagNNN` prefab |
-| `PieceGroup01`... | Optional grouping parent nodes |
 | `PieceBoard` | Puzzle piece tray |
 | `RewardPanel` | Puzzle completion reward panel |
 | `Package001` | MainScene card pack slot template, hidden and cloned at runtime |
@@ -178,9 +177,9 @@ New `CanvasScaler` values are written by `CanvasDesignResolutionEditor.cs`. Use 
 
 1. Create a prefab named `CardBagNNN` under `Assets/Resources/CardBagPrefabs/` where `NNN` matches `PackId`.
 2. Put one child object named `GameBoard` inside the prefab.
-3. Add `Piece01`...`PieceNN` under `GameBoard` as `Image` objects.
+3. Add grouped piece objects under `GameBoard` as `Image` objects using `Piece11`, `Piece12`, ... for group 1; `Piece21`, `Piece22`, ... for group 2; `Piece31`, ... for group 3. The group number is `PieceNN / 10`, sorted ascending.
 4. Store source textures under `Assets/UI/CardBag001/` using grouped names such as `Pieces11`...`Pieces14` and `Pieces21`...`Pieces25`.
-5. Use `PieceGroup01`... parent nodes for explicit grouping, or rely on default `Piece01-04` / `Piece05+` grouping.
+5. Do not use `PieceGroup` parent nodes; grouping comes only from the number after `Piece`.
 6. Do not create Package JSON; runtime data comes from the loaded prefab's Images.
 
 ### CardFx

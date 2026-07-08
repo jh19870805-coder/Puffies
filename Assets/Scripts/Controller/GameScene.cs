@@ -295,96 +295,34 @@ public class GameScene : MonoBehaviour
             return new List<List<Image>>();
         }
 
-        var groupsFromHierarchy = CollectGrooveGroupsFromEditorHierarchy();
-        if (groupsFromHierarchy.Count > 0)
-        {
-            return groupsFromHierarchy;
-        }
-
-        return SplitGroovesIntoDefaultGroups(sortedGrooves);
+        return SplitGroovesIntoNumberedGroups(sortedGrooves);
     }
 
-    private static List<List<Image>> CollectGrooveGroupsFromEditorHierarchy()
+    private static List<List<Image>> SplitGroovesIntoNumberedGroups(List<Image> sortedGrooves)
     {
-        var groups = new List<List<Image>>();
-        var gameBoardObject = GameObject.Find(GameDefine.GameBoardObjectName);
-        if (gameBoardObject == null)
-        {
-            return groups;
-        }
-
-        var groupTransforms = new List<Transform>();
-        var boardTransform = gameBoardObject.transform;
-        for (var i = 0; i < boardTransform.childCount; i++)
-        {
-            var child = boardTransform.GetChild(i);
-            if (child.name.StartsWith(GameDefine.PieceGroupObjectPrefix, StringComparison.Ordinal))
-            {
-                groupTransforms.Add(child);
-            }
-        }
-
-        if (groupTransforms.Count == 0)
-        {
-            return groups;
-        }
-
-        groupTransforms.Sort((a, b) => string.Compare(a.name, b.name, StringComparison.Ordinal));
-        for (var groupIndex = 0; groupIndex < groupTransforms.Count; groupIndex++)
-        {
-            var groupTransform = groupTransforms[groupIndex];
-            var images = groupTransform.GetComponentsInChildren<Image>(true);
-            var grooveImages = new List<Image>();
-            for (var i = 0; i < images.Length; i++)
-            {
-                var image = images[i];
-                if (image != null && TryParsePieceObjectName(image.gameObject.name, out _))
-                {
-                    grooveImages.Add(image);
-                }
-            }
-
-            grooveImages.Sort((a, b) => GetPieceNumberFromImage(a).CompareTo(GetPieceNumberFromImage(b)));
-            if (grooveImages.Count > 0)
-            {
-                groups.Add(grooveImages);
-            }
-        }
-
-        return groups;
-    }
-
-    private static List<List<Image>> SplitGroovesIntoDefaultGroups(List<Image> sortedGrooves)
-    {
-        var firstGroup = new List<Image>();
-        var secondGroup = new List<Image>();
+        var groupsByNumber = new SortedDictionary<int, List<Image>>();
         for (var i = 0; i < sortedGrooves.Count; i++)
         {
             var grooveImage = sortedGrooves[i];
-            if (grooveImage == null)
+            if (grooveImage == null || !TryGetNumberedGroup(grooveImage, out var groupNumber))
             {
                 continue;
             }
 
-            if (GetPieceNumberFromImage(grooveImage) <= GameDefine.DefaultFirstPuzzleGroupMaxPieceNumber)
+            if (!groupsByNumber.TryGetValue(groupNumber, out var group))
             {
-                firstGroup.Add(grooveImage);
+                group = new List<Image>();
+                groupsByNumber[groupNumber] = group;
             }
-            else
-            {
-                secondGroup.Add(grooveImage);
-            }
+
+            group.Add(grooveImage);
         }
 
         var groups = new List<List<Image>>();
-        if (firstGroup.Count > 0)
+        foreach (var group in groupsByNumber.Values)
         {
-            groups.Add(firstGroup);
-        }
-
-        if (secondGroup.Count > 0)
-        {
-            groups.Add(secondGroup);
+            group.Sort((a, b) => GetPieceNumberFromImage(a).CompareTo(GetPieceNumberFromImage(b)));
+            groups.Add(group);
         }
 
         return groups;
@@ -408,6 +346,18 @@ public class GameScene : MonoBehaviour
         }
 
         return GetPieceNumberFromImage(state.GrooveImage);
+    }
+
+    private static bool TryGetNumberedGroup(Image image, out int groupNumber)
+    {
+        groupNumber = 0;
+        if (image == null || !TryParsePieceObjectName(image.gameObject.name, out var pieceNumber))
+        {
+            return false;
+        }
+
+        groupNumber = pieceNumber / 10;
+        return groupNumber > 0;
     }
 
     private static List<Image> CollectSortedEditorPieceGrooves()
