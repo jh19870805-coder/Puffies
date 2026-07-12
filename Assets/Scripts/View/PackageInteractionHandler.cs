@@ -13,17 +13,22 @@ public class PackageInteractionHandler : MonoBehaviour,
     IPointerDownHandler,
     IPointerUpHandler
 {
+    private const float ClickMaxDragDistance = 20f;
+
     private MainScene mOwner;
     private int mBagId;
     private Image mImage;
+    private ScrollRect mScrollRect;
     private bool mPointerDown;
-    private bool mGestureHandled;
+    private bool mIsDragging;
+    private Vector2 mPointerDownPosition;
 
-    public void Initialize(MainScene owner, int bagId, Image image)
+    public void Initialize(MainScene owner, int bagId, Image image, ScrollRect scrollRect = null)
     {
         mOwner = owner;
         mBagId = bagId;
         mImage = image;
+        mScrollRect = scrollRect != null ? scrollRect : GetComponentInParent<ScrollRect>();
     }
 
     public void OnPointerDown(PointerEventData eventData)
@@ -34,47 +39,45 @@ public class PackageInteractionHandler : MonoBehaviour,
         }
 
         mPointerDown = true;
-        mGestureHandled = false;
-        eventData.Use();
+        mIsDragging = false;
+        mPointerDownPosition = eventData.position;
     }
 
     public void OnPointerUp(PointerEventData eventData)
     {
-        TryCompleteGesture();
-        eventData.Use();
+        if (!mIsDragging
+            && mPointerDown
+            && Vector2.Distance(mPointerDownPosition, eventData.position) <= ClickMaxDragDistance)
+        {
+            TryCompleteGesture();
+        }
+
+        mPointerDown = false;
+        mIsDragging = false;
     }
 
     public void OnInitializePotentialDrag(PointerEventData eventData)
     {
-        if (!CanAcceptPointer())
-        {
-            return;
-        }
-
-        eventData.pointerDrag = gameObject;
-        eventData.Use();
+        mScrollRect?.OnInitializePotentialDrag(eventData);
     }
 
     public void OnBeginDrag(PointerEventData eventData)
     {
-        if (!CanAcceptPointer())
-        {
-            return;
-        }
-
-        eventData.pointerDrag = gameObject;
-        eventData.Use();
+        mIsDragging = true;
+        mScrollRect?.OnBeginDrag(eventData);
     }
 
     public void OnDrag(PointerEventData eventData)
     {
-        eventData.Use();
+        mIsDragging = true;
+        mScrollRect?.OnDrag(eventData);
     }
 
     public void OnEndDrag(PointerEventData eventData)
     {
-        TryCompleteGesture();
-        eventData.Use();
+        mScrollRect?.OnEndDrag(eventData);
+        mPointerDown = false;
+        mIsDragging = false;
     }
 
     private bool CanAcceptPointer()
@@ -88,13 +91,11 @@ public class PackageInteractionHandler : MonoBehaviour,
 
     private void TryCompleteGesture()
     {
-        if (!mPointerDown || mGestureHandled || mOwner == null || mImage == null)
+        if (!mPointerDown || mOwner == null || mImage == null)
         {
             return;
         }
 
-        mGestureHandled = true;
-        mPointerDown = false;
         mOwner.HandlePackageGesture(mBagId, mImage);
     }
 }
