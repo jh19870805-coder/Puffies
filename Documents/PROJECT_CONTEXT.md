@@ -22,7 +22,7 @@ Current work state is tracked in [CURRENT_TASK.md](CURRENT_TASK.md). Workflow ru
 | Scene | Requirements |
 |------|--------------|
 | LoadingScene | Initialize JSON, SQLite, task data, and card pack data; enter MainScene after loading |
-| MainScene | Refresh card pack list from `CardPacks.csv` plus SQLite unlock state; provide Rank, Achieve, and pack-opening entry points |
+| MainScene | Refresh card pack list from `CardPacks.csv` plus SQLite unlock state; provide Rank, Achieve, Menu, and pack-opening entry points |
 | GameScene | Load `CardBagNNN` prefab by selected pack id; organize puzzle pieces by `PieceNN` group-number naming; when a group completes, switch groups and clear previous pieces; show RewardPanel after all pieces complete |
 | RankScene | Enter from Main and return to Main |
 | AchieveScene | Currently displays mock achievements; replace the data source when Steam integration is added |
@@ -95,6 +95,10 @@ LoadingScene (2.5s, TextLoading 0% -> 100%)
   -> MainScene
       -> BtnRank     -> RankScene     -> BtnReturn -> Main
       -> BtnAchieve  -> AchieveScene  -> CloseBtn  -> Main
+      -> BtnMenu     -> PanelMenu     -> BtnClose / BtnReturn -> close menu
+                    -> BtnSet        -> PanelSet -> BtnClose / BtnReturn -> close settings
+                    -> BtnUsable     -> PanelUsable -> BtnClose / BtnReturn -> close usable options
+                    -> BtnData       -> PanelSave -> BtnClose / BtnReturn -> close save panel
       -> unlocked pack runtime slot -> pack animation -> GameScene
           -> BtnReturn -> Main
           -> RewardPanel / BtnFinish -> Main
@@ -114,7 +118,23 @@ effect (debug): CardFx preview, menu Puffies -> Preview CardFx Effects
 | Object Name | Purpose |
 |-------------|---------|
 | `BtnRank` / `BtnAchieve` | Main -> Rank / Achieve |
-| `BtnReturn` | Rank / Game -> Main |
+| `BtnMenu` | MainScene opens `PanelMenu` |
+| `PanelMenu` | MainScene menu popup, hidden on startup |
+| `PanelMenu/BtnClose` | Close MainScene menu |
+| `PanelMenu/BtnSet` | Open MainScene `PanelSet` settings popup |
+| `PanelMenu/BtnUsable` | Open MainScene `PanelUsable` usable-options popup |
+| `PanelMenu/BtnData` | Open MainScene `PanelSave` popup |
+| `PanelSet` | MainScene settings popup for music, effect, and windowed mode |
+| `PanelSet/SliderMusic` | Music volume setting |
+| `PanelSet/SliderEffect` | Effect volume setting |
+| `PanelSet/ToggleFrame` | Windowed-mode setting |
+| `PanelSet/BtnClose` / `PanelSet/BtnReturn` | Close MainScene settings popup |
+| `PanelUsable` | MainScene usable-options popup |
+| `PanelUsable/Toggle1` / `Toggle2` / `Toggle3` | Persisted usable option toggles |
+| `PanelUsable/BtnClose` / `PanelUsable/BtnReturn` | Close MainScene usable-options popup |
+| `PanelSave` | MainScene save/data popup, currently display/hide only |
+| `PanelSave/BtnClose` / `PanelSave/BtnReturn` | Close MainScene save/data popup |
+| `BtnReturn` | Rank / Game -> Main; under `PanelMenu`, closes the MainScene menu |
 | `CloseBtn` | Achieve -> Main |
 | `BtnFinish` | Game RewardPanel -> Main |
 | `TextLoading` | Loading progress text |
@@ -156,6 +176,9 @@ New `CanvasScaler` values are written by `CanvasDesignResolutionEditor.cs`. Use 
 - `CsvTable` is the unified CSV parser with header access, quoted fields, and empty-line filtering; business code should not directly `Split(',')`.
 - `JsonLocalStore` reads/writes one root object for the whole file, currently task progress.
 - `SqliteLocalStore` uses collection/key records in `AppRecords`; card pack business state uses the dedicated `CardPacks` table.
+- MainScene settings are stored in `AppRecords` as collection/key `GameSettings/Runtime`: music volume, effect volume, and windowed mode.
+- MainScene usable option toggles are stored in the same `GameSettings/Runtime` record as `UsableOption1`, `UsableOption2`, and `UsableOption3`.
+- MainScene `PanelSet/SliderMusic` and `PanelSet/SliderEffect` are hand-built fake sliders: root Image background plus `SliderFill` and `SliderHandle` children. Runtime uses `FakeSettingsSliderInput` to handle pointer drag, refresh visuals, and save values.
 - Do not use `PlayerPrefs`.
 - Initialization happens in `LoadingScene.Start` for `JsonLocalStore`, `SqliteLocalStore`, `GameTaskUtility`, and `CardPackDataUtility`.
 

@@ -36,6 +36,21 @@ public class MainScene : MonoBehaviour
     private const string PackItemTemplateObjectName = "PackItemTemplate";
     private const string PackCoverObjectName = "Cover";
     private const string PackNameTextObjectName = "NameText";
+    private const string MenuButtonObjectName = "BtnMenu";
+    private const string MenuPanelObjectName = "PanelMenu";
+    private const string MenuCloseButtonObjectName = "BtnClose";
+    private const string SettingsPanelObjectName = "PanelSet";
+    private const string SettingsButtonObjectName = "BtnSet";
+    private const string MusicSliderObjectName = "SliderMusic";
+    private const string EffectSliderObjectName = "SliderEffect";
+    private const string WindowedToggleObjectName = "ToggleFrame";
+    private const string UsablePanelObjectName = "PanelUsable";
+    private const string UsableButtonObjectName = "BtnUsable";
+    private const string UsableToggle1ObjectName = "Toggle1";
+    private const string UsableToggle2ObjectName = "Toggle2";
+    private const string UsableToggle3ObjectName = "Toggle3";
+    private const string SavePanelObjectName = "PanelSave";
+    private const string SaveButtonObjectName = "BtnData";
     private static bool sHookedSceneLoaded;
 
     private readonly Dictionary<int, PackageEntry> mPackageSlotsById = new Dictionary<int, PackageEntry>();
@@ -44,9 +59,20 @@ public class MainScene : MonoBehaviour
     private RectTransform mPackageContentRoot;
     private RectTransform mPackagePageTemplate;
     private ScrollRect mPackageScrollRect;
+    private GameObject mMenuPanelRoot;
+    private GameObject mSettingsPanelRoot;
+    private GameObject mUsablePanelRoot;
+    private GameObject mSavePanelRoot;
+    private FakeSettingsSliderInput mMusicSlider;
+    private FakeSettingsSliderInput mEffectSlider;
+    private Toggle mWindowedToggle;
+    private Toggle mUsableToggle1;
+    private Toggle mUsableToggle2;
+    private Toggle mUsableToggle3;
     private bool mUsesPagedPackageGrid;
     private bool mIsPlayingAnimation;
     private bool mHasSwitchedToGameScene;
+    private bool mIsApplyingSettingsToUi;
     private Coroutine mPlayAnimationCoroutine;
 
     private struct PackageEntry
@@ -98,6 +124,10 @@ public class MainScene : MonoBehaviour
 
         ConfigureRankButton();
         ConfigureAchieveButton();
+        ConfigureMenuPanel();
+        ConfigureSettingsPanel();
+        ConfigureUsablePanel();
+        ConfigureSavePanel();
     }
 
     public bool CanAcceptPackageInput()
@@ -649,6 +679,463 @@ public class MainScene : MonoBehaviour
         }
 
         GameManager.EnterAchieveScene();
+    }
+
+    private void ConfigureMenuPanel()
+    {
+        mMenuPanelRoot = GameCommonUtility.FindSceneObject(MenuPanelObjectName);
+        if (mMenuPanelRoot == null)
+        {
+            Debug.LogWarning($"MainScene: menu panel not found. Expected object named {MenuPanelObjectName}.");
+            return;
+        }
+
+        SetMenuPanelVisible(false);
+
+        var menuButton = GameCommonUtility.FindSceneObject(MenuButtonObjectName)?.GetComponent<Button>();
+        if (menuButton == null)
+        {
+            Debug.LogWarning($"MainScene: menu button not found. Expected object named {MenuButtonObjectName}.");
+        }
+        else
+        {
+            menuButton.onClick.RemoveListener(OnMenuButtonClicked);
+            menuButton.onClick.AddListener(OnMenuButtonClicked);
+        }
+
+        var closeButton = FindChild(mMenuPanelRoot.transform, MenuCloseButtonObjectName)?.GetComponent<Button>();
+        if (closeButton != null)
+        {
+            closeButton.onClick.RemoveListener(OnMenuCloseButtonClicked);
+            closeButton.onClick.AddListener(OnMenuCloseButtonClicked);
+        }
+
+        var returnButton = FindChild(mMenuPanelRoot.transform, GameDefine.ReturnButtonObjectName)?.GetComponent<Button>();
+        if (returnButton != null)
+        {
+            returnButton.onClick.RemoveListener(OnMenuCloseButtonClicked);
+            returnButton.onClick.AddListener(OnMenuCloseButtonClicked);
+        }
+
+        var settingsButton = FindChild(mMenuPanelRoot.transform, SettingsButtonObjectName)?.GetComponent<Button>();
+        if (settingsButton != null)
+        {
+            settingsButton.onClick.RemoveListener(OnSettingsButtonClicked);
+            settingsButton.onClick.AddListener(OnSettingsButtonClicked);
+        }
+
+        var usableButton = FindChild(mMenuPanelRoot.transform, UsableButtonObjectName)?.GetComponent<Button>();
+        if (usableButton != null)
+        {
+            usableButton.onClick.RemoveListener(OnUsableButtonClicked);
+            usableButton.onClick.AddListener(OnUsableButtonClicked);
+        }
+
+        var saveButton = FindChild(mMenuPanelRoot.transform, SaveButtonObjectName)?.GetComponent<Button>();
+        if (saveButton != null)
+        {
+            saveButton.onClick.RemoveListener(OnSaveButtonClicked);
+            saveButton.onClick.AddListener(OnSaveButtonClicked);
+        }
+    }
+
+    private void OnMenuButtonClicked()
+    {
+        if (mIsPlayingAnimation)
+        {
+            return;
+        }
+
+        SetMenuPanelVisible(true);
+    }
+
+    private void OnMenuCloseButtonClicked()
+    {
+        SetMenuPanelVisible(false);
+    }
+
+    private void SetMenuPanelVisible(bool visible)
+    {
+        if (mMenuPanelRoot == null)
+        {
+            return;
+        }
+
+        mMenuPanelRoot.SetActive(visible);
+        if (visible)
+        {
+            mMenuPanelRoot.transform.SetAsLastSibling();
+        }
+    }
+
+    private void ConfigureSettingsPanel()
+    {
+        mSettingsPanelRoot = GameCommonUtility.FindSceneObject(SettingsPanelObjectName);
+        if (mSettingsPanelRoot == null)
+        {
+            Debug.LogWarning($"MainScene: settings panel not found. Expected object named {SettingsPanelObjectName}.");
+            return;
+        }
+
+        mMusicSlider = ConfigureSettingsSlider(MusicSliderObjectName);
+        mEffectSlider = ConfigureSettingsSlider(EffectSliderObjectName);
+        mWindowedToggle = FindChild(mSettingsPanelRoot.transform, WindowedToggleObjectName)?.GetComponent<Toggle>();
+
+        if (!GameSettingsUtility.Initialize())
+        {
+            Debug.LogWarning("MainScene: GameSettingsUtility is not ready, settings will use defaults until SQLite is available.");
+        }
+
+        ApplySettingsToUi(GameSettingsUtility.GetSettings());
+        BindSettingsControls();
+        SetSettingsPanelVisible(false);
+    }
+
+    private void BindSettingsControls()
+    {
+        var closeButton = FindChild(mSettingsPanelRoot.transform, MenuCloseButtonObjectName)?.GetComponent<Button>();
+        if (closeButton != null)
+        {
+            closeButton.onClick.RemoveListener(OnSettingsCloseButtonClicked);
+            closeButton.onClick.AddListener(OnSettingsCloseButtonClicked);
+        }
+
+        var returnButton = FindChild(mSettingsPanelRoot.transform, GameDefine.ReturnButtonObjectName)?.GetComponent<Button>();
+        if (returnButton != null)
+        {
+            returnButton.onClick.RemoveListener(OnSettingsCloseButtonClicked);
+            returnButton.onClick.AddListener(OnSettingsCloseButtonClicked);
+        }
+
+        if (mMusicSlider != null)
+        {
+            mMusicSlider.ValueChanged = OnMusicVolumeChanged;
+        }
+        else
+        {
+            Debug.LogWarning($"MainScene: settings music slider not found. Expected {MusicSliderObjectName} under {SettingsPanelObjectName}.");
+        }
+
+        if (mEffectSlider != null)
+        {
+            mEffectSlider.ValueChanged = OnEffectVolumeChanged;
+        }
+        else
+        {
+            Debug.LogWarning($"MainScene: settings effect slider not found. Expected {EffectSliderObjectName} under {SettingsPanelObjectName}.");
+        }
+
+        if (mWindowedToggle != null)
+        {
+            mWindowedToggle.onValueChanged.RemoveListener(OnWindowedToggleChanged);
+            mWindowedToggle.onValueChanged.AddListener(OnWindowedToggleChanged);
+        }
+        else
+        {
+            Debug.LogWarning($"MainScene: settings windowed toggle not found. Expected {WindowedToggleObjectName} under {SettingsPanelObjectName}.");
+        }
+    }
+
+    private void ApplySettingsToUi(GameSettingsData settings)
+    {
+        if (settings == null)
+        {
+            return;
+        }
+
+        mIsApplyingSettingsToUi = true;
+        if (mMusicSlider != null)
+        {
+            mMusicSlider.SetValueWithoutNotify(settings.MusicVolume);
+        }
+
+        if (mEffectSlider != null)
+        {
+            mEffectSlider.SetValueWithoutNotify(settings.EffectVolume);
+        }
+
+        if (mWindowedToggle != null)
+        {
+            mWindowedToggle.SetIsOnWithoutNotify(settings.IsWindowed);
+        }
+
+        if (mUsableToggle1 != null)
+        {
+            mUsableToggle1.SetIsOnWithoutNotify(settings.UsableOption1);
+        }
+
+        if (mUsableToggle2 != null)
+        {
+            mUsableToggle2.SetIsOnWithoutNotify(settings.UsableOption2);
+        }
+
+        if (mUsableToggle3 != null)
+        {
+            mUsableToggle3.SetIsOnWithoutNotify(settings.UsableOption3);
+        }
+
+        mIsApplyingSettingsToUi = false;
+    }
+
+    private FakeSettingsSliderInput ConfigureSettingsSlider(string objectName)
+    {
+        var rootRect = FindChild(mSettingsPanelRoot.transform, objectName) as RectTransform;
+        if (rootRect == null)
+        {
+            return null;
+        }
+
+        return FakeSettingsSliderInput.Attach(rootRect);
+    }
+
+    private void OnSettingsButtonClicked()
+    {
+        if (mIsPlayingAnimation)
+        {
+            return;
+        }
+
+        SetMenuPanelVisible(false);
+        SetSettingsPanelVisible(true);
+    }
+
+    private void OnSettingsCloseButtonClicked()
+    {
+        SetSettingsPanelVisible(false);
+    }
+
+    private void OnMusicVolumeChanged(float value)
+    {
+        if (mIsApplyingSettingsToUi)
+        {
+            return;
+        }
+
+        GameSettingsUtility.SetMusicVolume(value);
+    }
+
+    private void OnEffectVolumeChanged(float value)
+    {
+        if (mIsApplyingSettingsToUi)
+        {
+            return;
+        }
+
+        GameSettingsUtility.SetEffectVolume(value);
+    }
+
+    private void OnWindowedToggleChanged(bool isWindowed)
+    {
+        if (mIsApplyingSettingsToUi)
+        {
+            return;
+        }
+
+        GameSettingsUtility.SetWindowed(isWindowed);
+    }
+
+    private void SetSettingsPanelVisible(bool visible)
+    {
+        if (mSettingsPanelRoot == null)
+        {
+            return;
+        }
+
+        mSettingsPanelRoot.SetActive(visible);
+        if (visible)
+        {
+            mSettingsPanelRoot.transform.SetAsLastSibling();
+        }
+    }
+
+    private void ConfigureUsablePanel()
+    {
+        mUsablePanelRoot = GameCommonUtility.FindSceneObject(UsablePanelObjectName);
+        if (mUsablePanelRoot == null)
+        {
+            Debug.LogWarning($"MainScene: usable panel not found. Expected object named {UsablePanelObjectName}.");
+            return;
+        }
+
+        mUsableToggle1 = FindChild(mUsablePanelRoot.transform, UsableToggle1ObjectName)?.GetComponent<Toggle>();
+        mUsableToggle2 = FindChild(mUsablePanelRoot.transform, UsableToggle2ObjectName)?.GetComponent<Toggle>();
+        mUsableToggle3 = FindChild(mUsablePanelRoot.transform, UsableToggle3ObjectName)?.GetComponent<Toggle>();
+
+        if (!GameSettingsUtility.Initialize())
+        {
+            Debug.LogWarning("MainScene: GameSettingsUtility is not ready, usable options will use defaults until SQLite is available.");
+        }
+
+        ApplySettingsToUi(GameSettingsUtility.GetSettings());
+        BindUsableControls();
+        SetUsablePanelVisible(false);
+    }
+
+    private void BindUsableControls()
+    {
+        var closeButton = FindChild(mUsablePanelRoot.transform, MenuCloseButtonObjectName)?.GetComponent<Button>();
+        if (closeButton != null)
+        {
+            closeButton.onClick.RemoveListener(OnUsableCloseButtonClicked);
+            closeButton.onClick.AddListener(OnUsableCloseButtonClicked);
+        }
+
+        var returnButton = FindChild(mUsablePanelRoot.transform, GameDefine.ReturnButtonObjectName)?.GetComponent<Button>();
+        if (returnButton != null)
+        {
+            returnButton.onClick.RemoveListener(OnUsableCloseButtonClicked);
+            returnButton.onClick.AddListener(OnUsableCloseButtonClicked);
+        }
+
+        if (mUsableToggle1 != null)
+        {
+            mUsableToggle1.onValueChanged.RemoveListener(OnUsableToggle1Changed);
+            mUsableToggle1.onValueChanged.AddListener(OnUsableToggle1Changed);
+        }
+        else
+        {
+            Debug.LogWarning($"MainScene: usable toggle not found. Expected {UsableToggle1ObjectName} under {UsablePanelObjectName}.");
+        }
+
+        if (mUsableToggle2 != null)
+        {
+            mUsableToggle2.onValueChanged.RemoveListener(OnUsableToggle2Changed);
+            mUsableToggle2.onValueChanged.AddListener(OnUsableToggle2Changed);
+        }
+        else
+        {
+            Debug.LogWarning($"MainScene: usable toggle not found. Expected {UsableToggle2ObjectName} under {UsablePanelObjectName}.");
+        }
+
+        if (mUsableToggle3 != null)
+        {
+            mUsableToggle3.onValueChanged.RemoveListener(OnUsableToggle3Changed);
+            mUsableToggle3.onValueChanged.AddListener(OnUsableToggle3Changed);
+        }
+        else
+        {
+            Debug.LogWarning($"MainScene: usable toggle not found. Expected {UsableToggle3ObjectName} under {UsablePanelObjectName}.");
+        }
+    }
+
+    private void OnUsableButtonClicked()
+    {
+        if (mIsPlayingAnimation)
+        {
+            return;
+        }
+
+        SetMenuPanelVisible(false);
+        SetUsablePanelVisible(true);
+    }
+
+    private void OnUsableCloseButtonClicked()
+    {
+        SetUsablePanelVisible(false);
+    }
+
+    private void OnUsableToggle1Changed(bool value)
+    {
+        if (mIsApplyingSettingsToUi)
+        {
+            return;
+        }
+
+        GameSettingsUtility.SetUsableOption1(value);
+    }
+
+    private void OnUsableToggle2Changed(bool value)
+    {
+        if (mIsApplyingSettingsToUi)
+        {
+            return;
+        }
+
+        GameSettingsUtility.SetUsableOption2(value);
+    }
+
+    private void OnUsableToggle3Changed(bool value)
+    {
+        if (mIsApplyingSettingsToUi)
+        {
+            return;
+        }
+
+        GameSettingsUtility.SetUsableOption3(value);
+    }
+
+    private void SetUsablePanelVisible(bool visible)
+    {
+        if (mUsablePanelRoot == null)
+        {
+            return;
+        }
+
+        mUsablePanelRoot.SetActive(visible);
+        if (visible)
+        {
+            mUsablePanelRoot.transform.SetAsLastSibling();
+        }
+    }
+
+    private void ConfigureSavePanel()
+    {
+        mSavePanelRoot = GameCommonUtility.FindSceneObject(SavePanelObjectName);
+        if (mSavePanelRoot == null)
+        {
+            Debug.LogWarning($"MainScene: save panel not found. Expected object named {SavePanelObjectName}.");
+            return;
+        }
+
+        BindSaveControls();
+        SetSavePanelVisible(false);
+    }
+
+    private void BindSaveControls()
+    {
+        var closeButton = FindChild(mSavePanelRoot.transform, MenuCloseButtonObjectName)?.GetComponent<Button>();
+        if (closeButton != null)
+        {
+            closeButton.onClick.RemoveListener(OnSaveCloseButtonClicked);
+            closeButton.onClick.AddListener(OnSaveCloseButtonClicked);
+        }
+
+        var returnButton = FindChild(mSavePanelRoot.transform, GameDefine.ReturnButtonObjectName)?.GetComponent<Button>();
+        if (returnButton != null)
+        {
+            returnButton.onClick.RemoveListener(OnSaveCloseButtonClicked);
+            returnButton.onClick.AddListener(OnSaveCloseButtonClicked);
+        }
+    }
+
+    private void OnSaveButtonClicked()
+    {
+        if (mIsPlayingAnimation)
+        {
+            return;
+        }
+
+        SetMenuPanelVisible(false);
+        SetSavePanelVisible(true);
+    }
+
+    private void OnSaveCloseButtonClicked()
+    {
+        SetSavePanelVisible(false);
+    }
+
+    private void SetSavePanelVisible(bool visible)
+    {
+        if (mSavePanelRoot == null)
+        {
+            return;
+        }
+
+        mSavePanelRoot.SetActive(visible);
+        if (visible)
+        {
+            mSavePanelRoot.transform.SetAsLastSibling();
+        }
     }
 
     private void ConfigurePackageCanvas(Camera targetCamera)

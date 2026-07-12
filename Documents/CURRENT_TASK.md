@@ -1,58 +1,81 @@
 # Current Task
 
-- Task: Support updated package ScrollView UI
+- Task: Add MainScene menu panel persistence
 - Status: In Progress
 - Updated At: 2026-07-12
 
 ## User Intent
 
-- Support the newly edited package list UI in `MainScene`.
-- Use the `PackageScrollView -> Viewport -> Content -> Page_1` layout for displaying card packs.
-- Keep package clicking functional while allowing ScrollView dragging.
+- Support the newly edited `PanelSet` UI in MainScene.
+- `PanelSet` contains music volume, effect volume, and windowed-mode controls.
+- Persist those three settings locally.
+- Support the newly added `PanelUsable` UI in MainScene.
+- Bind `BtnUsable` to open `PanelUsable`, and persist its three toggle values locally.
+- Support the newly added `PanelSave` UI in MainScene.
+- Bind its menu entry to show `PanelSave`; only display/hide behavior is required for now.
 
 ## Working Notes
 
-- `GameScene.unity` did not contain the package list change; the edited ScrollView is in `MainScene.unity`.
-- The new scene structure has `PackageScrollView`, `Content`, and `Page_1`.
-- `PackItem.prefab` contains `Cover` and `NameText`.
-- Runtime code now prefers the new paged ScrollView layout, and falls back to the old `Package001` image template if the new layout is absent.
-- The new page model uses 18 packages per page and creates additional `Page_N` objects as needed.
-- Pack icons use original 600x680 source textures and should be proportionally fitted inside the MainScene package list cells.
-- Package list should start from the upper-left and place pack icons horizontally before wrapping to the next row.
+- `MainScene.unity` contains inactive `PanelSet` under the main Canvas.
+- `PanelSet` contains `SliderMusic`, `SliderEffect`, `ToggleFrame`, `BtnClose`, and `BtnReturn`.
+- `PanelMenu/BtnSet` opens `PanelSet`.
+- `GameCommonUtility.FindSceneObject` can find inactive scene objects, so runtime binding can resolve `PanelSet` without scene edits.
+- Scene slider roots were 160x20 while their background sprites were 258x52, and Fill/Handle children had fixed offsets that made the UI deform and prevented dragging cleanly to the left edge.
+- The current fix uses editor-built fake sliders directly.
+- `PanelSet/SliderMusic` and `PanelSet/SliderEffect` are Image roots with `SliderFill` and `SliderHandle` child Images.
+- Runtime attaches `FakeSettingsSliderInput` to each root, updates `SliderFill` width and `SliderHandle` x-position during pointer down/drag, and saves the resulting value.
+- `PanelUsable` contains `Toggle1`, `Toggle2`, and `Toggle3`; their concrete gameplay meaning is not defined yet, so they are stored as neutral usable option fields.
+- `PanelSave` is inactive in `MainScene.unity` and contains close/return buttons.
+- The scene currently uses `PanelMenu/BtnData` as the `PanelSave` entry button; there is no `BtnSave` object.
 
 ## Files Changed
 
 - `Assets/Scripts/Controller/MainScene.cs`
-- `Assets/Scripts/View/PackageInteractionHandler.cs`
+- `Assets/Scenes/MainScene.unity`
+- `Assets/Scripts/View/FakeSettingsSliderInput.cs`
+- `Assets/Scripts/Model/GameSettingsUtility.cs`
+- `Documents/PROJECT_CONTEXT.md`
 - `Documents/CURRENT_TASK.md`
 
 ## Decisions
 
-- Use `PackageScrollView` as the new primary package list container.
-- Use `Page_1` as the page template under ScrollView `Content`.
-- Use `Assets/Prefabs/PackItem.prefab` in Editor; fall back to a runtime-created simple item if the prefab is unavailable.
-- Treat short pointer movement as click-to-open, and forward drag events to `ScrollRect` for list scrolling.
-- Runtime package item size is 240x272, matching the 600x680 source icon aspect ratio at 40% scale.
-- `PackageScrollView` content, page, and grid layout settings are normalized at runtime to upper-left horizontal layout.
-- Each page uses a 6-column by 3-row grid, so items fill left-to-right from the upper-left before creating the next horizontal page.
-- `NameText` is hidden in runtime package items so it does not overflow the icon cell.
+- Store settings in SQLite `AppRecords` collection/key `GameSettings/Runtime`.
+- Keep `PanelSet` hidden during MainScene startup.
+- Keep `PanelUsable` hidden during MainScene startup.
+- Bind `PanelMenu/BtnSet` to open `PanelSet` and hide `PanelMenu`.
+- Bind `PanelMenu/BtnUsable` to open `PanelUsable` and hide `PanelMenu`.
+- Bind `PanelMenu/BtnData` to open `PanelSave` and hide `PanelMenu`.
+- Bind `PanelSet/BtnClose` and `PanelSet/BtnReturn` to hide `PanelSet`.
+- Bind `PanelUsable/BtnClose` and `PanelUsable/BtnReturn` to hide `PanelUsable`.
+- Bind `PanelSave/BtnClose` and `PanelSave/BtnReturn` to hide `PanelSave`.
+- Slider and toggle changes save immediately.
+- `PanelUsable` toggles save immediately as `UsableOption1`, `UsableOption2`, and `UsableOption3`.
+- Windowed toggle maps `true` to `Screen.fullScreen = false`.
+- Audio settings are stored separately as music/effect volumes; existing AudioSources are applied by object name (`music`/`bgm` => music, others => effect).
+- Fake settings sliders use the editor layout directly and only refresh fill width / handle position at runtime.
 
 ## Validation
 
-- Static-checked that `MainScene.unity` contains `PackageScrollView`, `Content`, and `Page_1`.
-- Static-checked that `PackItem.prefab` contains `Cover` and `NameText`.
-- Static-checked that scene `Page_1` is serialized as 0x0 and can be affected by old centered alignment, so runtime now overrides page and grid layout values.
-- Ran `git diff --check` for changed scripts; no script whitespace errors.
-- Full `git diff --check` still reports existing Unity scene trailing whitespace in `Assets/Scenes/MainScene.unity`; the script fix does not rewrite that scene.
-- Tried locating a Unity executable from command line; none was available, so Play Mode UI screenshot validation was not run.
+- Static-checked that `MainScene.unity` contains inactive `PanelSet`, `SliderMusic`, `SliderEffect`, `ToggleFrame`, `PanelSet/BtnClose`, and `PanelSet/BtnReturn`.
+- Static-checked that `PanelMenu` contains `BtnSet`.
+- Static-checked that `MainScene.unity` contains inactive `PanelUsable`, `PanelMenu/BtnUsable`, and `Toggle1` / `Toggle2` / `Toggle3`.
+- Static-checked that `MainScene.unity` contains inactive `PanelSave`, `PanelMenu/BtnData`, and `PanelSave` close/return buttons.
+- Added `GameSettingsUtility` for local persistence and runtime application.
+- Extended `GameSettingsUtility` with three persisted usable option booleans.
+- Replaced standard Unity `Slider` usage with `FakeSettingsSliderInput` for the hand-built three-image sliders.
+- Ran scoped `git diff --check` for touched scripts/docs; no whitespace errors. Git only reported existing LF-to-CRLF working-copy warnings.
+- `dotnet`, `msbuild`, and command-line Unity were not available in this shell, so compile/Play Mode automation was not run.
+- Unity Play Mode was not run from this shell.
 
 ## Next Action
 
 1. Open `MainScene` in Unity and enter Play Mode.
-2. Verify package items instantiate under `PackageScrollView/Viewport/Content/Page_1`.
-3. Verify horizontal drag scrolls pages instead of opening a package.
-4. Verify tapping a package still plays the pack animation and enters `GameScene`.
+2. Open menu, click `BtnSet`, and verify `PanelSet` opens.
+3. Open menu, click `BtnUsable`, and verify `PanelUsable` opens.
+4. Open menu, click `BtnData`, and verify `PanelSave` opens.
+5. Toggle `Toggle1` / `Toggle2` / `Toggle3` and verify values persist after restarting Play Mode.
+6. Move `SliderMusic` / `SliderEffect` and verify values persist after restarting Play Mode.
 
 ## Resume Prompt
 
-Continue Puffies updated package ScrollView UI work. Read AGENTS.md, Documents/WORKFLOW.md, and Documents/CURRENT_TASK.md first, then verify the MainScene package list in Unity Play Mode.
+Continue Puffies MainScene menu panel work. Read AGENTS.md, Documents/WORKFLOW.md, and Documents/CURRENT_TASK.md first, then verify the settings/usable/save UI and local persistence in Unity Play Mode.
