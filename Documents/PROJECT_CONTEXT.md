@@ -137,7 +137,7 @@ effect (debug): CardFx preview, menu Puffies -> Preview CardFx Effects
 | `BtnReturn` | Rank / Game -> Main; under `PanelMenu`, closes the MainScene menu |
 | `CloseBtn` | Achieve -> Main |
 | `BtnFinish` | Game RewardPanel -> Main |
-| `TextLoading` | Loading progress text |
+| `TextLoading` | Loading progress text; supports TextMeshPro `TMP_Text` and legacy `UnityEngine.UI.Text` |
 | `CardBagNNN` | Runtime gameplay prefab loaded from `Resources/CardBagPrefabs/` |
 | `GameBoard` / `Piece01`... | Board and slots inside a `CardBagNNN` prefab |
 | `PieceBoard` | Puzzle piece tray |

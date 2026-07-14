@@ -1,4 +1,5 @@
 using System.Collections;
+using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
@@ -10,6 +11,7 @@ public class LoadingScene : MonoBehaviour
     private const string BootstrapObjectName = "LoadingSceneBootstrap";
     private static bool sHookedSceneLoaded;
     private Text mLoadingText;
+    private TMP_Text mLoadingTmpText;
     private Coroutine mLoadingCoroutine;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -44,9 +46,20 @@ public class LoadingScene : MonoBehaviour
             return;
         }
 
-        GameFontUtility.ApplyDefaultFont(mLoadingText);
+        ApplyLoadingTextFont();
 
         mLoadingCoroutine = StartCoroutine(RunLoadingProgress());
+    }
+
+    private void ApplyLoadingTextFont()
+    {
+        if (mLoadingTmpText != null)
+        {
+            GameFontUtility.ApplyDefaultFont(mLoadingTmpText);
+            return;
+        }
+
+        GameFontUtility.ApplyDefaultFont(mLoadingText);
     }
 
     private static void InitializeLocalStores()
@@ -75,10 +88,11 @@ public class LoadingScene : MonoBehaviour
             return false;
         }
 
+        mLoadingTmpText = textObject.GetComponent<TMP_Text>();
         mLoadingText = textObject.GetComponent<Text>();
-        if (mLoadingText == null)
+        if (mLoadingTmpText == null && mLoadingText == null)
         {
-            Debug.LogWarning($"LoadingScene: {GameDefine.LoadingTextObjectName} is missing Text component.");
+            Debug.LogWarning($"LoadingScene: {GameDefine.LoadingTextObjectName} is missing Text or TMP_Text component.");
             return false;
         }
 
@@ -105,11 +119,17 @@ public class LoadingScene : MonoBehaviour
 
     private void UpdateLoadingText(int percent)
     {
-        if (mLoadingText == null)
+        var text = string.Format(GameDefine.LoadingTextFormat, percent);
+        if (mLoadingTmpText != null)
         {
+            mLoadingTmpText.text = text;
             return;
         }
 
-        mLoadingText.text = string.Format(GameDefine.LoadingTextFormat, percent);
+        if (mLoadingText != null)
+        {
+            mLoadingText.text = text;
+            return;
+        }
     }
 }
