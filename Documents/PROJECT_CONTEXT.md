@@ -50,7 +50,7 @@ Current work state is tracked in [CURRENT_TASK.md](CURRENT_TASK.md). Workflow ru
 - Formal Rank page content.
 - Steam achievement integration, replacing AchieveScene mock data.
 - Formal build regression.
-- Board sliding to slot center and slot outline rendering were discussed but not merged; if still needed, implement as separate small tasks.
+- Board sliding to slot center was discussed but not merged; if still needed, implement as a separate small task.
 
 ---
 
@@ -140,6 +140,7 @@ effect (debug): CardFx preview, menu Puffies -> Preview CardFx Effects
 | `TextLoading` | Loading progress text; supports TextMeshPro `TMP_Text` and legacy `UnityEngine.UI.Text` |
 | `CardBagNNN` | Runtime gameplay prefab loaded from `Resources/CardBagPrefabs/` |
 | `GameBoard` / `Piece01`... | Board and slots inside a `CardBagNNN` prefab |
+| `ActiveGroupOutline` | Runtime-generated world-space SpriteRenderer outline around the current `GameScene` puzzle target group |
 | `PieceBoard` | Puzzle piece tray |
 | `RewardPanel` | Puzzle completion reward panel |
 | `Package001` | MainScene card pack slot template, hidden and cloned at runtime |
@@ -204,6 +205,7 @@ New `CanvasScaler` values are written by `CanvasDesignResolutionEditor.cs`. Use 
 4. Store source textures under `Assets/UI/CardBag001/` using grouped names such as `Pieces11`...`Pieces14` and `Pieces21`...`Pieces25`.
 5. Do not use `PieceGroup` parent nodes; grouping comes only from the number after `Piece`.
 6. Do not create Package JSON; runtime data comes from the loaded prefab's Images.
+7. `GameScene` automatically generates a merged world-space `ActiveGroupOutline` SpriteRenderer from the current group's existing `PieceNN` sprites and filters it against the existing `GameBoard` background, using color `#3f423e` and a 3-pixel outline width; do not author outline objects or per-group mask assets in prefabs.
 
 ### CardFx
 

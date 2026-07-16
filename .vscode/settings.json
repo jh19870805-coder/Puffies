@@ -1,7 +1,5 @@
 {
   "editor.codeLens": false,
-  "csharp.referencesCodeLens.enabled": false,
-  "csharp.testsCodeLens.enabled": false,
   "files.exclude": {
     "**/.vscode": true,
     "**/.agents": true,
@@ -58,5 +56,7 @@
     "**/UniversalRenderPipelineGlobalSettings.asset": true,
     "**/Puffies_BurstDebugInformation_DoNotShip/**": true,
     "**/Assets/Scenes/**": true
-  }
+  },
+  "dotnet.codeLens.enableReferencesCodeLens": false,
+  "dotnet.codeLens.enableTestsCodeLens": false
 }
