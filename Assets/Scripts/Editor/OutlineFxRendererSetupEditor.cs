@@ -11,7 +11,7 @@ public static class OutlineFxRendererSetupEditor
     private const string RendererDataPath = "Assets/Settings/Renderer2D.asset";
     private const string OutlineShaderPath =
         "Packages/www.nulltale.outlinefx/Runtime/Shaders/Main.shader";
-    private const float DesignOutlineThickness = 0.075f;
+    private const float DesignOutlineThickness = 0.0375f;
 
     static OutlineFxRendererSetupEditor()
     {

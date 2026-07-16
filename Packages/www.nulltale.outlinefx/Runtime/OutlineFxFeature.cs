@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
@@ -151,13 +150,13 @@ namespace OutlineFx
         // =======================================================================
         public override void Create()
         {
-            
+            CoreUtils.Destroy(_outlineMat);
+            _outlineMat = null;
             _pass = new Pass() { _owner = this };
             _pass.Init();
             _renderers.Clear();
             
             _validateContent();
-			_ensureMaterialReady();
 			
             if (k_ScreenMesh == null)
             {
@@ -207,18 +206,36 @@ namespace OutlineFx
         // =======================================================================
         private bool _ensureMaterialReady()
         {
-            if (_shader == null || _shader.name != k_OutlineShader || _shader.passCount < 8)
+            if (_shader == null || _shader.name != k_OutlineShader || !_shader.isSupported)
                 _shader = Shader.Find(k_OutlineShader);
 
-            if (_shader == null || _shader.name != k_OutlineShader || _shader.passCount < 8)
+            if (_shader == null || _shader.name != k_OutlineShader || !_shader.isSupported)
                 return false;
 
-            if (_outlineMat != null && _outlineMat.shader == _shader && _outlineMat.passCount >= 8)
+            if (_hasRequiredPasses(_outlineMat))
                 return true;
 
             CoreUtils.Destroy(_outlineMat);
             _validateMaterial();
-            return true;
+            return _hasRequiredPasses(_outlineMat);
+        }
+
+        private bool _hasRequiredPasses(Material material)
+        {
+            return material != null
+                && material.shader == _shader
+                && material.shader != null
+                && material.shader.name == k_OutlineShader
+                && material.shader.isSupported
+                && material.FindPass("Transparent") >= 0
+                && material.FindPass("Outline") >= 0
+                && material.FindPass("DilateMaskHorizontal") >= 0
+                && material.FindPass("DilateMaskVertical") >= 0
+                && material.FindPass("ErodeMaskHorizontal") >= 0
+                && material.FindPass("ErodeMaskVertical") >= 0
+                && material.FindPass("ExpandMaskHorizontal") >= 0
+                && material.FindPass("ExpandMaskVertical") >= 0
+                && material.FindPass("MaskInteriorOutline") >= 0;
         }
 
         private void _validateMaterial()
@@ -262,11 +279,19 @@ namespace OutlineFx
 			
             if (_solidMask._pattern == null)
             {
-                var dir = Path.GetDirectoryName(UnityEditor.AssetDatabase.GetAssetPath(_shader));
-                _solidMask._pattern = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>($"{dir}\\checker.png");
+                var shaderPath = UnityEditor.AssetDatabase.GetAssetPath(_shader);
+                var separatorIndex = shaderPath.LastIndexOf('/');
+                if (separatorIndex >= 0)
+                {
+                    var patternPath = $"{shaderPath.Substring(0, separatorIndex + 1)}Checker.png";
+                    var pattern = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>(patternPath);
+                    if (pattern != null)
+                    {
+                        _solidMask._pattern = pattern;
+                        UnityEditor.EditorUtility.SetDirty(this);
+                    }
+                }
             }
-            
-            UnityEditor.EditorUtility.SetDirty(this);
 #endif
         }
 		

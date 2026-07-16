@@ -26,6 +26,7 @@ public class GameScene : MonoBehaviour
     private const float PieceBgFillAlpha = 0.3f;
     private const int PieceSortingOrder = 520;
     private const int ActiveGroupOutlineSortingOrder = PieceSortingOrder - 1;
+    private static readonly Vector2 ActiveGroupOutlineScreenOffset = new Vector2(6f, 6f);
     private const string BootstrapObjectName = "GameSceneBootstrap";
     private const string PieceBgFillObjectName = "PieceBgFill";
     private const string PieceBgObjectName = "PieceBg";
@@ -42,6 +43,8 @@ public class GameScene : MonoBehaviour
     private static bool sHookedSceneLoaded;
     private readonly BoardState _board = new BoardState();
     private readonly DragState _drag = new DragState();
+    private readonly Dictionary<SpriteRenderer, RectTransform> _outlineProxyTargets =
+        new Dictionary<SpriteRenderer, RectTransform>();
     private Vector3 _pieceBgOriginalPosition;
     private bool _hasPieceBgOriginalPosition;
     private bool _isPieceBgHidden;
@@ -97,6 +100,34 @@ public class GameScene : MonoBehaviour
             TryBeginDrag,
             UpdateDragging,
             OnPointerEnd);
+    }
+
+    private void LateUpdate()
+    {
+        if (_outlineProxyTargets.Count == 0)
+        {
+            return;
+        }
+
+        var camera = Camera.main;
+        if (camera == null)
+        {
+            return;
+        }
+
+        var boardScale = CalculatePieceScaleOnBoard();
+        foreach (var proxyTarget in _outlineProxyTargets)
+        {
+            var proxyRenderer = proxyTarget.Key;
+            var grooveRect = proxyTarget.Value;
+            if (proxyRenderer == null || grooveRect == null)
+            {
+                continue;
+            }
+
+            proxyRenderer.transform.localScale = boardScale;
+            proxyRenderer.transform.position = GetActiveGroupOutlinePosition(grooveRect, camera);
+        }
     }
 
     private void InitializeGameplay(int bagId)
@@ -765,7 +796,7 @@ public class GameScene : MonoBehaviour
         }
     }
 
-    private static bool CreateActiveGroupOutlineProxy(
+    private bool CreateActiveGroupOutlineProxy(
         Image grooveImage,
         string objectName,
         Transform parent,
@@ -789,7 +820,7 @@ public class GameScene : MonoBehaviour
         return true;
     }
 
-    private static void CreateActiveGroupOutlineBlocker(
+    private void CreateActiveGroupOutlineBlocker(
         Image grooveImage,
         string objectName,
         Transform parent,
@@ -809,7 +840,7 @@ public class GameScene : MonoBehaviour
         }
     }
 
-    private static SpriteRenderer CreateActiveGroupOutlineRenderer(
+    private SpriteRenderer CreateActiveGroupOutlineRenderer(
         Image grooveImage,
         string objectName,
         Transform parent,
@@ -831,12 +862,14 @@ public class GameScene : MonoBehaviour
         proxyRenderer.sortingOrder = sortingOrder;
         proxyRenderer.color = new Color(1f, 1f, 1f, 0f);
         proxyRenderer.transform.localScale = boardScale;
-        proxyRenderer.transform.position = GetGrooveSnapPosition(grooveImage.rectTransform, camera);
+        proxyRenderer.transform.position = GetActiveGroupOutlinePosition(grooveImage.rectTransform, camera);
+        _outlineProxyTargets[proxyRenderer] = grooveImage.rectTransform;
         return proxyRenderer;
     }
 
-    private static void ClearActiveGroupOutline()
+    private void ClearActiveGroupOutline()
     {
+        _outlineProxyTargets.Clear();
         var root = GameObject.Find(ActiveGroupOutlineRootObjectName);
         if (root != null)
         {
@@ -1048,6 +1081,25 @@ public class GameScene : MonoBehaviour
             grooveRect,
             camera,
             WorldGameplayDepth);
+        worldPosition.z = WorldGameplayDepth;
+        return worldPosition;
+    }
+
+    private static Vector3 GetActiveGroupOutlinePosition(RectTransform grooveRect, Camera camera)
+    {
+        var worldPosition = GetGrooveSnapPosition(grooveRect, camera);
+        if (camera == null)
+        {
+            return worldPosition;
+        }
+
+        var distance = Mathf.Abs(camera.transform.position.z - WorldGameplayDepth);
+        var screenOrigin = camera.ScreenToWorldPoint(new Vector3(0f, 0f, distance));
+        var screenOffset = camera.ScreenToWorldPoint(new Vector3(
+            ActiveGroupOutlineScreenOffset.x,
+            ActiveGroupOutlineScreenOffset.y,
+            distance));
+        worldPosition += screenOffset - screenOrigin;
         worldPosition.z = WorldGameplayDepth;
         return worldPosition;
     }
@@ -1489,30 +1541,148 @@ public class GameScene : MonoBehaviour
         }
 
         GameCommonUtility.FitOrthographicCameraSizeOnly(camera, GamePageCameraPadding, pageBounds);
-        CenterCardBagOnActivePage(
-            camera,
-            activeGroupBounds.size.sqrMagnitude > 0f ? activeGroupBounds : pageBounds);
+        Canvas.ForceUpdateCanvases();
         AlignPieceTrayToPageBottom();
+        CenterCardBagOnActivePage(camera, activeGroupIndex);
     }
 
-    private void CenterCardBagOnActivePage(Camera camera, Bounds pageBounds)
+    private void CenterCardBagOnActivePage(Camera camera, int activeGroupIndex)
     {
         if (_loadedCardBagRect == null
             || !_hasOriginalCardBagAnchoredPosition
-            || pageBounds.size.sqrMagnitude <= 0f)
+            || !TryBuildActiveGroupScreenRect(camera, activeGroupIndex, out var groupScreenRect)
+            || !TryGetAvailableBoardScreenCenter(camera, out var targetScreenCenter))
         {
             return;
         }
 
-        var cameraCenter = new Vector2(camera.transform.position.x, camera.transform.position.y);
-        var pageCenter = new Vector2(pageBounds.center.x, pageBounds.center.y);
-        var worldDelta = cameraCenter - pageCenter;
-        var anchoredDelta = GameCommonUtility.WorldDeltaToCanvasAnchoredDelta(
-            _loadedCardBagRect,
-            camera,
-            worldDelta,
-            WorldGameplayDepth);
-        _loadedCardBagRect.anchoredPosition = _originalCardBagAnchoredPosition + anchoredDelta;
+        var parentRect = _loadedCardBagRect.parent as RectTransform;
+        if (parentRect == null)
+        {
+            return;
+        }
+
+        var canvas = _loadedCardBagRect.GetComponentInParent<Canvas>();
+        var eventCamera = canvas != null && canvas.renderMode == RenderMode.ScreenSpaceOverlay
+            ? null
+            : canvas != null ? canvas.worldCamera ?? camera : camera;
+        if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                parentRect,
+                groupScreenRect.center,
+                eventCamera,
+                out var groupLocalCenter)
+            || !RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                parentRect,
+                targetScreenCenter,
+                eventCamera,
+                out var targetLocalCenter))
+        {
+            return;
+        }
+
+        _loadedCardBagRect.anchoredPosition = _originalCardBagAnchoredPosition
+            + targetLocalCenter
+            - groupLocalCenter;
+        Canvas.ForceUpdateCanvases();
+    }
+
+    private bool TryBuildActiveGroupScreenRect(
+        Camera camera,
+        int activeGroupIndex,
+        out Rect screenRect)
+    {
+        screenRect = default;
+        if (_board.GrooveImagesByGroup == null
+            || activeGroupIndex < 0
+            || activeGroupIndex >= _board.GrooveImagesByGroup.Count)
+        {
+            return false;
+        }
+
+        var group = _board.GrooveImagesByGroup[activeGroupIndex];
+        var hasRect = false;
+        if (group != null)
+        {
+            for (var i = 0; i < group.Count; i++)
+            {
+                var grooveImage = group[i];
+                if (grooveImage == null || !grooveImage.gameObject.activeInHierarchy)
+                {
+                    continue;
+                }
+
+                var grooveScreenRect = GetRectTransformScreenRect(grooveImage.rectTransform, camera);
+                screenRect = hasRect ? UnionRects(screenRect, grooveScreenRect) : grooveScreenRect;
+                hasRect = true;
+            }
+        }
+
+        return hasRect;
+    }
+
+    private bool TryGetAvailableBoardScreenCenter(Camera camera, out Vector2 screenCenter)
+    {
+        var backgroundRect = _board.BackgroundRect != null
+            ? GetRectTransformScreenRect(_board.BackgroundRect, camera)
+            : Rect.MinMaxRect(0f, 0f, Screen.width, Screen.height);
+        var availableBottom = backgroundRect.yMin;
+
+        if (_board.PieceBoardRect != null
+            && _board.PieceBoardRect.gameObject.activeInHierarchy
+            && !_isPieceBoardHidden)
+        {
+            availableBottom = GetRectTransformScreenRect(_board.PieceBoardRect, camera).yMax;
+        }
+        else if (_board.PieceBgRenderer != null
+                 && _board.PieceBgRenderer.gameObject.activeInHierarchy
+                 && !_isPieceBgHidden)
+        {
+            availableBottom = camera.WorldToScreenPoint(
+                new Vector3(
+                    _board.PieceBgRenderer.bounds.center.x,
+                    _board.PieceBgRenderer.bounds.max.y,
+                    _board.PieceBgRenderer.bounds.center.z)).y;
+        }
+
+        availableBottom = Mathf.Clamp(availableBottom, backgroundRect.yMin, backgroundRect.yMax);
+        screenCenter = new Vector2(
+            backgroundRect.center.x,
+            (availableBottom + backgroundRect.yMax) * 0.5f);
+        return backgroundRect.width > 0f && backgroundRect.height > 0f;
+    }
+
+    private static Rect GetRectTransformScreenRect(RectTransform rectTransform, Camera fallbackCamera)
+    {
+        var canvas = rectTransform.GetComponentInParent<Canvas>();
+        var eventCamera = canvas != null && canvas.renderMode == RenderMode.ScreenSpaceOverlay
+            ? null
+            : canvas != null ? canvas.worldCamera ?? fallbackCamera : fallbackCamera;
+        var corners = new Vector3[4];
+        rectTransform.GetWorldCorners(corners);
+        var first = RectTransformUtility.WorldToScreenPoint(eventCamera, corners[0]);
+        var xMin = first.x;
+        var xMax = first.x;
+        var yMin = first.y;
+        var yMax = first.y;
+        for (var i = 1; i < corners.Length; i++)
+        {
+            var point = RectTransformUtility.WorldToScreenPoint(eventCamera, corners[i]);
+            xMin = Mathf.Min(xMin, point.x);
+            xMax = Mathf.Max(xMax, point.x);
+            yMin = Mathf.Min(yMin, point.y);
+            yMax = Mathf.Max(yMax, point.y);
+        }
+
+        return Rect.MinMaxRect(xMin, yMin, xMax, yMax);
+    }
+
+    private static Rect UnionRects(Rect left, Rect right)
+    {
+        return Rect.MinMaxRect(
+            Mathf.Min(left.xMin, right.xMin),
+            Mathf.Min(left.yMin, right.yMin),
+            Mathf.Max(left.xMax, right.xMax),
+            Mathf.Max(left.yMax, right.yMax));
     }
 
     private Bounds BuildActiveGroupBounds(int activeGroupIndex)

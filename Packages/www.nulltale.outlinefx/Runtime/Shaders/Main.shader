@@ -120,15 +120,8 @@ Shader "Hidden/OutlineFx/Main"
             float4 frag(fragIn i) : SV_Target
             {
             	float4 color = tex2D(_MainTex, i.uv);
-            	if (color.a > .0)
-            	{
-#ifdef ALPHA_MASK
-            		return float4(color.xyz, color.a * _Solid * tex2D(_AlphaTex, mad(i.uv, _AlphaTO.xy, _AlphaTO.zw)).a);
-#endif
-            		return float4(color.xyz, color.a * _Solid);
-            	}
-            	
 				float4 result = 0;
+				float erodedAlpha = 1;
 
 #ifdef BOX
 				const float2 stepX = float2(_Step.x, 0);
@@ -144,15 +137,32 @@ Shader "Hidden/OutlineFx/Main"
 #ifdef HARD
 					result = max(result, _sample(uv, stepY));
 #endif
+					float2 erosionUv = uv - BLUR_LENGTH_HALF * stepY;
+					[unroll]
+					for (int m = 0; m < BLUR_LENGTH; m ++)
+					{
+						erodedAlpha = min(erodedAlpha, tex2D(_MainTex, erosionUv).a);
+						erosionUv += stepY;
+					}
 					
 					uv += stepX;
 				}
 #endif            	
 #ifdef CROSS
 				result = (_sample(i.uv, _Step) + _sample(i.uv, float2(_Step.x, -_Step.y))) * .5f;
+				[unroll]
+				for (int n = -BLUR_LENGTH_HALF; n <= BLUR_LENGTH_HALF; n ++)
+				{
+					erodedAlpha = min(erodedAlpha, tex2D(_MainTex, i.uv + _Step * n).a);
+					erodedAlpha = min(erodedAlpha, tex2D(_MainTex, i.uv + float2(_Step.x, -_Step.y) * n).a);
+				}
 #endif
-            	
-            	return result;
+
+				float solidAlpha = color.a * _Solid;
+#ifdef ALPHA_MASK
+				solidAlpha *= tex2D(_AlphaTex, mad(i.uv, _AlphaTO.xy, _AlphaTO.zw)).a;
+#endif
+				return float4(result.rgb, max(result.a - erodedAlpha, solidAlpha));
             }
             ENDHLSL
         }
@@ -300,7 +310,65 @@ Shader "Hidden/OutlineFx/Main"
             ENDHLSL
         }
 
-        Pass   // 7: keep only active outline pixels on the full puzzle exterior
+        Pass   // 7: expand the closed mask horizontally
+        {
+            name "ExpandMaskHorizontal"
+
+            Cull Off
+            ZWrite Off
+            ZTest Off
+            Blend One Zero
+
+            HLSLPROGRAM
+            #include "Utils.hlsl"
+
+            #pragma vertex vert_screen
+            #pragma fragment frag
+
+            sampler2D _MainTex;
+            float2 _GapStep;
+
+            float4 frag(fragIn i) : SV_Target
+            {
+                float4 result = 0;
+                [unroll]
+                for (int offset = -3; offset <= 3; offset++)
+                    result = max(result, tex2D(_MainTex, i.uv + float2(_GapStep.x * offset, 0)));
+                return result;
+            }
+            ENDHLSL
+        }
+
+        Pass   // 8: expand the closed mask vertically
+        {
+            name "ExpandMaskVertical"
+
+            Cull Off
+            ZWrite Off
+            ZTest Off
+            Blend One Zero
+
+            HLSLPROGRAM
+            #include "Utils.hlsl"
+
+            #pragma vertex vert_screen
+            #pragma fragment frag
+
+            sampler2D _MainTex;
+            float2 _GapStep;
+
+            float4 frag(fragIn i) : SV_Target
+            {
+                float4 result = 0;
+                [unroll]
+                for (int offset = -3; offset <= 3; offset++)
+                    result = max(result, tex2D(_MainTex, i.uv + float2(0, _GapStep.y * offset)));
+                return result;
+            }
+            ENDHLSL
+        }
+
+        Pass   // 9: keep only centered active outline pixels on the expanded full-puzzle exterior
         {
             name "MaskInteriorOutline"
 
@@ -315,14 +383,32 @@ Shader "Hidden/OutlineFx/Main"
             #pragma vertex vert_screen
             #pragma fragment frag
 
+			#define BLUR_LENGTH 9
+			#define BLUR_LENGTH_HALF ((BLUR_LENGTH - 1) / 2)
+
             sampler2D _MainTex;
             sampler2D _MaskTex;
+			float2 _Step;
 
             float4 frag(fragIn i) : SV_Target
             {
-                float4 outline = tex2D(_MainTex, i.uv);
-                float occupied = tex2D(_MaskTex, i.uv).a;
-                return float4(outline.rgb, occupied > 0.001 ? 0 : outline.a);
+				float4 outline = tex2D(_MainTex, i.uv);
+				float minOccupied = 1;
+				float maxOccupied = 0;
+				[unroll]
+				for (int x = -BLUR_LENGTH_HALF; x <= BLUR_LENGTH_HALF; x ++)
+				{
+					[unroll]
+					for (int y = -BLUR_LENGTH_HALF; y <= BLUR_LENGTH_HALF; y ++)
+					{
+						float occupied = tex2D(_MaskTex, i.uv + float2(_Step.x * x, _Step.y * y)).a;
+						minOccupied = min(minOccupied, occupied);
+						maxOccupied = max(maxOccupied, occupied);
+					}
+				}
+
+				bool isPuzzleEdge = maxOccupied > 0.001 && minOccupied < 0.999;
+				return float4(outline.rgb, isPuzzleEdge ? outline.a : 0);
             }
             ENDHLSL
         }

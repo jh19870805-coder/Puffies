@@ -27,6 +27,9 @@ namespace OutlineFx
             private RenderTarget            _unionBuffer;
             private RenderTarget            _gapBuffer;
             private RenderTarget            _closedBuffer;
+            private RenderTarget            _activeGapBuffer;
+            private RenderTarget            _activeClosedBuffer;
+            private RenderTarget            _activeExpandedBuffer;
             private RenderTarget            _outlineBuffer;
             private RenderTarget            _outputTex;
             private RTHandle                _output;
@@ -39,6 +42,9 @@ namespace OutlineFx
                 _unionBuffer  = new RenderTarget().Allocate(nameof(_unionBuffer));
                 _gapBuffer    = new RenderTarget().Allocate(nameof(_gapBuffer));
                 _closedBuffer = new RenderTarget().Allocate(nameof(_closedBuffer));
+                _activeGapBuffer = new RenderTarget().Allocate(nameof(_activeGapBuffer));
+                _activeClosedBuffer = new RenderTarget().Allocate(nameof(_activeClosedBuffer));
+                _activeExpandedBuffer = new RenderTarget().Allocate(nameof(_activeExpandedBuffer));
                 _outlineBuffer = new RenderTarget().Allocate(nameof(_outlineBuffer));
                 if (_owner._output.Enabled)
                     _outputTex = new RenderTarget().Allocate(_owner._output.value);
@@ -46,6 +52,32 @@ namespace OutlineFx
 
             public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
             {
+                if (_owner._ensureMaterialReady() == false)
+                    return;
+
+                var outlineMaterial = _owner._outlineMat;
+                var transparentPass = outlineMaterial.FindPass("Transparent");
+                var outlinePass = outlineMaterial.FindPass("Outline");
+                var dilateHorizontalPass = outlineMaterial.FindPass("DilateMaskHorizontal");
+                var dilateVerticalPass = outlineMaterial.FindPass("DilateMaskVertical");
+                var erodeHorizontalPass = outlineMaterial.FindPass("ErodeMaskHorizontal");
+                var erodeVerticalPass = outlineMaterial.FindPass("ErodeMaskVertical");
+                var expandHorizontalPass = outlineMaterial.FindPass("ExpandMaskHorizontal");
+                var expandVerticalPass = outlineMaterial.FindPass("ExpandMaskVertical");
+                var maskInteriorPass = outlineMaterial.FindPass("MaskInteriorOutline");
+                if (transparentPass < 0
+                    || outlinePass < 0
+                    || dilateHorizontalPass < 0
+                    || dilateVerticalPass < 0
+                    || erodeHorizontalPass < 0
+                    || erodeVerticalPass < 0
+                    || expandHorizontalPass < 0
+                    || expandVerticalPass < 0
+                    || maskInteriorPass < 0)
+                {
+                    return;
+                }
+
                 // allocate resources
                 var cmd  = CommandBufferPool.Get(nameof(OutlineFxFeature));
                 var desc = renderingData.cameraData.cameraTargetDescriptor;
@@ -54,18 +86,18 @@ namespace OutlineFx
 				_unionBuffer.Get(cmd, desc);
 				_gapBuffer.Get(cmd, desc);
 				_closedBuffer.Get(cmd, desc);
+				_activeGapBuffer.Get(cmd, desc);
+				_activeClosedBuffer.Get(cmd, desc);
+				_activeExpandedBuffer.Get(cmd, desc);
 				_outlineBuffer.Get(cmd, desc);
 		
-                if (_owner._outlineMat == null)
-    			    return;
-		    
-                _owner._outlineMat.SetFloat(s_Alpha, _owner._alphaCutout);
-                _owner._outlineMat.SetFloat(s_Solid, _owner._solid);
+                outlineMaterial.SetFloat(s_Alpha, _owner._alphaCutout);
+                outlineMaterial.SetFloat(s_Solid, _owner._solid);
                 
                 if (_owner._solidMask._enabled)
                 {
                     var sm = _owner._solidMask;
-                    _owner._outlineMat.SetTexture(s_AlphaTex, sm._pattern);
+                    outlineMaterial.SetTexture(s_AlphaTex, sm._pattern);
                     var xPeriod = 1f / (sm._velocity.x / 1000f);
                     var yPeriod = 1f / (sm._velocity.y / 1000f);
                     var xOffset = sm._velocity.x == 0 ? 0 : (Time.unscaledTime % xPeriod) / xPeriod * sm._scale;
@@ -73,7 +105,7 @@ namespace OutlineFx
                     
                     var aspectTex = sm._pattern.width / (float)sm._pattern.height;
                     
-                    _owner._outlineMat.SetVector(s_AlphaTO, new Vector4(sm._scale * (Screen.width / (float)Screen.height) / aspectTex, sm._scale, xOffset, yOffset));
+                    outlineMaterial.SetVector(s_AlphaTO, new Vector4(sm._scale * (Screen.width / (float)Screen.height) / aspectTex, sm._scale, xOffset, yOffset));
                 }
                 
 #if !UNITY_2022_1_OR_NEWER
@@ -82,6 +114,7 @@ namespace OutlineFx
 #else
 				_output = renderingData.cameraData.renderer.cameraColorTargetHandle;
 #endif
+
                 if (_owner._output.Enabled)
                 {
                     _outputTex.Get(cmd, desc);
@@ -119,21 +152,31 @@ namespace OutlineFx
                 cmd.SetGlobalVector(
                     s_GapStep,
                     new Vector4(1f / desc.width, 1f / desc.height, 0f, 0f));
-                _blit(_unionBuffer.Handle, _gapBuffer.Handle, _owner._outlineMat, 3);
-                _blit(_gapBuffer.Handle, _closedBuffer.Handle, _owner._outlineMat, 4);
-                _blit(_closedBuffer.Handle, _gapBuffer.Handle, _owner._outlineMat, 5);
-                _blit(_gapBuffer.Handle, _closedBuffer.Handle, _owner._outlineMat, 6);
+                _blit(_unionBuffer.Handle, _gapBuffer.Handle, outlineMaterial, dilateHorizontalPass);
+                _blit(_gapBuffer.Handle, _closedBuffer.Handle, outlineMaterial, dilateVerticalPass);
+                _blit(_closedBuffer.Handle, _gapBuffer.Handle, outlineMaterial, erodeHorizontalPass);
+                _blit(_gapBuffer.Handle, _closedBuffer.Handle, outlineMaterial, erodeVerticalPass);
+
+                _blit(_buffer.Handle, _activeGapBuffer.Handle, outlineMaterial, dilateHorizontalPass);
+                _blit(_activeGapBuffer.Handle, _activeClosedBuffer.Handle, outlineMaterial, dilateVerticalPass);
+                _blit(_activeClosedBuffer.Handle, _activeGapBuffer.Handle, outlineMaterial, erodeHorizontalPass);
+                _blit(_activeGapBuffer.Handle, _activeClosedBuffer.Handle, outlineMaterial, erodeVerticalPass);
+
+                _blit(_activeClosedBuffer.Handle, _activeGapBuffer.Handle, outlineMaterial, expandHorizontalPass);
+                _blit(_activeGapBuffer.Handle, _activeExpandedBuffer.Handle, outlineMaterial, expandVerticalPass);
+                _blit(_closedBuffer.Handle, _gapBuffer.Handle, outlineMaterial, expandHorizontalPass);
+                _blit(_gapBuffer.Handle, _unionBuffer.Handle, outlineMaterial, expandVerticalPass);
 
                 cmd.SetGlobalVector(s_Step, _owner._step);
                 cmd.SetRenderTarget(_outlineBuffer.Handle);
                 cmd.ClearRenderTarget(false, true, Color.clear, 1f);
-                _blit(_buffer.Handle, _outlineBuffer.Handle, _owner._outlineMat, 1);
-                cmd.SetGlobalTexture(s_MaskTexId, _closedBuffer.Handle.nameID);
+                _blit(_activeExpandedBuffer.Handle, _outlineBuffer.Handle, outlineMaterial, outlinePass);
+                cmd.SetGlobalTexture(s_MaskTexId, _unionBuffer.Handle.nameID);
                 _blit(
                     _outlineBuffer.Handle,
                     _owner._output.Enabled ? _outputTex.Handle : _output,
-                    _owner._outlineMat,
-                    7);
+                    outlineMaterial,
+                    maskInteriorPass);
 
                 _execute();
 				
@@ -156,7 +199,7 @@ namespace OutlineFx
                     {
                         cmd.SetGlobalTexture(s_MainTex, inst._renderer.sharedMaterials[i].mainTexture);
                         cmd.SetGlobalColor(s_Color, color);
-                        cmd.DrawRenderer(inst._renderer, _owner._outlineMat, i, 0);
+                        cmd.DrawRenderer(inst._renderer, outlineMaterial, i, transparentPass);
                     }
                 }
 
@@ -178,6 +221,9 @@ namespace OutlineFx
 				_unionBuffer.Release(cmd);
 				_gapBuffer.Release(cmd);
 				_closedBuffer.Release(cmd);
+				_activeGapBuffer.Release(cmd);
+				_activeClosedBuffer.Release(cmd);
+				_activeExpandedBuffer.Release(cmd);
 				_outlineBuffer.Release(cmd);
 /*                
 #if !UNITY_2022_1_OR_NEWER
