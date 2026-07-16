@@ -25,17 +25,20 @@ public class GameScene : MonoBehaviour
     private const float PieceBgAlpha = 1f;
     private const float PieceBgFillAlpha = 0.3f;
     private const int PieceSortingOrder = 520;
+    private const int ActiveGroupOutlineSortingOrder = PieceSortingOrder - 1;
     private const string BootstrapObjectName = "GameSceneBootstrap";
     private const string PieceBgFillObjectName = "PieceBgFill";
     private const string PieceBgObjectName = "PieceBg";
     private const string PieceBgPath = GameDefine.UiRoot + "/BasicUI/ImgMaskBlack.png";
     private const string DraggableGroupRootObjectName = "DraggableGroupPieces";
+    private const string ActiveGroupOutlineRootObjectName = "ActiveGroupOutline";
     private const string PlacedPiecesRootObjectName = "PlacedPieces";
     private const string TaskBg1ObjectName = "TaskBg1";
     private const string TaskContent1ObjectName = "TaskContent1";
     private const string TaskBagIconObjectName = "BagIcon";
     private const string TaskBagRewardCountPath = "TaskBg1/BagBg/Text (TMP)";
     private const string TaskRewardImgBagPath = "ImgBagBg/ImgBag";
+    private static readonly Color ActiveGroupOutlineColor = new Color32(0x3f, 0x42, 0x3e, 0xff);
     private static bool sHookedSceneLoaded;
     private readonly BoardState _board = new BoardState();
     private readonly DragState _drag = new DragState();
@@ -613,6 +616,7 @@ public class GameScene : MonoBehaviour
 
         LayoutTrayPieces();
         CachePieceTrayOriginalPosition();
+        TryRefreshActiveGroupOutline(groupIndex);
     }
 
     private static SpriteRenderer CreateDraggablePieceFromGroove(Image grooveImage, string objectName, Transform parent)
@@ -672,10 +676,171 @@ public class GameScene : MonoBehaviour
     {
         _drag.DraggingPiece = null;
         _drag.CurrentGroupDraggables.Clear();
+        ClearActiveGroupOutline();
 
         var root = GameObject.Find(DraggableGroupRootObjectName);
         if (root != null)
         {
+            Destroy(root);
+        }
+    }
+
+    private void TryRefreshActiveGroupOutline(int groupIndex)
+    {
+        try
+        {
+            RefreshActiveGroupOutline(groupIndex);
+        }
+        catch (Exception exception)
+        {
+            ClearActiveGroupOutline();
+            Debug.LogWarning($"GameScene: failed to create active group outline. {exception.Message}");
+        }
+    }
+
+    private void RefreshActiveGroupOutline(int groupIndex)
+    {
+        ClearActiveGroupOutline();
+        if (_board.GrooveImagesByGroup == null
+            || groupIndex < 0
+            || groupIndex >= _board.GrooveImagesByGroup.Count)
+        {
+            return;
+        }
+
+        var grooveGroup = _board.GrooveImagesByGroup[groupIndex];
+        var camera = Camera.main;
+        if (grooveGroup == null || grooveGroup.Count == 0 || camera == null)
+        {
+            return;
+        }
+
+        var root = new GameObject(ActiveGroupOutlineRootObjectName);
+        var boardScale = CalculatePieceScaleOnBoard();
+        var activeProxyCount = 0;
+        for (var i = 0; i < grooveGroup.Count; i++)
+        {
+            if (CreateActiveGroupOutlineProxy(
+                    grooveGroup[i],
+                    $"ActiveGroupOutlineProxy_{groupIndex}_{i}",
+                    root.transform,
+                    camera,
+                    boardScale))
+            {
+                activeProxyCount++;
+            }
+        }
+
+        if (activeProxyCount == 0)
+        {
+            root.SetActive(false);
+            Destroy(root);
+            return;
+        }
+
+        for (var otherGroupIndex = 0;
+             otherGroupIndex < _board.GrooveImagesByGroup.Count;
+             otherGroupIndex++)
+        {
+            if (otherGroupIndex == groupIndex)
+            {
+                continue;
+            }
+
+            var blockerGroup = _board.GrooveImagesByGroup[otherGroupIndex];
+            if (blockerGroup == null)
+            {
+                continue;
+            }
+
+            for (var i = 0; i < blockerGroup.Count; i++)
+            {
+                CreateActiveGroupOutlineBlocker(
+                    blockerGroup[i],
+                    $"ActiveGroupOutlineBlocker_{otherGroupIndex}_{i}",
+                    root.transform,
+                    camera,
+                    boardScale);
+            }
+        }
+    }
+
+    private static bool CreateActiveGroupOutlineProxy(
+        Image grooveImage,
+        string objectName,
+        Transform parent,
+        Camera camera,
+        Vector3 boardScale)
+    {
+        var proxyRenderer = CreateActiveGroupOutlineRenderer(
+            grooveImage,
+            objectName,
+            parent,
+            camera,
+            boardScale,
+            ActiveGroupOutlineSortingOrder);
+        if (proxyRenderer == null)
+        {
+            return false;
+        }
+
+        var outline = proxyRenderer.gameObject.AddComponent<global::OutlineFx.OutlineFx>();
+        outline.Color = ActiveGroupOutlineColor;
+        return true;
+    }
+
+    private static void CreateActiveGroupOutlineBlocker(
+        Image grooveImage,
+        string objectName,
+        Transform parent,
+        Camera camera,
+        Vector3 boardScale)
+    {
+        var proxyRenderer = CreateActiveGroupOutlineRenderer(
+            grooveImage,
+            objectName,
+            parent,
+            camera,
+            boardScale,
+            ActiveGroupOutlineSortingOrder + 1);
+        if (proxyRenderer != null)
+        {
+            proxyRenderer.gameObject.AddComponent<global::OutlineFx.OutlineBlocker>();
+        }
+    }
+
+    private static SpriteRenderer CreateActiveGroupOutlineRenderer(
+        Image grooveImage,
+        string objectName,
+        Transform parent,
+        Camera camera,
+        Vector3 boardScale,
+        int sortingOrder)
+    {
+        if (grooveImage == null || grooveImage.sprite == null)
+        {
+            return null;
+        }
+
+        var proxyRenderer = CreateDraggablePieceFromGroove(grooveImage, objectName, parent);
+        if (proxyRenderer == null)
+        {
+            return null;
+        }
+
+        proxyRenderer.sortingOrder = sortingOrder;
+        proxyRenderer.color = new Color(1f, 1f, 1f, 0f);
+        proxyRenderer.transform.localScale = boardScale;
+        proxyRenderer.transform.position = GetGrooveSnapPosition(grooveImage.rectTransform, camera);
+        return proxyRenderer;
+    }
+
+    private static void ClearActiveGroupOutline()
+    {
+        var root = GameObject.Find(ActiveGroupOutlineRootObjectName);
+        if (root != null)
+        {
+            root.SetActive(false);
             Destroy(root);
         }
     }
@@ -1071,6 +1236,7 @@ public class GameScene : MonoBehaviour
     {
         _drag.DraggingPiece = null;
         _drag.CurrentGroupDraggables.Clear();
+        ClearActiveGroupOutline();
 
         var draggableRoot = GameObject.Find(DraggableGroupRootObjectName);
         if (draggableRoot != null)

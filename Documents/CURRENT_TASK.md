@@ -1,74 +1,73 @@
 # Current Task
 
-- Task: Add active puzzle area outline
+- Task: Integrate OutlineFx for active puzzle area outline
 - Status: In Progress
-- Updated At: 2026-07-14
+- Updated At: 2026-07-16
 
 ## User Intent
 
-- Add a visible outline around the current puzzle target area in `GameScene`.
-- The outline should tell the player the boundary of the currently active group.
-- Outline color should be `#3f423e`; outline width can start at 3 pixels.
+- Use a reliable free third-party Unity plugin for the current puzzle target outline.
+- The outline should identify the boundary of the active puzzle group in `GameScene`.
+- Use color `#3f423e` and start near 3 pixels wide.
 
 ## Working Notes
 
-- `GameScene` already groups puzzle slots by `PieceNN / 10`.
-- Active group slots are active but transparent; completed groups are visible; future groups are inactive.
-- The outline is generated at runtime as `ActiveGroupOutline`, a world-space `SpriteRenderer` aligned to the current group bounds.
-- Runtime combines the active group's slot sprite alpha into one mask, then draws the boundary ring.
-- If a sprite texture is not CPU-readable, runtime reads its real alpha through a temporary GPU render texture; the Unity sprite mesh remains the final fallback.
-- Puzzle textures such as `Pieces11` use `isReadable: 0` and Tight sprite meshes; outline generation must not call `Texture2D.GetPixels` for them.
-- The project has hundreds of card packs, so per-card or per-group authored outline masks are not an acceptable content requirement.
-- `GameBoard` contains gray puzzle gaps plus colored characters that some piece cuts cross; a piece Alpha edge is not always a player-facing target boundary.
-- First implementation generated the outline before draggable pieces were created; an outline-generation exception could interrupt `CreateDraggableGroup` before the tray pieces were instantiated.
+- Selected `NullTale/OutlineFx`, licensed under MIT, and embedded its verified upstream commit in the project.
+- The active groove objects are transparent UGUI `Image` components, while OutlineFx accepts `Renderer` components.
+- `GameScene` now creates transparent world-space `SpriteRenderer` proxies from the active groove sprites.
+- OutlineFx renders all proxies into one screen-space mask before outlining, so adjacent pieces form one group outline instead of separate per-piece outlines.
+- Proxy rendering samples sprite alpha on the GPU and does not require readable source textures.
+- `OutlineFxRendererSetupEditor` automatically adds and configures `ActiveGroupOutlineFx` on `Assets/Settings/Renderer2D.asset` after Unity resolves the package.
 
 ## Files Changed
 
+- `Packages/www.nulltale.outlinefx/`
+- `.gitignore`
 - `Assets/Scripts/Controller/GameScene.cs`
+- `Assets/Scripts/Editor/OutlineFxRendererSetupEditor.cs`
+- `Assets/Scripts/Editor/OutlineFxRendererSetupEditor.cs.meta`
 - `Documents/CURRENT_TASK.md`
 - `Documents/PROJECT_CONTEXT.md`
 
 ## Decisions
 
-- Generate a single merged outline for the active group, not separate outlines per piece.
-- Render the outline with the same world-space `SpriteRenderer` path used by draggable pieces, one sorting order below placed pieces.
-- Destroy and rebuild the outline when groups switch, and clear it before the reward board reveal.
-- Use `#3f423e` and `3` pixels as initial visual values.
-- Draggable piece creation and layout must run before outline generation.
-- Outline generation is isolated behind `try/catch`; a failed outline must not block puzzle creation or interaction.
-- Check `Texture2D.isReadable` before CPU pixel access and use GPU readback for non-readable puzzle textures, without changing their import settings.
-- Derive all outlines automatically from existing `PieceNN` sprites and prefab placement; do not require additional outline-mask assets.
-- Treat Alpha `>= 128` as the intended piece boundary, close gaps up to 2 pixels after merging the group, and draw the 3-pixel ring inside the merged region so it does not enlarge the target shape.
-- Keep an outline segment only when pixels immediately outside it are predominantly the existing light `GameBoard` background. Suppress boundaries against gray future-group areas and boundaries within 40 pixels of colored `GameBoard` artwork outside the active mask.
+- Embed OutlineFx commit `394abc8f69e5362737759c7cca1a221a7a30dc67` under `Packages/www.nulltale.outlinefx` for reproducible, offline package resolution.
+- Keep the existing UGUI puzzle prefab format; create runtime SpriteRenderer proxies instead of converting authored content.
+- Render proxies fully transparent in the normal camera pass; their sprite alpha remains available to OutlineFx's override mask pass.
+- Configure a hard box outline, no solid fill, 50% alpha cutoff, no depth attachment, and thickness `0.075`, which targets roughly 3 pixels at the 1440-pixel design height.
+- Clear and rebuild the proxy root when groups switch, and clear it before the reward board reveal.
+- Catch outline setup failures so the optional visual effect cannot block puzzle creation or interaction.
 
 ## Validation
 
-- Static-checked that `GameScene.cs` creates `ActiveGroupOutline` after active group/camera setup.
-- Static-checked that the outline is cleared during group switch, runtime piece cleanup, and reward reveal.
-- Static-checked that the outline color is `#3f423e` and width is controlled by `ActiveGroupOutlinePixels = 3`.
-- Static-checked that `RefreshActiveGroupOutline` now runs after `LayoutTrayPieces()` / `CachePieceTrayOriginalPosition()`.
-- Static-checked that outline exceptions are caught and logged as warnings.
-- Confirmed current `Pieces11` assets are imported with `isReadable: 0` and `spriteMeshType: 1` (Tight).
-- Static-checked that non-readable textures now bypass `Texture2D.GetPixels`, read actual alpha through a temporary render texture, and still fall back to the sprite mesh if GPU readback fails.
-- Static-checked that the mask is merged before outlining and that only inside-mask boundary pixels are colored, so the line does not enlarge the target region.
-- Measured `Pieces11` through `Pieces14`: each source contains roughly 800-2,000 antialiased pixels between Alpha 1 and 254, confirming that the previous `Alpha > 8` threshold expanded the inferred region.
-- Static-checked the revised automatic pipeline: Alpha 50% threshold -> merge active group -> 2-pixel morphological closing -> 3-pixel inside outline.
-- Compared normal and vertically flipped piece Alpha overlays against `GameBoard`; normal orientation aligns, so the marked errors are boundary-classification errors rather than GPU Y-flip errors.
-- Sampled `CardBag001/GameBoard.png`: gray puzzle areas are around RGB `180/175/170`, while light board background channels are generally above `200`; colored character samples have substantially wider channel spread.
-- Offline-rendered the first background-only filter and found character sticker borders were wider than the 4-12 pixel sample ring.
-- Offline-rendered the final filter against `CardBag001/GameBoard.png`: a strict 40-pixel colored-art exclusion removes the marked purple/blue character lines and the near-background test removes the lower gray group seam while retaining the top/left outer boundary.
-- Implemented colored-art proximity with separable sliding windows so the 40-pixel exclusion is linear in texture size instead of scanning the full neighborhood for every outline pixel.
-- Updated `ActiveGroupOutline` display from a `GameBoard` child `Image` to a world-space `SpriteRenderer`, so it shares the same camera coordinate path as puzzle pieces.
-- Ran scoped `git diff --check` for touched script/docs; no whitespace errors. Git only reported LF-to-CRLF working-copy warnings.
-- Unity Play Mode was not run from this shell.
+- Confirmed the project uses Unity `2022.3.62f2c1`, URP `14.0.12`, and `Renderer2D.asset`.
+- Reviewed OutlineFx package `1.1.0`, MIT license, Unity `2021.3` baseline, and its Unity 2022 `RTHandle` code path.
+- Static-checked that the plugin combines all registered renderers into one mask before applying the outline pass.
+- Static-checked active group proxy creation after camera/card layout and proxy cleanup during group switching and reward preparation.
+- Static-checked that transparent proxies reuse existing sprites without CPU texture reads.
+- Confirmed OutlineFx's override vertex/fragment path ignores SpriteRenderer tint alpha while sampling sprite texture alpha, so transparent proxies remain available to its mask pass.
+- Confirmed against the installed URP 14 source that `ScriptableRendererData.rendererFeatures`, `ScriptableRendererFeature.isActive`, and `SetActive` used by the setup utility are available.
+- Parsed both package JSON files successfully and ran `git diff --check`; only existing LF-to-CRLF working-copy warnings were reported.
+- Unity initially failed to resolve the Git dependency because the GitHub connection was reset; the exact verified commit is now embedded so future project opens do not require GitHub access.
+- First Play Mode run reported `Hidden/Internal-Loading: invalid pass index 1` because OutlineFx created its material while the embedded shader was still importing after the Library rebuild.
+- Patched the embedded `OutlineFxFeature` to defer its pass until `Hidden/OutlineFx/Main` exposes all three passes and to rebuild a stale loading-placeholder material automatically.
+- First visual test showed the outline following active-piece Alpha along internal group seams instead of consistently matching the player-facing gray puzzle boundary.
+- Added transparent `OutlineBlocker` proxies for every non-active puzzle group so OutlineFx suppresses group-to-group seams while retaining the active mask's exposed outer boundary.
+- The next screenshot clarified that 1-2 pixel Alpha gaps between pieces in the same active group were still producing unwanted interior lines; only the two segments touching the visible outer border should remain.
+- Added a GPU morphological closing stage to the embedded OutlineFx mask before its outline pass. The first 3x3 attempt only broke interior lines into fragments, so it was replaced with separable 7x7 dilation/erosion to close gaps up to roughly 6 screen pixels while restoring the original external mask extent.
+- The 7x7 closing alone still left fragmented interior lines. The final pipeline now renders separate active-group and all-groups union masks, outlines only the active mask, then rejects every outline pixel covered by the closed union mask. This explicitly keeps only the intersection between the active boundary and the full puzzle exterior.
+- Unity resolved the embedded package, compiled the integration, and serialized `ActiveGroupOutlineFx` into `Renderer2D.asset`.
+- Play Mode reached `GameScene` and rendered the outline; the initial loading-shader error and first visual fit issue were captured from the Unity log and game screenshot.
+- The loading-shader and non-active-group blocker fixes still need a clean recompile and Play Mode verification.
 
 ## Next Action
 
-1. Open `GameScene` in Unity and enter Play Mode.
-2. Verify the current puzzle target group shows a `#3f423e` outline.
-3. Complete the group and verify the outline rebuilds around the next target group.
-4. Complete all groups and verify the outline is gone when the reward panel shows.
+1. Exit Play Mode and wait for Unity to recompile the embedded OutlineFx and GameScene changes.
+2. Clear Console, enter `GameScene` again, and confirm no new `Hidden/Internal-Loading` pass error appears.
+3. Verify the active group displays a `#3f423e` outline without lines against non-active puzzle groups.
+4. Complete a group and verify the outline rebuilds for the next group.
+5. Complete the puzzle and verify the outline is removed before `RewardPanel` appears.
 
 ## Resume Prompt
 
-Continue Puffies active puzzle area outline work. Read AGENTS.md, Documents/WORKFLOW.md, and Documents/CURRENT_TASK.md first, then verify GameScene outline behavior in Unity Play Mode.
+Continue the Puffies OutlineFx integration. Read `AGENTS.md`, `Documents/WORKFLOW.md`, and `Documents/CURRENT_TASK.md` first, then resolve the package in Unity and verify the active group outline in Play Mode.

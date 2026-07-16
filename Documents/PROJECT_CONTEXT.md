@@ -140,7 +140,7 @@ effect (debug): CardFx preview, menu Puffies -> Preview CardFx Effects
 | `TextLoading` | Loading progress text; supports TextMeshPro `TMP_Text` and legacy `UnityEngine.UI.Text` |
 | `CardBagNNN` | Runtime gameplay prefab loaded from `Resources/CardBagPrefabs/` |
 | `GameBoard` / `Piece01`... | Board and slots inside a `CardBagNNN` prefab |
-| `ActiveGroupOutline` | Runtime-generated world-space SpriteRenderer outline around the current `GameScene` puzzle target group |
+| `ActiveGroupOutline` | Runtime root containing transparent SpriteRenderer proxies outlined as one mask by OutlineFx |
 | `PieceBoard` | Puzzle piece tray |
 | `RewardPanel` | Puzzle completion reward panel |
 | `Package001` | MainScene card pack slot template, hidden and cloned at runtime |
@@ -205,7 +205,14 @@ New `CanvasScaler` values are written by `CanvasDesignResolutionEditor.cs`. Use 
 4. Store source textures under `Assets/UI/CardBag001/` using grouped names such as `Pieces11`...`Pieces14` and `Pieces21`...`Pieces25`.
 5. Do not use `PieceGroup` parent nodes; grouping comes only from the number after `Piece`.
 6. Do not create Package JSON; runtime data comes from the loaded prefab's Images.
-7. `GameScene` automatically generates a merged world-space `ActiveGroupOutline` SpriteRenderer from the current group's existing `PieceNN` sprites and filters it against the existing `GameBoard` background, using color `#3f423e` and a 3-pixel outline width; do not author outline objects or per-group mask assets in prefabs.
+7. `GameScene` creates transparent SpriteRenderer proxies from the active group's existing `PieceNN` sprites. The free MIT `NullTale/OutlineFx` package merges them into one screen-space mask and draws a `#3f423e` outline; transparent `OutlineBlocker` proxies from non-active groups suppress internal group seams. Do not author outline objects or per-group mask assets in prefabs.
+
+### Third-Party Rendering
+
+- `NullTale/OutlineFx` is embedded under `Packages/www.nulltale.outlinefx` at upstream commit `394abc8f69e5362737759c7cca1a221a7a30dc67`, so package resolution does not require network access.
+- `OutlineFxRendererSetupEditor` ensures `Assets/Settings/Renderer2D.asset` contains the `ActiveGroupOutlineFx` Renderer Feature after package resolution.
+- The embedded OutlineFx mask applies a separable 7x7 GPU morphological closing stage before outlining so Alpha gaps inside an active group do not become interior lines.
+- Keep OutlineFx proxy creation isolated from puzzle interaction; an outline failure must not prevent draggable pieces from being created.
 
 ### CardFx
 
