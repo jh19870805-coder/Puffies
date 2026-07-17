@@ -25,8 +25,6 @@ public class GameScene : MonoBehaviour
     private const float PieceBgAlpha = 1f;
     private const float PieceBgFillAlpha = 0.3f;
     private const int PieceSortingOrder = 520;
-    private const int ActiveGroupOutlineSortingOrder = PieceSortingOrder - 1;
-    private static readonly Vector2 ActiveGroupOutlineScreenOffset = new Vector2(6f, 6f);
     private const string BootstrapObjectName = "GameSceneBootstrap";
     private const string PieceBgFillObjectName = "PieceBgFill";
     private const string PieceBgObjectName = "PieceBg";
@@ -39,12 +37,9 @@ public class GameScene : MonoBehaviour
     private const string TaskBagIconObjectName = "BagIcon";
     private const string TaskBagRewardCountPath = "TaskBg1/BagBg/Text (TMP)";
     private const string TaskRewardImgBagPath = "ImgBagBg/ImgBag";
-    private static readonly Color ActiveGroupOutlineColor = new Color32(0x3f, 0x42, 0x3e, 0xff);
     private static bool sHookedSceneLoaded;
     private readonly BoardState _board = new BoardState();
     private readonly DragState _drag = new DragState();
-    private readonly Dictionary<SpriteRenderer, RectTransform> _outlineProxyTargets =
-        new Dictionary<SpriteRenderer, RectTransform>();
     private Vector3 _pieceBgOriginalPosition;
     private bool _hasPieceBgOriginalPosition;
     private bool _isPieceBgHidden;
@@ -100,34 +95,6 @@ public class GameScene : MonoBehaviour
             TryBeginDrag,
             UpdateDragging,
             OnPointerEnd);
-    }
-
-    private void LateUpdate()
-    {
-        if (_outlineProxyTargets.Count == 0)
-        {
-            return;
-        }
-
-        var camera = Camera.main;
-        if (camera == null)
-        {
-            return;
-        }
-
-        var boardScale = CalculatePieceScaleOnBoard();
-        foreach (var proxyTarget in _outlineProxyTargets)
-        {
-            var proxyRenderer = proxyTarget.Key;
-            var grooveRect = proxyTarget.Value;
-            if (proxyRenderer == null || grooveRect == null)
-            {
-                continue;
-            }
-
-            proxyRenderer.transform.localScale = boardScale;
-            proxyRenderer.transform.position = GetActiveGroupOutlinePosition(grooveRect, camera);
-        }
     }
 
     private void InitializeGameplay(int bagId)
@@ -745,83 +712,9 @@ public class GameScene : MonoBehaviour
             return;
         }
 
-        if (TryCreateBakedActiveGroupOutline(groupIndex))
+        if (!TryGetNumberedGroup(grooveGroup[0], out var groupNumber))
         {
             return;
-        }
-
-        var camera = Camera.main;
-        if (camera == null)
-        {
-            return;
-        }
-
-        var root = new GameObject(ActiveGroupOutlineRootObjectName);
-        var boardScale = CalculatePieceScaleOnBoard();
-        var activeProxyCount = 0;
-        for (var i = 0; i < grooveGroup.Count; i++)
-        {
-            if (CreateActiveGroupOutlineProxy(
-                    grooveGroup[i],
-                    $"ActiveGroupOutlineProxy_{groupIndex}_{i}",
-                    root.transform,
-                    camera,
-                    boardScale))
-            {
-                activeProxyCount++;
-            }
-        }
-
-        if (activeProxyCount == 0)
-        {
-            root.SetActive(false);
-            Destroy(root);
-            return;
-        }
-
-        for (var otherGroupIndex = 0;
-             otherGroupIndex < _board.GrooveImagesByGroup.Count;
-             otherGroupIndex++)
-        {
-            if (otherGroupIndex == groupIndex)
-            {
-                continue;
-            }
-
-            var blockerGroup = _board.GrooveImagesByGroup[otherGroupIndex];
-            if (blockerGroup == null)
-            {
-                continue;
-            }
-
-            for (var i = 0; i < blockerGroup.Count; i++)
-            {
-                CreateActiveGroupOutlineBlocker(
-                    blockerGroup[i],
-                    $"ActiveGroupOutlineBlocker_{otherGroupIndex}_{i}",
-                    root.transform,
-                    camera,
-                    boardScale);
-            }
-        }
-    }
-
-    private bool TryCreateBakedActiveGroupOutline(int groupIndex)
-    {
-        if (_board.GameBoardImage == null
-            || _board.GrooveImagesByGroup == null
-            || groupIndex < 0
-            || groupIndex >= _board.GrooveImagesByGroup.Count)
-        {
-            return false;
-        }
-
-        var grooveGroup = _board.GrooveImagesByGroup[groupIndex];
-        if (grooveGroup == null
-            || grooveGroup.Count == 0
-            || !TryGetNumberedGroup(grooveGroup[0], out var groupNumber))
-        {
-            return false;
         }
 
         var resourcePath = GameDefine.FormatPuzzleOutlineResourcesPath(
@@ -830,7 +723,10 @@ public class GameScene : MonoBehaviour
         var outlineSprite = Resources.Load<Sprite>(resourcePath);
         if (outlineSprite == null)
         {
-            return false;
+            Debug.LogWarning(
+                $"GameScene: baked puzzle outline is missing at Resources/{resourcePath}. " +
+                "Run Puffies/Puzzles/Bake Outline Masks in the Unity Editor.");
+            return;
         }
 
         var outlineObject = new GameObject(
@@ -854,83 +750,10 @@ public class GameScene : MonoBehaviour
         outlineImage.raycastTarget = false;
         outlineImage.maskable = false;
         outlineImage.preserveAspect = false;
-        return true;
-    }
-
-    private bool CreateActiveGroupOutlineProxy(
-        Image grooveImage,
-        string objectName,
-        Transform parent,
-        Camera camera,
-        Vector3 boardScale)
-    {
-        var proxyRenderer = CreateActiveGroupOutlineRenderer(
-            grooveImage,
-            objectName,
-            parent,
-            camera,
-            boardScale,
-            ActiveGroupOutlineSortingOrder);
-        if (proxyRenderer == null)
-        {
-            return false;
-        }
-
-        var outline = proxyRenderer.gameObject.AddComponent<global::OutlineFx.OutlineFx>();
-        outline.Color = ActiveGroupOutlineColor;
-        return true;
-    }
-
-    private void CreateActiveGroupOutlineBlocker(
-        Image grooveImage,
-        string objectName,
-        Transform parent,
-        Camera camera,
-        Vector3 boardScale)
-    {
-        var proxyRenderer = CreateActiveGroupOutlineRenderer(
-            grooveImage,
-            objectName,
-            parent,
-            camera,
-            boardScale,
-            ActiveGroupOutlineSortingOrder + 1);
-        if (proxyRenderer != null)
-        {
-            proxyRenderer.gameObject.AddComponent<global::OutlineFx.OutlineBlocker>();
-        }
-    }
-
-    private SpriteRenderer CreateActiveGroupOutlineRenderer(
-        Image grooveImage,
-        string objectName,
-        Transform parent,
-        Camera camera,
-        Vector3 boardScale,
-        int sortingOrder)
-    {
-        if (grooveImage == null || grooveImage.sprite == null)
-        {
-            return null;
-        }
-
-        var proxyRenderer = CreateDraggablePieceFromGroove(grooveImage, objectName, parent);
-        if (proxyRenderer == null)
-        {
-            return null;
-        }
-
-        proxyRenderer.sortingOrder = sortingOrder;
-        proxyRenderer.color = new Color(1f, 1f, 1f, 0f);
-        proxyRenderer.transform.localScale = boardScale;
-        proxyRenderer.transform.position = GetActiveGroupOutlinePosition(grooveImage.rectTransform, camera);
-        _outlineProxyTargets[proxyRenderer] = grooveImage.rectTransform;
-        return proxyRenderer;
     }
 
     private void ClearActiveGroupOutline()
     {
-        _outlineProxyTargets.Clear();
         var root = GameObject.Find(ActiveGroupOutlineRootObjectName);
         if (root != null)
         {
@@ -1142,25 +965,6 @@ public class GameScene : MonoBehaviour
             grooveRect,
             camera,
             WorldGameplayDepth);
-        worldPosition.z = WorldGameplayDepth;
-        return worldPosition;
-    }
-
-    private static Vector3 GetActiveGroupOutlinePosition(RectTransform grooveRect, Camera camera)
-    {
-        var worldPosition = GetGrooveSnapPosition(grooveRect, camera);
-        if (camera == null)
-        {
-            return worldPosition;
-        }
-
-        var distance = Mathf.Abs(camera.transform.position.z - WorldGameplayDepth);
-        var screenOrigin = camera.ScreenToWorldPoint(new Vector3(0f, 0f, distance));
-        var screenOffset = camera.ScreenToWorldPoint(new Vector3(
-            ActiveGroupOutlineScreenOffset.x,
-            ActiveGroupOutlineScreenOffset.y,
-            distance));
-        worldPosition += screenOffset - screenOrigin;
         worldPosition.z = WorldGameplayDepth;
         return worldPosition;
     }

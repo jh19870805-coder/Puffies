@@ -10,7 +10,7 @@ Generate a deterministic outline for each numbered puzzle group without drawing 
 - Piece-to-piece and group-to-group seams inside the gray puzzle area are excluded.
 - Existing `CardBagNNN` prefabs remain the source of piece layout and grouping.
 - All existing card bags can be processed in one Unity Editor command.
-- Runtime loads the baked sprite directly; OutlineFx remains only as a fallback for card bags that have not been baked.
+- Runtime loads the baked sprite directly and reports a warning when a card bag has not been baked.
 - The stroke color is `#3f423e` and the initial width is approximately three source pixels.
 - The implementation must not modify scenes, Canvas dimensions, or authored prefab transforms.
 
@@ -33,4 +33,3 @@ Generate a deterministic outline for each numbered puzzle group without drawing 
 - Inspect generated masks for continuity and absence of interior lines.
 - Compile runtime and Editor assemblies.
 - Enter `GameScene`, switch groups, and verify outline cleanup before the reward view.
-

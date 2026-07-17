@@ -42,8 +42,6 @@ Desktop.ini
 !**/[Uu]nity[Pp]ackages/*
 !**/[Pp]ackages/manifest.json
 !**/[Pp]ackages/packages-lock.json
-!Packages/www.nulltale.outlinefx/
-!Packages/www.nulltale.outlinefx/**
 # ===========================
 # Build outputs
 # ===========================

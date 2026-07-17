@@ -140,7 +140,7 @@ effect (debug): CardFx preview, menu Puffies -> Preview CardFx Effects
 | `TextLoading` | Loading progress text; supports TextMeshPro `TMP_Text` and legacy `UnityEngine.UI.Text` |
 | `CardBagNNN` | Runtime gameplay prefab loaded from `Resources/CardBagPrefabs/` |
 | `GameBoard` / `Piece01`... | Board and slots inside a `CardBagNNN` prefab |
-| `ActiveGroupOutline` | Runtime baked-outline UGUI Image under `GameBoard`; may contain OutlineFx proxies only when a baked Sprite is missing |
+| `ActiveGroupOutline` | Runtime baked-outline UGUI Image under `GameBoard` |
 | `PieceBoard` | Puzzle piece tray |
 | `RewardPanel` | Puzzle completion reward panel |
 | `Package001` | MainScene card pack slot template, hidden and cloned at runtime |
@@ -207,15 +207,13 @@ New `CanvasScaler` values are written by `CanvasDesignResolutionEditor.cs`. Use 
 6. Do not create Package JSON; runtime data comes from the loaded prefab's Images.
 7. Run **Puffies -> Puzzles -> Bake Outline Masks** after adding or changing a CardBag. The baker merges Piece Alpha in GameBoard coordinates, closes narrow gaps, flood-fills the complete puzzle exterior, and writes `Resources/Generated/PuzzleOutlines/CardBagNNN/GroupNN.png`.
 8. `GameScene` displays the baked `#3f423e` group Sprite as a non-interactive `GameBoard` child. This is the primary path and does not draw internal Piece/group seams. Do not author outline objects in prefabs.
-9. If a generated Sprite is missing, runtime falls back to the existing OutlineFx SpriteRenderer proxy path so an unbaked card bag remains playable.
+9. If a generated Sprite is missing, runtime logs an authoring warning and continues gameplay without an outline. Re-run the baker before delivery.
 
-### Third-Party Rendering
+### Puzzle Outline Rendering
 
-- `NullTale/OutlineFx` is embedded under `Packages/www.nulltale.outlinefx` at upstream commit `394abc8f69e5362737759c7cca1a221a7a30dc67`, so package resolution does not require network access.
-- `OutlineFxRendererSetupEditor` ensures `Assets/Settings/Renderer2D.asset` contains the `ActiveGroupOutlineFx` Renderer Feature after package resolution.
-- The embedded OutlineFx mask applies a separable 7x7 GPU morphological closing stage before outlining so Alpha gaps inside an active group do not become interior lines.
-- OutlineFx is now a compatibility fallback. Existing baked card bags do not register proxy renderers or execute the OutlineFx path.
-- Keep both baked-outline loading and OutlineFx fallback isolated from puzzle interaction; an outline failure must not prevent draggable pieces from being created.
+- Puzzle outlines are generated offline by `PuzzleOutlineBakerEditor` and rendered with Unity UGUI `Image`.
+- The project has no runtime outline Shader, Renderer Feature, or third-party outline package.
+- Keep baked-outline loading isolated from puzzle interaction; a missing outline must not prevent draggable pieces from being created.
 
 ### CardFx
 
