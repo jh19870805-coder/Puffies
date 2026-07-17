@@ -1,51 +1,45 @@
 # Current Task
 
-- Task: Consolidate runtime task, scoring, settings, and settlement UI code
+- Task: Record cross-device development environment bootstrap
 - Status: Completed
 - Updated At: 2026-07-17
 
 ## User Intent
 
-- Merge duplicated functionality and remove redundant runtime code without changing gameplay, UI layout, or persisted data.
+- When Puffies is opened on another device, have Codex check and help install the required VS Code Unity/C# tooling and .NET SDK.
 
 ## Working Notes
 
-- Task completion now reads and validates the current task once; score overflow behavior remains unchanged.
-- MainScene panel visibility and usable-option persistence use shared internal paths.
-- GameScene caches RewardPanel UI references and no longer repeats hierarchy lookups or full TaskItem binding during settlement animation.
-- Task progress animation no longer reapplies the TMP font every frame.
-- Unused score/settings APIs were removed after confirming there were no callers.
+- New-device checks are now part of the repository-level agent instructions.
+- VS Code recommends the required C#, C# Dev Kit, and Microsoft Unity extensions when the workspace opens.
+- The .NET 8 SDK remains a per-device system installation and requires system/network authorization when missing.
+- Unity-generated `Assembly-CSharp*.csproj` files must not be edited as a compatibility workaround.
 
 ## Files Changed
 
-- `Assets/Scripts/Controller/GameScene.cs`
-- `Assets/Scripts/Controller/MainScene.cs`
-- `Assets/Scripts/Model/GameScoreUtility.cs`
-- `Assets/Scripts/Model/GameSettingsUtility.cs`
-- `Assets/Scripts/Model/GameTaskUtility.cs`
-- `Assets/Scripts/View/TaskProgressUIUtility.cs`
-- `specs/task-and-settlement.md`
+- `AGENTS.md`
+- `.gitignore`
+- `.vscode/extensions.json`
+- `Documents/PROJECT_CONTEXT.md`
 - `Documents/CURRENT_TASK.md`
 
 ## Decisions
 
-- Preserve score formula, time thresholds, upward rounding, task overflow carry, setting semantics, and all persisted field names.
-- Preserve public usable-option setters because scene listeners and future callers depend on their semantic names.
-- Do not modify scenes, prefabs, Canvas values, CSV files, or generated Unity project files.
+- Require .NET 8 without pinning a patch version.
+- Prefer WinGet for SDK installation when available.
+- Install missing prerequisites only after obtaining the approval required by the device.
 
 ## Validation
 
-- `dotnet msbuild Puffies.sln -t:Build -p:Configuration=Debug -verbosity:minimal` completed successfully for `Assembly-CSharp-firstpass`, `Assembly-CSharp`, and `Assembly-CSharp-Editor`.
-- Static searches found no remaining references to removed helpers or the old four-argument task progress API.
-- `git diff --check` passed; only line-ending conversion warnings were reported.
-- Confirmed `MainScene.unity`, `GameScene.unity`, `TaskItem.prefab`, and `Assembly-CSharp.csproj` are unchanged.
-- Interactive Unity Play Mode verification remains pending.
+- Confirmed `.vscode/extensions.json` contains all three required extension identifiers.
+- Confirmed this device has .NET SDK 8.0.423 and all three VS Code extensions installed.
+- Confirmed the Unity solution compiles successfully with the installed SDK.
 
 ## Next Action
 
-1. In Play Mode, open and close each MainScene settings panel and confirm every setting persists after returning to MainScene.
-2. Complete one puzzle and confirm settlement score, bag count, task progress animation, reward image, and overflow carry remain correct.
+1. On the other device, open this repository with Codex and allow the prerequisite checks and any requested installations.
+2. Continue the pending Unity Play Mode regression described in `specs/task-and-settlement.md`.
 
 ## Resume Prompt
 
-Continue Puffies verification. Read AGENTS.md, Documents/WORKFLOW.md, Documents/CURRENT_TASK.md, and specs/task-and-settlement.md first, then perform the Play Mode checks in Next Action unless the user gives a newer instruction.
+Continue Puffies on this device. Read AGENTS.md, Documents/WORKFLOW.md, and Documents/CURRENT_TASK.md first. If this is a new device, complete New Device Bootstrap before diagnosing C# errors or changing project files.
