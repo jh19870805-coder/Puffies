@@ -1,11 +1,15 @@
 # Current Task
 
-- Task: Center active puzzle area above the piece tray and verify OutlineFx
-- Status: In Progress
-- Updated At: 2026-07-16
+- Task: Bake puzzle exterior outlines and load them at runtime
+- Status: Ready for Play Mode Verification
+- Updated At: 2026-07-17
 
 ## User Intent
 
+- Draw only the active group's segments along the gray puzzle area's boundary with the light board background.
+- Never draw Piece or group seams in the middle of the puzzle area.
+- Support existing card bags through a Unity Editor batch baker and display generated sprites at runtime.
+- Keep OutlineFx only as a fallback for card bags without baked resources.
 - Use a reliable free third-party Unity plugin for the current puzzle target outline.
 - The outline should identify the boundary of the active puzzle group in `GameScene`.
 - Use color `#3f423e` and start near 3 pixels wide.
@@ -13,6 +17,13 @@
 
 ## Working Notes
 
+- Added `PuzzleOutlineBakerEditor`, which transforms authored Piece Alpha into GameBoard pixel space, unions the complete puzzle, flood-fills its exterior, validates gray-to-light transitions, and writes one full-board PNG per numbered group.
+- Added runtime baked-outline loading under `Resources/Generated/PuzzleOutlines/CardBagNNN/GroupNN`; the generated UGUI Image is a stretched, non-interactive `GameBoard` child and does not alter Canvas or prefab dimensions.
+- Runtime derives the baked group number from the actual `PieceNN` name. Missing generated resources fall back to the existing OutlineFx proxy path.
+- Baked 14 group sprites for CardBag001, CardBag002, CardBag003, and CardBag008 under `Assets/Resources/Generated/PuzzleOutlines/`.
+- A 2-pixel morphological close removes narrow Alpha gaps before exterior flood-fill. This prevents outside connectivity from leaking into Piece seams.
+- CardBag001 has a real gray puzzle area, so 6939 of 8016 exterior pixels passed gray/light validation and the baked line follows the authored color boundary.
+- CardBag002, CardBag003, and CardBag008 do not contain a gray missing area. Their color coverage is too low, so the baker intentionally uses the continuous closed geometric exterior instead of fragmented texture edges.
 - Selected `NullTale/OutlineFx`, licensed under MIT, and embedded its verified upstream commit in the project.
 - The active groove objects are transparent UGUI `Image` components, while OutlineFx accepts `Renderer` components.
 - `GameScene` now creates transparent world-space `SpriteRenderer` proxies from the active groove sprites.
@@ -24,6 +35,10 @@
 
 ## Files Changed
 
+- `specs/2026-07-17-baked-puzzle-outline.md`
+- `Assets/Scripts/Editor/PuzzleOutlineBakerEditor.cs`
+- `Assets/Scripts/Model/GameDefine.cs`
+- `Assets/Resources/Generated/PuzzleOutlines/`
 - `Packages/www.nulltale.outlinefx/`
 - `.gitignore`
 - `Assets/Scripts/Controller/GameScene.cs`
@@ -43,6 +58,14 @@
 
 ## Validation
 
+- Compiled both `Assembly-CSharp` and `Assembly-CSharp-Editor` with Unity's generated Roslyn response files after the baked-outline integration; both completed with exit code 0.
+- Confirmed the baker's first Editor compile failure was only an unsupported `TextureImporter.spriteMeshType` assignment; removed it because runtime UGUI uses a full rectangular Image mesh, then recompiled successfully.
+- Unity batch mode compiled both assemblies, baked all 14 group masks, imported them as Sprites, saved assets, and exited with return code 0.
+- Every generated group reported a non-zero outline pixel count. The generated source PNG total is about 516 KiB.
+- Visually inspected CardBag001 Group01/Group02: the line follows the gray/light edge and does not draw Piece-to-Piece seams.
+- Visually inspected CardBag002 Group01/Group02 after gap closing: both are continuous exterior segments with no fragmented texture responses or doubled internal lines.
+- Confirmed no `MainScene`, `GameScene`, Canvas, or CardBag prefab asset was modified by the baker.
+- The final bake log contains no C# compile error, Shader error, exception, or invalid-pass error.
 - Confirmed the project uses Unity `2022.3.62f2c1`, URP `14.0.12`, and `Renderer2D.asset`.
 - Reviewed OutlineFx package `1.1.0`, MIT license, Unity `2021.3` baseline, and its Unity 2022 `RTHandle` code path.
 - Static-checked that the plugin combines all registered renderers into one mask before applying the outline pass.
@@ -104,11 +127,9 @@
 
 ## Next Action
 
-1. Exit Play Mode, let Unity recompile, then enter `GameScene` and verify the active group is centered in the area above `PieceBoard`.
-2. Complete a group and verify the next group is centered in the same upper area without changing snap alignment.
-3. Confirm neither `ArgumentException: Invalid path` nor `Hidden/Internal-Loading` pass errors appear.
-4. Verify the expanded `#3f423e` stroke tracks the lighter authored seam continuously and still omits lines against non-active puzzle groups; adjust only the uniform expansion radius if needed.
-5. Complete the puzzle and verify the outline is removed before `RewardPanel` appears.
+1. Enter `GameScene`, verify group switching and confirm no middle seams are visible at the actual target resolution.
+2. Confirm the baked path produces no OutlineFx invalid-pass errors and the outline is removed before `RewardPanel` appears.
+3. If the authored visual line needs a small width adjustment, change only `StrokeRadius` in `PuzzleOutlineBakerEditor` and rebake from `Puffies -> Puzzles -> Bake Outline Masks`.
 
 ## Resume Prompt
 

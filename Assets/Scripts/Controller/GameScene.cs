@@ -740,8 +740,18 @@ public class GameScene : MonoBehaviour
         }
 
         var grooveGroup = _board.GrooveImagesByGroup[groupIndex];
+        if (grooveGroup == null || grooveGroup.Count == 0)
+        {
+            return;
+        }
+
+        if (TryCreateBakedActiveGroupOutline(groupIndex))
+        {
+            return;
+        }
+
         var camera = Camera.main;
-        if (grooveGroup == null || grooveGroup.Count == 0 || camera == null)
+        if (camera == null)
         {
             return;
         }
@@ -794,6 +804,57 @@ public class GameScene : MonoBehaviour
                     boardScale);
             }
         }
+    }
+
+    private bool TryCreateBakedActiveGroupOutline(int groupIndex)
+    {
+        if (_board.GameBoardImage == null
+            || _board.GrooveImagesByGroup == null
+            || groupIndex < 0
+            || groupIndex >= _board.GrooveImagesByGroup.Count)
+        {
+            return false;
+        }
+
+        var grooveGroup = _board.GrooveImagesByGroup[groupIndex];
+        if (grooveGroup == null
+            || grooveGroup.Count == 0
+            || !TryGetNumberedGroup(grooveGroup[0], out var groupNumber))
+        {
+            return false;
+        }
+
+        var resourcePath = GameDefine.FormatPuzzleOutlineResourcesPath(
+            GameManager.GetBagId(),
+            groupNumber);
+        var outlineSprite = Resources.Load<Sprite>(resourcePath);
+        if (outlineSprite == null)
+        {
+            return false;
+        }
+
+        var outlineObject = new GameObject(
+            ActiveGroupOutlineRootObjectName,
+            typeof(RectTransform),
+            typeof(CanvasRenderer),
+            typeof(Image));
+        var outlineRect = outlineObject.GetComponent<RectTransform>();
+        outlineRect.SetParent(_board.GameBoardImage.rectTransform, false);
+        outlineRect.anchorMin = Vector2.zero;
+        outlineRect.anchorMax = Vector2.one;
+        outlineRect.pivot = new Vector2(0.5f, 0.5f);
+        outlineRect.anchoredPosition = Vector2.zero;
+        outlineRect.offsetMin = Vector2.zero;
+        outlineRect.offsetMax = Vector2.zero;
+        outlineRect.localScale = Vector3.one;
+
+        var outlineImage = outlineObject.GetComponent<Image>();
+        outlineImage.sprite = outlineSprite;
+        outlineImage.color = Color.white;
+        outlineImage.raycastTarget = false;
+        outlineImage.maskable = false;
+        outlineImage.preserveAspect = false;
+        return true;
     }
 
     private bool CreateActiveGroupOutlineProxy(

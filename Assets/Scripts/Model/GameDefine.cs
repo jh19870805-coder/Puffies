@@ -84,6 +84,11 @@ public static class GameDefine
         return $"{CardBagPrefabResourcesFolder}{CardBagPrefabPrefix}{bagId:D3}";
     }
 
+    public static string FormatPuzzleOutlineResourcesPath(int bagId, int groupNumber)
+    {
+        return $"{PuzzleOutlineResourcesFolder}{CardBagPrefabPrefix}{bagId:D3}/Group{groupNumber:D2}";
+    }
+
     public static string FormatPackImagePath(int packId)
     {
         return $"{UiRoot}/{PackImagesFolder}/{PackImageFilePrefix}{packId:D3}{ImageExtPng}";
@@ -97,6 +102,7 @@ public static class GameDefine
     public const string PackImageFilePrefix = "PackIcon";
     public const string CardBagPrefabResourcesFolder = "CardBagPrefabs/";
     public const string CardBagPrefabPrefix = "CardBag";
+    public const string PuzzleOutlineResourcesFolder = "Generated/PuzzleOutlines/";
 
     public const string TaskConfigFileName = "TaskConfig.csv";
     public const string TaskConfigEditorPath = "Assets/Resources/Configs/TaskConfig.csv";
