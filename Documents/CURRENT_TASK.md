@@ -1,60 +1,49 @@
 # Current Task
 
-- Task: Calculate full settlement score bonuses
+- Task: Carry excess score into the next task
 - Status: Completed
 - Updated At: 2026-07-17
 
 ## User Intent
 
-- Include no-hint, two outline-setting, and completion-time bonuses in GameScene total score.
-- Use persisted MainScene `PanelUsable` toggle values.
-- Start gameplay timing when the first Piece is successfully placed.
-- Apply the same final score to settlement UI and accumulated task progress.
+- Preserve score above a completed task target instead of resetting all progress to zero.
+- Example: 228 progress completing a 200-point task must start the next task at 28.
 
 ## Working Notes
 
-- `UsableOption1` already persisted Toggle1 and now has semantic meaning `IsLevelOutlineEnabled`; disabled grants +2%.
-- `UsableOption2` already persisted Toggle2 and now has semantic meaning `IsStickerOutlineEnabled`; disabled grants +5%.
-- `UsableOption3` is high contrast and does not affect score.
-- Clicking `BtnTips` marks the current game as having used a hint; no click grants +5%.
-- The timer starts on the first successful Piece placement and stops before RewardPanel settlement.
-- Time bonuses are <=15s +3%, <=30s +2%, <=60s +1%, and above 60s +0%.
-- All qualified percentages are added, multiplied by base score once, and rounded upward with integer ceiling arithmetic.
-- `TaskScore` animation and `GameTaskUtility.AddCurrentScore` both use `GameScoreResult.FinalScore`.
+- `TryCompleteAndSetNextTaskId` now calculates overflow before changing the current task id.
+- Overflow carries only when both the completed task and next task are `AccumulateScore`.
+- Task id and carried progress are written together through the existing `SaveTaskProgress` call.
+- MainScene already reads persisted progress during `Start`, so it displays the carried value without additional UI changes.
+- Manual `SetCurrentTaskId` calls still reset progress to zero.
 
 ## Files Changed
 
-- `Assets/Scripts/Model/GameSettingsUtility.cs`
-- `Assets/Scripts/Model/GameScoreUtility.cs`
-- `Assets/Scripts/Controller/GameScene.cs`
-- `specs/2026-07-17-settlement-score-bonuses.md`
+- `Assets/Scripts/Model/GameTaskUtility.cs`
+- `specs/2026-07-17-task-score-overflow.md`
 - `Documents/GAME_DESIGN_REQUIREMENTS.md`
 - `Documents/CURRENT_TASK.md`
 - `Documents/PROJECT_CONTEXT.md`
 
 ## Decisions
 
-- Preserve `UsableOption1/2/3` serialized field names so existing SQLite JSON remains compatible.
-- Snapshot outline settings when GameScene starts because PanelUsable cannot be changed during gameplay.
-- Treat the first `BtnTips` click as hint use even though the visual hint action itself is not implemented in GameScene code.
-- Toggle1 also controls the existing baked active-group outer-frame display; Toggle2 currently contributes its saved setting to scoring but has no separate runtime sticker-outline renderer.
-- Do not modify MainScene, GameScene, Prefabs, or Canvas layout data.
+- Do not carry score into a future non-score task type.
+- Do not automatically complete multiple tasks from one settlement; the next task receives the full overflow and follows the normal completion flow.
+- Do not modify settlement score calculation, scenes, prefabs, or Canvas layout.
 
 ## Validation
 
-- Confirmed Toggle1 is paired with the authored +2% outer-frame description and Toggle2 with the +5% full-contour description.
-- Confirmed `BtnTips` exists in GameScene and added runtime click tracking.
-- Confirmed exact time boundaries use the faster tier through <=15, <=30, and <=60 checks.
+- Confirmed the previous implementation called `ResetCurrentCompleteValue` during every completed-task transition.
+- Confirmed completed-task transition now stores `Math.Max(0, currentProgress - completedTarget)` for consecutive score tasks.
+- Confirmed manual task-id changes retain the old reset behavior.
 - Compiled `Assembly-CSharp-firstpass`, `Assembly-CSharp`, and `Assembly-CSharp-Editor` successfully without warnings.
 - Interactive Unity play-mode verification remains to be performed.
 
 ## Next Action
 
-1. Test with both outline toggles off and no hint; an M pack completed within 15 seconds should settle at 115 points.
-2. Toggle one outline option at a time and confirm its percentage disappears from the `GameScene: score calculated` log.
-3. Click BtnTips and test the 15, 30, and 60 second boundaries.
-4. Design or add the actual hint action and individual bonus presentation UI as separate work.
+1. Complete a 200-point task with a 228-point settlement total.
+2. Return to MainScene and confirm the next task displays `28/next target` with matching progress width.
 
 ## Resume Prompt
 
-Continue the Puffies settlement scoring workflow. Read AGENTS.md, Documents/WORKFLOW.md, Documents/CURRENT_TASK.md, Documents/GAME_DESIGN_REQUIREMENTS.md, and specs/2026-07-17-settlement-score-bonuses.md first.
+Continue the Puffies accumulated-score task workflow. Read AGENTS.md, Documents/WORKFLOW.md, Documents/CURRENT_TASK.md, and specs/2026-07-17-task-score-overflow.md first.

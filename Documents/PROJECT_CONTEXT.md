@@ -36,6 +36,7 @@ Current work state is tracked in [CURRENT_TASK.md](CURRENT_TASK.md). Workflow ru
 - Settlement starts from the card-pack base score (XS 60, S 80, M 100, L 120, XL 140, XXL 160, XXXL 200), adds every qualified bonus percentage, multiplies once, and rounds upward.
 - Score bonuses are: no `BtnTips` click +5%, MainScene `Toggle1` level outline disabled +2%, `Toggle2` sticker outline disabled +5%, and completion time <=15 / <=30 / <=60 seconds +3% / +2% / +1%.
 - Completed tasks grant rewards and advance to the next task.
+- When an accumulate-score task advances to another accumulate-score task, progress above the completed target carries forward (`nextProgress = currentProgress - completedTarget`).
 - Card pack unlock/play state is stored in SQLite table `CardPacks`.
 - Task progress is stored in JSON root object `TaskProgressData`.
 - Business progress must not use `PlayerPrefs`.

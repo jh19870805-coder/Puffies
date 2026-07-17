@@ -156,6 +156,7 @@ Status: `Pending`
 
 | Date | Change |
 |---|---|
+| 2026-07-17 | Confirmed that score beyond a completed accumulate-score task target carries into the next accumulate-score task. |
 | 2026-07-17 | Confirmed that scoring time starts on the first successfully placed Piece and stops when completed-puzzle settlement begins. |
 | 2026-07-17 | Confirmed additive bonus stacking, `Ceil(BaseScore * (1 + TotalBonusRate))`, and sequential settlement score-roll presentation with synchronized progress/score updates. |
 | 2026-07-17 | Confirmed that exact threshold values belong to the faster tier: <=A, (A,B], and (B,C]. Time above C has no time bonus. |

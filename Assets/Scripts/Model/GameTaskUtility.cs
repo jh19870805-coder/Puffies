@@ -116,7 +116,7 @@ public static class GameTaskUtility
     }
 
     /// <summary>
-    /// 用途：当前任务完成后切换到下一任务 Id，并将完成进度重置为 0。返回：是否成功。
+    /// 用途：当前任务完成后切换到下一任务 Id；连续累计得分任务结转超额分数。返回：是否成功。
     /// </summary>
     public static bool TryCompleteAndSetNextTaskId(int nextTaskId)
     {
@@ -132,8 +132,20 @@ public static class GameTaskUtility
             return false;
         }
 
+        var carryOverValue = 0;
+        if (TryGetCurrentTaskConfig(out var currentTaskConfig)
+            && currentTaskConfig.TaskType == TaskType.AccumulateScore
+            && TryGetTaskConfig(nextTaskId, out var nextTaskConfig)
+            && nextTaskConfig.TaskType == TaskType.AccumulateScore)
+        {
+            carryOverValue = Math.Max(0, sCurrentCompleteValue - currentTaskConfig.CompleteValue);
+        }
+
         sCurrentTaskId = nextTaskId;
-        ResetCurrentCompleteValue();
+        sCurrentCompleteValue = carryOverValue;
+        Debug.Log(
+            $"GameTaskUtility: task advanced. nextTaskId={nextTaskId}, " +
+            $"carryOverValue={carryOverValue}");
         return SaveTaskProgress();
     }
 
@@ -162,7 +174,7 @@ public static class GameTaskUtility
     }
 
     /// <summary>
-    /// 用途：当前任务完成后将任务 Id 自动 +1，并将完成进度重置为 0。返回：是否成功。
+    /// 用途：当前任务完成后将任务 Id 自动 +1，并按任务类型结转超额进度。返回：是否成功。
     /// </summary>
     public static bool TryCompleteAndAdvanceTask()
     {
