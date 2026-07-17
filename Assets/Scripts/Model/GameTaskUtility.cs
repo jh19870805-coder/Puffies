@@ -8,7 +8,7 @@ using UnityEngine;
 public enum TaskType
 {
     None = 0,
-    CollectPuzzle = 1, // 收集拼图
+    AccumulateScore = 1, // 累计获得分数
 }
 
 /// <summary>
@@ -147,18 +147,18 @@ public static class GameTaskUtility
     }
 
     /// <summary>
-    /// 用途：增加当前任务已完成进度值并写入本地 JSON。返回：是否保存成功。
+    /// 用途：增加当前任务累计获得的分数并写入本地 JSON。返回：是否保存成功。
     /// </summary>
-    public static bool AddCurrentCompleteValue(int delta = 1)
+    public static bool AddCurrentScore(int score)
     {
         EnsureInitialized();
-        if (delta <= 0)
+        if (score <= 0)
         {
-            Debug.LogWarning($"GameTaskUtility.AddCurrentCompleteValue skipped, invalid delta={delta}");
+            Debug.LogWarning($"GameTaskUtility.AddCurrentScore skipped, invalid score={score}");
             return false;
         }
 
-        return SetCurrentCompleteValue(sCurrentCompleteValue + delta);
+        return SetCurrentCompleteValue(sCurrentCompleteValue + score);
     }
 
     /// <summary>
@@ -176,12 +176,12 @@ public static class GameTaskUtility
     }
 
     /// <summary>
-    /// 用途：判断当前任务是否为收集拼图类型。返回：是否为 CollectPuzzle。
+    /// 用途：判断当前任务是否为累计获得分数类型。返回：是否为 AccumulateScore。
     /// </summary>
-    public static bool IsCurrentTaskCollectPuzzle()
+    public static bool IsCurrentTaskAccumulateScore()
     {
         EnsureInitialized();
-        return TryGetCurrentTaskConfig(out var taskConfig) && taskConfig.TaskType == TaskType.CollectPuzzle;
+        return TryGetCurrentTaskConfig(out var taskConfig) && taskConfig.TaskType == TaskType.AccumulateScore;
     }
 
     /// <summary>

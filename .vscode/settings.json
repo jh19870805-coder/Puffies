@@ -58,5 +58,7 @@
     "**/Assets/Scenes/**": true
   },
   "dotnet.codeLens.enableReferencesCodeLens": false,
-  "dotnet.codeLens.enableTestsCodeLens": false
+  "dotnet.codeLens.enableTestsCodeLens": false,
+  "dotnet.defaultSolution": "Puffies.sln",
+  "dotnet.preferCSharpExtension": true
 }

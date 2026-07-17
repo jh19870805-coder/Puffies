@@ -19,6 +19,7 @@ public class GameScene : MonoBehaviour
     private const float SnapDistanceMax = 0.8f;
     private const float SnapDistanceSizeRatio = 0.22f;
     private const float PieceBgSlideDuration = 0.25f;
+    private const float TaskProgressRollDuration = 0.8f;
     private const float PieceBgSlideOutPadding = 0.15f;
     private const int PieceBgFillSortingOrder = 499;
     private const int PieceBgSortingOrder = 500;
@@ -32,10 +33,8 @@ public class GameScene : MonoBehaviour
     private const string DraggableGroupRootObjectName = "DraggableGroupPieces";
     private const string ActiveGroupOutlineRootObjectName = "ActiveGroupOutline";
     private const string PlacedPiecesRootObjectName = "PlacedPieces";
-    private const string TaskBg1ObjectName = "TaskBg1";
-    private const string TaskContent1ObjectName = "TaskContent1";
-    private const string TaskBagIconObjectName = "BagIcon";
-    private const string TaskBagRewardCountPath = "TaskBg1/BagBg/Text (TMP)";
+    private const string TaskItemObjectName = "TaskItem";
+    private const string TaskScorePath = "TaskBg2/TaskScore";
     private const string TaskRewardImgBagPath = "ImgBagBg/ImgBag";
     private static bool sHookedSceneLoaded;
     private readonly BoardState _board = new BoardState();
@@ -50,7 +49,7 @@ public class GameScene : MonoBehaviour
     private Vector2 _originalGameBoardAnchoredPosition;
     private bool _hasOriginalGameBoardAnchoredPosition;
     private bool _isGameFinished;
-    private bool _isCollectPuzzleTaskActive;
+    private bool _isAccumulateScoreTaskActive;
     private GameObject _rewardPanelRoot;
     private GameObject _loadedCardBagRoot;
     private RectTransform _loadedCardBagRect;
@@ -841,7 +840,6 @@ public class GameScene : MonoBehaviour
             var placedRoot = GetOrCreatePlacedPiecesRoot();
             state.PieceRenderer.transform.SetParent(placedRoot.transform, worldPositionStays: true);
             state.IsPlaced = true;
-            TryIncrementCollectPuzzleTaskProgress();
             LayoutTrayPieces();
             TryAdvanceGroup();
             return;
@@ -1073,9 +1071,9 @@ public class GameScene : MonoBehaviour
 
         PrepareBoardForRewardPanel();
         SaveCardPackAfterPuzzleComplete();
-        ProcessTaskSettlement();
         _rewardPanelRoot.SetActive(true);
         _rewardPanelRoot.transform.SetAsLastSibling();
+        StartCoroutine(ProcessTaskSettlement());
         Debug.Log("GameScene: puzzle completed, RewardPanel shown.");
     }
 
@@ -1205,26 +1203,12 @@ public class GameScene : MonoBehaviour
     private void InitializeTaskTracking()
     {
         GameTaskUtility.Initialize();
-        _isCollectPuzzleTaskActive = GameTaskUtility.IsCurrentTaskCollectPuzzle();
-        if (_isCollectPuzzleTaskActive)
+        _isAccumulateScoreTaskActive = GameTaskUtility.IsCurrentTaskAccumulateScore();
+        if (_isAccumulateScoreTaskActive)
         {
             Debug.Log(
-                $"GameScene: CollectPuzzle task active. taskId={GameTaskUtility.GetCurrentTaskId()}, " +
+                $"GameScene: AccumulateScore task active. taskId={GameTaskUtility.GetCurrentTaskId()}, " +
                 $"progress={GameTaskUtility.GetCurrentCompleteValue()}");
-        }
-    }
-
-    private void TryIncrementCollectPuzzleTaskProgress()
-    {
-        if (!_isCollectPuzzleTaskActive)
-        {
-            return;
-        }
-
-        if (GameTaskUtility.AddCurrentCompleteValue(1))
-        {
-            Debug.Log(
-                $"GameScene: puzzle piece collected. progress={GameTaskUtility.GetCurrentCompleteValue()}");
         }
     }
 
@@ -1245,26 +1229,70 @@ public class GameScene : MonoBehaviour
         Debug.Log($"GameScene: card pack data saved after puzzle complete. packId={packId}");
     }
 
-    private void ProcessTaskSettlement()
+    private IEnumerator ProcessTaskSettlement()
     {
         if (_rewardPanelRoot == null)
         {
-            return;
+            yield break;
         }
 
-        if (!GameTaskUtility.IsCurrentTaskCompleted()
+        var packId = GameManager.GetBagId();
+        if (!GameScoreUtility.TryGetCardPackBaseScore(packId, out var settlementScore))
+        {
+            Debug.LogWarning($"GameScene: cannot settle score for task. Invalid card pack config. packId={packId}");
+            SetTaskRewardSectionVisible(false);
+            yield break;
+        }
+
+        if (!_isAccumulateScoreTaskActive
             || !GameTaskUtility.TryGetCurrentTaskConfig(out var taskConfig))
         {
             SetTaskRewardSectionVisible(false);
-            return;
+            SetSettlementScore(settlementScore);
+            yield break;
         }
 
-        OutputTaskReward(taskConfig);
-        if (GameTaskUtility.TryCompleteAndAdvanceTask())
+        var progressBeforeSettlement = GameTaskUtility.GetCurrentCompleteValue();
+        if (!GameTaskUtility.AddCurrentScore(settlementScore))
         {
-            _isCollectPuzzleTaskActive = GameTaskUtility.IsCurrentTaskCollectPuzzle();
-            Debug.Log($"GameScene: task advanced. nextTaskId={GameTaskUtility.GetCurrentTaskId()}");
+            Debug.LogWarning(
+                $"GameScene: failed to add settlement score to current task. " +
+                $"packId={packId}, score={settlementScore}");
+            SetTaskRewardSectionVisible(false);
+            SetSettlementScore(settlementScore);
+            yield break;
         }
+
+        var progressAfterSettlement = GameTaskUtility.GetCurrentCompleteValue();
+        var isTaskCompleted = GameTaskUtility.IsCurrentTaskCompleted();
+        Debug.Log(
+            $"GameScene: settlement score added to task. packId={packId}, score={settlementScore}, " +
+            $"progress={progressAfterSettlement}");
+
+        SetTaskRewardSectionVisible(true);
+        var taskItem = _rewardPanelRoot.transform.Find(TaskItemObjectName);
+        TaskProgressUIUtility.RefreshTask(
+            taskItem,
+            taskConfig,
+            progressBeforeSettlement,
+            isTaskCompleted);
+
+        if (isTaskCompleted)
+        {
+            OutputTaskReward(taskConfig);
+            if (GameTaskUtility.TryCompleteAndAdvanceTask())
+            {
+                _isAccumulateScoreTaskActive = GameTaskUtility.IsCurrentTaskAccumulateScore();
+                Debug.Log($"GameScene: task advanced. nextTaskId={GameTaskUtility.GetCurrentTaskId()}");
+            }
+        }
+
+        yield return AnimateTaskSettlementProgress(
+            taskItem,
+            taskConfig,
+            progressBeforeSettlement,
+            progressAfterSettlement,
+            settlementScore);
     }
 
     private void OutputTaskReward(TaskConfigData taskConfig)
@@ -1296,10 +1324,10 @@ public class GameScene : MonoBehaviour
             return;
         }
 
-        var taskBg = _rewardPanelRoot.transform.Find(TaskBg1ObjectName);
-        if (taskBg != null)
+        var taskItem = _rewardPanelRoot.transform.Find(TaskItemObjectName);
+        if (taskItem != null)
         {
-            taskBg.gameObject.SetActive(visible);
+            taskItem.gameObject.SetActive(visible);
         }
     }
 
@@ -1311,34 +1339,20 @@ public class GameScene : MonoBehaviour
         }
 
         var rewardPackId = taskConfig.RewardId > 0 ? taskConfig.RewardId : GameDefine.DefaultBagId;
-        var rewardValue = taskConfig.RewardValue > 0 ? taskConfig.RewardValue : 1;
         var packImagePath = GameDefine.FormatPackImagePath(rewardPackId);
         var packSprite = GameCommonUtility.LoadSpriteByPath(packImagePath, PixelsPerUnit);
-
-        var taskContentObject = GameCommonUtility.FindSceneObject(TaskContent1ObjectName);
-        if (taskContentObject != null
-            && taskContentObject.TryGetComponent(out TextMeshProUGUI taskContentText))
+        var taskItem = _rewardPanelRoot.transform.Find(TaskItemObjectName);
+        if (taskItem != null)
         {
-            GameFontUtility.ApplyDefaultFont(taskContentText);
-            taskContentText.text =
-                $"完成收集拼图任务（{taskConfig.CompleteValue}/{taskConfig.CompleteValue}），获得卡包奖励！";
+            TaskProgressUIUtility.RefreshTask(
+                taskItem,
+                taskConfig,
+                GameTaskUtility.GetCurrentCompleteValue(),
+                true);
         }
-
-        var bagIconObject = GameCommonUtility.FindSceneObject(TaskBagIconObjectName);
-        if (bagIconObject != null && bagIconObject.TryGetComponent(out Image bagIconImage))
+        else
         {
-            if (packSprite != null)
-            {
-                bagIconImage.sprite = packSprite;
-            }
-        }
-
-        var rewardCountTransform = _rewardPanelRoot.transform.Find(TaskBagRewardCountPath);
-        if (rewardCountTransform != null
-            && rewardCountTransform.TryGetComponent(out TextMeshProUGUI rewardCountText))
-        {
-            GameFontUtility.ApplyDefaultFont(rewardCountText);
-            rewardCountText.text = $"+{rewardValue}";
+            Debug.LogWarning($"GameScene: task reward UI not found. Expected {TaskItemObjectName} under RewardPanel.");
         }
 
         var imgBagTransform = _rewardPanelRoot.transform.Find(TaskRewardImgBagPath);
@@ -1348,6 +1362,75 @@ public class GameScene : MonoBehaviour
             {
                 imgBagImage.sprite = packSprite;
             }
+        }
+    }
+
+    private IEnumerator AnimateTaskSettlementProgress(
+        Transform taskItem,
+        TaskConfigData taskConfig,
+        int progressBeforeSettlement,
+        int progressAfterSettlement,
+        int settlementScore)
+    {
+        var taskScoreTransform = _rewardPanelRoot != null
+            ? _rewardPanelRoot.transform.Find(TaskScorePath)
+            : null;
+        var taskScoreText = taskScoreTransform != null
+            ? taskScoreTransform.GetComponent<TMP_Text>()
+            : null;
+        if (taskScoreText == null)
+        {
+            Debug.LogWarning($"GameScene: settlement score text not found. Expected {TaskScorePath}.");
+        }
+        else
+        {
+            GameFontUtility.ApplyDefaultFont(taskScoreText);
+        }
+
+        TaskProgressUIUtility.SetProgress(taskItem, taskConfig, progressBeforeSettlement);
+        SetSettlementScore(taskScoreText, 0);
+
+        var elapsed = 0f;
+        while (elapsed < TaskProgressRollDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            var normalizedTime = Mathf.Clamp01(elapsed / TaskProgressRollDuration);
+            var easedTime = Mathf.SmoothStep(0f, 1f, normalizedTime);
+            var animatedScore = Mathf.RoundToInt(Mathf.Lerp(0f, settlementScore, easedTime));
+            var animatedTaskProgress = progressBeforeSettlement + animatedScore;
+
+            SetSettlementScore(taskScoreText, animatedScore);
+            TaskProgressUIUtility.SetProgress(taskItem, taskConfig, animatedTaskProgress);
+            yield return null;
+        }
+
+        SetSettlementScore(taskScoreText, settlementScore);
+        TaskProgressUIUtility.SetProgress(taskItem, taskConfig, progressAfterSettlement);
+    }
+
+    private void SetSettlementScore(int score)
+    {
+        var taskScoreTransform = _rewardPanelRoot != null
+            ? _rewardPanelRoot.transform.Find(TaskScorePath)
+            : null;
+        var taskScoreText = taskScoreTransform != null
+            ? taskScoreTransform.GetComponent<TMP_Text>()
+            : null;
+        if (taskScoreText == null)
+        {
+            Debug.LogWarning($"GameScene: settlement score text not found. Expected {TaskScorePath}.");
+            return;
+        }
+
+        GameFontUtility.ApplyDefaultFont(taskScoreText);
+        SetSettlementScore(taskScoreText, score);
+    }
+
+    private static void SetSettlementScore(TMP_Text scoreText, int score)
+    {
+        if (scoreText != null)
+        {
+            scoreText.text = Mathf.Max(0, score).ToString();
         }
     }
 

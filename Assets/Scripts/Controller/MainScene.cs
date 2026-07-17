@@ -51,6 +51,7 @@ public class MainScene : MonoBehaviour
     private const string UsableToggle3ObjectName = "Toggle3";
     private const string SavePanelObjectName = "PanelSave";
     private const string SaveButtonObjectName = "BtnData";
+    private const string TaskItemObjectName = "TaskItem";
     private static bool sHookedSceneLoaded;
 
     private readonly Dictionary<int, PackageEntry> mPackageSlotsById = new Dictionary<int, PackageEntry>();
@@ -128,6 +129,30 @@ public class MainScene : MonoBehaviour
         ConfigureSettingsPanel();
         ConfigureUsablePanel();
         ConfigureSavePanel();
+        RefreshTaskProgressUI();
+    }
+
+    private static void RefreshTaskProgressUI()
+    {
+        var taskItemObject = GameCommonUtility.FindSceneObject(TaskItemObjectName);
+        if (taskItemObject == null)
+        {
+            Debug.LogWarning($"MainScene: task UI not found. Expected object named {TaskItemObjectName}.");
+            return;
+        }
+
+        if (!GameTaskUtility.Initialize()
+            || !GameTaskUtility.IsCurrentTaskAccumulateScore()
+            || !GameTaskUtility.TryGetCurrentTaskConfig(out var taskConfig))
+        {
+            taskItemObject.SetActive(false);
+            return;
+        }
+
+        TaskProgressUIUtility.RefreshTask(
+            taskItemObject.transform,
+            taskConfig,
+            GameTaskUtility.GetCurrentCompleteValue());
     }
 
     public bool CanAcceptPackageInput()

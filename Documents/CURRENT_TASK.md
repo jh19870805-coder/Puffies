@@ -1,69 +1,54 @@
 # Current Task
 
-- Task: Replace runtime outline plugin with baked puzzle outlines
+- Task: Refresh shared task progress UI in MainScene and GameScene
 - Status: Completed
 - Updated At: 2026-07-17
 
 ## User Intent
 
-- Draw only the active group's segments along the complete puzzle exterior.
-- Never draw Piece or group seams in the middle of the puzzle area.
-- Support large batches of `CardBagNNN` prefabs through one Editor command.
-- Remove the third-party outline plugin and redundant fallback code after the baked path replaces it.
-- Keep color `#3f423e` and an initial source width of approximately three pixels.
-- Do not modify scene Canvas dimensions or authored CardBag prefab transforms.
+- Make MainScene and GameScene display the accumulated-score task's real persisted progress.
+- Keep task progress text and progress-bar width synchronized.
+- During GameScene settlement, roll the page score and task progress together.
 
 ## Working Notes
 
-- `PuzzleOutlineBakerEditor` transforms authored Piece Alpha into GameBoard pixel space, closes narrow gaps, flood-fills the complete puzzle exterior, and writes one full-board PNG per numbered group.
-- CardBag001 has a real gray puzzle area, so the baker uses its gray/light transition to validate the boundary.
-- CardBag002, CardBag003, and CardBag008 do not have a gray missing area; low color coverage automatically falls back to the continuous closed geometric exterior.
-- Runtime derives the group number from the actual `PieceNN` name and displays the baked Sprite as a stretched, non-interactive `GameBoard` child.
-- Missing baked resources now produce a warning that names the required Editor menu; they do not affect puzzle interaction.
-- Removed the OutlineFx runtime proxy/blocker path, per-frame proxy synchronization, screen offset, Renderer Feature, setup script, embedded package, lock entry, and package ignore exceptions.
+- Both scenes use the same `TaskItem.prefab`; runtime binding is centralized in `TaskProgressUIUtility`.
+- MainScene refreshes `TaskContent`, `TextProgress`, `ProgressMask`, reward icon, and reward count during `Start`.
+- GameScene keeps TaskItem visible for incomplete score tasks instead of hiding it.
+- GameScene captures progress before and after settlement, then rolls `TaskScore` from 0 to the base score while task progress rolls by the same value.
+- The initial animation duration is 0.8 seconds and uses unscaled time.
+- Completed task reward and advancement are saved before animation, so leaving the page early cannot lose business state.
 
 ## Files Changed
 
+- `Assets/Scripts/View/TaskProgressUIUtility.cs`
+- `Assets/Scripts/Controller/MainScene.cs`
 - `Assets/Scripts/Controller/GameScene.cs`
-- `Assets/Scripts/Model/GameDefine.cs`
-- `Assets/Scripts/Editor/PuzzleOutlineBakerEditor.cs`
-- `Assets/Resources/Generated/PuzzleOutlines/`
-- `Assets/Settings/Renderer2D.asset`
-- `Packages/packages-lock.json`
-- `.gitignore`
-- `specs/2026-07-17-baked-puzzle-outline.md`
+- `specs/2026-07-17-task-progress-ui-refresh.md`
 - `Documents/CURRENT_TASK.md`
 - `Documents/PROJECT_CONTEXT.md`
 
-## Removed
-
-- `Packages/www.nulltale.outlinefx/`
-- `Assets/Scripts/Editor/OutlineFxRendererSetupEditor.cs`
-
 ## Decisions
 
-- Baked Unity Sprites are the only production outline path.
-- The project no longer includes a runtime outline Shader or third-party rendering dependency.
-- Every new or changed CardBag must pass `Puffies -> Puzzles -> Bake Outline Masks` before delivery.
-- A missing bake is an authoring error surfaced by a warning, not a reason to restore runtime edge detection.
+- Derive the progress bar's full width from the authored `Progress` child rather than the mutable `ProgressMask` width.
+- Clamp only the visible bar ratio; keep the numeric text tied to the actual displayed task value.
+- Do not modify MainScene, GameScene, TaskItem.prefab, or Canvas layout data.
+- Keep bonus calculation and multi-step bonus presentation outside this UI binding task.
 
 ## Validation
 
-- Previously baked 14 non-empty group Sprites for CardBag001, CardBag002, CardBag003, and CardBag008 in Unity batch mode.
-- Visually inspected both gray/light and geometric-fallback outputs; the lines are continuous exterior segments without Piece seams.
-- Global search after cleanup found no live OutlineFx namespace, package name, Shader GUID, or Renderer Feature reference under Assets, Packages, specs, or `.gitignore`.
-- `Renderer2D.asset` now serializes an empty `m_RendererFeatures` list.
-- Unity detected the package removal and rebuilt both `Assembly-CSharp` and `Assembly-CSharp-Editor` successfully.
-- The latest Editor log contains no Missing Renderer Feature, Missing Script, package resolution, C#, Shader, or exception error after cleanup.
-- Recompiled both assemblies with Unity's generated Roslyn response files after the final runtime simplification; both exited with code 0.
-- Confirmed all 14 generated PNGs still have valid Unity Sprite import metadata.
-- Confirmed no stale OutlineFx assembly remains under `Library/ScriptAssemblies`.
+- Confirmed shared prefab paths: `TaskContent`, `ProgressBg/TextProgress`, `ProgressBg/ProgressMask/Progress`, `BagBg/BagIcon`, and `BagBg/TextAddNum`.
+- Confirmed GameScene settlement score path: `RewardPanel/TaskBg2/TaskScore`.
+- Compiled `Assembly-CSharp-firstpass`, `Assembly-CSharp`, and `Assembly-CSharp-Editor` successfully with local .NET MSBuild.
+- Confirmed no Scene, Prefab, Canvas, or generated C# project file is part of this change.
+- Interactive Unity play-mode verification remains to be performed.
 
 ## Next Action
 
-1. Enter `GameScene`, switch groups, and verify outline cleanup before `RewardPanel` appears.
-2. Run `Puffies -> Puzzles -> Bake Outline Masks` whenever a CardBag image, Piece Alpha, or prefab layout changes.
+1. Open MainScene and confirm the task shows the persisted value and matching progress width.
+2. Complete a puzzle in GameScene and confirm `TaskScore`, `TextProgress`, and `ProgressMask` finish together after 0.8 seconds.
+3. Test one incomplete settlement and one task-completing settlement, including return to MainScene.
 
 ## Resume Prompt
 
-Continue the baked puzzle outline workflow. Read `AGENTS.md`, `Documents/WORKFLOW.md`, and `Documents/CURRENT_TASK.md`; do not restore a runtime outline plugin.
+Continue the Puffies task progress UI workflow. Read AGENTS.md, Documents/WORKFLOW.md, Documents/CURRENT_TASK.md, Documents/GAME_DESIGN_REQUIREMENTS.md, and specs/2026-07-17-task-progress-ui-refresh.md first.

@@ -2,7 +2,7 @@
 
 Unity **2022.3** / URP 2D project. Core loop: card pack opening -> puzzle drag/drop -> task reward. This is the stable project reference for requirements, scenes, data, assets, build rules, and naming.
 
-Current work state is tracked in [CURRENT_TASK.md](CURRENT_TASK.md). Workflow rules are in [WORKFLOW.md](WORKFLOW.md).
+Current work state is tracked in [CURRENT_TASK.md](CURRENT_TASK.md). Workflow rules are in [WORKFLOW.md](WORKFLOW.md). Confirmed long-term game-design rules are recorded in [GAME_DESIGN_REQUIREMENTS.md](GAME_DESIGN_REQUIREMENTS.md).
 
 ---
 
@@ -32,7 +32,8 @@ Current work state is tracked in [CURRENT_TASK.md](CURRENT_TASK.md). Workflow ru
 
 - Task config comes from `Resources/Configs/TaskConfig.csv`.
 - Card pack config comes from `Resources/Configs/CardPacks.csv`.
-- Collect-puzzle task type is `CollectPuzzle` (`TaskType=1`); each placed puzzle piece adds +1 progress.
+- Accumulate-score task type is `AccumulateScore` (`TaskType=1`); completing a puzzle adds that game's settlement score once.
+- Current settlement uses the card-pack base score: XS 60, S 80, M 100, L 120, XL 140, XXL 160, XXXL 200. Confirmed hint, outline, and time bonuses will be integrated separately.
 - Completed tasks grant rewards and advance to the next task.
 - Card pack unlock/play state is stored in SQLite table `CardPacks`.
 - Task progress is stored in JSON root object `TaskProgressData`.
@@ -109,7 +110,7 @@ effect (debug): CardFx preview, menu Puffies -> Preview CardFx Effects
 |------|--------|-------|
 | LoadingScene | `LoadingScene.cs` | Initializes JSON / SQLite / `GameTaskUtility` / `CardPackDataUtility` |
 | MainScene | `MainScene.cs` | Card pack UI; refreshes by unlock state; 3D opening or 2D fallback |
-| GameScene | `GameScene.cs` | Puzzle grouping and RewardPanel; collects puzzle task progress; saves pack and settles task |
+| GameScene | `GameScene.cs` | Puzzle grouping and RewardPanel; saves the pack, accumulates settlement score task progress, and settles task rewards |
 | RankScene / AchieveScene | Scene scripts | Return to Main |
 | effect | `CardFxPreviewScene.cs` | CardObtain / CardTrail preview |
 
@@ -143,6 +144,7 @@ effect (debug): CardFx preview, menu Puffies -> Preview CardFx Effects
 | `ActiveGroupOutline` | Runtime baked-outline UGUI Image under `GameBoard` |
 | `PieceBoard` | Puzzle piece tray |
 | `RewardPanel` | Puzzle completion reward panel |
+| `TaskItem` | Shared `Assets/Prefabs/TaskItem.prefab` instance used by MainScene task progress and GameScene RewardPanel settlement |
 | `Package001` | MainScene card pack slot template, hidden and cloned at runtime |
 
 ---
@@ -179,6 +181,10 @@ New `CanvasScaler` values are written by `CanvasDesignResolutionEditor.cs`. Use 
 - `SqliteLocalStore` uses collection/key records in `AppRecords`; card pack business state uses the dedicated `CardPacks` table.
 - MainScene settings are stored in `AppRecords` as collection/key `GameSettings/Runtime`: music volume, effect volume, and windowed mode.
 - MainScene usable option toggles are stored in the same `GameSettings/Runtime` record as `UsableOption1`, `UsableOption2`, and `UsableOption3`.
+- MainScene and GameScene both reference the same `TaskItem.prefab` GUID. Their scene overrides only position the root (`MainScene`: `10,508`; `GameScene`: `-6,455`); child layout and visuals must be changed in the shared prefab.
+- Shared TaskItem child names are `TaskContent`, `TextProgress`, `ProgressMask`, `BagIcon`, and `BagBg`. Task UI binding code should resolve these names relative to the TaskItem instance and must not use scene-specific suffixes.
+- `TaskProgressUIUtility` is the shared runtime binding for both TaskItem instances. `TextProgress` displays `CurrentCompleteValue / TaskConfig.CompleteValue`, and the visible `ProgressMask` width uses the clamped ratio of those values.
+- MainScene refreshes TaskItem from persisted task data during `Start`. GameScene settlement rolls `TaskScore`, `TextProgress`, and `ProgressMask` together over 0.8 seconds using unscaled time; task reward and advancement are persisted before the animation.
 - MainScene `PanelSet/SliderMusic` and `PanelSet/SliderEffect` are hand-built fake sliders: root Image background plus `SliderFill` and `SliderHandle` children. Runtime uses `FakeSettingsSliderInput` to handle pointer drag, refresh visuals, and save values.
 - Do not use `PlayerPrefs`.
 - Initialization happens in `LoadingScene.Start` for `JsonLocalStore`, `SqliteLocalStore`, `GameTaskUtility`, and `CardPackDataUtility`.
