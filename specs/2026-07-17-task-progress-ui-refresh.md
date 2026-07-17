@@ -15,6 +15,8 @@ As a player, I want the shared task UI in MainScene and GameScene to reflect my 
 5. WHEN the updated task is incomplete THEN GameScene SHALL keep `TaskItem` visible with the updated progress and SHALL NOT grant a reward.
 6. WHEN the updated task is complete THEN GameScene SHALL show the completed task wording, grant its reward exactly once, and advance the task exactly once.
 7. IF a scene is missing optional task UI nodes THEN the system SHALL log a warning without blocking score persistence, task reward, or task advancement.
+8. WHEN GameScene settlement is shown THEN `TaskScore` SHALL display the current game's real settlement score even if no active score task exists.
+9. WHEN GameScene settlement is shown THEN `TaskBagNum` SHALL display the current count of unlocked card packs from SQLite, including a card pack unlocked by the current task reward.
 
 ## Design
 
@@ -25,6 +27,7 @@ As a player, I want the shared task UI in MainScene and GameScene to reflect my 
 - Convert GameScene task settlement to a coroutine. Persist the score and perform reward/advance business logic before the first animation frame, while rendering from captured pre/post-settlement values.
 - Use an initial score-roll duration of 0.8 seconds with unscaled time. This is an adjustable presentation constant, not a scoring rule.
 - This iteration animates the currently implemented base score only. Later bonus steps can call the same progress-update path.
+- Bind `TaskBg2/TaskScore` to the current game's settlement score and `TaskBg2/TaskBagNum` to `CardPackDataUtility.GetUnlockedPackIds().Count` independently from task availability.
 
 ## Tasks
 
@@ -32,6 +35,7 @@ As a player, I want the shared task UI in MainScene and GameScene to reflect my 
 - [x] Refresh MainScene task UI from current task data.
 - [x] Animate GameScene settlement task progress and total score together.
 - [x] Preserve completion reward and task advancement behavior.
+- [x] Bind settlement score and unlocked card-pack count to real data.
 - [x] Update project notes and compile runtime and Editor assemblies.
 
 ## Out Of Scope

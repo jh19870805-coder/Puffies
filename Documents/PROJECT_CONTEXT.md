@@ -33,7 +33,8 @@ Current work state is tracked in [CURRENT_TASK.md](CURRENT_TASK.md). Workflow ru
 - Task config comes from `Resources/Configs/TaskConfig.csv`.
 - Card pack config comes from `Resources/Configs/CardPacks.csv`.
 - Accumulate-score task type is `AccumulateScore` (`TaskType=1`); completing a puzzle adds that game's settlement score once.
-- Current settlement uses the card-pack base score: XS 60, S 80, M 100, L 120, XL 140, XXL 160, XXXL 200. Confirmed hint, outline, and time bonuses will be integrated separately.
+- Settlement starts from the card-pack base score (XS 60, S 80, M 100, L 120, XL 140, XXL 160, XXXL 200), adds every qualified bonus percentage, multiplies once, and rounds upward.
+- Score bonuses are: no `BtnTips` click +5%, MainScene `Toggle1` level outline disabled +2%, `Toggle2` sticker outline disabled +5%, and completion time <=15 / <=30 / <=60 seconds +3% / +2% / +1%.
 - Completed tasks grant rewards and advance to the next task.
 - Card pack unlock/play state is stored in SQLite table `CardPacks`.
 - Task progress is stored in JSON root object `TaskProgressData`.
@@ -181,10 +182,13 @@ New `CanvasScaler` values are written by `CanvasDesignResolutionEditor.cs`. Use 
 - `SqliteLocalStore` uses collection/key records in `AppRecords`; card pack business state uses the dedicated `CardPacks` table.
 - MainScene settings are stored in `AppRecords` as collection/key `GameSettings/Runtime`: music volume, effect volume, and windowed mode.
 - MainScene usable option toggles are stored in the same `GameSettings/Runtime` record as `UsableOption1`, `UsableOption2`, and `UsableOption3`.
+- `UsableOption1` is the level outer-frame toggle, `UsableOption2` is the sticker/full-contour toggle, and `UsableOption3` is high contrast. The serialized names remain unchanged for save compatibility.
 - MainScene and GameScene both reference the same `TaskItem.prefab` GUID. Their scene overrides only position the root (`MainScene`: `10,508`; `GameScene`: `-6,455`); child layout and visuals must be changed in the shared prefab.
 - Shared TaskItem child names are `TaskContent`, `TextProgress`, `ProgressMask`, `BagIcon`, and `BagBg`. Task UI binding code should resolve these names relative to the TaskItem instance and must not use scene-specific suffixes.
 - `TaskProgressUIUtility` is the shared runtime binding for both TaskItem instances. `TextProgress` displays `CurrentCompleteValue / TaskConfig.CompleteValue`, and the visible `ProgressMask` width uses the clamped ratio of those values.
 - MainScene refreshes TaskItem from persisted task data during `Start`. GameScene settlement rolls `TaskScore`, `TextProgress`, and `ProgressMask` together over 0.8 seconds using unscaled time; task reward and advancement are persisted before the animation.
+- GameScene settlement summary binds `TaskBg2/TaskScore` to the current game's settlement score and `TaskBg2/TaskBagNum` to the current SQLite count of unlocked card packs. A pack unlocked by the current task reward is included immediately.
+- GameScene snapshots outline settings on entry, marks hint use on `BtnTips` click, starts its unscaled score timer on the first successful Piece placement, and freezes time when RewardPanel settlement begins.
 - MainScene `PanelSet/SliderMusic` and `PanelSet/SliderEffect` are hand-built fake sliders: root Image background plus `SliderFill` and `SliderHandle` children. Runtime uses `FakeSettingsSliderInput` to handle pointer drag, refresh visuals, and save values.
 - Do not use `PlayerPrefs`.
 - Initialization happens in `LoadingScene.Start` for `JsonLocalStore`, `SqliteLocalStore`, `GameTaskUtility`, and `CardPackDataUtility`.

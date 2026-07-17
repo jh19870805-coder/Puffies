@@ -73,6 +73,8 @@ Status: `Confirmed`
 Status: `Confirmed`
 
 - Record the elapsed time for the current puzzle game and evaluate a time bonus during settlement.
+- Start recording time when the first puzzle Piece is successfully placed. Failed placement attempts do not start the timer.
+- Stop recording time when the completed puzzle begins the RewardPanel settlement flow.
 - The three time thresholds are configurable and will be tuned later.
 - Initial threshold values:
 
@@ -143,7 +145,6 @@ Status: `Pending`
 - The order in which qualified bonuses are revealed during settlement.
 - Duration, easing, and minimum visual step for each score-roll animation.
 - Whether intermediate cumulative step scores are rounded upward or only `FinalScore` is rounded upward.
-- Define when game-time recording starts, pauses, resumes, and stops.
 - Whether switching the outline on and then off during the same game disqualifies the bonus; the current wording is recorded as "never enabled during the current game."
 - Whether switching the sticker outline on and then off during the same game disqualifies the bonus; the current wording is recorded as "never enabled during the current game."
 - What exact hint-button action counts as using a hint if the hint cannot be completed or displayed.
@@ -155,6 +156,7 @@ Status: `Pending`
 
 | Date | Change |
 |---|---|
+| 2026-07-17 | Confirmed that scoring time starts on the first successfully placed Piece and stops when completed-puzzle settlement begins. |
 | 2026-07-17 | Confirmed additive bonus stacking, `Ceil(BaseScore * (1 + TotalBonusRate))`, and sequential settlement score-roll presentation with synchronized progress/score updates. |
 | 2026-07-17 | Confirmed that exact threshold values belong to the faster tier: <=A, (A,B], and (B,C]. Time above C has no time bonus. |
 | 2026-07-17 | Confirmed three configurable completion-time bonus tiers; initial thresholds are A=15s, B=30s, C=60s. |

@@ -10,6 +10,10 @@ public sealed class GameSettingsData
     public bool UsableOption1;
     public bool UsableOption2;
     public bool UsableOption3;
+
+    public bool IsLevelOutlineEnabled => UsableOption1;
+    public bool IsStickerOutlineEnabled => UsableOption2;
+    public bool IsHighContrastEnabled => UsableOption3;
 }
 
 public static class GameSettingsUtility

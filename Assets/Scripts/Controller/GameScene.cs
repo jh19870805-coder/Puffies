@@ -35,7 +35,9 @@ public class GameScene : MonoBehaviour
     private const string PlacedPiecesRootObjectName = "PlacedPieces";
     private const string TaskItemObjectName = "TaskItem";
     private const string TaskScorePath = "TaskBg2/TaskScore";
+    private const string TaskBagCountPath = "TaskBg2/TaskBagNum";
     private const string TaskRewardImgBagPath = "ImgBagBg/ImgBag";
+    private const string HintButtonObjectName = "BtnTips";
     private static bool sHookedSceneLoaded;
     private readonly BoardState _board = new BoardState();
     private readonly DragState _drag = new DragState();
@@ -50,6 +52,12 @@ public class GameScene : MonoBehaviour
     private bool _hasOriginalGameBoardAnchoredPosition;
     private bool _isGameFinished;
     private bool _isAccumulateScoreTaskActive;
+    private bool _wasHintUsed;
+    private bool _isLevelOutlineEnabled;
+    private bool _isStickerOutlineEnabled;
+    private bool _hasGameplayTimerStarted;
+    private float _gameplayStartRealtime;
+    private float _completionTimeSeconds;
     private GameObject _rewardPanelRoot;
     private GameObject _loadedCardBagRoot;
     private RectTransform _loadedCardBagRect;
@@ -80,10 +88,12 @@ public class GameScene : MonoBehaviour
         }
 
         ConfigureGameplayCanvas(camera);
+        InitializeScoringSession();
         var selectedBagId = GameManager.GetBagId();
         InitializeGameplay(selectedBagId);
         InitializeTaskTracking();
         ConfigureReturnButton();
+        ConfigureHintButton();
         ConfigureRewardPanel();
         Debug.Log("GameScene bootstrap completed.");
     }
@@ -684,6 +694,12 @@ public class GameScene : MonoBehaviour
 
     private void TryRefreshActiveGroupOutline(int groupIndex)
     {
+        if (!_isLevelOutlineEnabled)
+        {
+            ClearActiveGroupOutline();
+            return;
+        }
+
         try
         {
             RefreshActiveGroupOutline(groupIndex);
@@ -840,6 +856,7 @@ public class GameScene : MonoBehaviour
             var placedRoot = GetOrCreatePlacedPiecesRoot();
             state.PieceRenderer.transform.SetParent(placedRoot.transform, worldPositionStays: true);
             state.IsPlaced = true;
+            StartGameplayTimerIfNeeded();
             LayoutTrayPieces();
             TryAdvanceGroup();
             return;
@@ -1056,6 +1073,7 @@ public class GameScene : MonoBehaviour
         }
 
         _isGameFinished = true;
+        StopGameplayTimer();
         EndDragging();
 
         if (_rewardPanelRoot == null)
@@ -1200,6 +1218,77 @@ public class GameScene : MonoBehaviour
         GameManager.EnterMainScene();
     }
 
+    private void InitializeScoringSession()
+    {
+        GameSettingsUtility.Initialize();
+        var settings = GameSettingsUtility.GetSettings();
+        _wasHintUsed = false;
+        _isLevelOutlineEnabled = settings.IsLevelOutlineEnabled;
+        _isStickerOutlineEnabled = settings.IsStickerOutlineEnabled;
+        _hasGameplayTimerStarted = false;
+        _gameplayStartRealtime = 0f;
+        _completionTimeSeconds = 0f;
+
+        Debug.Log(
+            $"GameScene: scoring session initialized. levelOutline={_isLevelOutlineEnabled}, " +
+            $"stickerOutline={_isStickerOutlineEnabled}");
+    }
+
+    private void ConfigureHintButton()
+    {
+        var hintButtonObject = GameCommonUtility.FindSceneObject(HintButtonObjectName);
+        if (hintButtonObject == null)
+        {
+            Debug.LogWarning($"GameScene: hint button not found. Expected object named {HintButtonObjectName}.");
+            return;
+        }
+
+        var hintButton = hintButtonObject.GetComponent<Button>();
+        if (hintButton == null)
+        {
+            Debug.LogWarning($"GameScene: {HintButtonObjectName} is missing Button component.");
+            return;
+        }
+
+        hintButton.onClick.RemoveListener(OnHintButtonClicked);
+        hintButton.onClick.AddListener(OnHintButtonClicked);
+    }
+
+    private void OnHintButtonClicked()
+    {
+        if (_isGameFinished || _wasHintUsed)
+        {
+            return;
+        }
+
+        _wasHintUsed = true;
+        Debug.Log("GameScene: hint used; no-hint score bonus disabled for this game.");
+    }
+
+    private void StartGameplayTimerIfNeeded()
+    {
+        if (_hasGameplayTimerStarted || _isGameFinished)
+        {
+            return;
+        }
+
+        _hasGameplayTimerStarted = true;
+        _gameplayStartRealtime = Time.realtimeSinceStartup;
+        Debug.Log("GameScene: gameplay score timer started after first Piece placement.");
+    }
+
+    private void StopGameplayTimer()
+    {
+        if (!_hasGameplayTimerStarted)
+        {
+            _completionTimeSeconds = 0f;
+            return;
+        }
+
+        _completionTimeSeconds = Mathf.Max(0f, Time.realtimeSinceStartup - _gameplayStartRealtime);
+        Debug.Log($"GameScene: gameplay score timer stopped at {_completionTimeSeconds:F2}s.");
+    }
+
     private void InitializeTaskTracking()
     {
         GameTaskUtility.Initialize();
@@ -1236,13 +1325,32 @@ public class GameScene : MonoBehaviour
             yield break;
         }
 
+        SetSettlementScore(0);
+        RefreshSettlementBagCount();
+
         var packId = GameManager.GetBagId();
-        if (!GameScoreUtility.TryGetCardPackBaseScore(packId, out var settlementScore))
+        var scoreContext = new GameScoreContext
         {
-            Debug.LogWarning($"GameScene: cannot settle score for task. Invalid card pack config. packId={packId}");
+            WasHintUsed = _wasHintUsed,
+            IsLevelOutlineEnabled = _isLevelOutlineEnabled,
+            IsStickerOutlineEnabled = _isStickerOutlineEnabled,
+            CompletionTimeSeconds = _completionTimeSeconds
+        };
+        if (!GameScoreUtility.TryCalculateCardPackScore(packId, scoreContext, out var scoreResult))
+        {
+            Debug.LogWarning($"GameScene: cannot calculate settlement score. Invalid card pack config. packId={packId}");
             SetTaskRewardSectionVisible(false);
             yield break;
         }
+
+        var settlementScore = scoreResult.FinalScore;
+        Debug.Log(
+            $"GameScene: score calculated. base={scoreResult.BaseScore}, " +
+            $"noHint=+{scoreResult.NoHintBonusPercent}%, " +
+            $"levelOutlineOff=+{scoreResult.LevelOutlineDisabledBonusPercent}%, " +
+            $"stickerOutlineOff=+{scoreResult.StickerOutlineDisabledBonusPercent}%, " +
+            $"time=+{scoreResult.CompletionTimeBonusPercent}% ({scoreResult.CompletionTimeSeconds:F2}s), " +
+            $"total=+{scoreResult.TotalBonusPercent}%, final={scoreResult.FinalScore}");
 
         if (!_isAccumulateScoreTaskActive
             || !GameTaskUtility.TryGetCurrentTaskConfig(out var taskConfig))
@@ -1287,6 +1395,7 @@ public class GameScene : MonoBehaviour
             }
         }
 
+        RefreshSettlementBagCount();
         yield return AnimateTaskSettlementProgress(
             taskItem,
             taskConfig,
@@ -1432,6 +1541,24 @@ public class GameScene : MonoBehaviour
         {
             scoreText.text = Mathf.Max(0, score).ToString();
         }
+    }
+
+    private void RefreshSettlementBagCount()
+    {
+        var taskBagCountTransform = _rewardPanelRoot != null
+            ? _rewardPanelRoot.transform.Find(TaskBagCountPath)
+            : null;
+        var taskBagCountText = taskBagCountTransform != null
+            ? taskBagCountTransform.GetComponent<TMP_Text>()
+            : null;
+        if (taskBagCountText == null)
+        {
+            Debug.LogWarning($"GameScene: card pack count text not found. Expected {TaskBagCountPath}.");
+            return;
+        }
+
+        GameFontUtility.ApplyDefaultFont(taskBagCountText);
+        taskBagCountText.text = CardPackDataUtility.GetUnlockedPackIds().Count.ToString();
     }
 
     private void PlayTaskCardPackReward(int rewardPackId)
