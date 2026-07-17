@@ -32,7 +32,7 @@ public static class TaskProgressUIUtility
         taskItem.gameObject.SetActive(true);
         RefreshTaskContent(taskItem, taskConfig, showCompletedMessage);
         RefreshReward(taskItem, taskConfig);
-        return SetProgress(taskItem, taskConfig, displayValue, true);
+        return SetProgressInternal(taskItem, taskConfig, displayValue, true);
     }
 
     /// <summary>
@@ -41,8 +41,16 @@ public static class TaskProgressUIUtility
     public static bool SetProgress(
         Transform taskItem,
         TaskConfigData taskConfig,
+        int displayValue)
+    {
+        return SetProgressInternal(taskItem, taskConfig, displayValue, false);
+    }
+
+    private static bool SetProgressInternal(
+        Transform taskItem,
+        TaskConfigData taskConfig,
         int displayValue,
-        bool logMissingNodes = false)
+        bool initialize)
     {
         if (taskItem == null)
         {
@@ -54,7 +62,7 @@ public static class TaskProgressUIUtility
         var progressFill = taskItem.Find(ProgressFillPath) as RectTransform;
         if (progressText == null || progressMask == null || progressFill == null)
         {
-            if (logMissingNodes)
+            if (initialize)
             {
                 Debug.LogWarning(
                     "TaskProgressUIUtility: shared TaskItem is missing TextProgress, ProgressMask, or Progress.");
@@ -65,7 +73,11 @@ public static class TaskProgressUIUtility
 
         var safeDisplayValue = Mathf.Max(0, displayValue);
         var targetValue = Mathf.Max(0, taskConfig.CompleteValue);
-        GameFontUtility.ApplyDefaultFont(progressText);
+        if (initialize)
+        {
+            GameFontUtility.ApplyDefaultFont(progressText);
+        }
+
         progressText.text = $"{safeDisplayValue}/{targetValue}";
 
         var ratio = targetValue > 0

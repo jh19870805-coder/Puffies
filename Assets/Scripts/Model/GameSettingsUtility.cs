@@ -13,11 +13,17 @@ public sealed class GameSettingsData
 
     public bool IsLevelOutlineEnabled => UsableOption1;
     public bool IsStickerOutlineEnabled => UsableOption2;
-    public bool IsHighContrastEnabled => UsableOption3;
 }
 
 public static class GameSettingsUtility
 {
+    private enum UsableOption
+    {
+        LevelOutline,
+        StickerOutline,
+        HighContrast
+    }
+
     private const string SettingsCollection = "GameSettings";
     private const string SettingsKey = "Runtime";
 
@@ -99,22 +105,35 @@ public static class GameSettingsUtility
 
     public static void SetUsableOption1(bool enabled)
     {
-        EnsureSettingsLoaded();
-        sSettings.UsableOption1 = enabled;
-        Save();
+        SetUsableOption(UsableOption.LevelOutline, enabled);
     }
 
     public static void SetUsableOption2(bool enabled)
     {
-        EnsureSettingsLoaded();
-        sSettings.UsableOption2 = enabled;
-        Save();
+        SetUsableOption(UsableOption.StickerOutline, enabled);
     }
 
     public static void SetUsableOption3(bool enabled)
     {
+        SetUsableOption(UsableOption.HighContrast, enabled);
+    }
+
+    private static void SetUsableOption(UsableOption option, bool enabled)
+    {
         EnsureSettingsLoaded();
-        sSettings.UsableOption3 = enabled;
+        switch (option)
+        {
+            case UsableOption.LevelOutline:
+                sSettings.UsableOption1 = enabled;
+                break;
+            case UsableOption.StickerOutline:
+                sSettings.UsableOption2 = enabled;
+                break;
+            case UsableOption.HighContrast:
+                sSettings.UsableOption3 = enabled;
+                break;
+        }
+
         Save();
     }
 

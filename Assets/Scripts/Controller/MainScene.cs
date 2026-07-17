@@ -106,6 +106,10 @@ public class MainScene : MonoBehaviour
         mPlayAnimationCoroutine = null;
 
         GameManager.Initialize();
+        if (!GameSettingsUtility.Initialize())
+        {
+            Debug.LogWarning("MainScene: GameSettingsUtility is not ready; settings will use defaults until SQLite is available.");
+        }
 
         var targetCamera = Camera.main;
         if (targetCamera != null)
@@ -715,7 +719,7 @@ public class MainScene : MonoBehaviour
             return;
         }
 
-        SetMenuPanelVisible(false);
+        SetPanelVisible(mMenuPanelRoot, false);
 
         var menuButton = GameCommonUtility.FindSceneObject(MenuButtonObjectName)?.GetComponent<Button>();
         if (menuButton == null)
@@ -771,26 +775,12 @@ public class MainScene : MonoBehaviour
             return;
         }
 
-        SetMenuPanelVisible(true);
+        SetPanelVisible(mMenuPanelRoot, true);
     }
 
     private void OnMenuCloseButtonClicked()
     {
-        SetMenuPanelVisible(false);
-    }
-
-    private void SetMenuPanelVisible(bool visible)
-    {
-        if (mMenuPanelRoot == null)
-        {
-            return;
-        }
-
-        mMenuPanelRoot.SetActive(visible);
-        if (visible)
-        {
-            mMenuPanelRoot.transform.SetAsLastSibling();
-        }
+        SetPanelVisible(mMenuPanelRoot, false);
     }
 
     private void ConfigureSettingsPanel()
@@ -806,14 +796,9 @@ public class MainScene : MonoBehaviour
         mEffectSlider = ConfigureSettingsSlider(EffectSliderObjectName);
         mWindowedToggle = FindChild(mSettingsPanelRoot.transform, WindowedToggleObjectName)?.GetComponent<Toggle>();
 
-        if (!GameSettingsUtility.Initialize())
-        {
-            Debug.LogWarning("MainScene: GameSettingsUtility is not ready, settings will use defaults until SQLite is available.");
-        }
-
-        ApplySettingsToUi(GameSettingsUtility.GetSettings());
+        ApplySettingsPanelValues(GameSettingsUtility.GetSettings());
         BindSettingsControls();
-        SetSettingsPanelVisible(false);
+        SetPanelVisible(mSettingsPanelRoot, false);
     }
 
     private void BindSettingsControls()
@@ -861,7 +846,7 @@ public class MainScene : MonoBehaviour
         }
     }
 
-    private void ApplySettingsToUi(GameSettingsData settings)
+    private void ApplySettingsPanelValues(GameSettingsData settings)
     {
         if (settings == null)
         {
@@ -882,21 +867,6 @@ public class MainScene : MonoBehaviour
         if (mWindowedToggle != null)
         {
             mWindowedToggle.SetIsOnWithoutNotify(settings.IsWindowed);
-        }
-
-        if (mUsableToggle1 != null)
-        {
-            mUsableToggle1.SetIsOnWithoutNotify(settings.UsableOption1);
-        }
-
-        if (mUsableToggle2 != null)
-        {
-            mUsableToggle2.SetIsOnWithoutNotify(settings.UsableOption2);
-        }
-
-        if (mUsableToggle3 != null)
-        {
-            mUsableToggle3.SetIsOnWithoutNotify(settings.UsableOption3);
         }
 
         mIsApplyingSettingsToUi = false;
@@ -920,13 +890,13 @@ public class MainScene : MonoBehaviour
             return;
         }
 
-        SetMenuPanelVisible(false);
-        SetSettingsPanelVisible(true);
+        SetPanelVisible(mMenuPanelRoot, false);
+        SetPanelVisible(mSettingsPanelRoot, true);
     }
 
     private void OnSettingsCloseButtonClicked()
     {
-        SetSettingsPanelVisible(false);
+        SetPanelVisible(mSettingsPanelRoot, false);
     }
 
     private void OnMusicVolumeChanged(float value)
@@ -959,20 +929,6 @@ public class MainScene : MonoBehaviour
         GameSettingsUtility.SetWindowed(isWindowed);
     }
 
-    private void SetSettingsPanelVisible(bool visible)
-    {
-        if (mSettingsPanelRoot == null)
-        {
-            return;
-        }
-
-        mSettingsPanelRoot.SetActive(visible);
-        if (visible)
-        {
-            mSettingsPanelRoot.transform.SetAsLastSibling();
-        }
-    }
-
     private void ConfigureUsablePanel()
     {
         mUsablePanelRoot = GameCommonUtility.FindSceneObject(UsablePanelObjectName);
@@ -986,14 +942,9 @@ public class MainScene : MonoBehaviour
         mUsableToggle2 = FindChild(mUsablePanelRoot.transform, UsableToggle2ObjectName)?.GetComponent<Toggle>();
         mUsableToggle3 = FindChild(mUsablePanelRoot.transform, UsableToggle3ObjectName)?.GetComponent<Toggle>();
 
-        if (!GameSettingsUtility.Initialize())
-        {
-            Debug.LogWarning("MainScene: GameSettingsUtility is not ready, usable options will use defaults until SQLite is available.");
-        }
-
-        ApplySettingsToUi(GameSettingsUtility.GetSettings());
+        ApplyUsablePanelValues(GameSettingsUtility.GetSettings());
         BindUsableControls();
-        SetUsablePanelVisible(false);
+        SetPanelVisible(mUsablePanelRoot, false);
     }
 
     private void BindUsableControls()
@@ -1050,13 +1001,13 @@ public class MainScene : MonoBehaviour
             return;
         }
 
-        SetMenuPanelVisible(false);
-        SetUsablePanelVisible(true);
+        SetPanelVisible(mMenuPanelRoot, false);
+        SetPanelVisible(mUsablePanelRoot, true);
     }
 
     private void OnUsableCloseButtonClicked()
     {
-        SetUsablePanelVisible(false);
+        SetPanelVisible(mUsablePanelRoot, false);
     }
 
     private void OnUsableToggle1Changed(bool value)
@@ -1089,20 +1040,6 @@ public class MainScene : MonoBehaviour
         GameSettingsUtility.SetUsableOption3(value);
     }
 
-    private void SetUsablePanelVisible(bool visible)
-    {
-        if (mUsablePanelRoot == null)
-        {
-            return;
-        }
-
-        mUsablePanelRoot.SetActive(visible);
-        if (visible)
-        {
-            mUsablePanelRoot.transform.SetAsLastSibling();
-        }
-    }
-
     private void ConfigureSavePanel()
     {
         mSavePanelRoot = GameCommonUtility.FindSceneObject(SavePanelObjectName);
@@ -1113,7 +1050,7 @@ public class MainScene : MonoBehaviour
         }
 
         BindSaveControls();
-        SetSavePanelVisible(false);
+        SetPanelVisible(mSavePanelRoot, false);
     }
 
     private void BindSaveControls()
@@ -1140,27 +1077,53 @@ public class MainScene : MonoBehaviour
             return;
         }
 
-        SetMenuPanelVisible(false);
-        SetSavePanelVisible(true);
+        SetPanelVisible(mMenuPanelRoot, false);
+        SetPanelVisible(mSavePanelRoot, true);
     }
 
     private void OnSaveCloseButtonClicked()
     {
-        SetSavePanelVisible(false);
+        SetPanelVisible(mSavePanelRoot, false);
     }
 
-    private void SetSavePanelVisible(bool visible)
+    private static void SetPanelVisible(GameObject panel, bool visible)
     {
-        if (mSavePanelRoot == null)
+        if (panel == null)
         {
             return;
         }
 
-        mSavePanelRoot.SetActive(visible);
+        panel.SetActive(visible);
         if (visible)
         {
-            mSavePanelRoot.transform.SetAsLastSibling();
+            panel.transform.SetAsLastSibling();
         }
+    }
+
+    private void ApplyUsablePanelValues(GameSettingsData settings)
+    {
+        if (settings == null)
+        {
+            return;
+        }
+
+        mIsApplyingSettingsToUi = true;
+        if (mUsableToggle1 != null)
+        {
+            mUsableToggle1.SetIsOnWithoutNotify(settings.UsableOption1);
+        }
+
+        if (mUsableToggle2 != null)
+        {
+            mUsableToggle2.SetIsOnWithoutNotify(settings.UsableOption2);
+        }
+
+        if (mUsableToggle3 != null)
+        {
+            mUsableToggle3.SetIsOnWithoutNotify(settings.UsableOption3);
+        }
+
+        mIsApplyingSettingsToUi = false;
     }
 
     private void ConfigurePackageCanvas(Camera targetCamera)

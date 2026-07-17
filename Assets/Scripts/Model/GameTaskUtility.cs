@@ -121,7 +121,9 @@ public static class GameTaskUtility
     public static bool TryCompleteAndSetNextTaskId(int nextTaskId)
     {
         EnsureInitialized();
-        if (!IsCurrentTaskCompleted())
+        if (!TryGetCurrentTaskConfig(out var currentTaskConfig)
+            || currentTaskConfig.CompleteValue <= 0
+            || sCurrentCompleteValue < currentTaskConfig.CompleteValue)
         {
             return false;
         }
@@ -133,8 +135,7 @@ public static class GameTaskUtility
         }
 
         var carryOverValue = 0;
-        if (TryGetCurrentTaskConfig(out var currentTaskConfig)
-            && currentTaskConfig.TaskType == TaskType.AccumulateScore
+        if (currentTaskConfig.TaskType == TaskType.AccumulateScore
             && TryGetTaskConfig(nextTaskId, out var nextTaskConfig)
             && nextTaskConfig.TaskType == TaskType.AccumulateScore)
         {
@@ -179,11 +180,6 @@ public static class GameTaskUtility
     public static bool TryCompleteAndAdvanceTask()
     {
         EnsureInitialized();
-        if (!IsCurrentTaskCompleted())
-        {
-            return false;
-        }
-
         return TryCompleteAndSetNextTaskId(sCurrentTaskId + 1);
     }
 

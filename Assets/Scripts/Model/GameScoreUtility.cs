@@ -32,21 +32,6 @@ public static class GameScoreUtility
     private const int StickerOutlineDisabledBonusPercent = 5;
 
     /// <summary>
-    /// 用途：按卡包 Id 获取当前基础结算分数。返回：是否找到有效的卡包尺寸配置。
-    /// </summary>
-    public static bool TryGetCardPackBaseScore(int packId, out int baseScore)
-    {
-        baseScore = 0;
-        if (!CardPackDataUtility.TryGetPackConfig(packId, out var packSize))
-        {
-            return false;
-        }
-
-        baseScore = GetBaseScore(packSize);
-        return baseScore > 0;
-    }
-
-    /// <summary>
     /// 用途：按卡包尺寸获取基础结算分数。返回：未配置尺寸返回 0。
     /// </summary>
     public static int GetBaseScore(CardPackSize packSize)
@@ -81,7 +66,13 @@ public static class GameScoreUtility
         out GameScoreResult result)
     {
         result = default;
-        if (!TryGetCardPackBaseScore(packId, out var baseScore))
+        if (!CardPackDataUtility.TryGetPackConfig(packId, out var packSize))
+        {
+            return false;
+        }
+
+        var baseScore = GetBaseScore(packSize);
+        if (baseScore <= 0)
         {
             return false;
         }
@@ -118,20 +109,19 @@ public static class GameScoreUtility
     /// <summary>
     /// 用途：按完成耗时返回时间加成百分比。返回：3、2、1 或 0。
     /// </summary>
-    public static int GetCompletionTimeBonusPercent(float completionTimeSeconds)
+    private static int GetCompletionTimeBonusPercent(float completionTimeSeconds)
     {
-        var safeTime = SanitizeCompletionTime(completionTimeSeconds);
-        if (safeTime <= TimeThresholdASeconds)
+        if (completionTimeSeconds <= TimeThresholdASeconds)
         {
             return 3;
         }
 
-        if (safeTime <= TimeThresholdBSeconds)
+        if (completionTimeSeconds <= TimeThresholdBSeconds)
         {
             return 2;
         }
 
-        return safeTime <= TimeThresholdCSeconds ? 1 : 0;
+        return completionTimeSeconds <= TimeThresholdCSeconds ? 1 : 0;
     }
 
     private static float SanitizeCompletionTime(float completionTimeSeconds)
