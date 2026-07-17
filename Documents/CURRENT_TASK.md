@@ -24,7 +24,7 @@
 - `Assets/Scripts/Model/GameSettingsUtility.cs`
 - `Assets/Scripts/Model/GameTaskUtility.cs`
 - `Assets/Scripts/View/TaskProgressUIUtility.cs`
-- `specs/2026-07-17-runtime-code-cleanup.md`
+- `specs/task-and-settlement.md`
 - `Documents/CURRENT_TASK.md`
 
 ## Decisions
@@ -48,4 +48,4 @@
 
 ## Resume Prompt
 
-Continue Puffies verification. Read AGENTS.md, Documents/WORKFLOW.md, Documents/CURRENT_TASK.md, and specs/2026-07-17-runtime-code-cleanup.md first, then perform the Play Mode checks in Next Action unless the user gives a newer instruction.
+Continue Puffies verification. Read AGENTS.md, Documents/WORKFLOW.md, Documents/CURRENT_TASK.md, and specs/task-and-settlement.md first, then perform the Play Mode checks in Next Action unless the user gives a newer instruction.
