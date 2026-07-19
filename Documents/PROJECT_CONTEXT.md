@@ -152,6 +152,7 @@ effect (debug): CardFx preview, menu Puffies -> Preview CardFx Effects
 | `RewardPanel` | Puzzle completion reward panel |
 | `TaskItem` | Shared `Assets/Prefabs/TaskItem.prefab` instance used by MainScene task progress and GameScene RewardPanel settlement |
 | `Package001` | MainScene card pack slot template, hidden and cloned at runtime |
+| `PackItem/PackCover` | MainScene card pack cover Image; runtime assigns `PackIconNNN.png` |
 | `PackItem/PackSize` | Card pack size icon; runtime selects `PackSize_1.png` through `PackSize_7.png` from the configured `CardPackSize` value |
 
 ---
@@ -218,7 +219,7 @@ New `CanvasScaler` values are written by `CanvasDesignResolutionEditor.cs`. Use 
 
 `MainScene.RefreshPackageList` dynamically creates slots for unlocked packs from the database. Do not manually duplicate `Package002`, `Package003`, etc. in the scene.
 
-Shared size icons are `UI/PackImages/PackSize_1.png` through `PackSize_7.png`, matching the numeric values of `CardPackSize` (`XS=1` through `XXXL=7`). `PackItem` must contain an Image child named `PackSize`; MainScene assigns its Sprite at runtime.
+Shared size icons are `UI/PackImages/PackSize_1.png` through `PackSize_7.png`, matching the numeric values of `CardPackSize` (`XS=1` through `XXXL=7`). `PackItem` must contain Image children named `PackCover` and `PackSize`; MainScene assigns both Sprites at runtime and scales the size icon with the authored cover dimensions.
 
 1. Keep exactly one scene template object: `Package001`.
 2. Add a row to `CardPacks.csv` (`PackId`, `PackSize`, `ChapterId`).

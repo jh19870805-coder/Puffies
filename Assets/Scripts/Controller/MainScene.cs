@@ -34,7 +34,8 @@ public class MainScene : MonoBehaviour
     private const string PackItemPrefabEditorPath = "Assets/Prefabs/PackItem.prefab";
     private const string PackItemPrefabResourcesPath = "PackItem";
     private const string PackItemTemplateObjectName = "PackItemTemplate";
-    private const string PackCoverObjectName = "Cover";
+    private const string PackCoverObjectName = "PackCover";
+    private const string PackSizeObjectName = "PackSize";
     private const string PackNameTextObjectName = "NameText";
     private const string MenuButtonObjectName = "BtnMenu";
     private const string MenuPanelObjectName = "PanelMenu";
@@ -81,6 +82,7 @@ public class MainScene : MonoBehaviour
         public int BagId;
         public GameObject Root;
         public Image Image;
+        public Image SizeImage;
         public RectTransform RectTransform;
     }
 
@@ -401,7 +403,8 @@ public class MainScene : MonoBehaviour
         }
 
         var coverImage = FindChild(slotObject.transform, PackCoverObjectName)?.GetComponent<Image>() ?? rootImage;
-        PreparePagedPackageItem(slotObject, rootRect, rootImage, coverImage);
+        var sizeImage = FindChild(slotObject.transform, PackSizeObjectName)?.GetComponent<Image>();
+        PreparePagedPackageItem(slotObject, rootRect, rootImage, coverImage, sizeImage);
         EnsurePackageInteractionHandler(slotObject, coverImage, packId);
 
         return new PackageEntry
@@ -409,6 +412,7 @@ public class MainScene : MonoBehaviour
             BagId = packId,
             Root = slotObject,
             Image = coverImage,
+            SizeImage = sizeImage,
             RectTransform = rootRect
         };
     }
@@ -452,6 +456,8 @@ public class MainScene : MonoBehaviour
             entry.Image.sprite = packSprite;
         }
 
+        ApplyPackageSizeVisual(entry.SizeImage, packId);
+
         var nameText = FindChild(entry.Root.transform, PackNameTextObjectName)?.GetComponent<TMP_Text>();
         if (nameText != null)
         {
@@ -466,6 +472,38 @@ public class MainScene : MonoBehaviour
         }
 
         EnsurePackageInteractionHandler(entry.Root, entry.Image, packId);
+    }
+
+    private static void ApplyPackageSizeVisual(Image sizeImage, int packId)
+    {
+        if (sizeImage == null)
+        {
+            return;
+        }
+
+        sizeImage.raycastTarget = false;
+        sizeImage.preserveAspect = true;
+        if (!GameConfigRepository.TryGetCardPackConfig(packId, out var config)
+            || config.PackSize < CardPackSize.XS
+            || config.PackSize > CardPackSize.XXXL)
+        {
+            sizeImage.gameObject.SetActive(false);
+            Debug.LogWarning($"MainScene: pack size icon skipped. Invalid PackSize for packId={packId}.");
+            return;
+        }
+
+        var sizeSprite = GameCommonUtility.LoadSpriteByPath(
+            GameDefine.FormatPackSizeImagePath(config.PackSize),
+            PixelsPerUnit);
+        if (sizeSprite == null)
+        {
+            sizeImage.gameObject.SetActive(false);
+            return;
+        }
+
+        sizeImage.sprite = sizeSprite;
+        sizeImage.enabled = true;
+        sizeImage.gameObject.SetActive(true);
     }
 
     private void LayoutPackageSlot(RectTransform rectTransform, int index)
@@ -1195,6 +1233,18 @@ public class MainScene : MonoBehaviour
         coverImage.preserveAspect = true;
         coverImage.raycastTarget = false;
 
+        var sizeObject = new GameObject(PackSizeObjectName, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+        sizeObject.transform.SetParent(root.transform, false);
+        var sizeImage = sizeObject.GetComponent<Image>();
+        sizeImage.preserveAspect = true;
+        sizeImage.raycastTarget = false;
+        var sizeRect = sizeImage.rectTransform;
+        sizeRect.anchorMin = Vector2.zero;
+        sizeRect.anchorMax = Vector2.zero;
+        sizeRect.pivot = Vector2.zero;
+        sizeRect.anchoredPosition = new Vector2(0f, 25.2f);
+        sizeRect.sizeDelta = new Vector2(109.6f, 63.2f);
+
         var nameObject = new GameObject(PackNameTextObjectName, typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
         nameObject.transform.SetParent(root.transform, false);
         var nameText = nameObject.GetComponent<TextMeshProUGUI>();
@@ -1203,11 +1253,16 @@ public class MainScene : MonoBehaviour
         nameText.raycastTarget = false;
         GameFontUtility.ApplyDefaultFont(nameText);
 
-        PreparePagedPackageItem(root, root.GetComponent<RectTransform>(), rootImage, coverImage);
+        PreparePagedPackageItem(root, root.GetComponent<RectTransform>(), rootImage, coverImage, sizeImage);
         return root;
     }
 
-    private static void PreparePagedPackageItem(GameObject itemObject, RectTransform rootRect, Image rootImage, Image coverImage)
+    private static void PreparePagedPackageItem(
+        GameObject itemObject,
+        RectTransform rootRect,
+        Image rootImage,
+        Image coverImage,
+        Image sizeImage)
     {
         if (rootRect != null)
         {
@@ -1238,6 +1293,7 @@ public class MainScene : MonoBehaviour
             coverImage.raycastTarget = false;
             coverImage.preserveAspect = true;
             var coverRect = coverImage.rectTransform;
+            ScaleOverlayWithCover(sizeImage != null ? sizeImage.rectTransform : null, coverRect.sizeDelta);
             coverRect.anchorMin = new Vector2(0.5f, 0.5f);
             coverRect.anchorMax = new Vector2(0.5f, 0.5f);
             coverRect.pivot = new Vector2(0.5f, 0.5f);
@@ -1254,6 +1310,21 @@ public class MainScene : MonoBehaviour
             nameText.alignment = TextAlignmentOptions.Center;
             GameFontUtility.ApplyDefaultFont(nameText);
         }
+    }
+
+    private static void ScaleOverlayWithCover(RectTransform overlayRect, Vector2 sourceCoverSize)
+    {
+        if (overlayRect == null || sourceCoverSize.x <= 0f || sourceCoverSize.y <= 0f)
+        {
+            return;
+        }
+
+        var scale = new Vector2(
+            PackageCoverWidth / sourceCoverSize.x,
+            PackageCoverHeight / sourceCoverSize.y);
+        overlayRect.anchoredPosition = Vector2.Scale(overlayRect.anchoredPosition, scale);
+        overlayRect.sizeDelta = Vector2.Scale(overlayRect.sizeDelta, scale);
+        overlayRect.localScale = Vector3.one;
     }
 
     private static RectTransform FindFirstGridPage(Transform root)

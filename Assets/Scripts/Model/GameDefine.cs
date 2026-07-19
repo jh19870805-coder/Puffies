@@ -94,12 +94,18 @@ public static class GameDefine
         return $"{UiRoot}/{PackImagesFolder}/{PackImageFilePrefix}{packId:D3}{ImageExtPng}";
     }
 
+    public static string FormatPackSizeImagePath(CardPackSize packSize)
+    {
+        return $"{UiRoot}/{PackImagesFolder}/{PackSizeImageFilePrefix}{(int)packSize}{ImageExtPng}";
+    }
+
     // Common path tokens
     public const string AssetsRoot = "Assets";
     public const string UiRoot = "UI";
     public const string ConfigsRoot = "Configs";
     public const string PackImagesFolder = "PackImages";
     public const string PackImageFilePrefix = "PackIcon";
+    public const string PackSizeImageFilePrefix = "PackSize_";
     public const string CardBagPrefabResourcesFolder = "CardBagPrefabs/";
     public const string CardBagPrefabPrefix = "CardBag";
     public const string PuzzleOutlineResourcesFolder = "Generated/PuzzleOutlines/";
