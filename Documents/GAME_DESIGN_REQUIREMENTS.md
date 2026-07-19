@@ -2,7 +2,7 @@
 
 - Purpose: Long-term source of truth for confirmed game-design requirements
 - Status: In Progress
-- Last Updated: 2026-07-17
+- Last Updated: 2026-07-18
 
 This document records confirmed design rules as provided by the game designer. Items marked `Confirmed` are implementation requirements. Items marked `Pending` must not be inferred during implementation.
 
@@ -152,10 +152,36 @@ Status: `Pending`
 
 ---
 
+## 2. Card Pack Lifecycle
+
+Status: `Confirmed`
+
+Every card pack has one persisted lifecycle state:
+
+| State | Meaning |
+|---|---|
+| `Locked` | The card pack has not been granted and is not displayed in MainScene. |
+| `Unlocked` | The card pack has been granted but the first puzzle group has not been completed. Opening the pack and leaving before completing the first group keeps this state. |
+| `InProgress` | The first puzzle group has been completed, but at least one later group remains. |
+| `Completed` | Every puzzle group in the card pack has been completed. |
+
+Lifecycle transitions:
+
+1. Granting a card pack changes `Locked` to `Unlocked`.
+2. Entering GameScene or opening a pack does not by itself change `Unlocked`.
+3. Completing the first group of a multi-group card pack changes `Unlocked` to `InProgress`.
+4. Completing the final group changes the state to `Completed`.
+5. `InProgress` and `Completed` do not downgrade during normal play. A future explicit replay-reset flow may define a separate reset transition.
+
+MainScene presentation and ordering must use this lifecycle state. Exact visuals and ordering are implemented separately from the lifecycle data model.
+
+---
+
 ## Change Log
 
 | Date | Change |
 |---|---|
+| 2026-07-18 | Confirmed the four-state card pack lifecycle: Locked, Unlocked, InProgress after the first completed group, and Completed after the final group. |
 | 2026-07-17 | Confirmed that score beyond a completed accumulate-score task target carries into the next accumulate-score task. |
 | 2026-07-17 | Confirmed that scoring time starts on the first successfully placed Piece and stops when completed-puzzle settlement begins. |
 | 2026-07-17 | Confirmed additive bonus stacking, `Ceil(BaseScore * (1 + TotalBonusRate))`, and sequential settlement score-roll presentation with synchronized progress/score updates. |

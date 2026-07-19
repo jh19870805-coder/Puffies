@@ -22,7 +22,7 @@ Current work state is tracked in [CURRENT_TASK.md](CURRENT_TASK.md). Workflow ru
 | Scene | Requirements |
 |------|--------------|
 | LoadingScene | Initialize JSON, SQLite, task data, and card pack data; enter MainScene after loading |
-| MainScene | Refresh card pack list from `CardPacks.csv` plus SQLite unlock state; provide Rank, Achieve, Menu, and pack-opening entry points |
+| MainScene | Refresh card pack list from `CardPacks.csv` plus SQLite unlock state; display card packs in pages of 6 columns x 3 rows (18 per page); provide Rank, Achieve, Menu, and pack-opening entry points |
 | GameScene | Load `CardBagNNN` prefab by selected pack id; organize puzzle pieces by `PieceNN` group-number naming; when a group completes, switch groups and clear previous pieces; show RewardPanel after all pieces complete |
 | RankScene | Enter from Main and return to Main |
 | AchieveScene | Currently displays mock achievements; replace the data source when Steam integration is added |
@@ -37,7 +37,7 @@ Current work state is tracked in [CURRENT_TASK.md](CURRENT_TASK.md). Workflow ru
 - Score bonuses are: no `BtnTips` click +5%, MainScene `Toggle1` level outline disabled +2%, `Toggle2` sticker outline disabled +5%, and completion time <=15 / <=30 / <=60 seconds +3% / +2% / +1%.
 - Completed tasks grant rewards and advance to the next task.
 - When an accumulate-score task advances to another accumulate-score task, progress above the completed target carries forward (`nextProgress = currentProgress - completedTarget`).
-- Card pack unlock/play state is stored in SQLite table `CardPacks`.
+- Card pack lifecycle state is stored in SQLite table `CardPacks` as `Locked`, `Unlocked`, `InProgress`, or `Completed`. Existing `IsUnlocked` / `IsPlayed` columns remain synchronized for save compatibility.
 - Task progress is stored in JSON root object `TaskProgressData`.
 - Business progress must not use `PlayerPrefs`.
 
@@ -148,6 +148,7 @@ effect (debug): CardFx preview, menu Puffies -> Preview CardFx Effects
 | `RewardPanel` | Puzzle completion reward panel |
 | `TaskItem` | Shared `Assets/Prefabs/TaskItem.prefab` instance used by MainScene task progress and GameScene RewardPanel settlement |
 | `Package001` | MainScene card pack slot template, hidden and cloned at runtime |
+| `PackItem/PackSize` | Card pack size icon; runtime selects `PackSize_1.png` through `PackSize_7.png` from the configured `CardPackSize` value |
 
 ---
 
@@ -174,13 +175,14 @@ New `CanvasScaler` values are written by `CanvasDesignResolutionEditor.cs`. Use 
 | Task config | `GameConfigRepository` reads `Resources/Configs/TaskConfig.csv` | Read-only |
 | Task progress | `GameTaskUtility` | `persistentDataPath/LocalData.json` root object `TaskProgressData` |
 | Card pack config | `GameConfigRepository` reads `Resources/Configs/CardPacks.csv` | Read-only |
-| Card pack unlock/play state | `CardPackDataUtility` | `LocalData.db` table `CardPacks` |
+| Card pack lifecycle state | `CardPackDataUtility` | `LocalData.db` table `CardPacks` |
 | Generic collection + key storage | `SqliteLocalStore` API | `LocalData.db` table `AppRecords` |
 
 - `GameConfigRepository` loads and caches task/card pack config. Current source is `ResourcesGameConfigTextSource`, which prefers `Resources.Load<TextAsset>` and falls back to editor disk path.
 - `CsvTable` is the unified CSV parser with header access, quoted fields, and empty-line filtering; business code should not directly `Split(',')`.
 - `JsonLocalStore` reads/writes one root object for the whole file, currently task progress.
 - `SqliteLocalStore` uses collection/key records in `AppRecords`; card pack business state uses the dedicated `CardPacks` table.
+- `CardPackLifecycleState` is `Locked=0`, `Unlocked=1`, `InProgress=2`, and `Completed=3`. Completing the first group of a multi-group pack marks it `InProgress`; completing the final group marks it `Completed`. Existing databases add and backfill `LifecycleState` during SQLite initialization.
 - MainScene settings are stored in `AppRecords` as collection/key `GameSettings/Runtime`: music volume, effect volume, and windowed mode.
 - MainScene usable option toggles are stored in the same `GameSettings/Runtime` record as `UsableOption1`, `UsableOption2`, and `UsableOption3`.
 - `UsableOption1` is the level outer-frame toggle, `UsableOption2` is the sticker/full-contour toggle, and `UsableOption3` is high contrast. The serialized names remain unchanged for save compatibility.
@@ -202,10 +204,12 @@ New `CanvasScaler` values are written by `CanvasDesignResolutionEditor.cs`. Use 
 
 `MainScene.RefreshPackageList` dynamically creates slots for unlocked packs from the database. Do not manually duplicate `Package002`, `Package003`, etc. in the scene.
 
+Shared size icons are `UI/PackImages/PackSize_1.png` through `PackSize_7.png`, matching the numeric values of `CardPackSize` (`XS=1` through `XXXL=7`). `PackItem` must contain an Image child named `PackSize`; MainScene assigns its Sprite at runtime.
+
 1. Keep exactly one scene template object: `Package001`.
 2. Add a row to `CardPacks.csv` (`PackId`, `PackSize`).
 3. Add the corresponding cover under `UI/PackImages/` using `PackIconNNN.png` names. `GameDefine.FormatPackImagePath` maps pack id `1` to `UI/PackImages/PackIcon001.png`.
-4. Write unlock/play state through `CardPackDataUtility` into SQLite table `CardPacks`.
+4. Write lifecycle state through `CardPackDataUtility` into SQLite table `CardPacks`.
 5. Optional 3D assets: `CardPackAni_00N.FBX`, `CardPackSkin_00N.prefab` -> `Resources/Effects/CardPack/`; if missing, use 2D fallback.
 
 ### Puzzles
