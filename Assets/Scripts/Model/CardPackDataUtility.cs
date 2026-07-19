@@ -124,7 +124,7 @@ public static class CardPackDataUtility
         }
 
         var rows = SqliteLocalStore.Query<CardPackTableRow>(
-            $@"SELECT PackId, PackSize, LifecycleState, IsUnlocked, UnlockTime, IsPlayed
+            $@"SELECT PackId, PackSize, LifecycleState, UnlockTime
                FROM {GameDefine.LocalSqliteCardPackTable}
                WHERE PackId = ?
                LIMIT 1",
@@ -146,7 +146,7 @@ public static class CardPackDataUtility
     {
         EnsureInitialized();
         var rows = SqliteLocalStore.Query<CardPackTableRow>(
-            $@"SELECT PackId, PackSize, LifecycleState, IsUnlocked, UnlockTime, IsPlayed
+            $@"SELECT PackId, PackSize, LifecycleState, UnlockTime
                FROM {GameDefine.LocalSqliteCardPackTable}
                ORDER BY PackId");
         var records = new List<CardPackRecord>(rows.Count);
@@ -412,24 +412,18 @@ public static class CardPackDataUtility
         EnsureValidLifecycleState(ref record);
         EnsureUnlockTime(ref record);
         var unlockTime = record.UnlockTime ?? string.Empty;
-        var isUnlocked = record.LifecycleState != CardPackLifecycleState.Locked;
-        var isCompleted = record.LifecycleState == CardPackLifecycleState.Completed;
         var affected = SqliteLocalStore.ExecuteNonQuery(
             $@"INSERT INTO {GameDefine.LocalSqliteCardPackTable}
-               (PackId, PackSize, LifecycleState, IsUnlocked, UnlockTime, IsPlayed)
-               VALUES (?, ?, ?, ?, ?, ?)
+               (PackId, PackSize, LifecycleState, UnlockTime)
+               VALUES (?, ?, ?, ?)
                ON CONFLICT(PackId) DO UPDATE SET
                 PackSize = excluded.PackSize,
                 LifecycleState = excluded.LifecycleState,
-                IsUnlocked = excluded.IsUnlocked,
-                UnlockTime = excluded.UnlockTime,
-                IsPlayed = excluded.IsPlayed",
+                UnlockTime = excluded.UnlockTime",
             record.PackId,
             (int)record.PackSize,
             (int)record.LifecycleState,
-            isUnlocked ? 1 : 0,
-            unlockTime,
-            isCompleted ? 1 : 0);
+            unlockTime);
         return affected > 0;
     }
 
@@ -452,23 +446,8 @@ public static class CardPackDataUtility
 
     private static CardPackLifecycleState ResolveLifecycleState(CardPackTableRow row)
     {
-        if (Enum.IsDefined(typeof(CardPackLifecycleState), row.LifecycleState))
-        {
-            var state = (CardPackLifecycleState)row.LifecycleState;
-            if (state != CardPackLifecycleState.Locked
-                || (row.IsUnlocked == 0 && row.IsPlayed == 0))
-            {
-                return state;
-            }
-        }
-
-        if (row.IsPlayed != 0)
-        {
-            return CardPackLifecycleState.Completed;
-        }
-
-        return row.IsUnlocked != 0
-            ? CardPackLifecycleState.Unlocked
+        return Enum.IsDefined(typeof(CardPackLifecycleState), row.LifecycleState)
+            ? (CardPackLifecycleState)row.LifecycleState
             : CardPackLifecycleState.Locked;
     }
 
@@ -508,9 +487,7 @@ public static class CardPackDataUtility
         public int PackId { get; set; }
         public int PackSize { get; set; }
         public int LifecycleState { get; set; }
-        public int IsUnlocked { get; set; }
         public string UnlockTime { get; set; }
-        public int IsPlayed { get; set; }
     }
 
     private sealed class CardPackIdRow
@@ -533,48 +510,104 @@ public readonly struct CardPackGrantDecision
         CardPackChapterStage stage,
         int remainingLockedCount,
         int heldPlayableCount,
-        int targetMin,
-        int targetMax,
-        float probability,
-        float roll)
+        int maximumHeldBeforeGrant,
+        int expectedHeldAfterGrant,
+        bool shouldGrant)
     {
         Stage = stage;
         RemainingLockedCount = remainingLockedCount;
         HeldPlayableCount = heldPlayableCount;
-        TargetMin = targetMin;
-        TargetMax = targetMax;
-        Probability = probability;
-        Roll = roll;
+        MaximumHeldBeforeGrant = maximumHeldBeforeGrant;
+        ExpectedHeldAfterGrant = expectedHeldAfterGrant;
+        ShouldGrant = shouldGrant;
     }
 
     public CardPackChapterStage Stage { get; }
     public int RemainingLockedCount { get; }
     public int HeldPlayableCount { get; }
-    public int TargetMin { get; }
-    public int TargetMax { get; }
-    public float Probability { get; }
-    public float Roll { get; }
-    public bool ShouldGrant => Probability >= 1f || (Probability > 0f && Roll < Probability);
+    public int MaximumHeldBeforeGrant { get; }
+    public int ExpectedHeldAfterGrant { get; }
+    public bool ShouldGrant { get; }
+}
+
+[Serializable]
+public sealed class PendingCardPackTaskReward
+{
+    public int TaskId;
+    public int PreferredPackId;
+}
+
+[Serializable]
+public sealed class CardPackDistributionProgressData
+{
+    public List<PendingCardPackTaskReward> PendingTaskRewards = new List<PendingCardPackTaskReward>();
 }
 
 public static class CardPackDistributionUtility
 {
-    public const float WithinTargetRewardProbability = 0.5f;
+    private const string ProgressCollection = "CardPackDistribution";
+    private const string ProgressKey = "Progress";
 
-    public static bool TryGrantTaskReward(int preferredPackId, out int grantedPackId)
+    public static bool EnqueueTaskReward(int taskId, int preferredPackId)
     {
-        grantedPackId = 0;
-        if (!TryBuildState(out var configs, out var states))
+        if (taskId <= 0)
         {
             return false;
         }
 
-        var chapterId = ResolveTaskRewardChapter(configs, states);
+        var progress = LoadProgress();
+        for (var i = 0; i < progress.PendingTaskRewards.Count; i++)
+        {
+            if (progress.PendingTaskRewards[i] != null
+                && progress.PendingTaskRewards[i].TaskId == taskId)
+            {
+                return true;
+            }
+        }
+
+        progress.PendingTaskRewards.Add(new PendingCardPackTaskReward
+        {
+            TaskId = taskId,
+            PreferredPackId = Mathf.Max(0, preferredPackId)
+        });
+        return SaveProgress(progress);
+    }
+
+    public static int GetPendingTaskRewardCount()
+    {
+        return LoadProgress().PendingTaskRewards.Count;
+    }
+
+    public static bool TryGrantPendingTaskReward(
+        out int grantedPackId,
+        out int chapterId,
+        out CardPackGrantDecision decision)
+    {
+        grantedPackId = 0;
+        chapterId = 0;
+        decision = default;
+        var progress = LoadProgress();
+        if (progress.PendingTaskRewards.Count == 0
+            || !TryBuildState(out var configs, out var states))
+        {
+            return false;
+        }
+
+        chapterId = ResolveTaskRewardChapter(configs, states);
         if (chapterId <= 0)
         {
             return false;
         }
 
+        var remainingLockedCount = CountState(configs, states, chapterId, CardPackLifecycleState.Locked);
+        var heldPlayableCount = CountPlayable(configs, states, chapterId);
+        decision = EvaluateGrant(remainingLockedCount, heldPlayableCount);
+        if (!decision.ShouldGrant)
+        {
+            return false;
+        }
+
+        var preferredPackId = progress.PendingTaskRewards[0].PreferredPackId;
         var candidate = FindLockedCandidate(configs, states, chapterId, preferredPackId);
         if (candidate.PackId <= 0 || !CardPackDataUtility.TryUnlockPack(candidate.PackId))
         {
@@ -582,6 +615,13 @@ public static class CardPackDistributionUtility
         }
 
         grantedPackId = candidate.PackId;
+        progress.PendingTaskRewards.RemoveAt(0);
+        if (!SaveProgress(progress))
+        {
+            Debug.LogError(
+                $"CardPackDistributionUtility: granted pack {grantedPackId} but failed to persist pending task reward removal.");
+        }
+
         return true;
     }
 
@@ -608,8 +648,7 @@ public static class CardPackDistributionUtility
 
         var remainingLockedCount = CountState(configs, states, chapterId, CardPackLifecycleState.Locked);
         var heldPlayableCount = CountPlayable(configs, states, chapterId);
-        var roll = UnityEngine.Random.value;
-        decision = EvaluateFirstCompletionReward(remainingLockedCount, heldPlayableCount, roll);
+        decision = EvaluateGrant(remainingLockedCount, heldPlayableCount);
         if (!decision.ShouldGrant)
         {
             return false;
@@ -625,64 +664,95 @@ public static class CardPackDistributionUtility
         return true;
     }
 
-    public static CardPackGrantDecision EvaluateFirstCompletionReward(
-        int remainingLockedCount,
-        int heldPlayableCount,
-        float roll)
+    public static CardPackGrantDecision EvaluateGrant(int remainingLockedCount, int heldPlayableCount)
     {
-        var stage = ResolveStage(remainingLockedCount, out var targetMin, out var targetMax);
-        var probability = 0f;
-        if (stage != CardPackChapterStage.None)
+        var stage = ResolveStage(remainingLockedCount);
+        var maximumHeldBeforeGrant = 0;
+        var expectedHeldAfterGrant = 0;
+        var shouldGrant = false;
+        switch (stage)
         {
-            if (heldPlayableCount < targetMin)
-            {
-                probability = 1f;
-            }
-            else if (heldPlayableCount < targetMax)
-            {
-                probability = WithinTargetRewardProbability;
-            }
+            case CardPackChapterStage.Initial:
+                maximumHeldBeforeGrant = 5;
+                expectedHeldAfterGrant = 6;
+                shouldGrant = heldPlayableCount <= maximumHeldBeforeGrant;
+                break;
+            case CardPackChapterStage.MidToLate:
+                maximumHeldBeforeGrant = remainingLockedCount == 8 ? 3 : 2;
+                expectedHeldAfterGrant = maximumHeldBeforeGrant + 1;
+                shouldGrant = heldPlayableCount <= maximumHeldBeforeGrant;
+                break;
+            case CardPackChapterStage.Final:
+                maximumHeldBeforeGrant = 1;
+                expectedHeldAfterGrant = 2;
+                shouldGrant = heldPlayableCount <= maximumHeldBeforeGrant;
+                break;
         }
 
         return new CardPackGrantDecision(
             stage,
             Mathf.Max(0, remainingLockedCount),
             Mathf.Max(0, heldPlayableCount),
-            targetMin,
-            targetMax,
-            probability,
-            Mathf.Clamp01(roll));
+            maximumHeldBeforeGrant,
+            expectedHeldAfterGrant,
+            shouldGrant);
     }
 
-    private static CardPackChapterStage ResolveStage(
-        int remainingLockedCount,
-        out int targetMin,
-        out int targetMax)
+    private static CardPackChapterStage ResolveStage(int remainingLockedCount)
     {
         if (remainingLockedCount >= 9)
         {
-            targetMin = 5;
-            targetMax = 6;
             return CardPackChapterStage.Initial;
         }
 
         if (remainingLockedCount >= 3)
         {
-            targetMin = 2;
-            targetMax = 3;
             return CardPackChapterStage.MidToLate;
         }
 
         if (remainingLockedCount >= 1)
         {
-            targetMin = 1;
-            targetMax = 1;
             return CardPackChapterStage.Final;
         }
 
-        targetMin = 0;
-        targetMax = 0;
         return CardPackChapterStage.None;
+    }
+
+    private static CardPackDistributionProgressData LoadProgress()
+    {
+        if (SqliteLocalStore.Initialize()
+            && SqliteLocalStore.TryRead(
+                ProgressCollection,
+                ProgressKey,
+                out CardPackDistributionProgressData progress)
+            && progress != null)
+        {
+            if (progress.PendingTaskRewards == null)
+            {
+                progress.PendingTaskRewards = new List<PendingCardPackTaskReward>();
+            }
+
+            progress.PendingTaskRewards.RemoveAll(item => item == null || item.TaskId <= 0);
+
+            return progress;
+        }
+
+        return new CardPackDistributionProgressData();
+    }
+
+    private static bool SaveProgress(CardPackDistributionProgressData progress)
+    {
+        if (progress == null || !SqliteLocalStore.Initialize())
+        {
+            return false;
+        }
+
+        if (progress.PendingTaskRewards == null)
+        {
+            progress.PendingTaskRewards = new List<PendingCardPackTaskReward>();
+        }
+
+        return SqliteLocalStore.Upsert(ProgressCollection, ProgressKey, progress);
     }
 
     private static bool TryBuildState(

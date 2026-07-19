@@ -36,12 +36,12 @@ Current work state is tracked in [CURRENT_TASK.md](CURRENT_TASK.md). Workflow ru
 - Settlement starts from the card-pack base score (XS 60, S 80, M 100, L 120, XL 140, XXL 160, XXXL 200), adds every qualified bonus percentage, multiplies once, and rounds upward.
 - Score bonuses are: no `BtnTips` click +5%, MainScene `Toggle1` level outline disabled +2%, `Toggle2` sticker outline disabled +5%, and completion time <=15 / <=30 / <=60 seconds +3% / +2% / +1%.
 - Completed tasks grant rewards and advance to the next task.
-- Completing a task always grants one currently `Locked` card pack. First-time completion of a card pack may independently grant one currently `Locked` card pack based on a configurable probability; replaying an already `Completed` pack does not perform this probability roll. A replay may still receive the guaranteed task reward if it completes a task.
+- Completing a task always creates a persisted new-card-pack entitlement. If the chapter hand-count gate is closed, the reward remains pending and is retried later. First-time completion performs one deterministic stage-gated grant attempt; replaying an already `Completed` pack does not perform this attempt. A replay may still create a task entitlement.
 - Card-pack distribution uses 8 internal, player-invisible chapters for approximately 150 total packs (18.75 per chapter on average). Chapters constrain the eligible locked-pack reward pool but are not shown in MainScene or other player-facing UI. Exact PackId allocation and chapter advancement rules remain pending.
 - Internal chapter stage uses `R`, the number of still-`Locked` packs in the active chapter: initial `17..9`, mid-to-late `8..3`, final `2..1`. Held playable count means `Unlocked + InProgress` and targets approximately `5-6`, `2-3`, and `1` packs respectively. For chapters larger than 18 packs, extra `R` values above 17 are also initial-stage values.
-- Current first-completion distribution uses 100% probability below the stage target minimum, 50% within the target band, and 0% at its maximum. Task rewards bypass this cap and always attempt to grant a new locked pack. Both sources may grant in one settlement and their animations play sequentially.
+- Current distribution gates are: `R>=9` allows `H<=5`; `R=8` allows `H<=3`; `R=7..3` allows `H<=2`; `R=2..1` allows `H<=1`. A blocked first-completion attempt is skipped, while a blocked task reward remains pending. Both sources may grant in one settlement and animations play sequentially.
 - When an accumulate-score task advances to another accumulate-score task, progress above the completed target carries forward (`nextProgress = currentProgress - completedTarget`).
-- Card pack lifecycle state is stored in SQLite table `CardPacks` as `Locked`, `Unlocked`, `InProgress`, or `Completed`. Existing `IsUnlocked` / `IsPlayed` columns remain synchronized for save compatibility.
+- Card pack lifecycle state is stored in SQLite table `CardPacks` as `Locked`, `Unlocked`, `InProgress`, or `Completed`.
 - Task progress is stored in JSON root object `TaskProgressData`.
 - Business progress must not use `PlayerPrefs`.
 
@@ -186,8 +186,11 @@ New `CanvasScaler` values are written by `CanvasDesignResolutionEditor.cs`. Use 
 - `CsvTable` is the unified CSV parser with header access, quoted fields, and empty-line filtering; business code should not directly `Split(',')`.
 - `JsonLocalStore` reads/writes one root object for the whole file, currently task progress.
 - `SqliteLocalStore` uses collection/key records in `AppRecords`; card pack business state uses the dedicated `CardPacks` table.
-- `CardPackLifecycleState` is `Locked=0`, `Unlocked=1`, `InProgress=2`, and `Completed=3`. Completing the first group of a multi-group pack marks it `InProgress`; completing the final group marks it `Completed`. Existing databases add and backfill `LifecycleState` during SQLite initialization.
-- `CardPackDistributionUtility` lives with `CardPackDataUtility` and owns chapter selection, `R` / held-count evaluation, deterministic locked-candidate selection, and first-completion reward rolls. Replays skip this roll based on the lifecycle snapshot taken when GameScene starts.
+- `CardPackLifecycleState` is `Locked=0`, `Unlocked=1`, `InProgress=2`, and `Completed=3`. Completing the first group of a multi-group pack marks it `InProgress`; completing the final group marks it `Completed`.
+- The SQLite `CardPacks` table contains only `PackId`, `PackSize`, `LifecycleState`, and `UnlockTime`; the former `IsUnlocked` and `IsPlayed` columns are not retained.
+- `CardPackDistributionUtility` lives with `CardPackDataUtility` and owns chapter selection, `R` / held-count evaluation, deterministic locked-candidate selection, and first-completion grant attempts. Replays skip this attempt based on the lifecycle snapshot taken when GameScene starts.
+- Pending task card-pack entitlements are stored in SQLite `AppRecords` under `CardPackDistribution/Progress`, deduplicated by TaskId.
+- GameScene persists the task entitlement before advancing the task and only attempts delivery after task advancement succeeds, preventing duplicate grants when task-progress persistence fails.
 - MainScene settings are stored in `AppRecords` as collection/key `GameSettings/Runtime`: music volume, effect volume, and windowed mode.
 - MainScene usable option toggles are stored in the same `GameSettings/Runtime` record as `UsableOption1`, `UsableOption2`, and `UsableOption3`.
 - `UsableOption1` is the level outer-frame toggle, `UsableOption2` is the sticker/full-contour toggle, and `UsableOption3` is high contrast. The serialized names remain unchanged for save compatibility.
@@ -200,6 +203,12 @@ New `CanvasScaler` values are written by `CanvasDesignResolutionEditor.cs`. Use 
 - MainScene `PanelSet/SliderMusic` and `PanelSet/SliderEffect` are hand-built fake sliders: root Image background plus `SliderFill` and `SliderHandle` children. Runtime uses `FakeSettingsSliderInput` to handle pointer drag, refresh visuals, and save values.
 - Do not use `PlayerPrefs`.
 - Initialization happens in `LoadingScene.Start` for `JsonLocalStore`, `SqliteLocalStore`, `GameTaskUtility`, and `CardPackDataUtility`.
+
+### Development Persistence Policy
+
+- Local persistence has no backward-compatibility guarantee during active development. Change data structures and SQLite field types directly to the current required shape; do not add migrations or legacy fallbacks unless explicitly requested.
+- After an incompatible SQLite schema change, close Unity and delete `%USERPROFILE%/AppData/LocalLow/MainTown/Puffies/LocalData.db` before testing.
+- Also delete `LocalData.json` when JSON task progress or behavior spanning both persistence stores changed. The assistant must identify the required files after each incompatible change and must not delete them without an explicit request.
 
 ---
 

@@ -31,6 +31,14 @@ For simple read-only questions, only read the files needed to answer accurately.
 - If implementation reveals a new stable fact, update `PROJECT_CONTEXT.md`.
 - If code, scene, asset, config, or behavior changes are made, update `CURRENT_TASK.md` in the same turn.
 
+## Development Data Policy
+
+- The project is in active development. Data models, serialized structures, and SQLite schemas may be changed directly to the current required shape.
+- Do not add migrations, legacy-column synchronization, fallback readers, or other backward-compatibility code for existing local development data unless the user explicitly requests it.
+- After an incompatible persistence change, record the reset requirement in `CURRENT_TASK.md` and tell the user which local files must be deleted before testing.
+- Delete `persistentDataPath/LocalData.db` for SQLite schema changes. Also delete `persistentDataPath/LocalData.json` when JSON progress or related cross-store state is affected.
+- Never delete local persistence automatically unless the user explicitly asks for it.
+
 ## Current Task Update Rules
 
 Update `CURRENT_TASK.md` with:

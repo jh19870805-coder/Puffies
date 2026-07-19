@@ -60,6 +60,9 @@ public class GameScene : MonoBehaviour
     private float _gameplayStartRealtime;
     private float _completionTimeSeconds;
     private bool _wasSelectedPackCompletedOnEntry;
+    private bool _didAdvanceTaskDuringSettlement;
+    private bool _didFailTaskAdvanceDuringSettlement;
+    private bool _didSavePackCompletion;
     private GameObject _rewardPanelRoot;
     private Transform _rewardTaskItem;
     private TMP_Text _settlementScoreText;
@@ -98,6 +101,9 @@ public class GameScene : MonoBehaviour
         var selectedBagId = GameManager.GetBagId();
         CardPackDataUtility.Initialize();
         _wasSelectedPackCompletedOnEntry = CardPackDataUtility.IsPackCompleted(selectedBagId);
+        _didAdvanceTaskDuringSettlement = false;
+        _didFailTaskAdvanceDuringSettlement = false;
+        _didSavePackCompletion = false;
         _settlementPackRewardIds.Clear();
         InitializeGameplay(selectedBagId);
         InitializeTaskTracking();
@@ -1151,10 +1157,7 @@ public class GameScene : MonoBehaviour
         }
 
         PrepareBoardForRewardPanel();
-        if (SaveCardPackAfterPuzzleComplete())
-        {
-            TryGrantFirstCompletionPackReward();
-        }
+        _didSavePackCompletion = SaveCardPackAfterPuzzleComplete();
 
         _rewardPanelRoot.SetActive(true);
         _rewardPanelRoot.transform.SetAsLastSibling();
@@ -1402,8 +1405,8 @@ public class GameScene : MonoBehaviour
         Debug.Log(
             $"GameScene: first-completion pack reward evaluated. completedPackId={completedPackId}, " +
             $"chapter={chapterId}, stage={decision.Stage}, R={decision.RemainingLockedCount}, " +
-            $"held={decision.HeldPlayableCount}, target={decision.TargetMin}-{decision.TargetMax}, " +
-            $"probability={decision.Probability:F2}, roll={decision.Roll:F2}, granted={granted}, " +
+            $"held={decision.HeldPlayableCount}, maxHeldBeforeGrant={decision.MaximumHeldBeforeGrant}, " +
+            $"expectedHeldAfterGrant={decision.ExpectedHeldAfterGrant}, granted={granted}, " +
             $"grantedPackId={grantedPackId}");
         if (granted)
         {
@@ -1414,6 +1417,20 @@ public class GameScene : MonoBehaviour
     private IEnumerator ProcessTaskSettlement()
     {
         yield return ProcessTaskSettlementCore();
+
+        if (_didSavePackCompletion
+            && !_didFailTaskAdvanceDuringSettlement
+            && (!_wasSelectedPackCompletedOnEntry || _didAdvanceTaskDuringSettlement))
+        {
+            TryGrantPendingTaskPackReward(
+                _didAdvanceTaskDuringSettlement ? "task completion" : "first-completion retry");
+        }
+
+        if (_didSavePackCompletion)
+        {
+            TryGrantFirstCompletionPackReward();
+        }
+        RefreshSettlementBagCount();
         yield return PlayQueuedPackRewardAnimations();
     }
 
@@ -1486,11 +1503,20 @@ public class GameScene : MonoBehaviour
 
         if (isTaskCompleted)
         {
-            OutputTaskReward(taskConfig);
-            if (GameTaskUtility.TryCompleteAndAdvanceTask())
+            if (QueueTaskReward(taskConfig))
             {
-                _isAccumulateScoreTaskActive = GameTaskUtility.IsCurrentTaskAccumulateScore();
-                Debug.Log($"GameScene: task advanced. nextTaskId={GameTaskUtility.GetCurrentTaskId()}");
+                if (GameTaskUtility.TryCompleteAndAdvanceTask())
+                {
+                    _didAdvanceTaskDuringSettlement = true;
+                    _isAccumulateScoreTaskActive = GameTaskUtility.IsCurrentTaskAccumulateScore();
+                    Debug.Log($"GameScene: task advanced. nextTaskId={GameTaskUtility.GetCurrentTaskId()}");
+                }
+                else
+                {
+                    _didFailTaskAdvanceDuringSettlement = true;
+                    Debug.LogError(
+                        $"GameScene: task reward queued but task advance failed. taskId={taskConfig.TaskId}");
+                }
             }
         }
 
@@ -1503,24 +1529,45 @@ public class GameScene : MonoBehaviour
             settlementScore);
     }
 
-    private void OutputTaskReward(TaskConfigData taskConfig)
+    private bool QueueTaskReward(TaskConfigData taskConfig)
     {
         var preferredPackId = taskConfig.RewardType == RewardType.CardPack
             ? taskConfig.RewardId
             : 0;
-        if (!CardPackDistributionUtility.TryGrantTaskReward(preferredPackId, out var rewardPackId))
+        if (!CardPackDistributionUtility.EnqueueTaskReward(taskConfig.TaskId, preferredPackId))
         {
-            Debug.LogWarning(
-                $"GameScene: task completed but no locked card pack could be granted. " +
+            Debug.LogError(
+                $"GameScene: failed to persist guaranteed task reward. " +
                 $"taskId={taskConfig.TaskId}, preferredPackId={preferredPackId}");
+            return false;
+        }
+
+        Debug.Log(
+            $"GameScene: guaranteed task reward queued. taskId={taskConfig.TaskId}, " +
+            $"preferredPackId={preferredPackId}, " +
+            $"pending={CardPackDistributionUtility.GetPendingTaskRewardCount()}");
+        return true;
+    }
+
+    private void TryGrantPendingTaskPackReward(string source)
+    {
+        var granted = CardPackDistributionUtility.TryGrantPendingTaskReward(
+            out var rewardPackId,
+            out var chapterId,
+            out var decision);
+        Debug.Log(
+            $"GameScene: pending task reward evaluated. source={source}, chapter={chapterId}, " +
+            $"stage={decision.Stage}, R={decision.RemainingLockedCount}, " +
+            $"held={decision.HeldPlayableCount}, maxHeldBeforeGrant={decision.MaximumHeldBeforeGrant}, " +
+            $"granted={granted}, grantedPackId={rewardPackId}, " +
+            $"pending={CardPackDistributionUtility.GetPendingTaskRewardCount()}");
+        if (!granted)
+        {
             return;
         }
 
         UpdateTaskRewardImage(rewardPackId);
         QueuePackReward(rewardPackId);
-        Debug.Log(
-            $"GameScene: guaranteed task card pack granted. taskId={taskConfig.TaskId}, " +
-            $"preferredPackId={preferredPackId}, grantedPackId={rewardPackId}");
     }
 
     private void SetTaskRewardSectionVisible(bool visible)
