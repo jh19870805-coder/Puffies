@@ -166,6 +166,15 @@ public static class GameAnimationUtility
         animator.Update(0f);
         animator.Play(stateName, 0, 0f);
         animator.Update(0f);
+        if (searchRoot != null)
+        {
+            ApplyPreviewPose(animator, searchRoot);
+        }
+        else
+        {
+            ApplyCardPackMaterials(animator.GetComponentsInChildren<Renderer>(true));
+        }
+
         return true;
     }
 
@@ -399,22 +408,23 @@ public static class GameAnimationUtility
         var camera = Camera.main;
         const float worldDepth = 0f;
         Vector3 targetPosition;
-        float anchorSize;
+        Bounds anchorBounds = default;
+        var hasAnchorBounds = false;
         if (anchor is RectTransform rectTransform && camera != null)
         {
             targetPosition = GameCommonUtility.RectTransformToCameraWorld(rectTransform, camera, worldDepth);
-            anchorSize = GameCommonUtility.GetRectTransformWorldHeight(rectTransform, camera, worldDepth);
+            anchorBounds = GameCommonUtility.GetRectTransformCameraWorldBounds(rectTransform, camera, worldDepth);
+            hasAnchorBounds = anchorBounds.size.x > 0.001f && anchorBounds.size.y > 0.001f;
         }
         else
         {
             targetPosition = anchor.position;
             targetPosition.z = worldDepth;
-            anchorSize = Mathf.Max(anchor.lossyScale.x, anchor.lossyScale.y, 0.01f) * 4f;
         }
 
         targetTransform.position = targetPosition;
         targetTransform.rotation = prefabRotation;
-        targetTransform.localScale = Vector3.one * Mathf.Max(1.2f, anchorSize * 0.55f);
+        targetTransform.localScale = Vector3.one;
         targetTransform.gameObject.SetActive(true);
 
         var renderers = animator.GetComponentsInChildren<Renderer>(true);
@@ -427,6 +437,61 @@ public static class GameAnimationUtility
         }
 
         ApplyCardPackMaterials(renderers);
+
+        if (hasAnchorBounds && TryGetRendererBounds(renderers, out var modelBounds))
+        {
+            var scale = Mathf.Min(
+                anchorBounds.size.x / modelBounds.size.x,
+                anchorBounds.size.y / modelBounds.size.y);
+            targetTransform.localScale = Vector3.one * Mathf.Max(scale, 0.001f);
+
+            if (TryGetRendererBounds(renderers, out var scaledBounds))
+            {
+                targetTransform.position += targetPosition - scaledBounds.center;
+            }
+        }
+        else
+        {
+            var anchorSize = Mathf.Max(anchor.lossyScale.x, anchor.lossyScale.y, 0.01f) * 4f;
+            targetTransform.localScale = Vector3.one * Mathf.Max(1.2f, anchorSize * 0.55f);
+        }
+    }
+
+    private static bool TryGetRendererBounds(Renderer[] renderers, out Bounds bounds)
+    {
+        bounds = default;
+        var hasBounds = false;
+        if (renderers == null)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < renderers.Length; i++)
+        {
+            var renderer = renderers[i];
+            if (renderer == null || !renderer.gameObject.activeInHierarchy)
+            {
+                continue;
+            }
+
+            var rendererBounds = renderer.bounds;
+            if (rendererBounds.size.x <= 0.001f || rendererBounds.size.y <= 0.001f)
+            {
+                continue;
+            }
+
+            if (!hasBounds)
+            {
+                bounds = rendererBounds;
+                hasBounds = true;
+            }
+            else
+            {
+                bounds.Encapsulate(rendererBounds);
+            }
+        }
+
+        return hasBounds;
     }
 
     /// <summary>

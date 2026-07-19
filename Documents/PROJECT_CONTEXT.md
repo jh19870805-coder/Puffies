@@ -43,6 +43,7 @@ Current work state is tracked in [CURRENT_TASK.md](CURRENT_TASK.md). Workflow ru
 - When an accumulate-score task advances to another accumulate-score task, progress above the completed target carries forward (`nextProgress = currentProgress - completedTarget`).
 - Card pack lifecycle state is stored in SQLite table `CardPacks` as `Locked`, `Unlocked`, `InProgress`, or `Completed`.
 - MainScene card-pack order is: newly granted since the previous list presentation (one presentation only, newest grant first), then `InProgress`, then `Unlocked` by ascending unlock time, then `Completed` by ascending first-completion time. PackId is the deterministic tie-breaker; daily challenge priority is deferred.
+- MainScene lightly tints `Completed` card-pack covers and size icons gray while keeping them replayable.
 - Task progress is stored in JSON root object `TaskProgressData`.
 - Business progress must not use `PlayerPrefs`.
 
@@ -195,7 +196,7 @@ New `CanvasScaler` values are written by `CanvasDesignResolutionEditor.cs`. Use 
 - GameScene persists the task entitlement before advancing the task and only attempts delivery after task advancement succeeds, preventing duplicate grants when task-progress persistence fails.
 - MainScene settings are stored in `AppRecords` as collection/key `GameSettings/Runtime`: music volume, effect volume, and windowed mode.
 - MainScene usable option toggles are stored in the same `GameSettings/Runtime` record as `UsableOption1`, `UsableOption2`, and `UsableOption3`.
-- `UsableOption1` is the level outer-frame toggle, `UsableOption2` is the sticker/full-contour toggle, and `UsableOption3` is high contrast. The serialized names remain unchanged for save compatibility.
+- `UsableOption1` is the level outer-frame toggle and defaults to enabled for newly created settings; `UsableOption2` is the sticker/full-contour toggle, and `UsableOption3` is high contrast. Persisted user choices remain authoritative.
 - MainScene and GameScene both reference the same `TaskItem.prefab` GUID. Their scene overrides only position the root (`MainScene`: `10,508`; `GameScene`: `-6,455`); child layout and visuals must be changed in the shared prefab.
 - Shared TaskItem child names are `TaskContent`, `TextProgress`, `ProgressMask`, `BagIcon`, and `BagBg`. Task UI binding code should resolve these names relative to the TaskItem instance and must not use scene-specific suffixes.
 - `TaskProgressUIUtility` is the shared runtime binding for both TaskItem instances. `TextProgress` displays `CurrentCompleteValue / TaskConfig.CompleteValue`, and the visible `ProgressMask` width uses the clamped ratio of those values.

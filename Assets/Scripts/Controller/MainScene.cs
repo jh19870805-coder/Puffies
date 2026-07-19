@@ -62,6 +62,7 @@ public class MainScene : MonoBehaviour
     private const string SavePanelObjectName = "PanelSave";
     private const string SaveButtonObjectName = "BtnData";
     private const string TaskItemObjectName = "TaskItem";
+    private static readonly Color CompletedPackageTint = new Color(0.78f, 0.78f, 0.78f, 1f);
     private static bool sHookedSceneLoaded;
 
     private readonly Dictionary<int, PackageEntry> mPackageSlotsById = new Dictionary<int, PackageEntry>();
@@ -216,7 +217,18 @@ public class MainScene : MonoBehaviour
             StopCoroutine(mPlayAnimationCoroutine);
         }
 
-        mPlayAnimationCoroutine = StartCoroutine(PlayPackageInteraction(resolvedBagId, image));
+        if (!mPackageSlotsById.TryGetValue(resolvedBagId, out var entry))
+        {
+            entry = new PackageEntry
+            {
+                BagId = resolvedBagId,
+                Root = image.gameObject,
+                Image = image,
+                RectTransform = image.rectTransform
+            };
+        }
+
+        mPlayAnimationCoroutine = StartCoroutine(PlayPackageInteraction(resolvedBagId, entry));
     }
 
     private bool TryResolvePackageList()
@@ -504,6 +516,7 @@ public class MainScene : MonoBehaviour
         }
 
         ApplyPackageSizeVisual(entry.SizeImage, packId);
+        ApplyPackageLifecycleVisual(entry, packId);
 
         var nameText = FindChild(entry.Root.transform, PackNameTextObjectName)?.GetComponent<TMP_Text>();
         if (nameText != null)
@@ -519,6 +532,22 @@ public class MainScene : MonoBehaviour
         }
 
         EnsurePackageInteractionHandler(entry.Root, entry.Image, packId);
+    }
+
+    private static void ApplyPackageLifecycleVisual(PackageEntry entry, int packId)
+    {
+        var tint = CardPackDataUtility.IsPackCompleted(packId)
+            ? CompletedPackageTint
+            : Color.white;
+        if (entry.Image != null)
+        {
+            entry.Image.color = tint;
+        }
+
+        if (entry.SizeImage != null)
+        {
+            entry.SizeImage.color = tint;
+        }
     }
 
     private static void ApplyPackageSizeVisual(Image sizeImage, int packId)
@@ -1734,27 +1763,44 @@ public class MainScene : MonoBehaviour
         rectTransform.localScale = originalScale;
     }
 
-    private IEnumerator PlayPackageInteraction(int bagId, Image image)
+    private static void SetPackageVisualsVisible(PackageEntry entry, bool visible)
+    {
+        if (entry.Image != null)
+        {
+            entry.Image.enabled = visible;
+        }
+
+        if (entry.ShadowImage != null)
+        {
+            entry.ShadowImage.enabled = visible && entry.ShadowImage.sprite != null;
+        }
+
+        if (entry.SizeImage != null)
+        {
+            entry.SizeImage.enabled = visible && entry.SizeImage.sprite != null;
+        }
+    }
+
+    private IEnumerator PlayPackageInteraction(int bagId, PackageEntry entry)
     {
         mIsPlayingAnimation = true;
         var animationFileName = GameDefine.FormatCardPackAnimationFileName(bagId);
-        var anchor = image != null ? image.rectTransform : null;
+        var anchor = entry.Image != null ? entry.Image.rectTransform : entry.RectTransform;
         var hasPlayed = GameAnimationUtility.PlayCardPackAnimation(animationFileName, anchor);
         if (hasPlayed)
         {
-            if (image != null)
-            {
-                image.enabled = false;
-            }
-
+            SetPackageVisualsVisible(entry, false);
             yield return WaitForCardPackAnimation(animationFileName, anchor);
         }
         else
         {
             Debug.LogWarning($"Card pack animation not played: {animationFileName}");
-            if (image != null)
+            var fallbackRect = entry.RectTransform != null
+                ? entry.RectTransform
+                : anchor;
+            if (fallbackRect != null)
             {
-                yield return PlayPackageClickFallback(image.rectTransform);
+                yield return PlayPackageClickFallback(fallbackRect);
             }
         }
 
