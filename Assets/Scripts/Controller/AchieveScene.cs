@@ -34,6 +34,7 @@ public class AchieveScene : MonoBehaviour
     private const string AchieveContentObjectName = "AchieveContent";
     private const string AchieveProgressObjectName = "AchieveProg";
     private const int MockAchievementCount = 20;
+    private const int MockUnlockedAchievementCount = 5;
     private const int MockRandomSeed = 20260702;
     private const float ScrollbarTrackWidth = 18f;
     private const float ScrollbarTrackHeight = 812f;
@@ -487,7 +488,7 @@ public class AchieveScene : MonoBehaviour
         var result = new List<MockAchievementData>(MockAchievementCount);
         for (var i = 1; i <= MockAchievementCount; i++)
         {
-            var isUnlocked = random.Next(0, 2) == 1;
+            var isUnlocked = i <= MockUnlockedAchievementCount;
             result.Add(new MockAchievementData
             {
                 Title = $"成就{i}",

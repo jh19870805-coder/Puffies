@@ -25,7 +25,7 @@ Current work state is tracked in [CURRENT_TASK.md](CURRENT_TASK.md). Workflow ru
 | MainScene | Refresh card pack list from `CardPacks.csv` plus SQLite unlock state; display card packs in pages of 6 columns x 3 rows (18 per page); provide Rank, Achieve, Menu, and pack-opening entry points |
 | GameScene | Load `CardBagNNN` prefab by selected pack id; organize puzzle pieces by `PieceNN` group-number naming; when a group completes, switch groups and clear previous pieces; show RewardPanel after all pieces complete |
 | RankScene | Enter from Main and return to Main |
-| AchieveScene | Currently displays mock achievements; replace the data source when Steam integration is added |
+| AchieveScene | Currently displays 20 mock achievements: the first 5 are achieved and the remaining 15 are unachieved; replace the data source when Steam integration is added |
 | effect | Preview and debug CardFx |
 
 ### Data And Reward Requirements
