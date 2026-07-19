@@ -313,7 +313,7 @@ public class MainScene : MonoBehaviour
             return;
         }
 
-        var unlockedPackIds = CardPackDataUtility.GetUnlockedPackIds();
+        var unlockedPackIds = CardPackDataUtility.TakeMainSceneOrderedPackIds();
         ClearPackageSlots();
 
         for (var i = 0; i < unlockedPackIds.Count; i++)

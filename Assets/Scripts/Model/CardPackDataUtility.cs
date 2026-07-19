@@ -36,6 +36,7 @@ public struct CardPackRecord
     public CardPackSize PackSize;
     public CardPackLifecycleState LifecycleState;
     public string UnlockTime;
+    public string CompletionTime;
 
     public bool IsUnlocked => LifecycleState != CardPackLifecycleState.Locked;
     public bool IsPlayed => LifecycleState == CardPackLifecycleState.InProgress
@@ -48,9 +49,16 @@ public struct CardPackRecord
 /// </summary>
 public static class CardPackDataUtility
 {
-    private const string UnlockTimeFormat = "yyyy-MM-dd HH:mm:ss";
+    private const string TimestampFormat = "yyyy-MM-dd HH:mm:ss.fff";
 
     private static bool sIsInitialized;
+    private static readonly HashSet<int> sNewlyUnlockedPackIds = new HashSet<int>();
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetSessionOrderingState()
+    {
+        sNewlyUnlockedPackIds.Clear();
+    }
 
     /// <summary>
     /// 用途：准备卡包表访问（仅建表，不写入记录）。返回：是否初始化成功。
@@ -124,7 +132,7 @@ public static class CardPackDataUtility
         }
 
         var rows = SqliteLocalStore.Query<CardPackTableRow>(
-            $@"SELECT PackId, PackSize, LifecycleState, UnlockTime
+            $@"SELECT PackId, PackSize, LifecycleState, UnlockTime, CompletionTime
                FROM {GameDefine.LocalSqliteCardPackTable}
                WHERE PackId = ?
                LIMIT 1",
@@ -135,7 +143,7 @@ public static class CardPackDataUtility
         }
 
         record = ToRecord(rows[0]);
-        TryNormalizeAndPersistUnlockTime(ref record);
+        TryNormalizeAndPersistTimes(ref record);
         return true;
     }
 
@@ -146,14 +154,14 @@ public static class CardPackDataUtility
     {
         EnsureInitialized();
         var rows = SqliteLocalStore.Query<CardPackTableRow>(
-            $@"SELECT PackId, PackSize, LifecycleState, UnlockTime
+            $@"SELECT PackId, PackSize, LifecycleState, UnlockTime, CompletionTime
                FROM {GameDefine.LocalSqliteCardPackTable}
                ORDER BY PackId");
         var records = new List<CardPackRecord>(rows.Count);
         for (var i = 0; i < rows.Count; i++)
         {
             var record = ToRecord(rows[i]);
-            TryNormalizeAndPersistUnlockTime(ref record);
+            TryNormalizeAndPersistTimes(ref record);
             records.Add(record);
         }
 
@@ -183,6 +191,26 @@ public static class CardPackDataUtility
         return packIds;
     }
 
+    public static List<int> TakeMainSceneOrderedPackIds()
+    {
+        EnsureInitialized();
+        EnsureDefaultPackUnlocked();
+
+        var records = GetAllPacks();
+        records.RemoveAll(record => record.LifecycleState == CardPackLifecycleState.Locked);
+        var newlyUnlockedPackIds = new HashSet<int>(sNewlyUnlockedPackIds);
+        records.Sort((left, right) => CompareMainSceneOrder(left, right, newlyUnlockedPackIds));
+        sNewlyUnlockedPackIds.Clear();
+
+        var packIds = new List<int>(records.Count);
+        for (var i = 0; i < records.Count; i++)
+        {
+            packIds.Add(records[i].PackId);
+        }
+
+        return packIds;
+    }
+
     /// <summary>
     /// 用途：解锁卡包；无记录时按配置创建后解锁。返回：是否成功。
     /// </summary>
@@ -207,17 +235,26 @@ public static class CardPackDataUtility
                 PackId = packId,
                 PackSize = packSize,
                 LifecycleState = CardPackLifecycleState.Locked,
-                UnlockTime = string.Empty
+                UnlockTime = string.Empty,
+                CompletionTime = string.Empty
             };
         }
 
+        var newlyUnlocked = record.LifecycleState == CardPackLifecycleState.Locked;
         if (record.LifecycleState == CardPackLifecycleState.Locked)
         {
             record.LifecycleState = CardPackLifecycleState.Unlocked;
             record.UnlockTime = FormatUnlockTime(DateTime.Now);
+            record.CompletionTime = string.Empty;
         }
 
-        return UpsertPack(record);
+        var saved = UpsertPack(record);
+        if (saved && newlyUnlocked)
+        {
+            sNewlyUnlockedPackIds.Add(packId);
+        }
+
+        return saved;
     }
 
     /// <summary>
@@ -237,18 +274,31 @@ public static class CardPackDataUtility
             return false;
         }
 
-        if (!TryGetPack(packId, out var record))
+        var recordExists = TryGetPack(packId, out var record);
+        if (!recordExists)
         {
             record = new CardPackRecord
             {
                 PackId = packId
             };
         }
+        else if (record.LifecycleState != CardPackLifecycleState.Locked)
+        {
+            return false;
+        }
 
         record.PackSize = packSize;
+        var newlyUnlocked = !recordExists || record.LifecycleState == CardPackLifecycleState.Locked;
         record.LifecycleState = CardPackLifecycleState.Unlocked;
         record.UnlockTime = FormatUnlockTime(DateTime.Now);
-        return UpsertPack(record);
+        record.CompletionTime = string.Empty;
+        var saved = UpsertPack(record);
+        if (saved && newlyUnlocked)
+        {
+            sNewlyUnlockedPackIds.Add(packId);
+        }
+
+        return saved;
     }
 
     /// <summary>
@@ -301,7 +351,8 @@ public static class CardPackDataUtility
                 PackId = packId,
                 PackSize = packSize,
                 LifecycleState = CardPackLifecycleState.Unlocked,
-                UnlockTime = FormatUnlockTime(DateTime.Now)
+                UnlockTime = FormatUnlockTime(DateTime.Now),
+                CompletionTime = string.Empty
             };
         }
 
@@ -339,7 +390,8 @@ public static class CardPackDataUtility
                 PackId = packId,
                 PackSize = packSize,
                 LifecycleState = CardPackLifecycleState.Locked,
-                UnlockTime = string.Empty
+                UnlockTime = string.Empty,
+                CompletionTime = string.Empty
             };
         }
         else
@@ -347,7 +399,13 @@ public static class CardPackDataUtility
             record.PackSize = packSize;
         }
 
+        var wasCompleted = record.LifecycleState == CardPackLifecycleState.Completed;
         record.LifecycleState = CardPackLifecycleState.Completed;
+        if (!wasCompleted)
+        {
+            record.CompletionTime = FormatUnlockTime(DateTime.Now);
+        }
+
         return UpsertPack(record);
     }
 
@@ -377,7 +435,7 @@ public static class CardPackDataUtility
     /// </summary>
     public static string FormatUnlockTime(DateTime dateTime)
     {
-        return dateTime.ToString(UnlockTimeFormat, CultureInfo.InvariantCulture);
+        return dateTime.ToString(TimestampFormat, CultureInfo.InvariantCulture);
     }
 
     /// <summary>
@@ -387,7 +445,7 @@ public static class CardPackDataUtility
     {
         return DateTime.TryParseExact(
             unlockTime,
-            UnlockTimeFormat,
+            TimestampFormat,
             CultureInfo.InvariantCulture,
             DateTimeStyles.None,
             out dateTime);
@@ -411,19 +469,23 @@ public static class CardPackDataUtility
 
         EnsureValidLifecycleState(ref record);
         EnsureUnlockTime(ref record);
+        EnsureCompletionTime(ref record);
         var unlockTime = record.UnlockTime ?? string.Empty;
+        var completionTime = record.CompletionTime ?? string.Empty;
         var affected = SqliteLocalStore.ExecuteNonQuery(
             $@"INSERT INTO {GameDefine.LocalSqliteCardPackTable}
-               (PackId, PackSize, LifecycleState, UnlockTime)
-               VALUES (?, ?, ?, ?)
+               (PackId, PackSize, LifecycleState, UnlockTime, CompletionTime)
+               VALUES (?, ?, ?, ?, ?)
                ON CONFLICT(PackId) DO UPDATE SET
                 PackSize = excluded.PackSize,
                 LifecycleState = excluded.LifecycleState,
-                UnlockTime = excluded.UnlockTime",
+                UnlockTime = excluded.UnlockTime,
+                CompletionTime = excluded.CompletionTime",
             record.PackId,
             (int)record.PackSize,
             (int)record.LifecycleState,
-            unlockTime);
+            unlockTime,
+            completionTime);
         return affected > 0;
     }
 
@@ -434,7 +496,8 @@ public static class CardPackDataUtility
             PackId = row.PackId,
             PackSize = (CardPackSize)row.PackSize,
             LifecycleState = ResolveLifecycleState(row),
-            UnlockTime = row.UnlockTime ?? string.Empty
+            UnlockTime = row.UnlockTime ?? string.Empty,
+            CompletionTime = row.CompletionTime ?? string.Empty
         };
     }
 
@@ -461,8 +524,13 @@ public static class CardPackDataUtility
 
     private static void EnsureUnlockTime(ref CardPackRecord record)
     {
-        if (record.LifecycleState == CardPackLifecycleState.Locked
-            || HasUnlockTime(record.UnlockTime))
+        if (record.LifecycleState == CardPackLifecycleState.Locked)
+        {
+            record.UnlockTime = string.Empty;
+            return;
+        }
+
+        if (HasUnlockTime(record.UnlockTime))
         {
             return;
         }
@@ -470,16 +538,106 @@ public static class CardPackDataUtility
         record.UnlockTime = FormatUnlockTime(DateTime.Now);
     }
 
-    private static void TryNormalizeAndPersistUnlockTime(ref CardPackRecord record)
+    private static void EnsureCompletionTime(ref CardPackRecord record)
+    {
+        if (record.LifecycleState != CardPackLifecycleState.Completed)
+        {
+            record.CompletionTime = string.Empty;
+            return;
+        }
+
+        if (HasUnlockTime(record.CompletionTime))
+        {
+            return;
+        }
+
+        record.CompletionTime = FormatUnlockTime(DateTime.Now);
+    }
+
+    private static void TryNormalizeAndPersistTimes(ref CardPackRecord record)
     {
         var unlockTimeBefore = record.UnlockTime;
+        var completionTimeBefore = record.CompletionTime;
         var lifecycleStateBefore = record.LifecycleState;
         EnsureValidLifecycleState(ref record);
         EnsureUnlockTime(ref record);
-        if (record.UnlockTime != unlockTimeBefore || record.LifecycleState != lifecycleStateBefore)
+        EnsureCompletionTime(ref record);
+        if (record.UnlockTime != unlockTimeBefore
+            || record.CompletionTime != completionTimeBefore
+            || record.LifecycleState != lifecycleStateBefore)
         {
             UpsertPackInternal(record);
         }
+    }
+
+    private static int CompareMainSceneOrder(
+        CardPackRecord left,
+        CardPackRecord right,
+        HashSet<int> newlyUnlockedPackIds)
+    {
+        var leftIsNew = newlyUnlockedPackIds.Contains(left.PackId);
+        var rightIsNew = newlyUnlockedPackIds.Contains(right.PackId);
+        if (leftIsNew != rightIsNew)
+        {
+            return leftIsNew ? -1 : 1;
+        }
+
+        if (leftIsNew)
+        {
+            var newTimeComparison = CompareTimestamp(left.UnlockTime, right.UnlockTime, descending: true);
+            if (newTimeComparison != 0)
+            {
+                return newTimeComparison;
+            }
+        }
+
+        var priorityComparison = GetMainSceneLifecyclePriority(left.LifecycleState)
+            .CompareTo(GetMainSceneLifecyclePriority(right.LifecycleState));
+        if (priorityComparison != 0)
+        {
+            return priorityComparison;
+        }
+
+        var leftTime = left.LifecycleState == CardPackLifecycleState.Completed
+            ? left.CompletionTime
+            : left.UnlockTime;
+        var rightTime = right.LifecycleState == CardPackLifecycleState.Completed
+            ? right.CompletionTime
+            : right.UnlockTime;
+        var timeComparison = CompareTimestamp(leftTime, rightTime, descending: false);
+        return timeComparison != 0 ? timeComparison : left.PackId.CompareTo(right.PackId);
+    }
+
+    private static int GetMainSceneLifecyclePriority(CardPackLifecycleState lifecycleState)
+    {
+        switch (lifecycleState)
+        {
+            case CardPackLifecycleState.InProgress:
+                return 0;
+            case CardPackLifecycleState.Unlocked:
+                return 1;
+            case CardPackLifecycleState.Completed:
+                return 2;
+            default:
+                return 3;
+        }
+    }
+
+    private static int CompareTimestamp(string left, string right, bool descending)
+    {
+        var leftIsValid = TryParseUnlockTime(left, out var leftTime);
+        var rightIsValid = TryParseUnlockTime(right, out var rightTime);
+        if (leftIsValid != rightIsValid)
+        {
+            return leftIsValid ? -1 : 1;
+        }
+
+        if (!leftIsValid)
+        {
+            return 0;
+        }
+
+        return descending ? rightTime.CompareTo(leftTime) : leftTime.CompareTo(rightTime);
     }
 
     private sealed class CardPackTableRow
@@ -488,6 +646,7 @@ public static class CardPackDataUtility
         public int PackSize { get; set; }
         public int LifecycleState { get; set; }
         public string UnlockTime { get; set; }
+        public string CompletionTime { get; set; }
     }
 
     private sealed class CardPackIdRow

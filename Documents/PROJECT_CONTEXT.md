@@ -42,6 +42,7 @@ Current work state is tracked in [CURRENT_TASK.md](CURRENT_TASK.md). Workflow ru
 - Current distribution gates are: `R>=9` allows `H<=5`; `R=8` allows `H<=3`; `R=7..3` allows `H<=2`; `R=2..1` allows `H<=1`. A blocked first-completion attempt is skipped, while a blocked task reward remains pending. Both sources may grant in one settlement and animations play sequentially.
 - When an accumulate-score task advances to another accumulate-score task, progress above the completed target carries forward (`nextProgress = currentProgress - completedTarget`).
 - Card pack lifecycle state is stored in SQLite table `CardPacks` as `Locked`, `Unlocked`, `InProgress`, or `Completed`.
+- MainScene card-pack order is: newly granted since the previous list presentation (one presentation only, newest grant first), then `InProgress`, then `Unlocked` by ascending unlock time, then `Completed` by ascending first-completion time. PackId is the deterministic tie-breaker; daily challenge priority is deferred.
 - Task progress is stored in JSON root object `TaskProgressData`.
 - Business progress must not use `PlayerPrefs`.
 
@@ -188,7 +189,7 @@ New `CanvasScaler` values are written by `CanvasDesignResolutionEditor.cs`. Use 
 - `JsonLocalStore` reads/writes one root object for the whole file, currently task progress.
 - `SqliteLocalStore` uses collection/key records in `AppRecords`; card pack business state uses the dedicated `CardPacks` table.
 - `CardPackLifecycleState` is `Locked=0`, `Unlocked=1`, `InProgress=2`, and `Completed=3`. Completing the first group of a multi-group pack marks it `InProgress`; completing the final group marks it `Completed`.
-- The SQLite `CardPacks` table contains only `PackId`, `PackSize`, `LifecycleState`, and `UnlockTime`; the former `IsUnlocked` and `IsPlayed` columns are not retained.
+- The SQLite `CardPacks` table contains `PackId`, `PackSize`, `LifecycleState`, `UnlockTime`, and `CompletionTime`; the former `IsUnlocked` and `IsPlayed` columns are not retained. Unlock/completion timestamps use invariant `yyyy-MM-dd HH:mm:ss.fff` local time. `CompletionTime` is written on the first transition to `Completed` and is not changed by replay.
 - `CardPackDistributionUtility` lives with `CardPackDataUtility` and owns chapter selection, `R` / held-count evaluation, deterministic locked-candidate selection, and first-completion grant attempts. Replays skip this attempt based on the lifecycle snapshot taken when GameScene starts.
 - Pending task card-pack entitlements are stored in SQLite `AppRecords` under `CardPackDistribution/Progress`, deduplicated by TaskId.
 - GameScene persists the task entitlement before advancing the task and only attempts delivery after task advancement succeeds, preventing duplicate grants when task-progress persistence fails.

@@ -1,47 +1,51 @@
 # Current Task
 
-- Task: Remove stale BuildSync CardBag folder warning
+- Task: Implement confirmed MainScene card-pack ordering
 - Status: Completed
 - Updated At: 2026-07-19
 
 ## User Intent
 
-- Resolve the editor-load warning that BuildSync skipped the missing `Assets/UI/CardBag001` folder.
+- Update card-pack sorting according to the confirmed product document.
 
 ## Working Notes
 
-- Puzzle source textures were previously moved to `Assets/UI/CardBags/CardBagNNN`, but `BuildSync` still listed the old single-pack folder.
-- CardBag source textures do not need StreamingAssets copies because `Resources/CardBagPrefabs/CardBagNNN` carries their Sprite references into the Unity build.
-- Removed `CardBag001` from `UiStreamingFolders` instead of copying the entire CardBags source tree.
-- Added `AchieveScene` and `RankScene`, whose controllers load UI files through disk paths in player builds.
-- The final synchronized folders are `PackImages`, `BasicUI`, `AchieveScene`, and `RankScene`.
-- Replaced raw legacy-folder deletion with AssetDatabase deletion plus an orphan-meta fallback, fixing the `StreamingAssets/Configs.meta` warning.
-- Added obsolete singular `StreamingAssets/Config` to cleanup; its `Package001.json` belongs to the retired JSON puzzle flow.
+- MainScene now consumes a dedicated ordered PackId list instead of displaying the SQLite PackId order.
+- Packs granted since the previous MainScene presentation appear first once; multiple new grants use newest unlock first.
+- Default implemented priority is `InProgress`, `Unlocked`, then `Completed`; daily challenge is not part of the first release.
+- `Unlocked` packs use ascending unlock time. `Completed` packs use ascending first-completion time. PackId resolves timestamp ties.
+- Added `CompletionTime` to SQLite `CardPacks`; first completion writes it and replay preserves it.
+- Unlock and completion timestamps now include milliseconds so multiple rewards in one settlement remain orderable.
+- The temporary newly-granted set is in memory, is consumed by MainScene, and resets on application startup.
 
 ## Files Changed
 
-- `Assets/Scripts/Editor/BuildSync.cs`
+- `Assets/Scripts/Controller/MainScene.cs`
+- `Assets/Scripts/Model/CardPackDataUtility.cs`
+- `Assets/Scripts/Model/SqliteLocalStore.cs`
+- `Documents/GAME_DESIGN_REQUIREMENTS.md`
 - `Documents/PROJECT_CONTEXT.md`
 - `Documents/CURRENT_TASK.md`
 
 ## Decisions
 
-- Keep StreamingAssets limited to UI files loaded through `GameCommonUtility.LoadSpriteByPath` rather than duplicating every imported UI source texture.
-- Always remove a legacy StreamingAssets folder and its `.meta` together.
+- Add a real completion timestamp rather than overloading unlock time, because both ordering rules must remain independently correct.
+- Keep `GetUnlockedPackIds` unchanged for count-only callers and expose a MainScene-specific consuming order API.
+- Do not migrate the old development schema.
 
 ## Validation
 
-- Confirmed all four configured source folders exist under `Assets/UI`.
 - `dotnet build Puffies.sln --no-restore` completed with 0 warnings and 0 errors.
+- Five deterministic comparator tests passed: lifecycle priority, new-pack priority, unlock order, completion order, and PackId tie-breaking.
 - `git diff --check` completed without whitespace errors.
-- Confirmed `StreamingAssets/Config`, `StreamingAssets/Configs`, and both corresponding `.meta` files are absent after cleanup.
-- Running the Unity menu command without warnings still needs verification after Unity recompiles.
+- Unity Play Mode with a clean SQLite database still requires verification.
 
 ## Next Action
 
-1. Let Unity compile, then run `Puffies -> Sync Build Resources` and confirm no skipped-folder warning appears.
-2. Resume MainScene downward-shadow visual tuning using the latest generated-shadow parameters.
+1. Close Unity and delete `%USERPROFILE%/AppData/LocalLow/MainTown/Puffies/LocalData.db`, then reopen the project.
+2. Verify current-session grants appear first once, then fall back to lifecycle ordering on the next MainScene visit or application restart.
+3. Seed mixed `InProgress`, `Unlocked`, and `Completed` packs and confirm the 6 x 3 list follows the documented order.
 
 ## Resume Prompt
 
-Continue Puffies BuildSync verification. Read AGENTS.md, Documents/WORKFLOW.md, and Documents/CURRENT_TASK.md first, then run the sync menu regression or follow the user's latest instruction.
+Continue Puffies MainScene card-pack ordering verification. Read AGENTS.md, Documents/WORKFLOW.md, and Documents/CURRENT_TASK.md first, then run the clean-save Play Mode ordering regression or follow the user's latest instruction.

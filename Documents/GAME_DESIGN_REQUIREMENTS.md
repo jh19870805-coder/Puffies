@@ -173,7 +173,20 @@ Lifecycle transitions:
 4. Completing the final group changes the state to `Completed`.
 5. `InProgress` and `Completed` do not downgrade during normal play. A future explicit replay-reset flow may define a separate reset transition.
 
-MainScene presentation and ordering must use this lifecycle state. Exact visuals and ordering are implemented separately from the lifecycle data model.
+MainScene presentation and ordering must use this lifecycle state.
+
+### MainScene Card Pack Ordering
+
+Status: `Confirmed`
+
+The first release does not include daily-challenge packs. MainScene uses the following order:
+
+1. Card packs granted since the previous MainScene list presentation. These packs are shown first once; when several are granted together, the latest grant appears first.
+2. `InProgress` packs.
+3. `Unlocked` packs, ordered by unlock time from earliest to latest.
+4. `Completed` packs, ordered by first-completion time from earliest to latest.
+
+After MainScene consumes the temporary newly-granted priority, those packs use their normal lifecycle priority. Restarting the application also clears this temporary priority. Equal or invalid timestamps use ascending PackId as the deterministic tie-breaker. A future daily-challenge implementation will insert its packs ahead of these priorities.
 
 ---
 

@@ -402,7 +402,8 @@ public static class SqliteLocalStore
                 PackId INTEGER PRIMARY KEY,
                 PackSize INTEGER NOT NULL DEFAULT 0,
                 LifecycleState INTEGER NOT NULL DEFAULT 0,
-                UnlockTime TEXT NOT NULL DEFAULT ''
+                UnlockTime TEXT NOT NULL DEFAULT '',
+                CompletionTime TEXT NOT NULL DEFAULT ''
             );");
 
         sIsInitialized = true;
