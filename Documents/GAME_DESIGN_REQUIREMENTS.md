@@ -227,7 +227,7 @@ Current playtest implementation:
 - Pending task rewards are attempted before the current first-completion grant.
 - Task and first-completion sources may grant two different packs in one settlement when both pass the current stage gate.
 - Locked candidates are selected by ascending `Index` inside the active chapter. A task's configured `RewardId` is preferred only when it is still locked and belongs to that chapter.
-- Reward animations are queued and played sequentially when both sources grant a pack.
+- RewardPanel keeps the authored default `ImgBag` icon instead of replacing it with a granted pack cover. When `BtnFinish` is clicked, all packs granted by the settlement fly together from `ImgBag` into a centered row, pause, survive the MainScene load, and then fly to their corresponding card-pack list slots.
 
 ---
 
@@ -267,6 +267,7 @@ Pending parameters:
 
 | Date | Change |
 |---|---|
+| 2026-07-19 | Confirmed the settlement-to-MainScene reward transition: keep the default ImgBag icon, center all granted packs after Finish, pause, then fly each one into its MainScene list slot. |
 | 2026-07-19 | Confirmed internal chapter stages by remaining locked-pack count R: 17-9 initial, 8-3 mid-to-late, and 2-1 final, with corresponding held-pack targets. |
 | 2026-07-19 | Replaced the provisional random roll with deterministic stage gates and persisted deferred task rewards for playtesting. |
 | 2026-07-19 | Confirmed 8 player-invisible internal chapters for distributing approximately 150 card packs, averaging 18.75 packs per chapter. |

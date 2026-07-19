@@ -199,6 +199,27 @@ public class MainScene : MonoBehaviour
         return !mHasSwitchedToGameScene && !mIsPlayingAnimation;
     }
 
+    public bool TryGetPackageFlyTarget(int bagId, out RectTransform target)
+    {
+        target = null;
+        Canvas.ForceUpdateCanvases();
+        if (!mPackageSlotsById.TryGetValue(bagId, out var entry) || entry.Image == null)
+        {
+            return false;
+        }
+
+        target = entry.Image.rectTransform;
+        return target != null && target.gameObject.activeInHierarchy;
+    }
+
+    public void RevealPackageFlyTarget(int bagId)
+    {
+        if (mPackageSlotsById.TryGetValue(bagId, out var entry))
+        {
+            SetPackageVisualsVisible(entry, true);
+        }
+    }
+
     public void HandlePackageGesture(int bagId, Image image)
     {
         if (!CanAcceptPackageInput() || image == null)
@@ -517,6 +538,10 @@ public class MainScene : MonoBehaviour
 
         ApplyPackageSizeVisual(entry.SizeImage, packId);
         ApplyPackageLifecycleVisual(entry, packId);
+        if (CardPackRewardFlyTransition.IsPackPending(packId))
+        {
+            SetPackageVisualsVisible(entry, false);
+        }
 
         var nameText = FindChild(entry.Root.transform, PackNameTextObjectName)?.GetComponent<TMP_Text>();
         if (nameText != null)

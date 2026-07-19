@@ -268,7 +268,7 @@ GameObject:
   - component: {fileID: 160728236}
   - component: {fileID: 160728235}
   m_Layer: 0
-  m_Name: Text (TMP)
+  m_Name: BtnTitle
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -290,8 +290,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 5}
+  m_SizeDelta: {x: 0, y: -10}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &160728235
 MonoBehaviour:
@@ -316,7 +316,7 @@ MonoBehaviour:
   m_text: "\u5B8C\u6210!"
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 07169799dbf3be7428d02d725795d190, type: 2}
-  m_sharedMaterial: {fileID: 381051975239993251, guid: 07169799dbf3be7428d02d725795d190, type: 2}
+  m_sharedMaterial: {fileID: 2100000, guid: f893e8b02061b9d46a66a6ca93393af8, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []

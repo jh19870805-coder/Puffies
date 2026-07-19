@@ -68,6 +68,9 @@ public class GameScene : MonoBehaviour
     private TMP_Text _settlementScoreText;
     private TMP_Text _settlementBagCountText;
     private Image _taskRewardImage;
+    private Button _finishButton;
+    private bool _isSettlementReadyForFinish;
+    private bool _isFinishTransitionStarted;
     private GameObject _loadedCardBagRoot;
     private RectTransform _loadedCardBagRect;
     private Vector2 _originalCardBagAnchoredPosition;
@@ -104,6 +107,8 @@ public class GameScene : MonoBehaviour
         _didAdvanceTaskDuringSettlement = false;
         _didFailTaskAdvanceDuringSettlement = false;
         _didSavePackCompletion = false;
+        _isSettlementReadyForFinish = false;
+        _isFinishTransitionStarted = false;
         _settlementPackRewardIds.Clear();
         InitializeGameplay(selectedBagId);
         InitializeTaskTracking();
@@ -1082,15 +1087,16 @@ public class GameScene : MonoBehaviour
             return;
         }
 
-        var button = finishButtonObject.GetComponent<Button>();
-        if (button == null)
+        _finishButton = finishButtonObject.GetComponent<Button>();
+        if (_finishButton == null)
         {
             Debug.LogWarning($"GameScene: {GameDefine.FinishButtonObjectName} is missing Button component.");
             return;
         }
 
-        button.onClick.RemoveListener(OnFinishButtonClicked);
-        button.onClick.AddListener(OnFinishButtonClicked);
+        _finishButton.interactable = false;
+        _finishButton.onClick.RemoveListener(OnFinishButtonClicked);
+        _finishButton.onClick.AddListener(OnFinishButtonClicked);
     }
 
     private void CacheRewardPanelReferences()
@@ -1158,6 +1164,11 @@ public class GameScene : MonoBehaviour
 
         PrepareBoardForRewardPanel();
         _didSavePackCompletion = SaveCardPackAfterPuzzleComplete();
+        _isSettlementReadyForFinish = false;
+        if (_finishButton != null)
+        {
+            _finishButton.interactable = false;
+        }
 
         _rewardPanelRoot.SetActive(true);
         _rewardPanelRoot.transform.SetAsLastSibling();
@@ -1285,7 +1296,25 @@ public class GameScene : MonoBehaviour
 
     private void OnFinishButtonClicked()
     {
-        GameManager.EnterMainScene();
+        if (!_isSettlementReadyForFinish || _isFinishTransitionStarted)
+        {
+            return;
+        }
+
+        _isFinishTransitionStarted = true;
+        if (_finishButton != null)
+        {
+            _finishButton.interactable = false;
+        }
+
+        if (_settlementPackRewardIds.Count == 0
+            || _taskRewardImage == null
+            || !CardPackRewardFlyTransition.TryStart(
+                _taskRewardImage.rectTransform,
+                _settlementPackRewardIds))
+        {
+            GameManager.EnterMainScene();
+        }
     }
 
     private void InitializeScoringSession()
@@ -1431,7 +1460,11 @@ public class GameScene : MonoBehaviour
             TryGrantFirstCompletionPackReward();
         }
         RefreshSettlementBagCount();
-        yield return PlayQueuedPackRewardAnimations();
+        _isSettlementReadyForFinish = true;
+        if (_finishButton != null)
+        {
+            _finishButton.interactable = true;
+        }
     }
 
     private IEnumerator ProcessTaskSettlementCore()
@@ -1566,7 +1599,6 @@ public class GameScene : MonoBehaviour
             return;
         }
 
-        UpdateTaskRewardImage(rewardPackId);
         QueuePackReward(rewardPackId);
     }
 
@@ -1575,21 +1607,6 @@ public class GameScene : MonoBehaviour
         if (_rewardTaskItem != null)
         {
             _rewardTaskItem.gameObject.SetActive(visible);
-        }
-    }
-
-    private void UpdateTaskRewardImage(int rewardPackId)
-    {
-        if (_taskRewardImage == null)
-        {
-            return;
-        }
-
-        var packImagePath = GameDefine.FormatPackImagePath(rewardPackId);
-        var packSprite = GameCommonUtility.LoadSpriteByPath(packImagePath, PixelsPerUnit);
-        if (packSprite != null)
-        {
-            _taskRewardImage.sprite = packSprite;
         }
     }
 
@@ -1647,44 +1664,6 @@ public class GameScene : MonoBehaviour
         {
             _settlementPackRewardIds.Add(rewardPackId);
         }
-    }
-
-    private IEnumerator PlayQueuedPackRewardAnimations()
-    {
-        for (var i = 0; i < _settlementPackRewardIds.Count; i++)
-        {
-            var rewardPackId = _settlementPackRewardIds[i];
-            UpdateTaskRewardImage(rewardPackId);
-            if (!PlayCardPackReward(rewardPackId, out var duration))
-            {
-                continue;
-            }
-
-            yield return new WaitForSecondsRealtime(duration > 0f ? duration : 1.5f);
-        }
-
-        _settlementPackRewardIds.Clear();
-    }
-
-    private bool PlayCardPackReward(int rewardPackId, out float duration)
-    {
-        var anchor = _taskRewardImage != null ? _taskRewardImage.transform : null;
-
-        var canvas = _rewardPanelRoot != null ? _rewardPanelRoot.GetComponentInParent<Canvas>() : null;
-        if (canvas != null && Camera.main != null)
-        {
-            GameCommonUtility.ConfigureCanvasForWorldCardPack(canvas, Camera.main);
-        }
-
-        var animationFileName = GameDefine.FormatCardPackAnimationFileName(rewardPackId);
-        duration = GameAnimationUtility.GetCardPackPlayDuration(animationFileName, anchor);
-        if (!GameAnimationUtility.PlayCardPackAnimation(animationFileName, anchor))
-        {
-            Debug.LogWarning($"GameScene: card pack reward animation failed: {animationFileName}");
-            return false;
-        }
-
-        return true;
     }
 
     private static GameObject GetOrCreatePlacedPiecesRoot()

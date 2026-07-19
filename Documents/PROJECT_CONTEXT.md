@@ -39,7 +39,7 @@ Current work state is tracked in [CURRENT_TASK.md](CURRENT_TASK.md). Workflow ru
 - Completing a task always creates a persisted new-card-pack entitlement. If the chapter hand-count gate is closed, the reward remains pending and is retried later. First-time completion performs one deterministic stage-gated grant attempt; replaying an already `Completed` pack does not perform this attempt. A replay may still create a task entitlement.
 - Card-pack distribution uses 8 internal, player-invisible chapters for approximately 150 total packs (18.75 per chapter on average). Chapters constrain the eligible locked-pack reward pool but are not shown in MainScene or other player-facing UI. Exact PackId allocation and chapter advancement rules remain pending.
 - Internal chapter stage uses `R`, the number of still-`Locked` packs in the active chapter: initial `17..9`, mid-to-late `8..3`, final `2..1`. Held playable count means `Unlocked + InProgress` and targets approximately `5-6`, `2-3`, and `1` packs respectively. For chapters larger than 18 packs, extra `R` values above 17 are also initial-stage values.
-- Current distribution gates are: `R>=9` allows `H<=5`; `R=8` allows `H<=3`; `R=7..3` allows `H<=2`; `R=2..1` allows `H<=1`. A blocked first-completion attempt is skipped, while a blocked task reward remains pending. Both sources may grant in one settlement and animations play sequentially.
+- Current distribution gates are: `R>=9` allows `H<=5`; `R=8` allows `H<=3`; `R=7..3` allows `H<=2`; `R=2..1` allows `H<=1`. A blocked first-completion attempt is skipped, while a blocked task reward remains pending. Both sources may grant in one settlement. RewardPanel keeps its authored default `ImgBag` Sprite; after `BtnFinish`, every pack granted in that settlement flies from `ImgBag` to a centered row, pauses, survives the MainScene load, and then flies to its corresponding list slot.
 - When an accumulate-score task advances to another accumulate-score task, progress above the completed target carries forward (`nextProgress = currentProgress - completedTarget`).
 - Card pack lifecycle state is stored in SQLite table `CardPacks` as `Locked`, `Unlocked`, `InProgress`, or `Completed`.
 - MainScene card-pack order is: newly granted since the previous list presentation (one presentation only, newest grant first), then `InProgress`, then `Unlocked` by ascending unlock time, then `Completed` by ascending first-completion time. PackId is the deterministic tie-breaker; daily challenge priority is deferred.
@@ -145,7 +145,7 @@ effect (debug): CardFx preview, menu Puffies -> Preview CardFx Effects
 | `PanelSave/BtnClose` / `PanelSave/BtnReturn` | Close MainScene save/data popup |
 | `BtnReturn` | Rank / Game -> Main; under `PanelMenu`, closes the MainScene menu |
 | `CloseBtn` | Achieve -> Main |
-| `BtnFinish` | Game RewardPanel -> Main |
+| `BtnFinish` | Animate newly granted packs from RewardPanel into their MainScene list slots, then complete the return to Main |
 | `TextLoading` | Loading progress text; supports TextMeshPro `TMP_Text` and legacy `UnityEngine.UI.Text` |
 | `CardBagNNN` | Runtime gameplay prefab loaded from `Resources/CardBagPrefabs/` |
 | `GameBoard` / `Piece01`... | Board and slots inside a `CardBagNNN` prefab |
