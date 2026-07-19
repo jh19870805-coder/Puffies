@@ -9,6 +9,7 @@ public struct CardPackConfigData
     public int Index;
     public int PackId;
     public CardPackSize PackSize;
+    public int ChapterId;
 }
 
 public readonly struct GameConfigAssetDefinition
@@ -270,11 +271,18 @@ public static class GameConfigRepository
             return false;
         }
 
+        var chapterId = GetOptionalInt(row, "ChapterId");
+        if (chapterId <= 0)
+        {
+            chapterId = ((Math.Max(1, index) - 1) / 18) + 1;
+        }
+
         config = new CardPackConfigData
         {
             Index = index,
             PackId = packId,
-            PackSize = (CardPackSize)GetOptionalInt(row, "PackSize")
+            PackSize = (CardPackSize)GetOptionalInt(row, "PackSize"),
+            ChapterId = chapterId
         };
         return true;
     }

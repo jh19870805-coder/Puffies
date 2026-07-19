@@ -36,6 +36,10 @@ Current work state is tracked in [CURRENT_TASK.md](CURRENT_TASK.md). Workflow ru
 - Settlement starts from the card-pack base score (XS 60, S 80, M 100, L 120, XL 140, XXL 160, XXXL 200), adds every qualified bonus percentage, multiplies once, and rounds upward.
 - Score bonuses are: no `BtnTips` click +5%, MainScene `Toggle1` level outline disabled +2%, `Toggle2` sticker outline disabled +5%, and completion time <=15 / <=30 / <=60 seconds +3% / +2% / +1%.
 - Completed tasks grant rewards and advance to the next task.
+- Completing a task always grants one currently `Locked` card pack. First-time completion of a card pack may independently grant one currently `Locked` card pack based on a configurable probability; replaying an already `Completed` pack does not perform this probability roll. A replay may still receive the guaranteed task reward if it completes a task.
+- Card-pack distribution uses 8 internal, player-invisible chapters for approximately 150 total packs (18.75 per chapter on average). Chapters constrain the eligible locked-pack reward pool but are not shown in MainScene or other player-facing UI. Exact PackId allocation and chapter advancement rules remain pending.
+- Internal chapter stage uses `R`, the number of still-`Locked` packs in the active chapter: initial `17..9`, mid-to-late `8..3`, final `2..1`. Held playable count means `Unlocked + InProgress` and targets approximately `5-6`, `2-3`, and `1` packs respectively. For chapters larger than 18 packs, extra `R` values above 17 are also initial-stage values.
+- Current first-completion distribution uses 100% probability below the stage target minimum, 50% within the target band, and 0% at its maximum. Task rewards bypass this cap and always attempt to grant a new locked pack. Both sources may grant in one settlement and their animations play sequentially.
 - When an accumulate-score task advances to another accumulate-score task, progress above the completed target carries forward (`nextProgress = currentProgress - completedTarget`).
 - Card pack lifecycle state is stored in SQLite table `CardPacks` as `Locked`, `Unlocked`, `InProgress`, or `Completed`. Existing `IsUnlocked` / `IsPlayed` columns remain synchronized for save compatibility.
 - Task progress is stored in JSON root object `TaskProgressData`.
@@ -174,7 +178,7 @@ New `CanvasScaler` values are written by `CanvasDesignResolutionEditor.cs`. Use 
 |------|--------|---------------------|
 | Task config | `GameConfigRepository` reads `Resources/Configs/TaskConfig.csv` | Read-only |
 | Task progress | `GameTaskUtility` | `persistentDataPath/LocalData.json` root object `TaskProgressData` |
-| Card pack config | `GameConfigRepository` reads `Resources/Configs/CardPacks.csv` | Read-only |
+| Card pack config (`PackId`, `PackSize`, `ChapterId`) | `GameConfigRepository` reads `Resources/Configs/CardPacks.csv` | Read-only |
 | Card pack lifecycle state | `CardPackDataUtility` | `LocalData.db` table `CardPacks` |
 | Generic collection + key storage | `SqliteLocalStore` API | `LocalData.db` table `AppRecords` |
 
@@ -183,6 +187,7 @@ New `CanvasScaler` values are written by `CanvasDesignResolutionEditor.cs`. Use 
 - `JsonLocalStore` reads/writes one root object for the whole file, currently task progress.
 - `SqliteLocalStore` uses collection/key records in `AppRecords`; card pack business state uses the dedicated `CardPacks` table.
 - `CardPackLifecycleState` is `Locked=0`, `Unlocked=1`, `InProgress=2`, and `Completed=3`. Completing the first group of a multi-group pack marks it `InProgress`; completing the final group marks it `Completed`. Existing databases add and backfill `LifecycleState` during SQLite initialization.
+- `CardPackDistributionUtility` lives with `CardPackDataUtility` and owns chapter selection, `R` / held-count evaluation, deterministic locked-candidate selection, and first-completion reward rolls. Replays skip this roll based on the lifecycle snapshot taken when GameScene starts.
 - MainScene settings are stored in `AppRecords` as collection/key `GameSettings/Runtime`: music volume, effect volume, and windowed mode.
 - MainScene usable option toggles are stored in the same `GameSettings/Runtime` record as `UsableOption1`, `UsableOption2`, and `UsableOption3`.
 - `UsableOption1` is the level outer-frame toggle, `UsableOption2` is the sticker/full-contour toggle, and `UsableOption3` is high contrast. The serialized names remain unchanged for save compatibility.
@@ -207,7 +212,7 @@ New `CanvasScaler` values are written by `CanvasDesignResolutionEditor.cs`. Use 
 Shared size icons are `UI/PackImages/PackSize_1.png` through `PackSize_7.png`, matching the numeric values of `CardPackSize` (`XS=1` through `XXXL=7`). `PackItem` must contain an Image child named `PackSize`; MainScene assigns its Sprite at runtime.
 
 1. Keep exactly one scene template object: `Package001`.
-2. Add a row to `CardPacks.csv` (`PackId`, `PackSize`).
+2. Add a row to `CardPacks.csv` (`PackId`, `PackSize`, `ChapterId`).
 3. Add the corresponding cover under `UI/PackImages/` using `PackIconNNN.png` names. `GameDefine.FormatPackImagePath` maps pack id `1` to `UI/PackImages/PackIcon001.png`.
 4. Write lifecycle state through `CardPackDataUtility` into SQLite table `CardPacks`.
 5. Optional 3D assets: `CardPackAni_00N.FBX`, `CardPackSkin_00N.prefab` -> `Resources/Effects/CardPack/`; if missing, use 2D fallback.

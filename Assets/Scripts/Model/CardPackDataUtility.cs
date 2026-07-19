@@ -18,6 +18,14 @@ public enum CardPackSize
     XXXL = 7,
 }
 
+public enum CardPackLifecycleState
+{
+    Locked = 0,
+    Unlocked = 1,
+    InProgress = 2,
+    Completed = 3,
+}
+
 /// <summary>
 /// 本地卡包数据记录。
 /// </summary>
@@ -26,9 +34,13 @@ public struct CardPackRecord
 {
     public int PackId;
     public CardPackSize PackSize;
-    public bool IsUnlocked;
+    public CardPackLifecycleState LifecycleState;
     public string UnlockTime;
-    public bool IsPlayed;
+
+    public bool IsUnlocked => LifecycleState != CardPackLifecycleState.Locked;
+    public bool IsPlayed => LifecycleState == CardPackLifecycleState.InProgress
+        || LifecycleState == CardPackLifecycleState.Completed;
+    public bool IsCompleted => LifecycleState == CardPackLifecycleState.Completed;
 }
 
 /// <summary>
@@ -112,7 +124,7 @@ public static class CardPackDataUtility
         }
 
         var rows = SqliteLocalStore.Query<CardPackTableRow>(
-            $@"SELECT PackId, PackSize, IsUnlocked, UnlockTime, IsPlayed
+            $@"SELECT PackId, PackSize, LifecycleState, IsUnlocked, UnlockTime, IsPlayed
                FROM {GameDefine.LocalSqliteCardPackTable}
                WHERE PackId = ?
                LIMIT 1",
@@ -134,7 +146,7 @@ public static class CardPackDataUtility
     {
         EnsureInitialized();
         var rows = SqliteLocalStore.Query<CardPackTableRow>(
-            $@"SELECT PackId, PackSize, IsUnlocked, UnlockTime, IsPlayed
+            $@"SELECT PackId, PackSize, LifecycleState, IsUnlocked, UnlockTime, IsPlayed
                FROM {GameDefine.LocalSqliteCardPackTable}
                ORDER BY PackId");
         var records = new List<CardPackRecord>(rows.Count);
@@ -159,8 +171,9 @@ public static class CardPackDataUtility
         var rows = SqliteLocalStore.Query<CardPackIdRow>(
             $@"SELECT PackId
                FROM {GameDefine.LocalSqliteCardPackTable}
-               WHERE IsUnlocked = 1
-               ORDER BY PackId");
+               WHERE LifecycleState <> ?
+               ORDER BY PackId",
+            (int)CardPackLifecycleState.Locked);
         var packIds = new List<int>(rows.Count);
         for (var i = 0; i < rows.Count; i++)
         {
@@ -193,14 +206,17 @@ public static class CardPackDataUtility
             {
                 PackId = packId,
                 PackSize = packSize,
-                IsUnlocked = false,
-                UnlockTime = string.Empty,
-                IsPlayed = false
+                LifecycleState = CardPackLifecycleState.Locked,
+                UnlockTime = string.Empty
             };
         }
 
-        record.IsUnlocked = true;
-        record.UnlockTime = FormatUnlockTime(DateTime.Now);
+        if (record.LifecycleState == CardPackLifecycleState.Locked)
+        {
+            record.LifecycleState = CardPackLifecycleState.Unlocked;
+            record.UnlockTime = FormatUnlockTime(DateTime.Now);
+        }
+
         return UpsertPack(record);
     }
 
@@ -230,8 +246,7 @@ public static class CardPackDataUtility
         }
 
         record.PackSize = packSize;
-        record.IsUnlocked = true;
-        record.IsPlayed = false;
+        record.LifecycleState = CardPackLifecycleState.Unlocked;
         record.UnlockTime = FormatUnlockTime(DateTime.Now);
         return UpsertPack(record);
     }
@@ -251,6 +266,53 @@ public static class CardPackDataUtility
     public static bool IsPackUnlocked(int packId)
     {
         return TryGetPack(packId, out var record) && record.IsUnlocked;
+    }
+
+    public static bool TryGetPackLifecycleState(int packId, out CardPackLifecycleState lifecycleState)
+    {
+        lifecycleState = CardPackLifecycleState.Locked;
+        if (!TryGetPack(packId, out var record))
+        {
+            return false;
+        }
+
+        lifecycleState = record.LifecycleState;
+        return true;
+    }
+
+    public static bool TryMarkPackInProgress(int packId)
+    {
+        EnsureInitialized();
+        if (packId <= 0)
+        {
+            return false;
+        }
+
+        if (!TryGetPack(packId, out var record))
+        {
+            if (!TryGetPackConfig(packId, out var packSize))
+            {
+                Debug.LogWarning($"CardPackDataUtility.TryMarkPackInProgress skipped, config not found: {packId}");
+                return false;
+            }
+
+            record = new CardPackRecord
+            {
+                PackId = packId,
+                PackSize = packSize,
+                LifecycleState = CardPackLifecycleState.Unlocked,
+                UnlockTime = FormatUnlockTime(DateTime.Now)
+            };
+        }
+
+        if (record.LifecycleState == CardPackLifecycleState.Completed
+            || record.LifecycleState == CardPackLifecycleState.InProgress)
+        {
+            return true;
+        }
+
+        record.LifecycleState = CardPackLifecycleState.InProgress;
+        return UpsertPack(record);
     }
 
     /// <summary>
@@ -276,9 +338,8 @@ public static class CardPackDataUtility
             {
                 PackId = packId,
                 PackSize = packSize,
-                IsUnlocked = false,
-                UnlockTime = string.Empty,
-                IsPlayed = false
+                LifecycleState = CardPackLifecycleState.Locked,
+                UnlockTime = string.Empty
             };
         }
         else
@@ -286,7 +347,7 @@ public static class CardPackDataUtility
             record.PackSize = packSize;
         }
 
-        record.IsPlayed = true;
+        record.LifecycleState = CardPackLifecycleState.Completed;
         return UpsertPack(record);
     }
 
@@ -295,37 +356,7 @@ public static class CardPackDataUtility
     /// </summary>
     public static bool TryMarkPackPlayed(int packId)
     {
-        EnsureInitialized();
-        if (packId <= 0)
-        {
-            return false;
-        }
-
-        if (!TryGetPack(packId, out var record))
-        {
-            if (!TryGetPackConfig(packId, out var packSize))
-            {
-                Debug.LogWarning($"CardPackDataUtility.TryMarkPackPlayed skipped, config not found: {packId}");
-                return false;
-            }
-
-            record = new CardPackRecord
-            {
-                PackId = packId,
-                PackSize = packSize,
-                IsUnlocked = false,
-                UnlockTime = string.Empty,
-                IsPlayed = false
-            };
-        }
-
-        if (record.IsPlayed)
-        {
-            return true;
-        }
-
-        record.IsPlayed = true;
-        return UpsertPack(record);
+        return TryMarkPackInProgress(packId);
     }
 
     /// <summary>
@@ -334,6 +365,11 @@ public static class CardPackDataUtility
     public static bool IsPackPlayed(int packId)
     {
         return TryGetPack(packId, out var record) && record.IsPlayed;
+    }
+
+    public static bool IsPackCompleted(int packId)
+    {
+        return TryGetPack(packId, out var record) && record.IsCompleted;
     }
 
     /// <summary>
@@ -373,23 +409,27 @@ public static class CardPackDataUtility
             return false;
         }
 
-        EnsurePlayedPackState(ref record);
+        EnsureValidLifecycleState(ref record);
         EnsureUnlockTime(ref record);
         var unlockTime = record.UnlockTime ?? string.Empty;
+        var isUnlocked = record.LifecycleState != CardPackLifecycleState.Locked;
+        var isCompleted = record.LifecycleState == CardPackLifecycleState.Completed;
         var affected = SqliteLocalStore.ExecuteNonQuery(
             $@"INSERT INTO {GameDefine.LocalSqliteCardPackTable}
-               (PackId, PackSize, IsUnlocked, UnlockTime, IsPlayed)
-               VALUES (?, ?, ?, ?, ?)
+               (PackId, PackSize, LifecycleState, IsUnlocked, UnlockTime, IsPlayed)
+               VALUES (?, ?, ?, ?, ?, ?)
                ON CONFLICT(PackId) DO UPDATE SET
                 PackSize = excluded.PackSize,
+                LifecycleState = excluded.LifecycleState,
                 IsUnlocked = excluded.IsUnlocked,
                 UnlockTime = excluded.UnlockTime,
                 IsPlayed = excluded.IsPlayed",
             record.PackId,
             (int)record.PackSize,
-            record.IsUnlocked ? 1 : 0,
+            (int)record.LifecycleState,
+            isUnlocked ? 1 : 0,
             unlockTime,
-            record.IsPlayed ? 1 : 0);
+            isCompleted ? 1 : 0);
         return affected > 0;
     }
 
@@ -399,9 +439,8 @@ public static class CardPackDataUtility
         {
             PackId = row.PackId,
             PackSize = (CardPackSize)row.PackSize,
-            IsUnlocked = row.IsUnlocked != 0,
-            UnlockTime = row.UnlockTime ?? string.Empty,
-            IsPlayed = row.IsPlayed != 0
+            LifecycleState = ResolveLifecycleState(row),
+            UnlockTime = row.UnlockTime ?? string.Empty
         };
     }
 
@@ -411,20 +450,40 @@ public static class CardPackDataUtility
             && TryParseUnlockTime(unlockTime, out _);
     }
 
-    private static void EnsurePlayedPackState(ref CardPackRecord record)
+    private static CardPackLifecycleState ResolveLifecycleState(CardPackTableRow row)
     {
-        if (!record.IsPlayed)
+        if (Enum.IsDefined(typeof(CardPackLifecycleState), row.LifecycleState))
         {
-            return;
+            var state = (CardPackLifecycleState)row.LifecycleState;
+            if (state != CardPackLifecycleState.Locked
+                || (row.IsUnlocked == 0 && row.IsPlayed == 0))
+            {
+                return state;
+            }
         }
 
-        record.IsUnlocked = true;
-        EnsureUnlockTime(ref record);
+        if (row.IsPlayed != 0)
+        {
+            return CardPackLifecycleState.Completed;
+        }
+
+        return row.IsUnlocked != 0
+            ? CardPackLifecycleState.Unlocked
+            : CardPackLifecycleState.Locked;
+    }
+
+    private static void EnsureValidLifecycleState(ref CardPackRecord record)
+    {
+        if (!Enum.IsDefined(typeof(CardPackLifecycleState), record.LifecycleState))
+        {
+            record.LifecycleState = CardPackLifecycleState.Locked;
+        }
     }
 
     private static void EnsureUnlockTime(ref CardPackRecord record)
     {
-        if (!record.IsUnlocked || HasUnlockTime(record.UnlockTime))
+        if (record.LifecycleState == CardPackLifecycleState.Locked
+            || HasUnlockTime(record.UnlockTime))
         {
             return;
         }
@@ -435,10 +494,10 @@ public static class CardPackDataUtility
     private static void TryNormalizeAndPersistUnlockTime(ref CardPackRecord record)
     {
         var unlockTimeBefore = record.UnlockTime;
-        var isUnlockedBefore = record.IsUnlocked;
-        EnsurePlayedPackState(ref record);
+        var lifecycleStateBefore = record.LifecycleState;
+        EnsureValidLifecycleState(ref record);
         EnsureUnlockTime(ref record);
-        if (record.UnlockTime != unlockTimeBefore || record.IsUnlocked != isUnlockedBefore)
+        if (record.UnlockTime != unlockTimeBefore || record.LifecycleState != lifecycleStateBefore)
         {
             UpsertPackInternal(record);
         }
@@ -448,6 +507,7 @@ public static class CardPackDataUtility
     {
         public int PackId { get; set; }
         public int PackSize { get; set; }
+        public int LifecycleState { get; set; }
         public int IsUnlocked { get; set; }
         public string UnlockTime { get; set; }
         public int IsPlayed { get; set; }
@@ -456,5 +516,349 @@ public static class CardPackDataUtility
     private sealed class CardPackIdRow
     {
         public int PackId { get; set; }
+    }
+}
+
+public enum CardPackChapterStage
+{
+    None = 0,
+    Initial = 1,
+    MidToLate = 2,
+    Final = 3,
+}
+
+public readonly struct CardPackGrantDecision
+{
+    public CardPackGrantDecision(
+        CardPackChapterStage stage,
+        int remainingLockedCount,
+        int heldPlayableCount,
+        int targetMin,
+        int targetMax,
+        float probability,
+        float roll)
+    {
+        Stage = stage;
+        RemainingLockedCount = remainingLockedCount;
+        HeldPlayableCount = heldPlayableCount;
+        TargetMin = targetMin;
+        TargetMax = targetMax;
+        Probability = probability;
+        Roll = roll;
+    }
+
+    public CardPackChapterStage Stage { get; }
+    public int RemainingLockedCount { get; }
+    public int HeldPlayableCount { get; }
+    public int TargetMin { get; }
+    public int TargetMax { get; }
+    public float Probability { get; }
+    public float Roll { get; }
+    public bool ShouldGrant => Probability >= 1f || (Probability > 0f && Roll < Probability);
+}
+
+public static class CardPackDistributionUtility
+{
+    public const float WithinTargetRewardProbability = 0.5f;
+
+    public static bool TryGrantTaskReward(int preferredPackId, out int grantedPackId)
+    {
+        grantedPackId = 0;
+        if (!TryBuildState(out var configs, out var states))
+        {
+            return false;
+        }
+
+        var chapterId = ResolveTaskRewardChapter(configs, states);
+        if (chapterId <= 0)
+        {
+            return false;
+        }
+
+        var candidate = FindLockedCandidate(configs, states, chapterId, preferredPackId);
+        if (candidate.PackId <= 0 || !CardPackDataUtility.TryUnlockPack(candidate.PackId))
+        {
+            return false;
+        }
+
+        grantedPackId = candidate.PackId;
+        return true;
+    }
+
+    public static bool TryGrantFirstCompletionReward(
+        int completedPackId,
+        out int grantedPackId,
+        out int chapterId,
+        out CardPackGrantDecision decision)
+    {
+        grantedPackId = 0;
+        chapterId = 0;
+        decision = default;
+        if (!TryBuildState(out var configs, out var states)
+            || !TryFindConfig(configs, completedPackId, out var completedConfig))
+        {
+            return false;
+        }
+
+        chapterId = ResolveCompletionRewardChapter(configs, states, completedConfig.ChapterId);
+        if (chapterId <= 0)
+        {
+            return false;
+        }
+
+        var remainingLockedCount = CountState(configs, states, chapterId, CardPackLifecycleState.Locked);
+        var heldPlayableCount = CountPlayable(configs, states, chapterId);
+        var roll = UnityEngine.Random.value;
+        decision = EvaluateFirstCompletionReward(remainingLockedCount, heldPlayableCount, roll);
+        if (!decision.ShouldGrant)
+        {
+            return false;
+        }
+
+        var candidate = FindLockedCandidate(configs, states, chapterId, 0);
+        if (candidate.PackId <= 0 || !CardPackDataUtility.TryUnlockPack(candidate.PackId))
+        {
+            return false;
+        }
+
+        grantedPackId = candidate.PackId;
+        return true;
+    }
+
+    public static CardPackGrantDecision EvaluateFirstCompletionReward(
+        int remainingLockedCount,
+        int heldPlayableCount,
+        float roll)
+    {
+        var stage = ResolveStage(remainingLockedCount, out var targetMin, out var targetMax);
+        var probability = 0f;
+        if (stage != CardPackChapterStage.None)
+        {
+            if (heldPlayableCount < targetMin)
+            {
+                probability = 1f;
+            }
+            else if (heldPlayableCount < targetMax)
+            {
+                probability = WithinTargetRewardProbability;
+            }
+        }
+
+        return new CardPackGrantDecision(
+            stage,
+            Mathf.Max(0, remainingLockedCount),
+            Mathf.Max(0, heldPlayableCount),
+            targetMin,
+            targetMax,
+            probability,
+            Mathf.Clamp01(roll));
+    }
+
+    private static CardPackChapterStage ResolveStage(
+        int remainingLockedCount,
+        out int targetMin,
+        out int targetMax)
+    {
+        if (remainingLockedCount >= 9)
+        {
+            targetMin = 5;
+            targetMax = 6;
+            return CardPackChapterStage.Initial;
+        }
+
+        if (remainingLockedCount >= 3)
+        {
+            targetMin = 2;
+            targetMax = 3;
+            return CardPackChapterStage.MidToLate;
+        }
+
+        if (remainingLockedCount >= 1)
+        {
+            targetMin = 1;
+            targetMax = 1;
+            return CardPackChapterStage.Final;
+        }
+
+        targetMin = 0;
+        targetMax = 0;
+        return CardPackChapterStage.None;
+    }
+
+    private static bool TryBuildState(
+        out IReadOnlyList<CardPackConfigData> configs,
+        out Dictionary<int, CardPackLifecycleState> states)
+    {
+        states = new Dictionary<int, CardPackLifecycleState>();
+        if (!GameConfigRepository.TryGetCardPackConfigs(out configs))
+        {
+            return false;
+        }
+
+        var records = CardPackDataUtility.GetAllPacks();
+        for (var i = 0; i < records.Count; i++)
+        {
+            states[records[i].PackId] = records[i].LifecycleState;
+        }
+
+        return true;
+    }
+
+    private static int ResolveTaskRewardChapter(
+        IReadOnlyList<CardPackConfigData> configs,
+        Dictionary<int, CardPackLifecycleState> states)
+    {
+        var playableChapter = int.MaxValue;
+        for (var i = 0; i < configs.Count; i++)
+        {
+            var state = GetState(states, configs[i].PackId);
+            if (IsPlayable(state) && configs[i].ChapterId < playableChapter)
+            {
+                playableChapter = configs[i].ChapterId;
+            }
+        }
+
+        if (playableChapter != int.MaxValue
+            && CountState(configs, states, playableChapter, CardPackLifecycleState.Locked) > 0)
+        {
+            return playableChapter;
+        }
+
+        var minimumChapter = playableChapter == int.MaxValue ? int.MinValue : playableChapter + 1;
+        return FindFirstChapterWithLockedPack(configs, states, minimumChapter);
+    }
+
+    private static int ResolveCompletionRewardChapter(
+        IReadOnlyList<CardPackConfigData> configs,
+        Dictionary<int, CardPackLifecycleState> states,
+        int completedChapterId)
+    {
+        if (CountState(configs, states, completedChapterId, CardPackLifecycleState.Locked) > 0)
+        {
+            return completedChapterId;
+        }
+
+        return FindFirstChapterWithLockedPack(configs, states, completedChapterId + 1);
+    }
+
+    private static int FindFirstChapterWithLockedPack(
+        IReadOnlyList<CardPackConfigData> configs,
+        Dictionary<int, CardPackLifecycleState> states,
+        int minimumChapter)
+    {
+        var chapterId = int.MaxValue;
+        for (var i = 0; i < configs.Count; i++)
+        {
+            var config = configs[i];
+            if (config.ChapterId < minimumChapter
+                || config.ChapterId >= chapterId
+                || GetState(states, config.PackId) != CardPackLifecycleState.Locked)
+            {
+                continue;
+            }
+
+            chapterId = config.ChapterId;
+        }
+
+        return chapterId == int.MaxValue ? 0 : chapterId;
+    }
+
+    private static CardPackConfigData FindLockedCandidate(
+        IReadOnlyList<CardPackConfigData> configs,
+        Dictionary<int, CardPackLifecycleState> states,
+        int chapterId,
+        int preferredPackId)
+    {
+        var candidate = default(CardPackConfigData);
+        for (var i = 0; i < configs.Count; i++)
+        {
+            var config = configs[i];
+            if (config.ChapterId != chapterId
+                || GetState(states, config.PackId) != CardPackLifecycleState.Locked)
+            {
+                continue;
+            }
+
+            if (config.PackId == preferredPackId)
+            {
+                return config;
+            }
+
+            if (candidate.PackId <= 0 || config.Index < candidate.Index)
+            {
+                candidate = config;
+            }
+        }
+
+        return candidate;
+    }
+
+    private static int CountState(
+        IReadOnlyList<CardPackConfigData> configs,
+        Dictionary<int, CardPackLifecycleState> states,
+        int chapterId,
+        CardPackLifecycleState targetState)
+    {
+        var count = 0;
+        for (var i = 0; i < configs.Count; i++)
+        {
+            if (configs[i].ChapterId == chapterId
+                && GetState(states, configs[i].PackId) == targetState)
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    private static int CountPlayable(
+        IReadOnlyList<CardPackConfigData> configs,
+        Dictionary<int, CardPackLifecycleState> states,
+        int chapterId)
+    {
+        var count = 0;
+        for (var i = 0; i < configs.Count; i++)
+        {
+            if (configs[i].ChapterId == chapterId && IsPlayable(GetState(states, configs[i].PackId)))
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    private static bool TryFindConfig(
+        IReadOnlyList<CardPackConfigData> configs,
+        int packId,
+        out CardPackConfigData config)
+    {
+        for (var i = 0; i < configs.Count; i++)
+        {
+            if (configs[i].PackId == packId)
+            {
+                config = configs[i];
+                return true;
+            }
+        }
+
+        config = default;
+        return false;
+    }
+
+    private static CardPackLifecycleState GetState(
+        Dictionary<int, CardPackLifecycleState> states,
+        int packId)
+    {
+        return states.TryGetValue(packId, out var state)
+            ? state
+            : CardPackLifecycleState.Locked;
+    }
+
+    private static bool IsPlayable(CardPackLifecycleState state)
+    {
+        return state == CardPackLifecycleState.Unlocked
+            || state == CardPackLifecycleState.InProgress;
     }
 }

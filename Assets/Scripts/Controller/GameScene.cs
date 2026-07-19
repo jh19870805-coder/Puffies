@@ -41,6 +41,7 @@ public class GameScene : MonoBehaviour
     private static bool sHookedSceneLoaded;
     private readonly BoardState _board = new BoardState();
     private readonly DragState _drag = new DragState();
+    private readonly List<int> _settlementPackRewardIds = new List<int>();
     private Vector3 _pieceBgOriginalPosition;
     private bool _hasPieceBgOriginalPosition;
     private bool _isPieceBgHidden;
@@ -58,6 +59,7 @@ public class GameScene : MonoBehaviour
     private bool _hasGameplayTimerStarted;
     private float _gameplayStartRealtime;
     private float _completionTimeSeconds;
+    private bool _wasSelectedPackCompletedOnEntry;
     private GameObject _rewardPanelRoot;
     private Transform _rewardTaskItem;
     private TMP_Text _settlementScoreText;
@@ -94,6 +96,9 @@ public class GameScene : MonoBehaviour
         ConfigureGameplayCanvas(camera);
         InitializeScoringSession();
         var selectedBagId = GameManager.GetBagId();
+        CardPackDataUtility.Initialize();
+        _wasSelectedPackCompletedOnEntry = CardPackDataUtility.IsPackCompleted(selectedBagId);
+        _settlementPackRewardIds.Clear();
         InitializeGameplay(selectedBagId);
         InitializeTaskTracking();
         ConfigureReturnButton();
@@ -1032,11 +1037,23 @@ public class GameScene : MonoBehaviour
         var nextGroupIndex = _drag.CurrentGroupIndex + 1;
         if (_board.GrooveImagesByGroup != null && nextGroupIndex < _board.GrooveImagesByGroup.Count)
         {
+            MarkCurrentPackInProgress();
             CreateDraggableGroup(nextGroupIndex);
             return;
         }
 
         ShowRewardPanel();
+    }
+
+    private static void MarkCurrentPackInProgress()
+    {
+        var packId = GameManager.GetBagId();
+        if (packId <= 0 || CardPackDataUtility.TryMarkPackInProgress(packId))
+        {
+            return;
+        }
+
+        Debug.LogWarning($"GameScene: failed to mark card pack in progress. packId={packId}");
     }
 
     private void ConfigureRewardPanel()
@@ -1134,7 +1151,11 @@ public class GameScene : MonoBehaviour
         }
 
         PrepareBoardForRewardPanel();
-        SaveCardPackAfterPuzzleComplete();
+        if (SaveCardPackAfterPuzzleComplete())
+        {
+            TryGrantFirstCompletionPackReward();
+        }
+
         _rewardPanelRoot.SetActive(true);
         _rewardPanelRoot.transform.SetAsLastSibling();
         StartCoroutine(ProcessTaskSettlement());
@@ -1346,24 +1367,57 @@ public class GameScene : MonoBehaviour
         }
     }
 
-    private void SaveCardPackAfterPuzzleComplete()
+    private bool SaveCardPackAfterPuzzleComplete()
     {
         var packId = GameManager.GetBagId();
         if (packId <= 0)
         {
-            return;
+            return false;
         }
 
         if (!CardPackDataUtility.TrySavePackAfterPuzzleComplete(packId))
         {
             Debug.LogWarning($"GameScene: failed to save card pack data after puzzle complete. packId={packId}");
-            return;
+            return false;
         }
 
         Debug.Log($"GameScene: card pack data saved after puzzle complete. packId={packId}");
+        return true;
+    }
+
+    private void TryGrantFirstCompletionPackReward()
+    {
+        var completedPackId = GameManager.GetBagId();
+        if (_wasSelectedPackCompletedOnEntry)
+        {
+            Debug.Log($"GameScene: completion pack reward skipped for replay. packId={completedPackId}");
+            return;
+        }
+
+        var granted = CardPackDistributionUtility.TryGrantFirstCompletionReward(
+            completedPackId,
+            out var grantedPackId,
+            out var chapterId,
+            out var decision);
+        Debug.Log(
+            $"GameScene: first-completion pack reward evaluated. completedPackId={completedPackId}, " +
+            $"chapter={chapterId}, stage={decision.Stage}, R={decision.RemainingLockedCount}, " +
+            $"held={decision.HeldPlayableCount}, target={decision.TargetMin}-{decision.TargetMax}, " +
+            $"probability={decision.Probability:F2}, roll={decision.Roll:F2}, granted={granted}, " +
+            $"grantedPackId={grantedPackId}");
+        if (granted)
+        {
+            QueuePackReward(grantedPackId);
+        }
     }
 
     private IEnumerator ProcessTaskSettlement()
+    {
+        yield return ProcessTaskSettlementCore();
+        yield return PlayQueuedPackRewardAnimations();
+    }
+
+    private IEnumerator ProcessTaskSettlementCore()
     {
         if (_rewardPanelRoot == null)
         {
@@ -1451,22 +1505,22 @@ public class GameScene : MonoBehaviour
 
     private void OutputTaskReward(TaskConfigData taskConfig)
     {
-        var rewardPackId = taskConfig.RewardId > 0 ? taskConfig.RewardId : GameDefine.DefaultBagId;
-        var rewardValue = taskConfig.RewardValue > 0 ? taskConfig.RewardValue : 1;
-        UpdateTaskRewardImage(rewardPackId);
-        Debug.Log(
-            $"GameScene: task reward granted. type={taskConfig.RewardType}, " +
-            $"rewardId={rewardPackId}, rewardValue={rewardValue}");
-
-        if (taskConfig.RewardType == RewardType.CardPack)
+        var preferredPackId = taskConfig.RewardType == RewardType.CardPack
+            ? taskConfig.RewardId
+            : 0;
+        if (!CardPackDistributionUtility.TryGrantTaskReward(preferredPackId, out var rewardPackId))
         {
-            if (!CardPackDataUtility.TryUnlockPackFromTaskReward(rewardPackId))
-            {
-                Debug.LogWarning($"GameScene: failed to unlock task reward card pack. packId={rewardPackId}");
-            }
-
-            PlayTaskCardPackReward(rewardPackId);
+            Debug.LogWarning(
+                $"GameScene: task completed but no locked card pack could be granted. " +
+                $"taskId={taskConfig.TaskId}, preferredPackId={preferredPackId}");
+            return;
         }
+
+        UpdateTaskRewardImage(rewardPackId);
+        QueuePackReward(rewardPackId);
+        Debug.Log(
+            $"GameScene: guaranteed task card pack granted. taskId={taskConfig.TaskId}, " +
+            $"preferredPackId={preferredPackId}, grantedPackId={rewardPackId}");
     }
 
     private void SetTaskRewardSectionVisible(bool visible)
@@ -1540,7 +1594,32 @@ public class GameScene : MonoBehaviour
         _settlementBagCountText.text = CardPackDataUtility.GetUnlockedPackIds().Count.ToString();
     }
 
-    private void PlayTaskCardPackReward(int rewardPackId)
+    private void QueuePackReward(int rewardPackId)
+    {
+        if (rewardPackId > 0 && !_settlementPackRewardIds.Contains(rewardPackId))
+        {
+            _settlementPackRewardIds.Add(rewardPackId);
+        }
+    }
+
+    private IEnumerator PlayQueuedPackRewardAnimations()
+    {
+        for (var i = 0; i < _settlementPackRewardIds.Count; i++)
+        {
+            var rewardPackId = _settlementPackRewardIds[i];
+            UpdateTaskRewardImage(rewardPackId);
+            if (!PlayCardPackReward(rewardPackId, out var duration))
+            {
+                continue;
+            }
+
+            yield return new WaitForSecondsRealtime(duration > 0f ? duration : 1.5f);
+        }
+
+        _settlementPackRewardIds.Clear();
+    }
+
+    private bool PlayCardPackReward(int rewardPackId, out float duration)
     {
         var anchor = _taskRewardImage != null ? _taskRewardImage.transform : null;
 
@@ -1551,10 +1630,14 @@ public class GameScene : MonoBehaviour
         }
 
         var animationFileName = GameDefine.FormatCardPackAnimationFileName(rewardPackId);
+        duration = GameAnimationUtility.GetCardPackPlayDuration(animationFileName, anchor);
         if (!GameAnimationUtility.PlayCardPackAnimation(animationFileName, anchor))
         {
-            Debug.LogWarning($"GameScene: task reward card pack animation failed: {animationFileName}");
+            Debug.LogWarning($"GameScene: card pack reward animation failed: {animationFileName}");
+            return false;
         }
+
+        return true;
     }
 
     private static GameObject GetOrCreatePlacedPiecesRoot()

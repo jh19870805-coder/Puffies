@@ -177,10 +177,84 @@ MainScene presentation and ordering must use this lifecycle state. Exact visuals
 
 ---
 
+## 3. Card Pack Acquisition
+
+Status: `Confirmed` except for the parameters listed as pending.
+
+New card packs have two independent acquisition sources:
+
+1. Completing a task always grants one new card pack.
+2. First-time completion of a card pack performs one probability-based roll that may grant one new card pack.
+
+Replay rules:
+
+- Replaying a card pack that was already `Completed` does not perform the probability-based completion roll.
+- A replay can still complete a task. If it does, the task's guaranteed card pack reward is granted normally.
+- A first completion from `Unlocked` or `InProgress` to `Completed` is eligible for the probability-based roll.
+
+"New card pack" means a card pack that is currently `Locked`; these acquisition sources do not grant an already unlocked card pack.
+
+Both acquisition sources select from the currently active internal chapter's eligible `Locked` card-pack pool. The exact selection order is pending.
+
+Pending parameters:
+
+- Final tuned probability for the first-completion roll.
+- Final selection and ordering rules for choosing from eligible `Locked` card packs.
+- Behavior when no eligible `Locked` card pack remains.
+
+Current implementation defaults, pending tuning:
+
+- If held playable packs are below the current stage target minimum, first completion grants a pack with 100% probability.
+- If held playable packs are within the target band but below its maximum, the probability is 50%.
+- If held playable packs have reached the target maximum, the probability is 0%.
+- Task and first-completion rewards are independent and may grant two different packs in one settlement.
+- Locked candidates are selected by ascending `Index` inside the active chapter. A task's configured `RewardId` is preferred only when it is still locked and belongs to that chapter.
+- Reward animations are queued and played sequentially when both sources grant a pack.
+
+---
+
+## 4. Internal Chapter Model
+
+Status: `Confirmed` except for the exact per-chapter allocation and transition parameters.
+
+- The game has 8 internal chapters for card-pack data organization and acquisition control.
+- The full game plans approximately 150 card packs in total.
+- Each internal chapter contains approximately 18 card packs; the mathematical average is 18.75 packs per chapter.
+- Chapters are not exposed to the player. MainScene does not display chapter names, chapter numbers, chapter selection, or chapter-transition messaging.
+- The active internal chapter limits the card-pack pool used by task rewards and first-completion probability rewards.
+
+Chapter-stage counters:
+
+- `R` is the number of card packs in the active chapter that have not been granted and remain `Locked`.
+- Held playable pack count includes `Unlocked` and `InProgress` packs, and excludes `Completed` packs.
+- A standard 18-pack chapter starts at `R=17` after its initial pack has been granted. A larger chapter's extra `R` values belong to the initial stage.
+
+| Chapter Stage | `R` Range | Held Playable Pack Target |
+|---|---:|---|
+| Initial | 17 down to 9 | Grow toward approximately 5-6 packs. |
+| Mid-to-late | 8 down to 3 | Decline toward approximately 2-3 packs. |
+| Final | 2 down to 1 | Converge toward 1 pack before internal chapter advancement. |
+
+Pending parameters:
+
+- Exact card-pack count and PackId membership for each chapter.
+- Initial active chapter and persisted chapter-progress data.
+- Exact condition for advancing to the next internal chapter.
+- How special card packs count toward the 150 total and chapter allocations.
+- How task pacing and first-completion probability maintain the confirmed stage targets while preserving the guaranteed task reward.
+
+The previous `cool` rule that could suppress a task reward is not valid under the confirmed rule that every completed task grants a new card pack.
+
+---
+
 ## Change Log
 
 | Date | Change |
 |---|---|
+| 2026-07-19 | Confirmed internal chapter stages by remaining locked-pack count R: 17-9 initial, 8-3 mid-to-late, and 2-1 final, with corresponding held-pack targets. |
+| 2026-07-19 | Implemented provisional first-completion probabilities of 100% below target, 50% inside the target band, and 0% at the cap; task and completion rewards can both grant in one settlement. |
+| 2026-07-19 | Confirmed 8 player-invisible internal chapters for distributing approximately 150 card packs, averaging 18.75 packs per chapter. |
+| 2026-07-19 | Confirmed two new-pack sources: guaranteed on task completion and probability-based on first card-pack completion; replay does not receive the probability roll. |
 | 2026-07-18 | Confirmed the four-state card pack lifecycle: Locked, Unlocked, InProgress after the first completed group, and Completed after the final group. |
 | 2026-07-17 | Confirmed that score beyond a completed accumulate-score task target carries into the next accumulate-score task. |
 | 2026-07-17 | Confirmed that scoring time starts on the first successfully placed Piece and stops when completed-puzzle settlement begins. |

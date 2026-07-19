@@ -401,13 +401,52 @@ public static class SqliteLocalStore
             $@"CREATE TABLE IF NOT EXISTS {GameDefine.LocalSqliteCardPackTable} (
                 PackId INTEGER PRIMARY KEY,
                 PackSize INTEGER NOT NULL DEFAULT 0,
+                LifecycleState INTEGER NOT NULL DEFAULT 0,
                 IsUnlocked INTEGER NOT NULL DEFAULT 0,
                 UnlockTime TEXT NOT NULL DEFAULT '',
                 IsPlayed INTEGER NOT NULL DEFAULT 0
             );");
+        EnsureCardPackLifecycleSchema();
 
         sIsInitialized = true;
         Debug.Log($"SqliteLocalStore initialized: {sDatabasePath}");
+    }
+
+    private static void EnsureCardPackLifecycleSchema()
+    {
+        var columns = sConnection.GetTableInfo(GameDefine.LocalSqliteCardPackTable);
+        var hasLifecycleState = false;
+        for (var i = 0; i < columns.Count; i++)
+        {
+            if (string.Equals(columns[i].Name, "LifecycleState", StringComparison.OrdinalIgnoreCase))
+            {
+                hasLifecycleState = true;
+                break;
+            }
+        }
+
+        if (!hasLifecycleState)
+        {
+            sConnection.Execute(
+                $@"ALTER TABLE {GameDefine.LocalSqliteCardPackTable}
+                   ADD COLUMN LifecycleState INTEGER NOT NULL DEFAULT 0;");
+        }
+
+        sConnection.Execute(
+            $@"UPDATE {GameDefine.LocalSqliteCardPackTable}
+               SET LifecycleState = CASE
+                    WHEN IsPlayed <> 0 THEN 3
+                    WHEN IsUnlocked <> 0 THEN 1
+                    ELSE 0
+               END
+               WHERE LifecycleState NOT BETWEEN 0 AND 3
+                  OR (LifecycleState = 0 AND (IsUnlocked <> 0 OR IsPlayed <> 0));");
+        sConnection.Execute(
+            $@"UPDATE {GameDefine.LocalSqliteCardPackTable}
+               SET IsUnlocked = CASE WHEN LifecycleState = 0 THEN 0 ELSE 1 END,
+                   IsPlayed = CASE WHEN LifecycleState = 3 THEN 1 ELSE 0 END
+               WHERE IsUnlocked <> CASE WHEN LifecycleState = 0 THEN 0 ELSE 1 END
+                  OR IsPlayed <> CASE WHEN LifecycleState = 3 THEN 1 ELSE 0 END;");
     }
 
     private static bool TryValidateCollectionAndKey(string collection, string key)

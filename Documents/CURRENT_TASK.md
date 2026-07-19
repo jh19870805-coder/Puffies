@@ -1,46 +1,56 @@
 # Current Task
 
-- Task: Bind card pack size icons
+- Task: Implement chapter-based card pack distribution
 - Status: Completed
-- Updated At: 2026-07-18
+- Updated At: 2026-07-19
 
 ## User Intent
 
-- Display the newly added card pack size icon in each dynamically generated MainScene card pack item.
+- Decide and grant new card packs after each completed game according to the internal chapter stages, while excluding replay from the probability reward.
 
 ## Working Notes
 
-- `PackItem.prefab` now contains an Image child named `PackSize`, supplied by the user.
-- `PackSize_1.png` through `PackSize_7.png` map directly to `CardPackSize` numeric values 1 through 7.
-- MainScene reads each pack's `PackSize` from `CardPacks.csv` and assigns the corresponding Sprite.
-- The icon is normalized with the same 0.4 scale used by the 600 x 680 cover when displayed at 240 x 272.
-- The runtime fallback PackItem also creates and positions a `PackSize` Image for player builds.
+- Restored the four-state card pack lifecycle and backward-compatible SQLite migration because the current branch still contained the old boolean-only model.
+- Added `ChapterId` to card-pack config. Current development data assigns PackIds 1-18 to chapter 1 and 19-21 to chapter 2.
+- GameScene snapshots whether the selected pack was already completed, so replay never runs the first-completion reward roll.
+- Completing the first group of a multi-group pack now persists `InProgress`; final completion persists `Completed`.
+- First-completion probability is 100% below the stage target minimum, 50% inside the target band, and 0% at the maximum.
+- Task completion always attempts to grant the next locked pack and is not blocked by held-pack stage caps.
+- Task and first-completion rewards can both grant in one settlement; distinct reward animations play sequentially.
 
 ## Files Changed
 
-- `Assets/Scripts/Controller/MainScene.cs`
-- `Assets/Scripts/Model/GameDefine.cs`
+- `Assets/Resources/Configs/CardPacks.csv`
+- `Assets/Scripts/Controller/GameScene.cs`
+- `Assets/Scripts/Model/CardPackDataUtility.cs`
+- `Assets/Scripts/Model/GameConfigRepository.cs`
+- `Assets/Scripts/Model/SqliteLocalStore.cs`
+- `Documents/GAME_DESIGN_REQUIREMENTS.md`
 - `Documents/PROJECT_CONTEXT.md`
+- `Documents/Sticker_Puzzle_功能概览整理.md`
 - `Documents/CURRENT_TASK.md`
 
 ## Decisions
 
-- Use the stable path convention `UI/PackImages/PackSize_{(int)CardPackSize}.png`.
-- Hide the size icon when the configured size is invalid or its image cannot be loaded.
-- Preserve the user-authored PackItem prefab and image assets without rewriting them.
+- Use ascending card-pack `Index` as the current deterministic selection order inside a chapter.
+- Treat TaskConfig `RewardId` as a preferred candidate, not permission to re-grant an unlocked pack.
+- When the current chapter has no locked candidate, continue with the next chapter that has one.
+- Keep the 50% in-band probability as a tunable provisional value.
 
 ## Validation
 
-- Confirmed all 21 configured card packs have a corresponding `PackSize_1.png` through `PackSize_7.png` asset.
 - `dotnet build Puffies.sln --no-restore` completed with 0 warnings and 0 errors.
-- Scoped `git diff --check` completed without errors for the files changed by this task.
-- MainScene visual placement still requires a Unity Play Mode check.
+- Executed 13 boundary cases for `R=17/9/8/3/2/1/0`, held-count minima/maxima, and 50% roll outcomes; all passed.
+- Confirmed current config has 18 packs in chapter 1 and 3 development packs in chapter 2, with no invalid ChapterId.
+- `git diff --check` completed without whitespace errors.
+- Full SQLite migration, replay gating, reward persistence, and sequential animations still require Unity Play Mode regression.
 
 ## Next Action
 
-1. Open MainScene in Play Mode and verify XS through 3XL icons remain aligned on dynamically generated cards.
-2. Continue MainScene lifecycle ordering and visuals when requested.
+1. Run a clean-save and old-save Play Mode regression through first completion, replay, task-only reward, and dual reward.
+2. Tune the provisional 50% probability from gameplay data.
+3. Add ChapterId assignments as the remaining card packs are authored.
 
 ## Resume Prompt
 
-Continue Puffies MainScene card pack presentation. Read AGENTS.md, Documents/WORKFLOW.md, and Documents/CURRENT_TASK.md first, then verify the size icons in Play Mode or follow the user's latest instruction.
+Continue Puffies chapter-based card pack distribution. Read AGENTS.md, Documents/WORKFLOW.md, and Documents/CURRENT_TASK.md first, then run the Play Mode reward regression or follow the user's latest instruction.
