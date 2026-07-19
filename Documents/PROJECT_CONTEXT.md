@@ -50,7 +50,7 @@ Current work state is tracked in [CURRENT_TASK.md](CURRENT_TASK.md). Workflow ru
 - New card packs use the existing `Package001` template; `MainScene` dynamically creates runtime slots.
 - New puzzles are created by adding `CardBagNNN` prefabs under `Resources/CardBagPrefabs/`; each prefab contains `GameBoard` and `Piece01`...`PieceNN`; do not create Package JSON.
 - 3D card packs and CardFx assets live under `Resources/Effects/` and are loaded with `Resources.Load`.
-- Before builds, run `Puffies -> Sync Build Resources` to sync `Assets/UI` to `StreamingAssets/UI`.
+- Before builds, run `Puffies -> Sync Build Resources` to sync runtime disk-loaded UI folders to `StreamingAssets/UI`.
 
 ### Pending Or Unfinished Requirements
 
@@ -66,7 +66,7 @@ Current work state is tracked in [CURRENT_TASK.md](CURRENT_TASK.md). Workflow ru
 ```text
 Assets/
   Scenes/           LoadingScene (startup), MainScene, GameScene, RankScene, AchieveScene, effect
-  UI/               2D source textures (PackImages, CardBag001, BasicUI...)
+  UI/               2D source textures (PackImages, CardBags/CardBagNNN, BasicUI...)
   Scripts/          MVC
     Model/          GameDefine, GameManager, utilities, local storage, task/card pack data
     View/           PackageInteractionHandler
@@ -87,10 +87,10 @@ Assets/
 | Phase | 2D UI | 3D / FX |
 |------|-------|---------|
 | Editor | `Assets/UI` (scene Images reference directly) | `Assets/Resources/Effects` |
-| Build | `StreamingAssets/UI` (`ToDiskPath`) | `Resources.Load("Effects/...")` |
+| Build | Runtime disk-loaded folders in `StreamingAssets/UI` (`ToDiskPath`) | `Resources.Load("Effects/...")` |
 
 - Do not rename `Resources`; code has hardcoded resource paths.
-- GameScene dynamically loads `Resources/CardBagPrefabs/CardBagNNN.prefab` by selected pack id; `UI/CardBag001/` is the current card pack puzzle texture source.
+- GameScene dynamically loads `Resources/CardBagPrefabs/CardBagNNN.prefab` by selected pack id; source textures live under `UI/CardBags/CardBagNNN/` and are included through prefab Sprite references rather than StreamingAssets.
 - 3D effects stay under `Resources/Effects/`; do not duplicate them into StreamingAssets.
 
 ---
@@ -221,6 +221,8 @@ New `CanvasScaler` values are written by `CanvasDesignResolutionEditor.cs`. Use 
 
 Shared size icons are `UI/PackImages/PackSize_1.png` through `PackSize_7.png`, matching the numeric values of `CardPackSize` (`XS=1` through `XXXL=7`). `PackItem` must contain Image children named `PackCover` and `PackSize`; MainScene assigns both Sprites at runtime and scales the size icon with the authored cover dimensions.
 
+`PackItem/PackShadow` is a sibling Image rendered behind `PackCover`. MainScene samples the readable runtime cover texture, downsizes its alpha to the `240 x 272` display size, and applies three separable box-blur passes with horizontal radius 2 and vertical radius 5. It creates a cached `256 x 344` shadow Sprite at offset `(0,-20)`, so the directional projection appears below rather than to the right. Horizontal/vertical padding is `8/36` pixels. Shadow color is `#1f292d` with maximum alpha `0.52`. Generated shadow Sprites and textures are released when MainScene is destroyed. Keep `PackSize` above both images.
+
 1. Keep exactly one scene template object: `Package001`.
 2. Add a row to `CardPacks.csv` (`PackId`, `PackSize`, `ChapterId`).
 3. Add the corresponding cover under `UI/PackImages/` using `PackIconNNN.png` names. `GameDefine.FormatPackImagePath` maps pack id `1` to `UI/PackImages/PackIcon001.png`.
@@ -232,7 +234,7 @@ Shared size icons are `UI/PackImages/PackSize_1.png` through `PackSize_7.png`, m
 1. Create a prefab named `CardBagNNN` under `Assets/Resources/CardBagPrefabs/` where `NNN` matches `PackId`.
 2. Put one child object named `GameBoard` inside the prefab.
 3. Add grouped piece objects under `GameBoard` as `Image` objects using `Piece11`, `Piece12`, ... for group 1; `Piece21`, `Piece22`, ... for group 2; `Piece31`, ... for group 3. The group number is `PieceNN / 10`, sorted ascending.
-4. Store source textures under `Assets/UI/CardBag001/` using grouped names such as `Pieces11`...`Pieces14` and `Pieces21`...`Pieces25`.
+4. Store source textures under `Assets/UI/CardBags/CardBagNNN/` using grouped names such as `Pieces11`...`Pieces14` and `Pieces21`...`Pieces25`.
 5. Do not use `PieceGroup` parent nodes; grouping comes only from the number after `Piece`.
 6. Do not create Package JSON; runtime data comes from the loaded prefab's Images.
 7. Run **Puffies -> Puzzles -> Bake Outline Masks** after adding or changing a CardBag. The baker merges Piece Alpha in GameBoard coordinates, closes narrow gaps, flood-fills the complete puzzle exterior, and writes `Resources/Generated/PuzzleOutlines/CardBagNNN/GroupNN.png`.
@@ -266,7 +268,7 @@ Prefabs and dependencies go under `Resources/Effects/CardFx/`, for example `Card
 
 ## 8. Build
 
-Before building, run **Puffies -> Sync Build Resources** (`UI` -> `StreamingAssets/UI`).
+Before building, run **Puffies -> Sync Build Resources**. It copies `PackImages`, `BasicUI`, `AchieveScene`, and `RankScene` to `StreamingAssets/UI`; CardBag source textures stay out because their Sprite references are included through gameplay prefabs.
 
 Suggested Build Settings order: LoadingScene -> MainScene -> GameScene -> effect -> RankScene -> AchieveScene.
 
@@ -284,7 +286,7 @@ Suggested Build Settings order: LoadingScene -> MainScene -> GameScene -> effect
 
 | Menu | Purpose |
 |------|---------|
-| Puffies -> Sync Build Resources | UI -> StreamingAssets |
+| Puffies -> Sync Build Resources | Copy runtime disk-loaded UI folders to StreamingAssets |
 | Puffies -> Canvas -> Apply Design Resolution | Apply Canvas resolution |
 | Puffies -> Fonts -> Setup Default Chinese Font | Chinese font setup |
 | Puffies -> Preview CardFx Effects | Open effect scene |

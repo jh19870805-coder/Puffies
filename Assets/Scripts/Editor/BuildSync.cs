@@ -15,8 +15,9 @@ public class BuildSync : IPreprocessBuildWithReport
     private static readonly string[] UiStreamingFolders =
     {
         "PackImages",
-        "CardBag001",
-        "BasicUI"
+        "BasicUI",
+        "AchieveScene",
+        "RankScene"
     };
 
     private static readonly string[] LegacyAssetFolders =
@@ -37,6 +38,7 @@ public class BuildSync : IPreprocessBuildWithReport
     private static readonly string[] LegacyStreamingRoots =
     {
         "ArtRes",
+        "Config",
         "Configs",
         "Textures"
     };
@@ -109,10 +111,21 @@ public class BuildSync : IPreprocessBuildWithReport
     {
         for (var i = 0; i < LegacyStreamingRoots.Length; i++)
         {
-            var legacyRoot = Path.Combine(StreamingRoot, LegacyStreamingRoots[i]);
+            var legacyRoot = Path.Combine(StreamingRoot, LegacyStreamingRoots[i]).Replace("\\", "/");
+            if (AssetDatabase.IsValidFolder(legacyRoot) && AssetDatabase.DeleteAsset(legacyRoot))
+            {
+                continue;
+            }
+
             if (Directory.Exists(legacyRoot))
             {
                 Directory.Delete(legacyRoot, true);
+            }
+
+            var legacyMeta = legacyRoot + ".meta";
+            if (File.Exists(legacyMeta))
+            {
+                File.Delete(legacyMeta);
             }
         }
     }

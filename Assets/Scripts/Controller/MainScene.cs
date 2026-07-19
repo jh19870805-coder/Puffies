@@ -18,6 +18,14 @@ public class MainScene : MonoBehaviour
     private const float PackageSlotHeight = 272f;
     private const float PackageCoverWidth = 240f;
     private const float PackageCoverHeight = 272f;
+    private const float PackageShadowHorizontalPadding = 8f;
+    private const float PackageShadowVerticalPadding = 36f;
+    private const float PackageShadowOffsetX = 0f;
+    private const float PackageShadowOffsetY = -20f;
+    private const float PackageShadowAlpha = 0.52f;
+    private const int PackageShadowBlurPassCount = 3;
+    private const int PackageShadowHorizontalBlurRadius = 2;
+    private const int PackageShadowVerticalBlurRadius = 5;
     private const float PackageHorizontalSpacing = 20f;
     private const float PackageVerticalSpacing = 20f;
     private const float PackageContentHorizontalPadding = 16f;
@@ -34,6 +42,7 @@ public class MainScene : MonoBehaviour
     private const string PackItemPrefabEditorPath = "Assets/Prefabs/PackItem.prefab";
     private const string PackItemPrefabResourcesPath = "PackItem";
     private const string PackItemTemplateObjectName = "PackItemTemplate";
+    private const string PackShadowObjectName = "PackShadow";
     private const string PackCoverObjectName = "PackCover";
     private const string PackSizeObjectName = "PackSize";
     private const string PackNameTextObjectName = "NameText";
@@ -56,6 +65,7 @@ public class MainScene : MonoBehaviour
     private static bool sHookedSceneLoaded;
 
     private readonly Dictionary<int, PackageEntry> mPackageSlotsById = new Dictionary<int, PackageEntry>();
+    private readonly Dictionary<int, Sprite> mPackageShadowSpritesById = new Dictionary<int, Sprite>();
     private GameObject mPackageItemTemplate;
     private Image mLegacyPackageSlotTemplate;
     private RectTransform mPackageContentRoot;
@@ -82,6 +92,7 @@ public class MainScene : MonoBehaviour
         public int BagId;
         public GameObject Root;
         public Image Image;
+        public Image ShadowImage;
         public Image SizeImage;
         public RectTransform RectTransform;
     }
@@ -93,6 +104,27 @@ public class MainScene : MonoBehaviour
             ref sHookedSceneLoaded,
             GameDefine.SceneMain,
             BootstrapObjectName);
+    }
+
+    private void OnDestroy()
+    {
+        foreach (var pair in mPackageShadowSpritesById)
+        {
+            var shadowSprite = pair.Value;
+            if (shadowSprite == null)
+            {
+                continue;
+            }
+
+            var shadowTexture = shadowSprite.texture;
+            Destroy(shadowSprite);
+            if (shadowTexture != null)
+            {
+                Destroy(shadowTexture);
+            }
+        }
+
+        mPackageShadowSpritesById.Clear();
     }
 
     private void Start()
@@ -403,8 +435,14 @@ public class MainScene : MonoBehaviour
         }
 
         var coverImage = FindChild(slotObject.transform, PackCoverObjectName)?.GetComponent<Image>() ?? rootImage;
+        var shadowImage = FindChild(slotObject.transform, PackShadowObjectName)?.GetComponent<Image>();
+        if (shadowImage == null && coverImage != rootImage)
+        {
+            shadowImage = CreatePackShadowImage(slotObject.transform, coverImage.rectTransform.sizeDelta);
+        }
+
         var sizeImage = FindChild(slotObject.transform, PackSizeObjectName)?.GetComponent<Image>();
-        PreparePagedPackageItem(slotObject, rootRect, rootImage, coverImage, sizeImage);
+        PreparePagedPackageItem(slotObject, rootRect, rootImage, coverImage, shadowImage, sizeImage);
         EnsurePackageInteractionHandler(slotObject, coverImage, packId);
 
         return new PackageEntry
@@ -412,6 +450,7 @@ public class MainScene : MonoBehaviour
             BagId = packId,
             Root = slotObject,
             Image = coverImage,
+            ShadowImage = shadowImage,
             SizeImage = sizeImage,
             RectTransform = rootRect
         };
@@ -454,6 +493,14 @@ public class MainScene : MonoBehaviour
         if (packSprite != null)
         {
             entry.Image.sprite = packSprite;
+        }
+
+        if (entry.ShadowImage != null)
+        {
+            entry.ShadowImage.sprite = GetOrCreatePackageShadowSprite(packId, entry.Image.sprite);
+            var showShadow = entry.ShadowImage.sprite != null;
+            entry.ShadowImage.enabled = showShadow;
+            entry.ShadowImage.gameObject.SetActive(showShadow);
         }
 
         ApplyPackageSizeVisual(entry.SizeImage, packId);
@@ -1232,6 +1279,9 @@ public class MainScene : MonoBehaviour
         var coverImage = coverObject.GetComponent<Image>();
         coverImage.preserveAspect = true;
         coverImage.raycastTarget = false;
+        coverImage.rectTransform.sizeDelta = new Vector2(PackageCoverWidth, PackageCoverHeight);
+
+        var shadowImage = CreatePackShadowImage(root.transform, coverImage.rectTransform.sizeDelta);
 
         var sizeObject = new GameObject(PackSizeObjectName, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
         sizeObject.transform.SetParent(root.transform, false);
@@ -1253,7 +1303,7 @@ public class MainScene : MonoBehaviour
         nameText.raycastTarget = false;
         GameFontUtility.ApplyDefaultFont(nameText);
 
-        PreparePagedPackageItem(root, root.GetComponent<RectTransform>(), rootImage, coverImage, sizeImage);
+        PreparePagedPackageItem(root, root.GetComponent<RectTransform>(), rootImage, coverImage, shadowImage, sizeImage);
         return root;
     }
 
@@ -1262,6 +1312,7 @@ public class MainScene : MonoBehaviour
         RectTransform rootRect,
         Image rootImage,
         Image coverImage,
+        Image shadowImage,
         Image sizeImage)
     {
         if (rootRect != null)
@@ -1294,6 +1345,7 @@ public class MainScene : MonoBehaviour
             coverImage.preserveAspect = true;
             var coverRect = coverImage.rectTransform;
             ScaleOverlayWithCover(sizeImage != null ? sizeImage.rectTransform : null, coverRect.sizeDelta);
+            ScaleOverlayWithCover(shadowImage != null ? shadowImage.rectTransform : null, coverRect.sizeDelta);
             coverRect.anchorMin = new Vector2(0.5f, 0.5f);
             coverRect.anchorMax = new Vector2(0.5f, 0.5f);
             coverRect.pivot = new Vector2(0.5f, 0.5f);
@@ -1302,6 +1354,8 @@ public class MainScene : MonoBehaviour
             coverRect.localScale = Vector3.one;
         }
 
+        ConfigurePackShadow(shadowImage);
+
         var nameText = FindChild(itemObject.transform, PackNameTextObjectName)?.GetComponent<TMP_Text>();
         if (nameText != null)
         {
@@ -1309,6 +1363,255 @@ public class MainScene : MonoBehaviour
             nameText.raycastTarget = false;
             nameText.alignment = TextAlignmentOptions.Center;
             GameFontUtility.ApplyDefaultFont(nameText);
+        }
+    }
+
+    private static Image CreatePackShadowImage(Transform parent, Vector2 sourceCoverSize)
+    {
+        if (sourceCoverSize.x <= 0f || sourceCoverSize.y <= 0f)
+        {
+            sourceCoverSize = new Vector2(PackageCoverWidth, PackageCoverHeight);
+        }
+
+        var sourceScale = new Vector2(
+            sourceCoverSize.x / PackageCoverWidth,
+            sourceCoverSize.y / PackageCoverHeight);
+        var shadowObject = new GameObject(
+            PackShadowObjectName,
+            typeof(RectTransform),
+            typeof(CanvasRenderer),
+            typeof(Image));
+        shadowObject.transform.SetParent(parent, false);
+        shadowObject.transform.SetSiblingIndex(0);
+
+        var shadowImage = shadowObject.GetComponent<Image>();
+        var shadowRect = shadowImage.rectTransform;
+        shadowRect.anchorMin = new Vector2(0.5f, 0.5f);
+        shadowRect.anchorMax = new Vector2(0.5f, 0.5f);
+        shadowRect.pivot = new Vector2(0.5f, 0.5f);
+        shadowRect.anchoredPosition = new Vector2(
+            PackageShadowOffsetX * sourceScale.x,
+            PackageShadowOffsetY * sourceScale.y);
+        shadowRect.sizeDelta = new Vector2(
+            sourceCoverSize.x + PackageShadowHorizontalPadding * 2f * sourceScale.x,
+            sourceCoverSize.y + PackageShadowVerticalPadding * 2f * sourceScale.y);
+        ConfigurePackShadow(shadowImage);
+        return shadowImage;
+    }
+
+    private static void ConfigurePackShadow(Image shadowImage)
+    {
+        if (shadowImage == null)
+        {
+            return;
+        }
+
+        shadowImage.raycastTarget = false;
+        shadowImage.preserveAspect = false;
+        shadowImage.color = Color.white;
+        shadowImage.material = null;
+    }
+
+    private Sprite GetOrCreatePackageShadowSprite(int packId, Sprite coverSprite)
+    {
+        if (mPackageShadowSpritesById.TryGetValue(packId, out var cachedSprite) && cachedSprite != null)
+        {
+            return cachedSprite;
+        }
+
+        var shadowSprite = CreatePackageShadowSprite(packId, coverSprite);
+        if (shadowSprite != null)
+        {
+            mPackageShadowSpritesById[packId] = shadowSprite;
+        }
+
+        return shadowSprite;
+    }
+
+    private static Sprite CreatePackageShadowSprite(int packId, Sprite coverSprite)
+    {
+        if (coverSprite == null || coverSprite.texture == null)
+        {
+            return null;
+        }
+
+        Color32[] sourcePixels;
+        Rect sourceRect;
+        try
+        {
+            sourcePixels = coverSprite.texture.GetPixels32();
+            sourceRect = coverSprite.textureRect;
+        }
+        catch (UnityException exception)
+        {
+            Debug.LogWarning($"MainScene: pack shadow skipped for packId={packId}. {exception.Message}");
+            return null;
+        }
+
+        var sourceTexture = coverSprite.texture;
+        var contentWidth = Mathf.RoundToInt(PackageCoverWidth);
+        var contentHeight = Mathf.RoundToInt(PackageCoverHeight);
+        var horizontalPadding = Mathf.RoundToInt(PackageShadowHorizontalPadding);
+        var verticalPadding = Mathf.RoundToInt(PackageShadowVerticalPadding);
+        var shadowWidth = contentWidth + horizontalPadding * 2;
+        var shadowHeight = contentHeight + verticalPadding * 2;
+        var alpha = new float[shadowWidth * shadowHeight];
+        SampleSpriteAlpha(
+            sourcePixels,
+            sourceTexture.width,
+            sourceTexture.height,
+            sourceRect,
+            alpha,
+            shadowWidth,
+            contentWidth,
+            contentHeight,
+            horizontalPadding,
+            verticalPadding);
+
+        var scratch = new float[alpha.Length];
+        for (var pass = 0; pass < PackageShadowBlurPassCount; pass++)
+        {
+            BoxBlurHorizontal(
+                alpha,
+                scratch,
+                shadowWidth,
+                shadowHeight,
+                PackageShadowHorizontalBlurRadius);
+            BoxBlurVertical(
+                scratch,
+                alpha,
+                shadowWidth,
+                shadowHeight,
+                PackageShadowVerticalBlurRadius);
+        }
+
+        var shadowColor = new Color32(31, 41, 45, 0);
+        var outputPixels = new Color32[alpha.Length];
+        for (var i = 0; i < outputPixels.Length; i++)
+        {
+            shadowColor.a = (byte)Mathf.RoundToInt(
+                Mathf.Clamp01(alpha[i]) * PackageShadowAlpha * byte.MaxValue);
+            outputPixels[i] = shadowColor;
+        }
+
+        var shadowTexture = new Texture2D(shadowWidth, shadowHeight, TextureFormat.RGBA32, false)
+        {
+            name = $"PackShadow_{packId:D3}",
+            filterMode = FilterMode.Bilinear,
+            wrapMode = TextureWrapMode.Clamp
+        };
+        shadowTexture.SetPixels32(outputPixels);
+        shadowTexture.Apply(false, true);
+
+        var shadowSprite = Sprite.Create(
+            shadowTexture,
+            new Rect(0f, 0f, shadowWidth, shadowHeight),
+            new Vector2(0.5f, 0.5f),
+            PixelsPerUnit);
+        shadowSprite.name = shadowTexture.name;
+        return shadowSprite;
+    }
+
+    private static void SampleSpriteAlpha(
+        Color32[] sourcePixels,
+        int sourceTextureWidth,
+        int sourceTextureHeight,
+        Rect sourceRect,
+        float[] targetAlpha,
+        int targetWidth,
+        int contentWidth,
+        int contentHeight,
+        int horizontalPadding,
+        int verticalPadding)
+    {
+        for (var y = 0; y < contentHeight; y++)
+        {
+            var sourceY = sourceRect.y + (y + 0.5f) * sourceRect.height / contentHeight - 0.5f;
+            var y0 = Mathf.Clamp(Mathf.FloorToInt(sourceY), 0, sourceTextureHeight - 1);
+            var y1 = Mathf.Min(y0 + 1, sourceTextureHeight - 1);
+            var lerpY = sourceY - Mathf.Floor(sourceY);
+            for (var x = 0; x < contentWidth; x++)
+            {
+                var sourceX = sourceRect.x + (x + 0.5f) * sourceRect.width / contentWidth - 0.5f;
+                var x0 = Mathf.Clamp(Mathf.FloorToInt(sourceX), 0, sourceTextureWidth - 1);
+                var x1 = Mathf.Min(x0 + 1, sourceTextureWidth - 1);
+                var lerpX = sourceX - Mathf.Floor(sourceX);
+                var alpha00 = sourcePixels[y0 * sourceTextureWidth + x0].a / 255f;
+                var alpha10 = sourcePixels[y0 * sourceTextureWidth + x1].a / 255f;
+                var alpha01 = sourcePixels[y1 * sourceTextureWidth + x0].a / 255f;
+                var alpha11 = sourcePixels[y1 * sourceTextureWidth + x1].a / 255f;
+                var lowerAlpha = Mathf.Lerp(alpha00, alpha10, lerpX);
+                var upperAlpha = Mathf.Lerp(alpha01, alpha11, lerpX);
+                targetAlpha[(y + verticalPadding) * targetWidth + x + horizontalPadding] = Mathf.Lerp(
+                    lowerAlpha,
+                    upperAlpha,
+                    lerpY);
+            }
+        }
+    }
+
+    private static void BoxBlurHorizontal(float[] source, float[] target, int width, int height, int radius)
+    {
+        var sampleCount = radius * 2 + 1;
+        for (var y = 0; y < height; y++)
+        {
+            var rowStart = y * width;
+            var sum = 0f;
+            for (var sampleX = -radius; sampleX <= radius; sampleX++)
+            {
+                if (sampleX >= 0 && sampleX < width)
+                {
+                    sum += source[rowStart + sampleX];
+                }
+            }
+
+            for (var x = 0; x < width; x++)
+            {
+                target[rowStart + x] = sum / sampleCount;
+                var removeX = x - radius;
+                var addX = x + radius + 1;
+                if (removeX >= 0)
+                {
+                    sum -= source[rowStart + removeX];
+                }
+
+                if (addX < width)
+                {
+                    sum += source[rowStart + addX];
+                }
+            }
+        }
+    }
+
+    private static void BoxBlurVertical(float[] source, float[] target, int width, int height, int radius)
+    {
+        var sampleCount = radius * 2 + 1;
+        for (var x = 0; x < width; x++)
+        {
+            var sum = 0f;
+            for (var sampleY = -radius; sampleY <= radius; sampleY++)
+            {
+                if (sampleY >= 0 && sampleY < height)
+                {
+                    sum += source[sampleY * width + x];
+                }
+            }
+
+            for (var y = 0; y < height; y++)
+            {
+                target[y * width + x] = sum / sampleCount;
+                var removeY = y - radius;
+                var addY = y + radius + 1;
+                if (removeY >= 0)
+                {
+                    sum -= source[removeY * width + x];
+                }
+
+                if (addY < height)
+                {
+                    sum += source[addY * width + x];
+                }
+            }
         }
     }
 
