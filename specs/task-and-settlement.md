@@ -1,35 +1,63 @@
-# Task And Settlement
+# Progression And Settlement
 
-- Status: Implemented; Play Mode regression pending
-- Scope: Accumulated-score tasks, settlement scoring, shared task UI, rewards, and overflow carry
+- Status: Core implementation complete; sequential bonus presentation and Play Mode regression pending
+- Scope: Score tasks, settlement, card-pack lifecycle, acquisition, list presentation, and persistence
 
-## Requirements
+## Confirmed Rules
 
-1. `TaskType=1` represents `AccumulateScore`; Piece placement does not directly increase task progress.
-2. GameScene adds the final settlement score to the active score task exactly once, then evaluates completion, grants the configured reward, and advances the task exactly once.
-3. Base scores by card-pack size are XS 60, S 80, M 100, L 120, XL 140, XXL 160, and XXXL 200.
-4. Qualified bonuses are additive: no hint +5%, level outline disabled +2%, sticker outline disabled +5%, and completion time `<=15` / `<=30` / `<=60` seconds +3% / +2% / +1%.
-5. The final score is `ceil(baseScore * (1 + totalBonusPercent / 100))`.
-6. Timing starts on the first successful Piece placement and freezes when settlement begins. Clicking `BtnTips` at any time during the game disables the no-hint bonus.
-7. MainScene `Toggle1` and `Toggle2` values come from persisted `UsableOption1` and `UsableOption2`; `Toggle3` does not affect score.
-8. MainScene and GameScene use the shared `TaskItem` binding. `TextProgress`, `ProgressMask`, and settlement `TaskScore` must animate from the same score value.
-9. Settlement `TaskBagNum` displays the current unlocked card-pack count, including a pack unlocked by the current reward.
-10. Score above a completed accumulate-score task target carries into the next accumulate-score task. Manual task-id changes still reset progress to zero.
-11. Existing numeric enum values and persisted fields, including `CurrentCompleteValue` and `UsableOption1/2/3`, remain compatible.
+### Scoring And Tasks
 
-## Design
+1. `TaskType=1` is `AccumulateScore`; Piece placement does not directly increase task progress.
+2. Base scores are XS 60, S 80, M 100, L 120, XL 140, XXL 160, and XXXL 200. Card-pack size comes from `CardPacks.csv`.
+3. Qualified bonuses are additive: no hint +5%, level outline disabled +2%, sticker outline disabled +5%, and completion time `<=15` / `<=30` / `<=60` seconds +3% / +2% / +1%.
+4. Timing starts on the first successful Piece placement and freezes when settlement starts. Clicking `BtnTips` disables the no-hint bonus.
+5. The final score is `ceil(baseScore * (1 + totalBonusPercent / 100))` and is added to the active score task exactly once.
+6. A completed task grants its configured reward and advances exactly once. Overflow carries only into the next `AccumulateScore` task.
+7. Settlement score, `TextProgress`, and `ProgressMask` use the same animated score value.
 
-- `GameScoreUtility` owns base-score mapping, bonus calculation, time tiers, and upward rounding.
-- `GameTaskUtility` owns persisted progress, completion, reward transition, and overflow carry.
-- `TaskProgressUIUtility` is the single binding path for the shared MainScene and GameScene `TaskItem` instances.
-- GameScene snapshots settings at session start, tracks hint and timing state, persists settlement before presentation, and animates captured pre/post values.
-- RewardPanel references are cached during configuration; optional missing UI nodes warn without blocking score persistence or task advancement.
-- MainScene panel visibility and usable-option persistence share internal helpers while retaining semantic public setters.
+### Card-Pack Progression
+
+1. Persisted lifecycle states are `Locked`, `Unlocked`, `InProgress`, and `Completed`.
+2. Granting changes `Locked` to `Unlocked`; completing the first group changes a multi-group pack to `InProgress`; completing the final group changes it to `Completed`.
+3. Replaying a completed pack does not repeat the first-completion grant attempt, but can still complete a task and create its guaranteed entitlement.
+4. Task rewards create deduplicated pending entitlements. A blocked entitlement remains persisted for a later retry.
+5. First completion performs one stage-gated grant attempt. Task and first-completion sources may grant two different locked packs in one settlement.
+6. Internal chapters constrain the eligible locked-pack pool and are not shown to the player.
+
+### MainScene And Reward Presentation
+
+1. MainScene displays 18 card packs per page in a 6-column x 3-row grid.
+2. One-presentation newly granted packs appear first, then `InProgress`, `Unlocked`, and `Completed` packs; timestamps and PackId provide deterministic ordering.
+3. Completed covers and size icons are tinted gray but remain replayable.
+4. RewardPanel keeps its authored `ImgBag` Sprite. On `BtnFinish`, all packs granted by that settlement move into a centered row, pause, survive scene loading, and fly to their MainScene list slots.
+
+## Current Implementation
+
+- `GameScoreUtility` calculates the full final score and all individual bonus percentages.
+- GameScene persists task progress and reward state before running its settlement presentation.
+- `TaskProgressUIUtility` binds the shared MainScene/GameScene `TaskItem`.
+- The current score presentation performs one 0-to-final roll over 0.8 seconds. It does not yet reveal each qualified bonus or animate cumulative score steps.
+- `CardPackDistributionUtility` applies the current deterministic `R` / held-pack gates and stores pending task entitlements in SQLite.
+- Current content contains 21 configured packs across chapter 1 and chapter 2; only five playable CardBag prefabs currently exist: 001, 002, 003, 008, and 017.
+
+## Persistence
+
+- Task progress remains in `LocalData.json` under `TaskProgressData`.
+- Card-pack lifecycle and distribution progress are stored in `LocalData.db`.
+- The `CardPacks` table uses `PackId`, `PackSize`, `LifecycleState`, `UnlockTime`, and `CompletionTime`; old `IsUnlocked` and `IsPlayed` columns are not supported.
+- After syncing from the old schema, close Unity and reset both local data files before a clean cross-store regression. Never delete them without explicit user permission.
+
+## Pending Decisions
+
+- Qualified-bonus reveal order, per-step timing/easing, and intermediate rounding.
+- Exact hint failure semantics and outline-toggle qualification semantics.
+- Final candidate selection and empty locked-pool behavior.
+- Exact chapter membership, initial chapter state, and chapter advancement rules.
+- Special-pack accounting and final pacing toward approximately 150 packs.
 
 ## Validation
 
-- Runtime, first-pass, and Editor assemblies compile successfully.
-- Removed helpers and the old task-progress API have no remaining callers.
-- Scenes, prefabs, Canvas values, CSV files, enum numeric values, and persisted field names were not changed.
-- Play Mode still needs verification for settings persistence, score animation, bag count, reward output, and overflow carry.
+- Current HEAD `2236f9f` builds all runtime, first-pass, and Editor assemblies with 0 warnings and 0 errors.
+- Static implementation and persisted schema were cross-checked against `PROJECT_CONTEXT.md` and `GAME_DESIGN_REQUIREMENTS.md`.
+- Full Play Mode regression remains pending.
 

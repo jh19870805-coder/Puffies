@@ -58,6 +58,9 @@ Current work state is tracked in [CURRENT_TASK.md](CURRENT_TASK.md). Workflow ru
 
 - Formal Rank page content.
 - Steam achievement integration, replacing AchieveScene mock data.
+- Sequential settlement presentation that reveals each qualified bonus and rolls through cumulative step scores; current runtime performs one 0-to-final-score roll.
+- Final chapter PackId allocation, chapter advancement rules, empty-pool handling, and final card-pack selection policy.
+- Full Play Mode regression for card-pack lifecycle/distribution, reward flight, list ordering/paging, stable tray positions, and staged outlines.
 - Formal build regression.
 - Board sliding to slot center was discussed but not merged; if still needed, implement as a separate small task.
 

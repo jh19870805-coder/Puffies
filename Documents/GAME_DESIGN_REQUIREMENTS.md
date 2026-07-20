@@ -2,7 +2,7 @@
 
 - Purpose: Long-term source of truth for confirmed game-design requirements
 - Status: In Progress
-- Last Updated: 2026-07-18
+- Last Updated: 2026-07-20
 
 This document records confirmed design rules as provided by the game designer. Items marked `Confirmed` are implementation requirements. Items marked `Pending` must not be inferred during implementation.
 
@@ -15,6 +15,10 @@ This document records confirmed design rules as provided by the game designer. I
 Status: `Confirmed`
 
 Each card pack size has one base score.
+
+- A card pack's size is configured by `PackSize` in `Resources/Configs/CardPacks.csv`.
+- `PackSize` uses `CardPackSize` numeric values `XS=1` through `XXXL=7`.
+- The base-score mapping is owned by `GameScoreUtility`.
 
 | Card Pack Size | Base Score |
 |---|---:|
@@ -139,8 +143,6 @@ During every score-roll animation:
 
 Status: `Pending`
 
-- How a CardBag is assigned a size.
-- Where the size/base-score mapping is stored in game data.
 - The exact point inside settlement at which the score is persisted, displayed, and applied to task progress.
 - The order in which qualified bonuses are revealed during settlement.
 - Duration, easing, and minimum visual step for each score-roll animation.
@@ -263,10 +265,34 @@ Pending parameters:
 
 ---
 
+## 5. Puzzle Group Presentation
+
+Status: `Confirmed`
+
+### Tray Stability
+
+- Pieces are laid out once when the current group is created.
+- After a Piece is placed successfully, every remaining Piece keeps its established X and Y position.
+- The empty position left by a placed Piece is not compacted until the next group is created.
+
+### Staged Outline Boundary
+
+- Group 1 displays only the part of Group 1's boundary that belongs to the final puzzle exterior.
+- Every later group displays its own final-puzzle exterior plus its contact edges with all lower-number groups that are already completed.
+- A current group must not display completed groups' unrelated boundaries.
+- A current group must not display contact edges with future groups.
+- Seams between individual Pieces inside the same group must not be displayed.
+- Runtime displays only the current group's baked outline image; previous stage images are not overlaid.
+- Outline baking is an Editor-time content step. Missing generated data must not block puzzle interaction.
+
+---
+
 ## Change Log
 
 | Date | Change |
 |---|---|
+| 2026-07-20 | Confirmed stable tray positions and staged outline rules: current-group exterior plus contacts with completed groups only. |
+| 2026-07-20 | Recorded `CardPacks.csv/PackSize` and `GameScoreUtility` as the implemented size/base-score data path. |
 | 2026-07-19 | Confirmed the settlement-to-MainScene reward transition: keep the default ImgBag icon, center all granted packs after Finish, pause, then fly each one into its MainScene list slot. |
 | 2026-07-19 | Confirmed internal chapter stages by remaining locked-pack count R: 17-9 initial, 8-3 mid-to-late, and 2-1 final, with corresponding held-pack targets. |
 | 2026-07-19 | Replaced the provisional random roll with deterministic stage gates and persisted deferred task rewards for playtesting. |

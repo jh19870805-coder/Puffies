@@ -1,62 +1,69 @@
 # Current Task
 
-- Task: Freeze tray positions and correct staged outline boundaries
+- Task: Synchronize latest development progress and game rules
 - Status: Completed
 - Updated At: 2026-07-20
 
 ## User Intent
 
-- Do not refresh the X spacing or positions of remaining tray Pieces after one Piece is placed.
-- Group 1 draws only the part of its boundary that touches the final puzzle exterior.
-- Every later group draws its own final-puzzle exterior plus its contact edges with all already completed groups.
-- Do not draw completed groups' other boundaries, current-to-future-group edges, or seams between Pieces in the same group.
+- Consolidate the latest cross-device implementation progress and rules into the project's durable documentation.
+- Correct stale outline and scoring data-path descriptions without creating more dated spec files.
 
 ## Working Notes
 
-- Successful placement no longer calls `LayoutTrayPieces`; all remaining Pieces keep their original X and Y positions and leave a gap where the placed Piece was located.
-- Initial group creation still performs deterministic Sprite-bounds centering once.
-- The outline baker calculates the complete puzzle exterior once, then calculates each current group's own boundary separately.
-- Each `GroupNN.png` selects only final-exterior pixels assigned to the current group and current-group boundary pixels adjacent to lower-number completed groups.
-- The completed mask is advanced only after the current image is written, so future-group boundaries cannot leak into an earlier stage.
-- Previous stage PNGs are no longer overlaid onto later stages.
-- All 19 outline masks for the 5 existing CardBag prefabs were regenerated with the corrected rule.
+- `GAME_DESIGN_REQUIREMENTS.md` remains the source of truth for confirmed and pending design rules.
+- `PROJECT_CONTEXT.md` records the actual current architecture, persistence, content, and runtime behavior.
+- `specs/task-and-settlement.md` now covers scoring, task progress, card-pack lifecycle/distribution, list ordering, and reward presentation.
+- `specs/puzzle-outline.md` now records stable tray positions and the latest current-group exterior/contact-edge rule.
+- The latest implementation is commit `2236f9f` on `develop`, synchronized with `origin/develop` when this review was performed.
+
+## Implemented Progress
+
+- Accumulated-score settlement with hint, outline, sticker, and time bonuses plus upward rounding.
+- Four-state card-pack lifecycle, pending task entitlements, stage-gated first-completion grants, and internal chapter pools.
+- MainScene 18-item paging, lifecycle ordering, new-pack priority, completed tint, size icons, and generated cover shadows.
+- Multi-pack RewardPanel-to-MainScene collection flight.
+- CardBag017 content and 19 baked outline masks across five playable CardBag prefabs.
+- Stable Piece tray positions and staged current-group outline boundaries.
+- RankScene local-player presentation and 20-item mock AchieveScene content.
 
 ## Files Changed
 
-- `Assets/Scripts/Controller/GameScene.cs`
-- `Assets/Scripts/Editor/PuzzleOutlineBakerEditor.cs`
-- `Assets/Resources/Generated/PuzzleOutlines/CardBag001/Group02.png`
-- `Assets/Resources/Generated/PuzzleOutlines/CardBag002/Group02.png` through `Group04.png`
-- `Assets/Resources/Generated/PuzzleOutlines/CardBag003/Group02.png` through `Group04.png`
-- `Assets/Resources/Generated/PuzzleOutlines/CardBag008/Group02.png` through `Group04.png`
-- `Assets/Resources/Generated/PuzzleOutlines/CardBag017/`
+- `Documents/GAME_DESIGN_REQUIREMENTS.md`
 - `Documents/PROJECT_CONTEXT.md`
 - `Documents/CURRENT_TASK.md`
+- `specs/task-and-settlement.md`
+- `specs/puzzle-outline.md`
 
 ## Decisions
 
-- Do not compact tray gaps during a group; stability takes priority over continuously repacking the row.
-- Treat lower-number groups as completed when baking a later group.
-- Use `ColorBridgeRadius` for completed-area adjacency so anti-aliased gaps between groups do not drop valid contact edges.
-- Continue using the existing runtime resource paths and active-group loading logic.
+- Keep only two long-lived spec files rather than creating one dated document per change.
+- Separate confirmed design rules, current playtest parameters, implementation facts, and pending decisions.
+- Record the current single 0-to-final score roll as an implementation gap against the confirmed sequential bonus presentation.
+- Preserve the active-development policy: no legacy SQLite migration unless explicitly requested.
 
 ## Validation
 
-- `dotnet build Puffies.sln --no-restore` completed with 0 warnings and 0 errors.
-- Unity 2022.3.62f2 Editor bake completed successfully: 19 group masks from 5 CardBag prefabs; regenerated tracked Group01 PNGs were byte-equivalent to their repository versions.
-- CardBag001 Group01 contains 14,674 outline pixels; Group02 contains 9,372 instead of the incorrect 24,018-pixel historical overlay.
-- Visually inspected CardBag001 Group01 and Group02: Group01 keeps only its final-puzzle exterior, while Group02 contains its own exterior/contact lines without repeating Group01's unrelated exterior.
-- Unity Editor log reported the completed 19-mask bake with no C# compiler error or exception.
-- Confirmed successful Piece placement has no remaining tray-layout call.
-- `git diff --check` completed without whitespace errors; Git only reported LF-to-CRLF working-copy notices.
-- Unity Play Mode verification is still required.
+- Reviewed commit history from `121e593` through `2236f9f` and checked current code/config ownership for each documented feature.
+- `dotnet build Puffies.sln --no-restore` completed with 0 warnings and 0 errors at `2236f9f`.
+- Confirmed `develop` matched `origin/develop` and the workspace was clean before this documentation update.
+- Static consistency checks found no stale outline rule, resolved PackSize pending item, or unexpected non-document change.
+- No code, scene, prefab, generated outline, or gameplay resource was changed in this documentation task.
+
+## Data Reset Before Regression
+
+- Close Unity before resetting development data.
+- Delete `%USERPROFILE%/AppData/LocalLow/MainTown/Puffies/LocalData.db` because the CardPacks schema changed incompatibly.
+- Delete `%USERPROFILE%/AppData/LocalLow/MainTown/Puffies/LocalData.json` for a clean task/distribution cross-store regression.
+- Do not delete either file automatically without explicit user permission.
 
 ## Next Action
 
-1. Place any one Piece and confirm every remaining Piece stays at the exact same X and Y coordinates.
-2. Complete CardBag001 Group01 and confirm Group02 draws the Group02-to-Group01 contact edge without keeping Group01's other outlines.
-3. Spot-check a later transition and confirm the current group contacts all completed groups but not future groups.
+1. Verify stable tray coordinates and staged group outlines in Play Mode.
+2. Verify lifecycle transitions, pending and dual grants, reward flight, and MainScene paging/order with clean local data.
+3. Implement the confirmed sequential bonus reveal and cumulative score-roll presentation after its pending timing/order details are confirmed.
+4. Confirm final chapter allocation, advancement, candidate selection, and empty-pool behavior before scaling content toward 150 packs.
 
 ## Resume Prompt
 
-Continue Puffies fixed tray-position and staged outline-boundary verification. Read AGENTS.md, Documents/WORKFLOW.md, and Documents/CURRENT_TASK.md first, then run the listed Play Mode checks or follow the user's latest instruction.
+Continue Puffies from the synchronized project state. Read AGENTS.md, Documents/WORKFLOW.md, Documents/CURRENT_TASK.md, Documents/GAME_DESIGN_REQUIREMENTS.md, and the two specs first, then follow the latest user instruction or the Next Action list.
