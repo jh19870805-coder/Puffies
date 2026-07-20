@@ -12,11 +12,18 @@ using UnityEditor;
 public static class GameAnimationUtility
 {
     private const string DefaultCardPackStateName = "Take 001";
+    private const float CardPackReferenceCoverAspect = 1822f / 2301f;
     private const string CardPackAnimationFolder = GameDefine.CardPackAnimationEditorFolder;
     private const string CardPackPrefabEditorFolder = GameDefine.CardPackPrefabEditorFolder;
     private const string CardPackMaterialEditorPath = GameDefine.CardPackMaterialEditorPath;
     private const string CardPackPrefabResourcesPath = GameDefine.CardPackPrefabResourcesFolder;
     private const string CardPackMaterialResourcesPath = GameDefine.CardPackMaterialResourcesPath;
+    private static readonly string GenericCardPackObjectName =
+        GameDefine.FormatCardPackSkinPrefabName(GameDefine.DefaultBagId);
+    private static readonly int BaseMapPropertyId = Shader.PropertyToID("_BaseMap");
+    private static readonly int BaseMapTransformPropertyId = Shader.PropertyToID("_BaseMap_ST");
+    private static readonly int MainTexturePropertyId = Shader.PropertyToID("_MainTex");
+    private static readonly int MainTextureTransformPropertyId = Shader.PropertyToID("_MainTex_ST");
     private static readonly Dictionary<string, Animator> sSpawnedAnimators = new Dictionary<string, Animator>();
     private static Material sCardPackLitMaterial;
 
@@ -134,27 +141,28 @@ public static class GameAnimationUtility
     /// <param name="animationFileName">参数：动画文件名或状态名，例如 CardPackAni_001.FBX。</param>
     /// <param name="searchRoot">参数：查找对象的根节点；传 null 时在全场景查找。</param>
     /// <returns>返回：true 表示播放成功，false 表示未找到目标或播放失败。</returns>
-    public static bool PlayCardPackAnimation(string animationFileName, Transform searchRoot = null)
+    public static bool PlayCardPackAnimation(int packId, Sprite coverSprite, Transform anchor)
     {
-        if (string.IsNullOrWhiteSpace(animationFileName))
+        if (packId <= 0)
         {
-            Debug.LogWarning("PlayCardPackAnimation failed: animationFileName is empty.");
+            Debug.LogWarning($"PlayCardPackAnimation failed: invalid packId={packId}.");
             return false;
         }
 
-        var objectName = ResolveCardPackTargetObjectName(animationFileName);
-        var animator = FindAnimatorByObjectName(objectName, searchRoot);
+        if (coverSprite == null || coverSprite.texture == null)
+        {
+            Debug.LogWarning(
+                $"PlayCardPackAnimation: cover missing for packId={packId}; using the authored model texture.");
+        }
+
+        var animator = FindAnimatorByObjectName(GenericCardPackObjectName, anchor);
         if (animator == null)
         {
-            animator = TrySpawnCardPackAnimator(objectName, searchRoot);
+            animator = TrySpawnCardPackAnimator(GenericCardPackObjectName, anchor, coverSprite);
         }
-        else if (searchRoot != null)
+        else if (anchor != null)
         {
-            ApplyPreviewPose(animator, searchRoot);
-        }
-        else
-        {
-            ApplyCardPackMaterials(animator.GetComponentsInChildren<Renderer>(true));
+            ApplyPreviewPose(animator, anchor, coverSprite);
         }
 
         if (animator == null)
@@ -162,18 +170,17 @@ public static class GameAnimationUtility
             return false;
         }
 
-        var stateName = ResolveCardPackStateName(animationFileName);
         animator.Rebind();
         animator.Update(0f);
-        animator.Play(stateName, 0, 0f);
+        animator.Play(DefaultCardPackStateName, 0, 0f);
         animator.Update(0f);
-        if (searchRoot != null)
+        if (anchor != null)
         {
-            ApplyPreviewPose(animator, searchRoot);
+            ApplyPreviewPose(animator, anchor, coverSprite);
         }
         else
         {
-            ApplyCardPackMaterials(animator.GetComponentsInChildren<Renderer>(true));
+            ApplyCardPackMaterials(animator.GetComponentsInChildren<Renderer>(true), coverSprite);
         }
 
         return true;
@@ -182,18 +189,23 @@ public static class GameAnimationUtility
     /// <summary>
     /// 用途：估算卡包动画播放时长，供主场景在切页前等待。返回：时长大于 0 表示有效。
     /// </summary>
-    public static float GetCardPackPlayDuration(string animationFileName, Transform searchRoot = null)
+    public static float GetCardPackPlayDuration(Transform anchor = null)
     {
-        if (string.IsNullOrWhiteSpace(animationFileName))
+        Animator animator = null;
+        if (sSpawnedAnimators.TryGetValue(GenericCardPackObjectName, out var cachedAnimator)
+            && cachedAnimator != null)
         {
-            return 0f;
+            animator = cachedAnimator;
         }
 
-        var objectName = ResolveCardPackTargetObjectName(animationFileName);
-        var animator = FindAnimatorByObjectName(objectName, searchRoot);
         if (animator == null)
         {
-            animator = TrySpawnCardPackAnimator(objectName, searchRoot);
+            animator = FindAnimatorByObjectName(GenericCardPackObjectName, anchor);
+        }
+
+        if (animator == null)
+        {
+            animator = TrySpawnCardPackAnimator(GenericCardPackObjectName, anchor);
         }
 
         if (animator == null || animator.runtimeAnimatorController == null)
@@ -201,12 +213,11 @@ public static class GameAnimationUtility
             return 0f;
         }
 
-        var stateName = ResolveCardPackStateName(animationFileName);
         var clips = animator.runtimeAnimatorController.animationClips;
         for (var i = 0; i < clips.Length; i++)
         {
             var clip = clips[i];
-            if (clip != null && clip.name.Equals(stateName, StringComparison.OrdinalIgnoreCase))
+            if (clip != null && clip.name.Equals(DefaultCardPackStateName, StringComparison.OrdinalIgnoreCase))
             {
                 return clip.length;
             }
@@ -303,30 +314,6 @@ public static class GameAnimationUtility
         return sceneObject != null ? sceneObject.GetComponentInChildren<Animator>(true) : null;
     }
 
-    private static string ResolveCardPackTargetObjectName(string animationFileName)
-    {
-        var normalizedName = Path.GetFileNameWithoutExtension(animationFileName.Trim());
-        if (normalizedName.StartsWith(GameDefine.CardPackAniPrefix, StringComparison.OrdinalIgnoreCase))
-        {
-            return GameDefine.CardPackSkinPrefix + normalizedName.Substring(GameDefine.CardPackAniPrefix.Length);
-        }
-
-        if (normalizedName.StartsWith(GameDefine.CardPackSkinPrefix, StringComparison.OrdinalIgnoreCase))
-        {
-            return normalizedName;
-        }
-
-        return normalizedName;
-    }
-
-    private static string ResolveCardPackStateName(string animationFileName)
-    {
-        var normalizedName = Path.GetFileNameWithoutExtension(animationFileName.Trim());
-        return normalizedName.Equals(DefaultCardPackStateName, StringComparison.OrdinalIgnoreCase)
-            ? normalizedName
-            : DefaultCardPackStateName;
-    }
-
     private static Transform FindDeepChild(Transform root, string childName)
     {
         if (root == null)
@@ -351,7 +338,10 @@ public static class GameAnimationUtility
         return null;
     }
 
-    private static Animator TrySpawnCardPackAnimator(string objectName, Transform anchor)
+    private static Animator TrySpawnCardPackAnimator(
+        string objectName,
+        Transform anchor,
+        Sprite coverSprite = null)
     {
         if (string.IsNullOrWhiteSpace(objectName) || anchor == null)
         {
@@ -360,7 +350,7 @@ public static class GameAnimationUtility
 
         if (sSpawnedAnimators.TryGetValue(objectName, out var cachedAnimator) && cachedAnimator != null)
         {
-            ApplyPreviewPose(cachedAnimator, anchor);
+            ApplyPreviewPose(cachedAnimator, anchor, coverSprite);
             return cachedAnimator;
         }
 
@@ -379,7 +369,7 @@ public static class GameAnimationUtility
             return null;
         }
 
-        ApplyPreviewPose(animator, anchor);
+        ApplyPreviewPose(animator, anchor, coverSprite);
         sSpawnedAnimators[objectName] = animator;
         return animator;
     }
@@ -397,7 +387,7 @@ public static class GameAnimationUtility
         return Resources.Load<GameObject>($"{CardPackPrefabResourcesPath}{objectName}");
     }
 
-    private static void ApplyPreviewPose(Animator animator, Transform anchor)
+    private static void ApplyPreviewPose(Animator animator, Transform anchor, Sprite coverSprite = null)
     {
         if (animator == null || anchor == null)
         {
@@ -437,7 +427,7 @@ public static class GameAnimationUtility
             }
         }
 
-        ApplyCardPackMaterials(renderers);
+        ApplyCardPackMaterials(renderers, coverSprite);
 
         if (hasAnchorBounds && TryGetRendererBounds(renderers, out var modelBounds))
         {
@@ -498,7 +488,7 @@ public static class GameAnimationUtility
     /// <summary>
     /// 用途：将卡包模型上不兼容 URP 的内置管线材质替换为可用的 Lit 材质。返回：无。
     /// </summary>
-    private static void ApplyCardPackMaterials(Renderer[] renderers)
+    private static void ApplyCardPackMaterials(Renderer[] renderers, Sprite coverSprite = null)
     {
         var litMaterial = GetCardPackLitMaterial();
         if (litMaterial == null || renderers == null)
@@ -529,7 +519,72 @@ public static class GameAnimationUtility
             {
                 renderer.sharedMaterials = materials;
             }
+
+            ApplyCardPackCover(renderer, coverSprite);
         }
+    }
+
+    private static void ApplyCardPackCover(Renderer renderer, Sprite coverSprite)
+    {
+        if (renderer == null)
+        {
+            return;
+        }
+
+        if (coverSprite == null || coverSprite.texture == null)
+        {
+            renderer.SetPropertyBlock(null);
+            return;
+        }
+
+        var coverTexture = coverSprite.texture;
+        coverTexture.wrapMode = TextureWrapMode.Clamp;
+        coverTexture.filterMode = FilterMode.Bilinear;
+
+        var propertyBlock = new MaterialPropertyBlock();
+        renderer.GetPropertyBlock(propertyBlock);
+        var uvTransform = CalculateCoverUvTransform(coverSprite);
+        propertyBlock.SetTexture(BaseMapPropertyId, coverTexture);
+        propertyBlock.SetVector(BaseMapTransformPropertyId, uvTransform);
+        propertyBlock.SetTexture(MainTexturePropertyId, coverTexture);
+        propertyBlock.SetVector(MainTextureTransformPropertyId, uvTransform);
+        renderer.SetPropertyBlock(propertyBlock);
+    }
+
+    private static Vector4 CalculateCoverUvTransform(Sprite coverSprite)
+    {
+        var texture = coverSprite != null ? coverSprite.texture : null;
+        if (texture == null || texture.width <= 0 || texture.height <= 0)
+        {
+            return new Vector4(1f, 1f, 0f, 0f);
+        }
+
+        var sourceRect = coverSprite.textureRect;
+        if (sourceRect.width <= 0f || sourceRect.height <= 0f)
+        {
+            sourceRect = new Rect(0f, 0f, texture.width, texture.height);
+        }
+
+        var sampleRect = sourceRect;
+        var sourceAspect = sourceRect.width / sourceRect.height;
+        if (sourceAspect > CardPackReferenceCoverAspect)
+        {
+            var targetWidth = sourceRect.height * CardPackReferenceCoverAspect;
+            sampleRect.x += (sourceRect.width - targetWidth) * 0.5f;
+            sampleRect.width = targetWidth;
+        }
+        else if (sourceAspect < CardPackReferenceCoverAspect)
+        {
+            var targetHeight = sourceRect.width / CardPackReferenceCoverAspect;
+            sampleRect.y += (sourceRect.height - targetHeight) * 0.5f;
+            sampleRect.height = targetHeight;
+        }
+
+        return new Vector4(
+            sampleRect.width / texture.width,
+            sampleRect.height / texture.height,
+            sampleRect.x / texture.width,
+            sampleRect.y / texture.height);
     }
 
     private static bool IsSupportedCardPackMaterial(Material material)

@@ -30,6 +30,10 @@
 2. One-presentation newly granted packs appear first, then `InProgress`, `Unlocked`, and `Completed` packs; timestamps and PackId provide deterministic ordering.
 3. Completed covers and size icons are tinted gray but remain replayable.
 4. RewardPanel keeps its authored `ImgBag` Sprite. On `BtnFinish`, all packs granted by that settlement move into a centered row, pause, survive scene loading, and fly to their MainScene list slots.
+5. MainScene card-pack opening reuses one generic 3D model and its existing Animator Controller for every PackId.
+6. Before playback, the model receives the selected pack's real `PackIconNNN.png` through per-renderer material properties; shared material assets are not modified.
+7. The cover UV is center-cropped to the reference model texture aspect ratio, and the animated model is fitted to the clicked card-pack UI bounds and center.
+8. Missing cover data may fall back to the authored model texture, but a missing pack-specific 3D prefab must not prevent the generic animation from playing.
 
 ## Current Implementation
 
@@ -39,6 +43,7 @@
 - The current score presentation performs one 0-to-final roll over 0.8 seconds. It does not yet reveal each qualified bonus or animate cumulative score steps.
 - `CardPackDistributionUtility` applies the current deterministic `R` / held-pack gates and stores pending task entitlements in SQLite.
 - Current content contains 21 configured packs across chapter 1 and chapter 2; only five playable CardBag prefabs currently exist: 001, 002, 003, 008, and 017.
+- Card-pack opening uses `CardPackSkin_001` and its existing animation as the generic model; PackId selects only the runtime cover texture rather than a `CardPackSkin_NNN` prefab.
 
 ## Persistence
 

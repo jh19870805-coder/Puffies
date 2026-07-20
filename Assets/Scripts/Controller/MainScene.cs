@@ -1746,9 +1746,9 @@ public class MainScene : MonoBehaviour
         return null;
     }
 
-    private static IEnumerator WaitForCardPackAnimation(string animationFileName, Transform anchor)
+    private static IEnumerator WaitForCardPackAnimation(Transform anchor)
     {
-        var duration = GameAnimationUtility.GetCardPackPlayDuration(animationFileName, anchor);
+        var duration = GameAnimationUtility.GetCardPackPlayDuration(anchor);
         if (duration > 0f)
         {
             yield return new WaitForSeconds(duration);
@@ -1809,17 +1809,17 @@ public class MainScene : MonoBehaviour
     private IEnumerator PlayPackageInteraction(int bagId, PackageEntry entry)
     {
         mIsPlayingAnimation = true;
-        var animationFileName = GameDefine.FormatCardPackAnimationFileName(bagId);
         var anchor = entry.Image != null ? entry.Image.rectTransform : entry.RectTransform;
-        var hasPlayed = GameAnimationUtility.PlayCardPackAnimation(animationFileName, anchor);
+        var coverSprite = entry.Image != null ? entry.Image.sprite : null;
+        var hasPlayed = GameAnimationUtility.PlayCardPackAnimation(bagId, coverSprite, anchor);
         if (hasPlayed)
         {
             SetPackageVisualsVisible(entry, false);
-            yield return WaitForCardPackAnimation(animationFileName, anchor);
+            yield return WaitForCardPackAnimation(anchor);
         }
         else
         {
-            Debug.LogWarning($"Card pack animation not played: {animationFileName}");
+            Debug.LogWarning($"Card pack animation not played. packId={bagId}");
             var fallbackRect = entry.RectTransform != null
                 ? entry.RectTransform
                 : anchor;

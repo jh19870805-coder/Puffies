@@ -22,7 +22,7 @@ Current work state is tracked in [CURRENT_TASK.md](CURRENT_TASK.md). Workflow ru
 | Scene | Requirements |
 |------|--------------|
 | LoadingScene | Initialize JSON, SQLite, task data, and card pack data; enter MainScene after loading |
-| MainScene | Refresh card pack list from `CardPacks.csv` plus SQLite unlock state; display card packs in pages of 6 columns x 3 rows (18 per page); provide Rank, Achieve, Menu, and pack-opening entry points |
+| MainScene | Refresh card pack list from `CardPacks.csv` plus SQLite unlock state; display card packs in pages of 6 columns x 3 rows (18 per page); play the generic 3D opening model with the selected pack's real cover; provide Rank, Achieve, and Menu entry points |
 | GameScene | Load `CardBagNNN` prefab by selected pack id; organize puzzle pieces by `PieceNN` group-number naming; when a group completes, switch groups and clear previous pieces; show RewardPanel after all pieces complete |
 | RankScene | Enter from Main and return to Main |
 | AchieveScene | Currently displays 20 mock achievements: the first 5 are achieved and the remaining 15 are unachieved; replace the data source when Steam integration is added |
@@ -51,7 +51,7 @@ Current work state is tracked in [CURRENT_TASK.md](CURRENT_TASK.md). Workflow ru
 
 - New card packs use the existing `Package001` template; `MainScene` dynamically creates runtime slots.
 - New puzzles are created by adding `CardBagNNN` prefabs under `Resources/CardBagPrefabs/`; each prefab contains `GameBoard` and `Piece01`...`PieceNN`; do not create Package JSON.
-- 3D card packs and CardFx assets live under `Resources/Effects/` and are loaded with `Resources.Load`.
+- The generic 3D card-pack opening model and CardFx assets live under `Resources/Effects/` and are loaded with `Resources.Load`.
 - Before builds, run `Puffies -> Sync Build Resources` to sync runtime disk-loaded UI folders to `StreamingAssets/UI`.
 
 ### Pending Or Unfinished Requirements
@@ -210,6 +210,7 @@ New `CanvasScaler` values are written by `CanvasDesignResolutionEditor.cs`. Use 
 - Do not use `PlayerPrefs`.
 - Initialization happens in `LoadingScene.Start` for `JsonLocalStore`, `SqliteLocalStore`, `GameTaskUtility`, and `CardPackDataUtility`.
 - `Assets/Scripts/Model` intentionally remains a single flat folder. Related pure C# types are consolidated as follows: `GameManager` lives in `GameDefine.cs`, CSV parser types live in `GameConfigRepository.cs`, both `JsonLocalStore` and `SqliteLocalStore` live in `LocalDataStore.cs`, and score types/`GameScoreUtility` live in `GameTaskUtility.cs`. Public type names and call sites remain unchanged.
+- MainScene card-pack opening always instantiates `Resources/Effects/CardPack/CardPackSkin_001.prefab`. `GameAnimationUtility` applies the selected entry's already-loaded `PackIconNNN` texture through `MaterialPropertyBlock`, center-crops its UV to the reference `1822 x 2301` cover aspect, and fits the model uniformly inside the clicked UI bounds. Shared `CardPackLit.mat` is not mutated.
 
 ### Development Persistence Policy
 
@@ -233,7 +234,7 @@ Shared size icons are `UI/PackImages/PackSize_1.png` through `PackSize_7.png`, m
 2. Add a row to `CardPacks.csv` (`PackId`, `PackSize`, `ChapterId`).
 3. Add the corresponding cover under `UI/PackImages/` using `PackIconNNN.png` names. `GameDefine.FormatPackImagePath` maps pack id `1` to `UI/PackImages/PackIcon001.png`.
 4. Write lifecycle state through `CardPackDataUtility` into SQLite table `CardPacks`.
-5. Optional 3D assets: `CardPackAni_00N.FBX`, `CardPackSkin_00N.prefab` -> `Resources/Effects/CardPack/`; if missing, use 2D fallback.
+5. Do not create per-pack 3D assets. The runtime reuses `CardPackAni_001.FBX`, `CardPackSkin_001.prefab`, and `CardPackLit.mat`; the selected `PackIconNNN.png` becomes the animated model cover. If the generic assets are missing, MainScene uses the 2D fallback.
 
 ### Puzzles
 
@@ -264,8 +265,8 @@ Prefabs and dependencies go under `Resources/Effects/CardFx/`, for example `Card
 
 | Type | Name | Path |
 |------|------|------|
-| Card pack skin | `CardPackSkin_001` | `Resources/Effects/CardPack/` |
-| Pack animation | `CardPackAni_001.FBX` | Same |
+| Generic card pack skin | `CardPackSkin_001` | `Resources/Effects/CardPack/` |
+| Generic pack animation | `CardPackAni_001.FBX` | Same |
 | Material | `CardPackLit` | Same |
 | Plane group | `PlaneGroup_001` | `Resources/Effects/PlaneGroup/` |
 | New card obtain | `CardObtain_001` | `Resources/Effects/CardFx/` |

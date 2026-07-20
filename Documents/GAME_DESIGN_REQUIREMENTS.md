@@ -287,10 +287,23 @@ Status: `Confirmed`
 
 ---
 
+## 6. Card Pack Opening Presentation
+
+Status: `Confirmed`
+
+- Every card pack reuses the existing generic 3D opening model and Animator animation.
+- The animated model displays the selected PackId's real card-pack cover instead of a fixed authored cover.
+- The generic model is centered on and fitted inside the clicked MainScene card-pack UI bounds before playback.
+- Adding a card pack does not require creating a matching `CardPackSkin_NNN` prefab or animation FBX.
+- If the generic model or animation cannot be loaded, MainScene keeps the existing 2D fallback interaction.
+
+---
+
 ## Change Log
 
 | Date | Change |
 |---|---|
+| 2026-07-20 | Confirmed a generic 3D opening model with the selected PackId's real cover and UI-bounds alignment. |
 | 2026-07-20 | Confirmed stable tray positions and staged outline rules: current-group exterior plus contacts with completed groups only. |
 | 2026-07-20 | Recorded `CardPacks.csv/PackSize` and `GameScoreUtility` as the implemented size/base-score data path. |
 | 2026-07-19 | Confirmed the settlement-to-MainScene reward transition: keep the default ImgBag icon, center all granted packs after Finish, pause, then fly each one into its MainScene list slot. |
