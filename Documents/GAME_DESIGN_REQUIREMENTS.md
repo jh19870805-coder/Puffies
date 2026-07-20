@@ -304,10 +304,21 @@ Status: `Confirmed`
 
 ---
 
+## 7. First Demo Scope
+
+Status: `Confirmed`
+
+- The first Demo does not include leaderboard functionality.
+- Do not connect ranking backend data or replace the current mock presentation during this Demo milestone.
+- The existing RankScene may remain as a placeholder and is not part of Demo acceptance.
+
+---
+
 ## Change Log
 
 | Date | Change |
 |---|---|
+| 2026-07-20 | Confirmed that leaderboard functionality is excluded from the first Demo. |
 | 2026-07-20 | Confirmed a generic 3D opening model with the selected PackId's real cover and UI-bounds alignment. |
 | 2026-07-20 | Confirmed stable tray positions and staged outline rules: current-group exterior plus contacts with completed groups only. |
 | 2026-07-20 | Recorded `CardPacks.csv/PackSize` and `GameScoreUtility` as the implemented size/base-score data path. |

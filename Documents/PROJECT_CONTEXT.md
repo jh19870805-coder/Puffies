@@ -17,6 +17,11 @@ Current work state is tracked in [CURRENT_TASK.md](CURRENT_TASK.md). Workflow ru
 5. Puzzle completion shows `RewardPanel`, settles task progress, and saves card pack state.
 6. `BtnFinish` returns to `MainScene`, where the card pack list refreshes from latest unlock state.
 
+### First Demo Scope
+
+- The first Demo does not implement leaderboard functionality. Do not connect ranking backend data, replace mock rows, add leaderboard persistence, or fix player-build loading for `RankItem.prefab` unless the Demo scope changes.
+- The existing `RankScene` and MainScene rank entry are placeholders only and are not part of Demo acceptance.
+
 ### Scene Requirements
 
 | Scene | Requirements |
@@ -24,7 +29,7 @@ Current work state is tracked in [CURRENT_TASK.md](CURRENT_TASK.md). Workflow ru
 | LoadingScene | Initialize JSON, SQLite, task data, and card pack data; enter MainScene after loading |
 | MainScene | Refresh card pack list from `CardPacks.csv` plus SQLite unlock state; display card packs in pages of 6 columns x 3 rows (18 per page); play the generic 3D opening model with the selected pack's real cover; provide Rank, Achieve, and Menu entry points |
 | GameScene | Load `CardBagNNN` prefab by selected pack id; organize puzzle pieces by `PieceNN` group-number naming; when a group completes, switch groups and clear previous pieces; show RewardPanel after all pieces complete |
-| RankScene | Enter from Main and return to Main |
+| RankScene | Placeholder only; leaderboard functionality is excluded from the first Demo |
 | AchieveScene | Currently displays 20 mock achievements: the first 5 are achieved and the remaining 15 are unachieved; replace the data source when Steam integration is added |
 | effect | Preview and debug CardFx |
 
