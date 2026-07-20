@@ -210,7 +210,7 @@ New `CanvasScaler` values are written by `CanvasDesignResolutionEditor.cs`. Use 
 - Do not use `PlayerPrefs`.
 - Initialization happens in `LoadingScene.Start` for `JsonLocalStore`, `SqliteLocalStore`, `GameTaskUtility`, and `CardPackDataUtility`.
 - `Assets/Scripts/Model` intentionally remains a single flat folder. Related pure C# types are consolidated as follows: `GameManager` lives in `GameDefine.cs`, CSV parser types live in `GameConfigRepository.cs`, both `JsonLocalStore` and `SqliteLocalStore` live in `LocalDataStore.cs`, and score types/`GameScoreUtility` live in `GameTaskUtility.cs`. Public type names and call sites remain unchanged.
-- MainScene card-pack opening always instantiates `Resources/Effects/CardPack/CardPackOpening.prefab`. `GameAnimationUtility` applies the selected entry's complete `PackIconNNN` Sprite texture rectangle through `MaterialPropertyBlock` without cropping or aspect compensation, bakes the animation-time-zero skinned mesh, and uniformly fits that first frame inside the clicked UI bounds before enabling its renderers. Shared `CardPackLit.mat` is not mutated. The generic effect must be authored for the common `600 x 680` (`15:17`) runtime cover aspect.
+- MainScene card-pack opening always instantiates `Resources/Effects/CardPack/CardPackOpening.prefab`. `GameAnimationUtility` applies the selected entry's complete `PackIconNNN` Sprite texture rectangle to `CardPackOpeningMaterial` through `MaterialPropertyBlock` without cropping or aspect compensation, bakes the animation-time-zero skinned mesh, and uniformly fits that first frame inside the clicked UI bounds before enabling its renderers. The shared material is not mutated. Its URP shader renders the selected cover on the front face, the authored back texture on the back face, and uses `CardPackClipMask.png` for the wave-shaped edge. The project uses URP `Renderer2D`, so this unlit mesh shader pass must use `LightMode=SRPDefaultUnlit` (or `Universal2D`); a `UniversalForward`-only pass compiles but is skipped and produces an invisible animation. The generic effect is authored for the common `600 x 680` (`15:17`) runtime cover aspect.
 
 ### Development Persistence Policy
 
@@ -234,7 +234,7 @@ Shared size icons are `UI/PackImages/PackSize_1.png` through `PackSize_7.png`, m
 2. Add a row to `CardPacks.csv` (`PackId`, `PackSize`, `ChapterId`).
 3. Add the corresponding cover under `UI/PackImages/` using `PackIconNNN.png` names. `GameDefine.FormatPackImagePath` maps pack id `1` to `UI/PackImages/PackIcon001.png`.
 4. Write lifecycle state through `CardPackDataUtility` into SQLite table `CardPacks`.
-5. Do not create per-pack 3D assets. The runtime reuses `CardPackOpeningAnimation.FBX`, `CardPackOpening.prefab`, and `CardPackLit.mat`; the selected `PackIconNNN.png` becomes the animated model cover. If the generic assets are missing, MainScene uses the 2D fallback.
+5. Do not create per-pack 3D assets. The runtime reuses `CardPackOpeningAnimation.FBX`, `CardPackOpening.prefab`, and `CardPackOpeningMaterial.mat`; the selected `PackIconNNN.png` becomes the animated model cover. If the generic assets are missing, MainScene uses the 2D fallback.
 
 ### Puzzles
 
@@ -270,7 +270,10 @@ Prefabs and dependencies go under `Resources/Effects/CardFx/`, for example `Card
 | Generic pack animation | `CardPackOpeningAnimation.FBX` | Same |
 | Generic card pack model | `CardPackOpeningModel.FBX` | Same |
 | Default card pack cover | `CardPackDefaultCover.png` | Same |
-| Material | `CardPackLit` | Same |
+| Material | `CardPackOpeningMaterial` | Same |
+| URP shader | `CardPackOpening.shader` | Same |
+| Back texture | `CardPackBack.png` | Same |
+| Wave clip mask | `CardPackClipMask.png` | Same |
 | Plane group | `PlaneGroup_001` | `Resources/Effects/PlaneGroup/` |
 | New card obtain | `CardObtain_001` | `Resources/Effects/CardFx/` |
 | Card trail | `CardTrail_001` | Same |

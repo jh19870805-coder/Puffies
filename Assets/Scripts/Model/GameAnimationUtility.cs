@@ -19,8 +19,10 @@ public static class GameAnimationUtility
     private static readonly int BaseMapTransformPropertyId = Shader.PropertyToID("_BaseMap_ST");
     private static readonly int MainTexturePropertyId = Shader.PropertyToID("_MainTex");
     private static readonly int MainTextureTransformPropertyId = Shader.PropertyToID("_MainTex_ST");
+    private static readonly int FrontFacesAlbedoPropertyId = Shader.PropertyToID("_FrontFacesAlbedo");
+    private static readonly int FrontFacesAlbedoTransformPropertyId = Shader.PropertyToID("_FrontFacesAlbedo_ST");
     private static readonly Dictionary<string, Animator> sSpawnedAnimators = new Dictionary<string, Animator>();
-    private static Material sCardPackLitMaterial;
+    private static Material sCardPackMaterial;
 
     public enum EaseType
     {
@@ -510,12 +512,12 @@ public static class GameAnimationUtility
     }
 
     /// <summary>
-    /// 用途：将卡包模型上不兼容 URP 的内置管线材质替换为可用的 Lit 材质。返回：无。
+    /// 用途：为卡包模型统一应用 URP 开包材质，并写入当前卡包封面。返回：无。
     /// </summary>
     private static void ApplyCardPackMaterials(Renderer[] renderers, Sprite coverSprite = null)
     {
-        var litMaterial = GetCardPackLitMaterial();
-        if (litMaterial == null || renderers == null)
+        var cardPackMaterial = GetCardPackMaterial();
+        if (cardPackMaterial == null || renderers == null)
         {
             return;
         }
@@ -532,9 +534,9 @@ public static class GameAnimationUtility
             var changed = false;
             for (var j = 0; j < materials.Length; j++)
             {
-                if (!IsSupportedCardPackMaterial(materials[j]))
+                if (materials[j] != cardPackMaterial)
                 {
-                    materials[j] = litMaterial;
+                    materials[j] = cardPackMaterial;
                     changed = true;
                 }
             }
@@ -568,6 +570,8 @@ public static class GameAnimationUtility
         var propertyBlock = new MaterialPropertyBlock();
         renderer.GetPropertyBlock(propertyBlock);
         var uvTransform = CalculateCoverUvTransform(coverSprite);
+        propertyBlock.SetTexture(FrontFacesAlbedoPropertyId, coverTexture);
+        propertyBlock.SetVector(FrontFacesAlbedoTransformPropertyId, uvTransform);
         propertyBlock.SetTexture(BaseMapPropertyId, coverTexture);
         propertyBlock.SetVector(BaseMapTransformPropertyId, uvTransform);
         propertyBlock.SetTexture(MainTexturePropertyId, coverTexture);
@@ -596,50 +600,38 @@ public static class GameAnimationUtility
             sourceRect.y / texture.height);
     }
 
-    private static bool IsSupportedCardPackMaterial(Material material)
+    private static Material GetCardPackMaterial()
     {
-        if (material == null || material.shader == null)
+        if (sCardPackMaterial != null)
         {
-            return false;
+            return sCardPackMaterial;
         }
 
-        return material.shader.isSupported
-            && material.shader.name.IndexOf("InternalError", StringComparison.OrdinalIgnoreCase) < 0
-            && material.shader.name.IndexOf("ASESampleShaders", StringComparison.OrdinalIgnoreCase) < 0;
-    }
-
-    private static Material GetCardPackLitMaterial()
-    {
-        if (sCardPackLitMaterial != null)
+        sCardPackMaterial = Resources.Load<Material>(CardPackMaterialResourcesPath);
+        if (sCardPackMaterial != null)
         {
-            return sCardPackLitMaterial;
-        }
-
-        sCardPackLitMaterial = Resources.Load<Material>(CardPackMaterialResourcesPath);
-        if (sCardPackLitMaterial != null)
-        {
-            return sCardPackLitMaterial;
+            return sCardPackMaterial;
         }
 
 #if UNITY_EDITOR
-        sCardPackLitMaterial = AssetDatabase.LoadAssetAtPath<Material>(CardPackMaterialEditorPath);
-        if (sCardPackLitMaterial != null)
+        sCardPackMaterial = AssetDatabase.LoadAssetAtPath<Material>(CardPackMaterialEditorPath);
+        if (sCardPackMaterial != null)
         {
-            return sCardPackLitMaterial;
+            return sCardPackMaterial;
         }
 #endif
 
-        var shader = Shader.Find("Universal Render Pipeline/Lit");
+        var shader = Shader.Find("Universal Render Pipeline/Unlit");
         if (shader == null)
         {
             return null;
         }
 
-        sCardPackLitMaterial = new Material(shader)
+        sCardPackMaterial = new Material(shader)
         {
-            name = "CardPackRuntimeLit"
+            name = "CardPackRuntimeFallback"
         };
-        return sCardPackLitMaterial;
+        return sCardPackMaterial;
     }
 }
 

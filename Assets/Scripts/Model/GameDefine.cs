@@ -56,9 +56,9 @@ public static class GameDefine
 
     public const string CardPackPrefabResourcesFolder = "Effects/CardPack/";
     public const string CardPackOpeningPrefabName = "CardPackOpening";
-    public const string CardPackMaterialResourcesPath = "Effects/CardPack/CardPackLit";
+    public const string CardPackMaterialResourcesPath = "Effects/CardPack/CardPackOpeningMaterial";
     public const string CardPackPrefabEditorFolder = "Assets/Resources/Effects/CardPack";
-    public const string CardPackMaterialEditorPath = "Assets/Resources/Effects/CardPack/CardPackLit.mat";
+    public const string CardPackMaterialEditorPath = "Assets/Resources/Effects/CardPack/CardPackOpeningMaterial.mat";
     public const string CardObtainPrefabName = "CardObtain_001";
     public const string CardTrailPrefabName = "CardTrail_001";
 

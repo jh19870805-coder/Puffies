@@ -295,6 +295,8 @@ Status: `Confirmed`
 - The animated model displays the selected PackId's real card-pack cover instead of a fixed authored cover.
 - The animated cover uses the complete original Sprite rectangle and must not center-crop it to the generic model's old default-cover aspect.
 - The generic effect itself must be authored for the common `600 x 680` (`15:17`) cover format; runtime code must not compensate for an incompatible effect aspect by cropping or non-uniform stretching.
+- The generic effect uses a URP Renderer2D-compatible two-sided material: the selected PackId cover is the front face, the authored card-pack back is the back face, and the authored clip mask keeps the wave-shaped top and bottom edge.
+- The runtime changes the front cover through per-renderer material properties and must not modify the shared material asset.
 - Runtime centers and uniformly fits the compatible generic model inside the clicked MainScene card-pack UI bounds before playback.
 - The closed 3D first frame must replace the clicked 2D cover without a visible position, size, aspect, crop, or blank-edge transition.
 - Adding a card pack does not require creating a matching `CardPackSkin_NNN` prefab or animation FBX.

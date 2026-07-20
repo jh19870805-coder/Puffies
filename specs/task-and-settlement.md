@@ -35,6 +35,20 @@
 7. The cover UV uses the complete original Sprite texture rectangle without center-cropping or runtime aspect compensation. The generic effect must be authored for the common `600 x 680` (`15:17`) cover format before the model is uniformly fitted to the clicked UI bounds and center.
 8. Missing cover data may fall back to the authored model texture, but a missing pack-specific 3D prefab must not prevent the generic animation from playing.
 9. The closed animation-time-zero mesh is measured after skinning, uniformly fitted, and aligned to the clicked cover before its renderers become visible. The compatible replacement effect must make this handoff free of size, aspect, crop, or blank-edge changes.
+10. The replacement effect uses one semantic `CardPackOpening` asset set. The runtime-selected pack cover is rendered on the model front face, the authored back texture is rendered on the back face, and the authored clip mask preserves the wave-shaped edge.
+11. The card-pack material must use a URP-compatible shader. Importing a replacement effect must not retain Built-in/Amplify shader dependencies or unrelated numbered card-pack assets from the source package.
+
+### Card-Pack Effect Replacement
+
+- [x] Extract only the generic opening animation, model, prefab, controller, material, shader, cover, back texture, and clip mask from the supplied package.
+- [x] Remove the obsolete numbered card-pack skins and their unused material textures.
+- [x] Normalize internal asset names and adapt the supplied two-sided clip shader to URP.
+- [x] Bind the selected pack Sprite to the shader front-face texture without modifying the shared material.
+- [x] Validate C# compilation, Unity import, shader support, asset references, and frame-zero aspect.
+- [x] Correct the unlit shader pass for the project's URP Renderer2D and verify nonblank offscreen output (`320789` visible pixels at `600 x 680`).
+- [ ] Validate the wave edge and static-to-animation handoff visually in MainScene Play Mode with PackId 1 and 17.
+
+MainScene retest confirmed visible output after the Renderer2D fix. A small position jump remains; final alignment is deferred until the production playback container and screen position are confirmed.
 
 ## Current Implementation
 
