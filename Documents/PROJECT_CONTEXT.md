@@ -73,7 +73,7 @@ Assets/
   Scenes/           LoadingScene (startup), MainScene, GameScene, RankScene, AchieveScene, effect
   UI/               2D source textures (PackImages, CardBags/CardBagNNN, BasicUI...)
   Scripts/          MVC
-    Model/          GameDefine, GameManager, utilities, local storage, task/card pack data
+    Model/          Intentionally flat: core, config, persistence, task/card-pack data, and runtime utilities
     View/           PackageInteractionHandler
     Controller/     Scene scripts
     Editor/         Build sync, Canvas resolution, Chinese font, CardFx preview
@@ -209,6 +209,7 @@ New `CanvasScaler` values are written by `CanvasDesignResolutionEditor.cs`. Use 
 - MainScene `PanelSet/SliderMusic` and `PanelSet/SliderEffect` are hand-built fake sliders: root Image background plus `SliderFill` and `SliderHandle` children. Runtime uses `FakeSettingsSliderInput` to handle pointer drag, refresh visuals, and save values.
 - Do not use `PlayerPrefs`.
 - Initialization happens in `LoadingScene.Start` for `JsonLocalStore`, `SqliteLocalStore`, `GameTaskUtility`, and `CardPackDataUtility`.
+- `Assets/Scripts/Model` intentionally remains a single flat folder. Related pure C# types are consolidated as follows: `GameManager` lives in `GameDefine.cs`, CSV parser types live in `GameConfigRepository.cs`, both `JsonLocalStore` and `SqliteLocalStore` live in `LocalDataStore.cs`, and score types/`GameScoreUtility` live in `GameTaskUtility.cs`. Public type names and call sites remain unchanged.
 
 ### Development Persistence Policy
 

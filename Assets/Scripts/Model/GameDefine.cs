@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 public sealed class DraggablePieceState
@@ -163,4 +164,59 @@ public static class GameDefine
     public const string DefaultChineseTmpFontEditorPath = "Assets/TextMesh Pro/Resources/Fonts & Materials/NotoSansSC-Regular SDF.asset";
     public const string DefaultChineseFontResourcesPath = "Fonts & Materials/NotoSansSC-Regular";
     public const string DefaultChineseTmpFontResourcesPath = "Fonts & Materials/NotoSansSC-Regular SDF";
+}
+
+public static class GameManager
+{
+    private static int sBagId = GameDefine.DefaultBagId;
+    private static bool sIsInitialized;
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+    private static void Bootstrap()
+    {
+        Initialize();
+    }
+
+    public static void Initialize()
+    {
+        if (sIsInitialized)
+        {
+            return;
+        }
+
+        sBagId = GameDefine.DefaultBagId;
+        sIsInitialized = true;
+        Debug.Log("GameManager initialized.");
+    }
+
+    public static int GetBagId()
+    {
+        return sBagId;
+    }
+
+    public static void SetBagId(int bagId)
+    {
+        sBagId = bagId;
+    }
+
+    public static void EnterGameScene(int bagId)
+    {
+        SetBagId(bagId);
+        SceneManager.LoadScene(GameDefine.SceneGame);
+    }
+
+    public static void EnterRankScene()
+    {
+        SceneManager.LoadScene(GameDefine.SceneRank);
+    }
+
+    public static void EnterAchieveScene()
+    {
+        SceneManager.LoadScene(GameDefine.SceneAchieve);
+    }
+
+    public static void EnterMainScene()
+    {
+        SceneManager.LoadScene(GameDefine.SceneMain);
+    }
 }

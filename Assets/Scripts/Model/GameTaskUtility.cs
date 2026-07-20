@@ -292,3 +292,130 @@ public static class GameTaskUtility
         return JsonLocalStore.SaveRoot(progress);
     }
 }
+
+public struct GameScoreContext
+{
+    public bool WasHintUsed;
+    public bool IsLevelOutlineEnabled;
+    public bool IsStickerOutlineEnabled;
+    public float CompletionTimeSeconds;
+}
+
+public struct GameScoreResult
+{
+    public int BaseScore;
+    public int NoHintBonusPercent;
+    public int LevelOutlineDisabledBonusPercent;
+    public int StickerOutlineDisabledBonusPercent;
+    public int CompletionTimeBonusPercent;
+    public int TotalBonusPercent;
+    public float CompletionTimeSeconds;
+    public int FinalScore;
+}
+
+public static class GameScoreUtility
+{
+    public const float TimeThresholdASeconds = 15f;
+    public const float TimeThresholdBSeconds = 30f;
+    public const float TimeThresholdCSeconds = 60f;
+
+    private const int NoHintBonusPercent = 5;
+    private const int LevelOutlineDisabledBonusPercent = 2;
+    private const int StickerOutlineDisabledBonusPercent = 5;
+
+    public static int GetBaseScore(CardPackSize packSize)
+    {
+        switch (packSize)
+        {
+            case CardPackSize.XS:
+                return 60;
+            case CardPackSize.S:
+                return 80;
+            case CardPackSize.M:
+                return 100;
+            case CardPackSize.L:
+                return 120;
+            case CardPackSize.XL:
+                return 140;
+            case CardPackSize.XXL:
+                return 160;
+            case CardPackSize.XXXL:
+                return 200;
+            default:
+                return 0;
+        }
+    }
+
+    public static bool TryCalculateCardPackScore(
+        int packId,
+        GameScoreContext context,
+        out GameScoreResult result)
+    {
+        result = default;
+        if (!CardPackDataUtility.TryGetPackConfig(packId, out var packSize))
+        {
+            return false;
+        }
+
+        var baseScore = GetBaseScore(packSize);
+        if (baseScore <= 0)
+        {
+            return false;
+        }
+
+        var completionTimeSeconds = SanitizeCompletionTime(context.CompletionTimeSeconds);
+        var noHintBonus = context.WasHintUsed ? 0 : NoHintBonusPercent;
+        var levelOutlineBonus = context.IsLevelOutlineEnabled
+            ? 0
+            : LevelOutlineDisabledBonusPercent;
+        var stickerOutlineBonus = context.IsStickerOutlineEnabled
+            ? 0
+            : StickerOutlineDisabledBonusPercent;
+        var completionTimeBonus = GetCompletionTimeBonusPercent(completionTimeSeconds);
+        var totalBonus = noHintBonus
+            + levelOutlineBonus
+            + stickerOutlineBonus
+            + completionTimeBonus;
+        var scaledScore = baseScore * (100 + totalBonus);
+
+        result = new GameScoreResult
+        {
+            BaseScore = baseScore,
+            NoHintBonusPercent = noHintBonus,
+            LevelOutlineDisabledBonusPercent = levelOutlineBonus,
+            StickerOutlineDisabledBonusPercent = stickerOutlineBonus,
+            CompletionTimeBonusPercent = completionTimeBonus,
+            TotalBonusPercent = totalBonus,
+            CompletionTimeSeconds = completionTimeSeconds,
+            FinalScore = (scaledScore + 99) / 100
+        };
+        return true;
+    }
+
+    private static int GetCompletionTimeBonusPercent(float completionTimeSeconds)
+    {
+        if (completionTimeSeconds <= TimeThresholdASeconds)
+        {
+            return 3;
+        }
+
+        if (completionTimeSeconds <= TimeThresholdBSeconds)
+        {
+            return 2;
+        }
+
+        return completionTimeSeconds <= TimeThresholdCSeconds ? 1 : 0;
+    }
+
+    private static float SanitizeCompletionTime(float completionTimeSeconds)
+    {
+        if (float.IsNaN(completionTimeSeconds)
+            || float.IsInfinity(completionTimeSeconds)
+            || completionTimeSeconds < 0f)
+        {
+            return 0f;
+        }
+
+        return completionTimeSeconds;
+    }
+}

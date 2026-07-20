@@ -33,7 +33,7 @@
 
 ## Current Implementation
 
-- `GameScoreUtility` calculates the full final score and all individual bonus percentages.
+- `GameScoreUtility` (stored with task progression in `GameTaskUtility.cs`) calculates the full final score and all individual bonus percentages.
 - GameScene persists task progress and reward state before running its settlement presentation.
 - `TaskProgressUIUtility` binds the shared MainScene/GameScene `TaskItem`.
 - The current score presentation performs one 0-to-final roll over 0.8 seconds. It does not yet reveal each qualified bonus or animate cumulative score steps.
@@ -60,4 +60,3 @@
 - Current HEAD `2236f9f` builds all runtime, first-pass, and Editor assemblies with 0 warnings and 0 errors.
 - Static implementation and persisted schema were cross-checked against `PROJECT_CONTEXT.md` and `GAME_DESIGN_REQUIREMENTS.md`.
 - Full Play Mode regression remains pending.
-

@@ -4,6 +4,8 @@ using System.IO;
 using SQLite;
 using UnityEngine;
 
+// JSON and SQLite backends share this file as the project's local persistence layer.
+
 /// <summary>
 /// 用途：统一管理本地 SQLite 数据库的增删改查。返回：按方法说明。
 /// </summary>
@@ -430,5 +432,142 @@ public static class SqliteLocalStore
     private sealed class RecordKeyRow
     {
         public string RecordKey { get; set; }
+    }
+}
+
+public static class JsonLocalStore
+{
+    private const string TempFileSuffix = ".tmp";
+
+    private static readonly object sLock = new object();
+    private static bool sIsLoaded;
+    private static string sFilePath;
+
+    public static bool Initialize()
+    {
+        lock (sLock)
+        {
+            try
+            {
+                EnsureLoaded();
+                Debug.Log($"JsonLocalStore initialized: {sFilePath}");
+                return sIsLoaded;
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError($"JsonLocalStore.Initialize failed.\n{exception}");
+                return false;
+            }
+        }
+    }
+
+    public static bool IsInitialized => sIsLoaded;
+
+    public static string GetFilePath()
+    {
+        EnsureLoaded();
+        return sFilePath;
+    }
+
+    public static bool TryReadRoot<T>(out T value)
+    {
+        value = default;
+        lock (sLock)
+        {
+            EnsureLoaded();
+            if (!File.Exists(sFilePath))
+            {
+                return false;
+            }
+
+            try
+            {
+                var json = File.ReadAllText(sFilePath);
+                if (string.IsNullOrWhiteSpace(json))
+                {
+                    return false;
+                }
+
+                value = JsonUtility.FromJson<T>(json);
+                return true;
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError($"JsonLocalStore.TryReadRoot failed: {sFilePath}\n{exception}");
+                return false;
+            }
+        }
+    }
+
+    public static bool SaveRoot<T>(T value)
+    {
+        lock (sLock)
+        {
+            EnsureLoaded();
+            return TryPersist(JsonUtility.ToJson(value, prettyPrint: true));
+        }
+    }
+
+    public static bool ClearAll()
+    {
+        lock (sLock)
+        {
+            sIsLoaded = true;
+            sFilePath = Path.Combine(Application.persistentDataPath, GameDefine.LocalJsonFileName);
+
+            if (!File.Exists(sFilePath))
+            {
+                return true;
+            }
+
+            try
+            {
+                File.Delete(sFilePath);
+                return true;
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError($"JsonLocalStore.ClearAll failed: {sFilePath}\n{exception}");
+                return false;
+            }
+        }
+    }
+
+    private static void EnsureLoaded()
+    {
+        if (sIsLoaded)
+        {
+            return;
+        }
+
+        sFilePath = Path.Combine(Application.persistentDataPath, GameDefine.LocalJsonFileName);
+        sIsLoaded = true;
+    }
+
+    private static bool TryPersist(string json)
+    {
+        try
+        {
+            var directory = Path.GetDirectoryName(sFilePath);
+            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            var tempPath = sFilePath + TempFileSuffix;
+            File.WriteAllText(tempPath, json);
+            if (File.Exists(sFilePath))
+            {
+                File.Delete(sFilePath);
+            }
+
+            File.Move(tempPath, sFilePath);
+            return true;
+        }
+        catch (Exception exception)
+        {
+            Debug.LogError($"JsonLocalStore persist failed: {sFilePath}\n{exception}");
+            return false;
+        }
     }
 }

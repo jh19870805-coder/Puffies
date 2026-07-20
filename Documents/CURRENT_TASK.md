@@ -1,69 +1,66 @@
 # Current Task
 
-- Task: Synchronize latest development progress and game rules
+- Task: Consolidate flat Model scripts
 - Status: Completed
 - Updated At: 2026-07-20
 
 ## User Intent
 
-- Consolidate the latest cross-device implementation progress and rules into the project's durable documentation.
-- Correct stale outline and scoring data-path descriptions without creating more dated spec files.
+- Keep source directories shallow and avoid creating many nested folders.
+- Reduce the number of C# files in `Assets/Scripts/Model` by merging closely related functionality without changing behavior.
 
 ## Working Notes
 
-- `GAME_DESIGN_REQUIREMENTS.md` remains the source of truth for confirmed and pending design rules.
-- `PROJECT_CONTEXT.md` records the actual current architecture, persistence, content, and runtime behavior.
-- `specs/task-and-settlement.md` now covers scoring, task progress, card-pack lifecycle/distribution, list ordering, and reward presentation.
-- `specs/puzzle-outline.md` now records stable tray positions and the latest current-group exterior/contact-edge rule.
-- The latest implementation is commit `2236f9f` on `develop`, synchronized with `origin/develop` when this review was performed.
-
-## Implemented Progress
-
-- Accumulated-score settlement with hint, outline, sticker, and time bonuses plus upward rounding.
-- Four-state card-pack lifecycle, pending task entitlements, stage-gated first-completion grants, and internal chapter pools.
-- MainScene 18-item paging, lifecycle ordering, new-pack priority, completed tint, size icons, and generated cover shadows.
-- Multi-pack RewardPanel-to-MainScene collection flight.
-- CardBag017 content and 19 baked outline masks across five playable CardBag prefabs.
-- Stable Piece tray positions and staged current-group outline boundaries.
-- RankScene local-player presentation and 20-item mock AchieveScene content.
+- Model remains one flat directory and now contains 10 C# files instead of 14.
+- `GameManager` moved into `GameDefine.cs`.
+- `CsvTable` and `CsvRow` moved into `GameConfigRepository.cs`.
+- `JsonLocalStore` and `SqliteLocalStore` now share the accurately named `LocalDataStore.cs` file.
+- Score context/result types and `GameScoreUtility` moved into `GameTaskUtility.cs`.
+- Public type names, APIs, constants, persisted fields, and runtime behavior remain unchanged.
+- Garbled XML comments were not copied with the moved implementations; no unrelated source-wide encoding rewrite was performed.
 
 ## Files Changed
 
-- `Documents/GAME_DESIGN_REQUIREMENTS.md`
+- `Assets/Scripts/Model/GameDefine.cs`
+- `Assets/Scripts/Model/GameConfigRepository.cs`
+- `Assets/Scripts/Model/LocalDataStore.cs`
+- `Assets/Scripts/Model/GameTaskUtility.cs`
+- Deleted `GameManager.cs`, `CsvTable.cs`, `JsonLocalStore.cs`, and `GameScoreUtility.cs` plus their `.meta` files.
+- Renamed the combined `SqliteLocalStore.cs` file to `LocalDataStore.cs` while preserving its `.meta` GUID.
+- `AGENTS.md`
 - `Documents/PROJECT_CONTEXT.md`
 - `Documents/CURRENT_TASK.md`
 - `specs/task-and-settlement.md`
-- `specs/puzzle-outline.md`
 
 ## Decisions
 
-- Keep only two long-lived spec files rather than creating one dated document per change.
-- Separate confirmed design rules, current playtest parameters, implementation facts, and pending decisions.
-- Record the current single 0-to-final score roll as an implementation gap against the confirmed sequential bonus presentation.
-- Preserve the active-development policy: no legacy SQLite migration unless explicitly requested.
+- Keep `CardPackDataUtility`, `GameAnimationUtility`, and `GameCommonUtility` separate because each is already a large independently owned module.
+- Do not add Model subfolders solely to categorize ten files.
+- Delete the four obsolete script GUIDs only after confirming they had no Scene, Prefab, or Asset references.
+- Do not modify Unity-generated project files manually; regenerate them through Unity.
+- Name shared domain files after the domain rather than one contained implementation.
 
 ## Validation
 
-- Reviewed commit history from `121e593` through `2236f9f` and checked current code/config ownership for each documented feature.
-- `dotnet build Puffies.sln --no-restore` completed with 0 warnings and 0 errors at `2236f9f`.
-- Confirmed `develop` matched `origin/develop` and the workspace was clean before this documentation update.
-- Static consistency checks found no stale outline rule, resolved PackSize pending item, or unexpected non-document change.
-- No code, scene, prefab, generated outline, or gameplay resource was changed in this documentation task.
+- Confirmed the removed script GUIDs had no serialized Unity asset references.
+- Unity 2022.3.62f2 batch import completed without C# compiler errors and regenerated `Assembly-CSharp.dll`.
+- Unity solution synchronization removed all four deleted source paths from `Assembly-CSharp.csproj`.
+- Unity solution synchronization replaced the old persistence source path with `Assets/Scripts/Model/LocalDataStore.cs`.
+- `dotnet build Puffies.sln --no-restore` completed with 0 warnings and 0 errors for first-pass, runtime, and Editor assemblies.
+- `git diff --check` completed without whitespace errors; Git only reported line-ending conversion notices.
+- Play Mode smoke testing remains pending.
 
-## Data Reset Before Regression
+## Data Reset
 
-- Close Unity before resetting development data.
-- Delete `%USERPROFILE%/AppData/LocalLow/MainTown/Puffies/LocalData.db` because the CardPacks schema changed incompatibly.
-- Delete `%USERPROFILE%/AppData/LocalLow/MainTown/Puffies/LocalData.json` for a clean task/distribution cross-store regression.
-- Do not delete either file automatically without explicit user permission.
+- This refactor does not change serialized data or persistence schemas and does not require deleting `LocalData.db` or `LocalData.json`.
+- The separate reset requirement for testing the previously changed CardPacks schema still applies when using pre-schema-change development data.
 
 ## Next Action
 
-1. Verify stable tray coordinates and staged group outlines in Play Mode.
-2. Verify lifecycle transitions, pending and dual grants, reward flight, and MainScene paging/order with clean local data.
-3. Implement the confirmed sequential bonus reveal and cumulative score-roll presentation after its pending timing/order details are confirmed.
-4. Confirm final chapter allocation, advancement, candidate selection, and empty-pool behavior before scaling content toward 150 packs.
+1. Open Unity and confirm LoadingScene reaches MainScene without missing-script or type-load errors.
+2. Enter one card pack and smoke-test task score settlement plus return to MainScene.
+3. Continue the broader Play Mode regression recorded in the two specs.
 
 ## Resume Prompt
 
-Continue Puffies from the synchronized project state. Read AGENTS.md, Documents/WORKFLOW.md, Documents/CURRENT_TASK.md, Documents/GAME_DESIGN_REQUIREMENTS.md, and the two specs first, then follow the latest user instruction or the Next Action list.
+Continue Puffies after the flat Model consolidation. Read AGENTS.md, Documents/WORKFLOW.md, Documents/CURRENT_TASK.md, and Documents/PROJECT_CONTEXT.md first, then run the Play Mode smoke checks or follow the user's latest instruction.
