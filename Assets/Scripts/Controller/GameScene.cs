@@ -877,7 +877,6 @@ public class GameScene : MonoBehaviour
             state.PieceRenderer.transform.SetParent(placedRoot.transform, worldPositionStays: true);
             state.IsPlaced = true;
             StartGameplayTimerIfNeeded();
-            LayoutTrayPieces();
             TryAdvanceGroup();
             return;
         }
@@ -957,7 +956,11 @@ public class GameScene : MonoBehaviour
             var pieceWidth = GameCommonUtility.GetPieceWidth(state.PieceRenderer, state.TrayScale);
             var pieceHalfWidth = pieceWidth * 0.5f;
             var pieceCenterX = nextCenterX + pieceHalfWidth;
-            var position = PlaceTrayPieceAt(state.PieceRenderer, state.TrayScale, pieceCenterX, trayCenterY);
+            var position = PlaceTrayPieceAt(
+                state.PieceRenderer,
+                state.TrayScale,
+                pieceCenterX,
+                trayCenterY);
             state.StartPosition = position;
             nextCenterX = pieceCenterX + pieceHalfWidth + horizontalSpacing;
         }
@@ -970,14 +973,11 @@ public class GameScene : MonoBehaviour
         float trayCenterY)
     {
         renderer.transform.localScale = trayScale;
-        renderer.transform.position = new Vector3(centerX, trayCenterY, WorldGameplayDepth);
-        var deltaY = trayCenterY - renderer.bounds.center.y;
-        if (Mathf.Abs(deltaY) > 0.0001f)
-        {
-            var position = renderer.transform.position;
-            position.y += deltaY;
-            renderer.transform.position = position;
-        }
+        var spriteCenter = renderer.sprite != null ? renderer.sprite.bounds.center : Vector3.zero;
+        renderer.transform.position = new Vector3(
+            centerX - spriteCenter.x * trayScale.x,
+            trayCenterY - spriteCenter.y * trayScale.y,
+            WorldGameplayDepth);
 
         return renderer.transform.position;
     }

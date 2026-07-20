@@ -239,9 +239,10 @@ Shared size icons are `UI/PackImages/PackSize_1.png` through `PackSize_7.png`, m
 4. Store source textures under `Assets/UI/CardBags/CardBagNNN/` using grouped names such as `Pieces11`...`Pieces14` and `Pieces21`...`Pieces25`.
 5. Do not use `PieceGroup` parent nodes; grouping comes only from the number after `Piece`.
 6. Do not create Package JSON; runtime data comes from the loaded prefab's Images.
-7. Run **Puffies -> Puzzles -> Bake Outline Masks** after adding or changing a CardBag. The baker merges Piece Alpha in GameBoard coordinates, closes narrow gaps, flood-fills the complete puzzle exterior, and writes `Resources/Generated/PuzzleOutlines/CardBagNNN/GroupNN.png`.
-8. `GameScene` displays the baked `#3f423e` group Sprite as a non-interactive `GameBoard` child. This is the primary path and does not draw internal Piece/group seams. Do not author outline objects in prefabs.
+7. Run **Puffies -> Puzzles -> Bake Outline Masks** after adding or changing a CardBag. The baker merges Piece Alpha in GameBoard coordinates, closes narrow gaps, and writes `Resources/Generated/PuzzleOutlines/CardBagNNN/GroupNN.png`. Group 1 contains only its final-puzzle exterior. Every later image contains only the current group's final-puzzle exterior and its contact edges with lower-number completed groups.
+8. `GameScene` displays the baked `#3f423e` current-group Sprite as a non-interactive `GameBoard` child. The mask excludes completed groups' unrelated boundaries, current-to-future-group edges, and individual Piece seams inside the same group. Do not author outline objects in prefabs.
 9. If a generated Sprite is missing, runtime logs an authoring warning and continues gameplay without an outline. Re-run the baker before delivery.
+- Draggable pieces are positioned once when a group is created. After a Piece is placed, every remaining tray Piece retains its established X and Y position; gaps are not compacted until the next group is created.
 
 ### Puzzle Outline Rendering
 

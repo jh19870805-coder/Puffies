@@ -126,29 +126,65 @@ public static class PuzzleOutlineBakerEditor
 
             var unionMask = UnionMasks(groupMasks, width * height);
             var closedUnionMask = CloseMask(unionMask, width, height, MaskCloseRadius);
-            var exteriorMask = FloodExterior(closedUnionMask, width, height);
-            var geometricBoundary = BuildExteriorBoundary(closedUnionMask, exteriorMask, width, height);
-            var colorBoundary = ValidateGrayLightBoundary(
-                geometricBoundary,
-                exteriorMask,
+            var finalExteriorMask = FloodExterior(closedUnionMask, width, height);
+            var finalGeometricBoundary = BuildExteriorBoundary(
+                closedUnionMask,
+                finalExteriorMask,
+                width,
+                height);
+            var finalColorBoundary = ValidateGrayLightBoundary(
+                finalGeometricBoundary,
+                finalExteriorMask,
                 boardPixels,
                 width,
                 height);
-            var validatedBoundary = BridgeColorBoundary(
-                geometricBoundary,
-                colorBoundary,
+            var finalValidatedBoundary = BridgeColorBoundary(
+                finalGeometricBoundary,
+                finalColorBoundary,
                 width,
                 height);
 
             var outputFolder = $"{OutputRoot}/{GameDefine.CardBagPrefabPrefix}{bagId:D3}";
             Directory.CreateDirectory(outputFolder);
+            var completedMask = new bool[width * height];
             foreach (var pair in groupMasks)
             {
-                var outputPixels = BuildGroupOutline(
-                    pair.Value,
-                    validatedBoundary,
+                var closedCurrentMask = CloseMask(pair.Value, width, height, MaskCloseRadius);
+                var currentExteriorMask = FloodExterior(closedCurrentMask, width, height);
+                var currentGeometricBoundary = BuildExteriorBoundary(
+                    closedCurrentMask,
+                    currentExteriorMask,
                     width,
                     height);
+                var currentColorBoundary = ValidateGrayLightBoundary(
+                    currentGeometricBoundary,
+                    currentExteriorMask,
+                    boardPixels,
+                    width,
+                    height);
+                var currentValidatedBoundary = BridgeColorBoundary(
+                    currentGeometricBoundary,
+                    currentColorBoundary,
+                    width,
+                    height);
+                var activeBoundary = BuildActiveGroupBoundary(
+                    pair.Value,
+                    completedMask,
+                    finalValidatedBoundary,
+                    currentValidatedBoundary,
+                    width,
+                    height);
+                var outputPixels = BuildGroupOutline(
+                    pair.Value,
+                    activeBoundary,
+                    width,
+                    height);
+
+                for (var i = 0; i < completedMask.Length; i++)
+                {
+                    completedMask[i] |= pair.Value[i];
+                }
+
                 var outputPath = $"{outputFolder}/Group{pair.Key:D2}.png";
                 WritePng(outputPath, width, height, outputPixels);
                 Debug.Log(
@@ -356,6 +392,45 @@ public static class PuzzleOutlineBakerEditor
         }
 
         return union;
+    }
+
+    private static bool[] BuildActiveGroupBoundary(
+        bool[] currentMask,
+        bool[] completedMask,
+        bool[] finalBoundary,
+        bool[] currentBoundary,
+        int width,
+        int height)
+    {
+        var activeBoundary = new bool[currentMask.Length];
+        var hasCompletedPieces = CountTrue(completedMask) > 0;
+        for (var y = 0; y < height; y++)
+        {
+            for (var x = 0; x < width; x++)
+            {
+                var index = y * width + x;
+                var isCurrentOuterEdge = finalBoundary[index]
+                                         && IsNearMask(
+                                             currentMask,
+                                             x,
+                                             y,
+                                             width,
+                                             height,
+                                             GroupAssignmentRadius);
+                var isCompletedContactEdge = hasCompletedPieces
+                                             && currentBoundary[index]
+                                             && IsNearMask(
+                                                 completedMask,
+                                                 x,
+                                                 y,
+                                                 width,
+                                                 height,
+                                                 ColorBridgeRadius);
+                activeBoundary[index] = isCurrentOuterEdge || isCompletedContactEdge;
+            }
+        }
+
+        return activeBoundary;
     }
 
     private static bool[] FloodExterior(bool[] unionMask, int width, int height)
