@@ -1,51 +1,70 @@
 # Current Task
 
-- Task: Replace the generic card-pack opening effect with the re-exported package
-- Status: Imported and visible in MainScene; final-position alignment deferred
+- Task: Import the effect artist's card-pack shader revision
+- Status: Completed; MainScene visual acceptance pending
 - Updated At: 2026-07-20
 
 ## User Intent
 
-- Remove the old opening-effect resources and use the new effect artist export.
-- Keep one reusable opening effect for every current and future `600 x 680` card-pack cover.
-- Preserve the authored wave edge and make the static-cover-to-animation handoff visually seamless.
+- Inspect `Assets/Resources/shader修改.unitypackage` from the effect artist.
+- Import every resource required by the revised card-pack shader.
+- Keep imported assets organized under the project's existing naming and loading contract.
 
 ## Completed
 
-- Extracted only the generic animation, model, prefab, controller, material, shader, default cover, back texture, and clip mask from `Assets/Resources/卡包.unitypackage`.
-- Removed obsolete `CardPackSkin_002` through `CardPackSkin_006`, `CardPackLit.mat`, and the two unused normal/AO textures.
-- Normalized the asset names under `Assets/Resources/Effects/CardPack/` to the `CardPackOpening` naming contract.
-- Replaced the supplied Built-in/Amplify shader with `Puffies/CardPackOpening`, a URP-compatible two-sided alpha-clip shader.
-- Corrected its pass tag to `LightMode=SRPDefaultUnlit`; the project's `Renderer2D` does not draw a `UniversalForward`-only pass.
-- Bound the selected PackId Sprite to `_FrontFacesAlbedo` through `MaterialPropertyBlock`; the back texture and wave clip mask remain authored material inputs.
-- Kept complete-Sprite UV sampling, renderer pre-hide, animation-time-zero skinning, uniform fit, and center alignment.
+- Inspected all 16 package entries by GUID and dependency reference before importing.
+- Kept the existing generic `CardPackOpening` Prefab, model, animation, controller, back texture, dynamic cover binding, and wave clip mask.
+- Did not import the package's `mesh_skin_cardPack_006` model/Prefab because it is a material preview skin, not a replacement for the generic runtime opening model.
+- Ported the artist's double-sided normal, environment reflection, lighting ramp, metallic/smoothness, and AO behavior from the supplied Built-in Surface Shader into the existing URP-compatible `Puffies/CardPackOpening` shader.
+- Preserved `LightMode=SRPDefaultUnlit`, which is required for the project's URP Renderer2D.
+- Imported and renamed the required new dependencies as `CardPackFrontNormal.png`, `CardPackReflection.hdr`, `CardPackLightingRamp.png`, and `CardPackOcclusion.png` under `Resources/Effects/CardPack/`.
+- Reused the identical existing `Resources/Effects/CardFx/Textures/fx_a_fluid_017_n.png` as the back-face normal input instead of adding a duplicate asset.
+- Updated `CardPackOpeningMaterial` with the artist's authored parameter values and all eight required texture bindings.
+- Removed the full-card red tint by converting the rainbow lighting ramp and HDR reflection to luminance before applying them.
+- Preserved the selected cover's original albedo as the base output; normal, ramp, reflection, specular, and AO now add neutral surface detail instead of replacing or darkening the cover color.
+
+## Files Changed
+
+- `Assets/Resources/Effects/CardPack/CardPackOpening.shader`
+- `Assets/Resources/Effects/CardPack/CardPackOpeningMaterial.mat`
+- `Assets/Resources/Effects/CardPack/CardPackFrontNormal.png`
+- `Assets/Resources/Effects/CardPack/CardPackReflection.hdr`
+- `Assets/Resources/Effects/CardPack/CardPackLightingRamp.png`
+- `Assets/Resources/Effects/CardPack/CardPackOcclusion.png`
+- `Documents/PROJECT_CONTEXT.md`
+- `Documents/CURRENT_TASK.md`
+
+## Decisions
+
+- Do not import the package's original `Assets/ArtRes` and `Assets/U3DMake` directory trees.
+- Do not directly replace the URP shader with the supplied Built-in/Amplify Surface Shader; it cannot render through this project's Renderer2D.
+- Preserve the existing Shader, material, animation, and back-texture GUIDs so runtime and Prefab references remain stable.
+- Keep the selected card-pack cover assigned through `MaterialPropertyBlock`; the package's fixed `CardPack02.tga` is not a runtime dependency.
+- Exclude stale or unused package dependencies: `CardPack02A.png`, `studio025.jpg`, `tex_noise_w_032.png`, the 006 model/Prefab, and duplicate controller/animation/back assets.
 
 ## Validation
 
-- `dotnet build Puffies.sln --no-restore`: 0 warnings, 0 errors for first-pass, runtime, and Editor assemblies.
-- Unity 2022.3.62f2c1 batch import completed successfully with no shader, missing-reference, or invalid-pass errors.
-- Temporary Editor assertions verified shader support and pass layout, all three material textures, Prefab mesh/material, Animator Controller/default state, Resources paths, and absence of the old material/numbered Prefab.
-- A Renderer2D offscreen render produced `320789` visible pixels at `600 x 680`; the preview showed the complete cover and both wave-clipped edges instead of a blank frame.
-- Animation frame-zero mesh aspect is `0.884720`; target `15:17` is `0.882353`, an approximately `0.27%` difference.
-- MainScene Play Mode retest confirmed that the opening animation is visible and generally correct after the Renderer2D pass fix.
-- A slight position jump remains between the clicked cover and the animation. The user chose to defer final alignment because the production animation will not play at the current MainScene location.
+- Unity 2022.3.62f2c1 imported all selected assets and compiled `Puffies/CardPackOpening` without Shader errors or warnings.
+- Temporary Editor assertions verified Shader support, the `CardPackForward` pass, all eight material texture slots, and the Prefab's material binding.
+- Renderer2D offscreen validation rendered `322,312` visible pixels at `600 x 680`; the card cover, wave edges, normal highlights, AO, and environment reflections were visible.
+- A follow-up `600 x 680` offscreen preview confirmed the red overlay was removed, the original green/orange cover colors remained intact, and the wave edge plus neutral highlights were still visible.
+- `dotnet build Puffies.sln --no-restore` completed with 0 warnings and 0 errors.
+- The user's existing `Assets/Scenes/LoadingScene.unity` change was left untouched.
+- This visual-only change does not require deleting `LocalData.db` or `LocalData.json`.
 
 ## Source Package
 
-- `Assets/Resources/卡包.unitypackage` is intentionally still present as the supplied import source until visual acceptance.
-- It should be moved out of `Assets/Resources` or deleted after acceptance so the archive cannot enter a player build or repository by accident.
-
-## Data Reset
-
-- This presentation-only change does not modify persistence and does not require deleting `LocalData.db` or `LocalData.json`.
+- `Assets/Resources/shader修改.unitypackage` remains as the supplied source package for visual acceptance.
+- `Assets/Resources/卡包.unitypackage` also remains from the preceding opening-effect import.
+- Move or delete both archives outside `Assets/Resources` after acceptance so they cannot enter a player build or repository accidentally.
 
 ## Next Action
 
-1. Confirm the production scene/container and final screen position where the opening animation will play.
-2. Test PackId 1 and PackId 17 there, then calibrate only the remaining frame-zero position offset.
-3. Confirm the final cover content, orientation, dimensions, wave edge, and static-to-animation handoff.
-4. After final acceptance, remove or archive `Assets/Resources/卡包.unitypackage` outside `Assets`.
+1. Open MainScene and test the card-pack opening animation with PackId 1 and PackId 17.
+2. Compare the normal highlights and reflections against the effect artist's reference and tune only material values if necessary.
+3. Confirm the final production animation position and remove the remaining static-to-animation position jump.
+4. After visual acceptance, archive both `.unitypackage` files outside `Assets`.
 
 ## Resume Prompt
 
-Continue Puffies card-pack opening final-position integration. Read AGENTS.md, Documents/WORKFLOW.md, Documents/CURRENT_TASK.md, Documents/PROJECT_CONTEXT.md, and specs/task-and-settlement.md first, then identify the production animation container and calibrate the remaining frame-zero position offset there.
+Continue Puffies card-pack shader visual acceptance. Read AGENTS.md, Documents/WORKFLOW.md, Documents/CURRENT_TASK.md, Documents/PROJECT_CONTEXT.md, and specs/task-and-settlement.md first, then test the revised CardPackOpening material in MainScene with multiple pack covers.

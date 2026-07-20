@@ -215,7 +215,7 @@ New `CanvasScaler` values are written by `CanvasDesignResolutionEditor.cs`. Use 
 - Do not use `PlayerPrefs`.
 - Initialization happens in `LoadingScene.Start` for `JsonLocalStore`, `SqliteLocalStore`, `GameTaskUtility`, and `CardPackDataUtility`.
 - `Assets/Scripts/Model` intentionally remains a single flat folder. Related pure C# types are consolidated as follows: `GameManager` lives in `GameDefine.cs`, CSV parser types live in `GameConfigRepository.cs`, both `JsonLocalStore` and `SqliteLocalStore` live in `LocalDataStore.cs`, and score types/`GameScoreUtility` live in `GameTaskUtility.cs`. Public type names and call sites remain unchanged.
-- MainScene card-pack opening always instantiates `Resources/Effects/CardPack/CardPackOpening.prefab`. `GameAnimationUtility` applies the selected entry's complete `PackIconNNN` Sprite texture rectangle to `CardPackOpeningMaterial` through `MaterialPropertyBlock` without cropping or aspect compensation, bakes the animation-time-zero skinned mesh, and uniformly fits that first frame inside the clicked UI bounds before enabling its renderers. The shared material is not mutated. Its URP shader renders the selected cover on the front face, the authored back texture on the back face, and uses `CardPackClipMask.png` for the wave-shaped edge. The project uses URP `Renderer2D`, so this unlit mesh shader pass must use `LightMode=SRPDefaultUnlit` (or `Universal2D`); a `UniversalForward`-only pass compiles but is skipped and produces an invisible animation. The generic effect is authored for the common `600 x 680` (`15:17`) runtime cover aspect.
+- MainScene card-pack opening always instantiates `Resources/Effects/CardPack/CardPackOpening.prefab`. `GameAnimationUtility` applies the selected entry's complete `PackIconNNN` Sprite texture rectangle to `CardPackOpeningMaterial` through `MaterialPropertyBlock` without cropping or aspect compensation, bakes the animation-time-zero skinned mesh, and uniformly fits that first frame inside the clicked UI bounds before enabling its renderers. The shared material is not mutated. Its URP shader renders the selected cover on the front face, the authored back texture on the back face, and uses `CardPackClipMask.png` for the wave-shaped edge. The shader also applies the effect artist's front/back normal mapping, HDR environment reflection, lighting ramp, metallic/smoothness, and AO inputs. The back normal reuses `Resources/Effects/CardFx/Textures/fx_a_fluid_017_n.png`. The selected cover albedo must remain the unchanged base color; the rainbow ramp and HDR reflection are converted to luminance and applied only as neutral additive surface detail so they cannot tint or darken the whole card. The project uses URP `Renderer2D`, so this mesh shader pass must use `LightMode=SRPDefaultUnlit` (or `Universal2D`); supplied Built-in/Amplify Surface Shaders must be ported instead of imported directly. A `UniversalForward`-only pass compiles but is skipped and produces an invisible animation. The generic effect is authored for the common `600 x 680` (`15:17`) runtime cover aspect.
 
 ### Development Persistence Policy
 
@@ -277,6 +277,10 @@ Prefabs and dependencies go under `Resources/Effects/CardFx/`, for example `Card
 | Default card pack cover | `CardPackDefaultCover.png` | Same |
 | Material | `CardPackOpeningMaterial` | Same |
 | URP shader | `CardPackOpening.shader` | Same |
+| Front normal | `CardPackFrontNormal.png` | Same |
+| HDR reflection | `CardPackReflection.hdr` | Same |
+| Lighting ramp | `CardPackLightingRamp.png` | Same |
+| Occlusion map | `CardPackOcclusion.png` | Same |
 | Back texture | `CardPackBack.png` | Same |
 | Wave clip mask | `CardPackClipMask.png` | Same |
 | Plane group | `PlaneGroup_001` | `Resources/Effects/PlaneGroup/` |
