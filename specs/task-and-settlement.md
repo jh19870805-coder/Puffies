@@ -32,8 +32,9 @@
 4. RewardPanel keeps its authored `ImgBag` Sprite. On `BtnFinish`, all packs granted by that settlement move into a centered row, pause, survive scene loading, and fly to their MainScene list slots.
 5. MainScene card-pack opening reuses one generic 3D model and its existing Animator Controller for every PackId.
 6. Before playback, the model receives the selected pack's real `PackIconNNN.png` through per-renderer material properties; shared material assets are not modified.
-7. The cover UV is center-cropped to the reference model texture aspect ratio, and the animated model is fitted to the clicked card-pack UI bounds and center.
+7. The cover UV uses the complete original Sprite texture rectangle without center-cropping or runtime aspect compensation. The generic effect must be authored for the common `600 x 680` (`15:17`) cover format before the model is uniformly fitted to the clicked UI bounds and center.
 8. Missing cover data may fall back to the authored model texture, but a missing pack-specific 3D prefab must not prevent the generic animation from playing.
+9. The closed animation-time-zero mesh is measured after skinning, uniformly fitted, and aligned to the clicked cover before its renderers become visible. The compatible replacement effect must make this handoff free of size, aspect, crop, or blank-edge changes.
 
 ## Current Implementation
 

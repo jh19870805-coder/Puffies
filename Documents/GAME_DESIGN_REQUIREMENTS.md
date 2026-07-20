@@ -293,7 +293,10 @@ Status: `Confirmed`
 
 - Every card pack reuses the existing generic 3D opening model and Animator animation.
 - The animated model displays the selected PackId's real card-pack cover instead of a fixed authored cover.
-- The generic model is centered on and fitted inside the clicked MainScene card-pack UI bounds before playback.
+- The animated cover uses the complete original Sprite rectangle and must not center-crop it to the generic model's old default-cover aspect.
+- The generic effect itself must be authored for the common `600 x 680` (`15:17`) cover format; runtime code must not compensate for an incompatible effect aspect by cropping or non-uniform stretching.
+- Runtime centers and uniformly fits the compatible generic model inside the clicked MainScene card-pack UI bounds before playback.
+- The closed 3D first frame must replace the clicked 2D cover without a visible position, size, aspect, crop, or blank-edge transition.
 - Adding a card pack does not require creating a matching `CardPackSkin_NNN` prefab or animation FBX.
 - If the generic model or animation cannot be loaded, MainScene keeps the existing 2D fallback interaction.
 

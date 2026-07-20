@@ -210,7 +210,7 @@ New `CanvasScaler` values are written by `CanvasDesignResolutionEditor.cs`. Use 
 - Do not use `PlayerPrefs`.
 - Initialization happens in `LoadingScene.Start` for `JsonLocalStore`, `SqliteLocalStore`, `GameTaskUtility`, and `CardPackDataUtility`.
 - `Assets/Scripts/Model` intentionally remains a single flat folder. Related pure C# types are consolidated as follows: `GameManager` lives in `GameDefine.cs`, CSV parser types live in `GameConfigRepository.cs`, both `JsonLocalStore` and `SqliteLocalStore` live in `LocalDataStore.cs`, and score types/`GameScoreUtility` live in `GameTaskUtility.cs`. Public type names and call sites remain unchanged.
-- MainScene card-pack opening always instantiates `Resources/Effects/CardPack/CardPackOpening.prefab`. `GameAnimationUtility` applies the selected entry's already-loaded `PackIconNNN` texture through `MaterialPropertyBlock`, center-crops its UV to the reference `1822 x 2301` cover aspect, and fits the model uniformly inside the clicked UI bounds. Shared `CardPackLit.mat` is not mutated.
+- MainScene card-pack opening always instantiates `Resources/Effects/CardPack/CardPackOpening.prefab`. `GameAnimationUtility` applies the selected entry's complete `PackIconNNN` Sprite texture rectangle through `MaterialPropertyBlock` without cropping or aspect compensation, bakes the animation-time-zero skinned mesh, and uniformly fits that first frame inside the clicked UI bounds before enabling its renderers. Shared `CardPackLit.mat` is not mutated. The generic effect must be authored for the common `600 x 680` (`15:17`) runtime cover aspect.
 
 ### Development Persistence Policy
 

@@ -10,7 +10,6 @@ using UnityEditor;
 public static class GameAnimationUtility
 {
     private const string DefaultCardPackStateName = "CardPackOpening";
-    private const float CardPackReferenceCoverAspect = 1822f / 2301f;
     private const string CardPackPrefabEditorFolder = GameDefine.CardPackPrefabEditorFolder;
     private const string CardPackMaterialEditorPath = GameDefine.CardPackMaterialEditorPath;
     private const string CardPackPrefabResourcesPath = GameDefine.CardPackPrefabResourcesFolder;
@@ -155,11 +154,7 @@ public static class GameAnimationUtility
         var animator = FindAnimatorByObjectName(GenericCardPackObjectName, anchor);
         if (animator == null)
         {
-            animator = TrySpawnCardPackAnimator(GenericCardPackObjectName, anchor, coverSprite);
-        }
-        else if (anchor != null)
-        {
-            ApplyPreviewPose(animator, anchor, coverSprite);
+            animator = TrySpawnCardPackAnimator(GenericCardPackObjectName, anchor);
         }
 
         if (animator == null)
@@ -313,8 +308,7 @@ public static class GameAnimationUtility
 
     private static Animator TrySpawnCardPackAnimator(
         string objectName,
-        Transform anchor,
-        Sprite coverSprite = null)
+        Transform anchor)
     {
         if (string.IsNullOrWhiteSpace(objectName) || anchor == null)
         {
@@ -323,7 +317,6 @@ public static class GameAnimationUtility
 
         if (sSpawnedAnimators.TryGetValue(objectName, out var cachedAnimator) && cachedAnimator != null)
         {
-            ApplyPreviewPose(cachedAnimator, anchor, coverSprite);
             return cachedAnimator;
         }
 
@@ -342,7 +335,6 @@ public static class GameAnimationUtility
             return null;
         }
 
-        ApplyPreviewPose(animator, anchor, coverSprite);
         sSpawnedAnimators[objectName] = animator;
         return animator;
     }
@@ -396,20 +388,20 @@ public static class GameAnimationUtility
         {
             if (renderers[i] != null)
             {
-                renderers[i].enabled = true;
+                renderers[i].enabled = false;
             }
         }
 
         ApplyCardPackMaterials(renderers, coverSprite);
 
-        if (hasAnchorBounds && TryGetRendererBounds(renderers, out var modelBounds))
+        if (hasAnchorBounds && TryGetCurrentPoseBounds(renderers, out var modelBounds))
         {
             var scale = Mathf.Min(
                 anchorBounds.size.x / modelBounds.size.x,
                 anchorBounds.size.y / modelBounds.size.y);
             targetTransform.localScale = Vector3.one * Mathf.Max(scale, 0.001f);
 
-            if (TryGetRendererBounds(renderers, out var scaledBounds))
+            if (TryGetCurrentPoseBounds(renderers, out var scaledBounds))
             {
                 targetTransform.position += targetPosition - scaledBounds.center;
             }
@@ -419,9 +411,17 @@ public static class GameAnimationUtility
             var anchorSize = Mathf.Max(anchor.lossyScale.x, anchor.lossyScale.y, 0.01f) * 4f;
             targetTransform.localScale = Vector3.one * Mathf.Max(1.2f, anchorSize * 0.55f);
         }
+
+        for (var i = 0; i < renderers.Length; i++)
+        {
+            if (renderers[i] != null)
+            {
+                renderers[i].enabled = true;
+            }
+        }
     }
 
-    private static bool TryGetRendererBounds(Renderer[] renderers, out Bounds bounds)
+    private static bool TryGetCurrentPoseBounds(Renderer[] renderers, out Bounds bounds)
     {
         bounds = default;
         var hasBounds = false;
@@ -439,6 +439,12 @@ public static class GameAnimationUtility
             }
 
             var rendererBounds = renderer.bounds;
+            if (renderer is SkinnedMeshRenderer skinnedRenderer
+                && TryGetSkinnedMeshBounds(skinnedRenderer, out var skinnedBounds))
+            {
+                rendererBounds = skinnedBounds;
+            }
+
             if (rendererBounds.size.x <= 0.001f || rendererBounds.size.y <= 0.001f)
             {
                 continue;
@@ -456,6 +462,51 @@ public static class GameAnimationUtility
         }
 
         return hasBounds;
+    }
+
+    private static bool TryGetSkinnedMeshBounds(SkinnedMeshRenderer renderer, out Bounds bounds)
+    {
+        bounds = default;
+        if (renderer == null || renderer.sharedMesh == null)
+        {
+            return false;
+        }
+
+        var bakedMesh = new Mesh();
+        try
+        {
+            renderer.BakeMesh(bakedMesh, false);
+            var vertices = bakedMesh.vertices;
+            if (vertices == null || vertices.Length == 0)
+            {
+                return false;
+            }
+
+            var localToWorld = renderer.transform.localToWorldMatrix;
+            bounds = new Bounds(localToWorld.MultiplyPoint3x4(vertices[0]), Vector3.zero);
+            for (var i = 1; i < vertices.Length; i++)
+            {
+                bounds.Encapsulate(localToWorld.MultiplyPoint3x4(vertices[i]));
+            }
+
+            return true;
+        }
+        catch (Exception exception)
+        {
+            Debug.LogWarning($"Failed to measure card-pack skinned mesh bounds: {exception.Message}");
+            return false;
+        }
+        finally
+        {
+            if (Application.isPlaying)
+            {
+                UnityEngine.Object.Destroy(bakedMesh);
+            }
+            else
+            {
+                UnityEngine.Object.DestroyImmediate(bakedMesh);
+            }
+        }
     }
 
     /// <summary>
@@ -538,26 +589,11 @@ public static class GameAnimationUtility
             sourceRect = new Rect(0f, 0f, texture.width, texture.height);
         }
 
-        var sampleRect = sourceRect;
-        var sourceAspect = sourceRect.width / sourceRect.height;
-        if (sourceAspect > CardPackReferenceCoverAspect)
-        {
-            var targetWidth = sourceRect.height * CardPackReferenceCoverAspect;
-            sampleRect.x += (sourceRect.width - targetWidth) * 0.5f;
-            sampleRect.width = targetWidth;
-        }
-        else if (sourceAspect < CardPackReferenceCoverAspect)
-        {
-            var targetHeight = sourceRect.width / CardPackReferenceCoverAspect;
-            sampleRect.y += (sourceRect.height - targetHeight) * 0.5f;
-            sampleRect.height = targetHeight;
-        }
-
         return new Vector4(
-            sampleRect.width / texture.width,
-            sampleRect.height / texture.height,
-            sampleRect.x / texture.width,
-            sampleRect.y / texture.height);
+            sourceRect.width / texture.width,
+            sourceRect.height / texture.height,
+            sourceRect.x / texture.width,
+            sourceRect.y / texture.height);
     }
 
     private static bool IsSupportedCardPackMaterial(Material material)
