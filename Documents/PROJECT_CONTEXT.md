@@ -210,7 +210,7 @@ New `CanvasScaler` values are written by `CanvasDesignResolutionEditor.cs`. Use 
 - Do not use `PlayerPrefs`.
 - Initialization happens in `LoadingScene.Start` for `JsonLocalStore`, `SqliteLocalStore`, `GameTaskUtility`, and `CardPackDataUtility`.
 - `Assets/Scripts/Model` intentionally remains a single flat folder. Related pure C# types are consolidated as follows: `GameManager` lives in `GameDefine.cs`, CSV parser types live in `GameConfigRepository.cs`, both `JsonLocalStore` and `SqliteLocalStore` live in `LocalDataStore.cs`, and score types/`GameScoreUtility` live in `GameTaskUtility.cs`. Public type names and call sites remain unchanged.
-- MainScene card-pack opening always instantiates `Resources/Effects/CardPack/CardPackSkin_001.prefab`. `GameAnimationUtility` applies the selected entry's already-loaded `PackIconNNN` texture through `MaterialPropertyBlock`, center-crops its UV to the reference `1822 x 2301` cover aspect, and fits the model uniformly inside the clicked UI bounds. Shared `CardPackLit.mat` is not mutated.
+- MainScene card-pack opening always instantiates `Resources/Effects/CardPack/CardPackOpening.prefab`. `GameAnimationUtility` applies the selected entry's already-loaded `PackIconNNN` texture through `MaterialPropertyBlock`, center-crops its UV to the reference `1822 x 2301` cover aspect, and fits the model uniformly inside the clicked UI bounds. Shared `CardPackLit.mat` is not mutated.
 
 ### Development Persistence Policy
 
@@ -234,7 +234,7 @@ Shared size icons are `UI/PackImages/PackSize_1.png` through `PackSize_7.png`, m
 2. Add a row to `CardPacks.csv` (`PackId`, `PackSize`, `ChapterId`).
 3. Add the corresponding cover under `UI/PackImages/` using `PackIconNNN.png` names. `GameDefine.FormatPackImagePath` maps pack id `1` to `UI/PackImages/PackIcon001.png`.
 4. Write lifecycle state through `CardPackDataUtility` into SQLite table `CardPacks`.
-5. Do not create per-pack 3D assets. The runtime reuses `CardPackAni_001.FBX`, `CardPackSkin_001.prefab`, and `CardPackLit.mat`; the selected `PackIconNNN.png` becomes the animated model cover. If the generic assets are missing, MainScene uses the 2D fallback.
+5. Do not create per-pack 3D assets. The runtime reuses `CardPackOpeningAnimation.FBX`, `CardPackOpening.prefab`, and `CardPackLit.mat`; the selected `PackIconNNN.png` becomes the animated model cover. If the generic assets are missing, MainScene uses the 2D fallback.
 
 ### Puzzles
 
@@ -265,8 +265,11 @@ Prefabs and dependencies go under `Resources/Effects/CardFx/`, for example `Card
 
 | Type | Name | Path |
 |------|------|------|
-| Generic card pack skin | `CardPackSkin_001` | `Resources/Effects/CardPack/` |
-| Generic pack animation | `CardPackAni_001.FBX` | Same |
+| Generic card pack prefab | `CardPackOpening` | `Resources/Effects/CardPack/` |
+| Generic card pack controller | `CardPackOpening.controller` | Same |
+| Generic pack animation | `CardPackOpeningAnimation.FBX` | Same |
+| Generic card pack model | `CardPackOpeningModel.FBX` | Same |
+| Default card pack cover | `CardPackDefaultCover.png` | Same |
 | Material | `CardPackLit` | Same |
 | Plane group | `PlaneGroup_001` | `Resources/Effects/PlaneGroup/` |
 | New card obtain | `CardObtain_001` | `Resources/Effects/CardFx/` |

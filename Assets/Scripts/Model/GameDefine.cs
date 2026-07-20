@@ -55,12 +55,10 @@ public static class GameDefine
     public const string PlaneGroupFbxEditorFolder = "Assets/Resources/Effects/PlaneGroup";
 
     public const string CardPackPrefabResourcesFolder = "Effects/CardPack/";
+    public const string CardPackOpeningPrefabName = "CardPackOpening";
     public const string CardPackMaterialResourcesPath = "Effects/CardPack/CardPackLit";
     public const string CardPackPrefabEditorFolder = "Assets/Resources/Effects/CardPack";
     public const string CardPackMaterialEditorPath = "Assets/Resources/Effects/CardPack/CardPackLit.mat";
-    public const string CardPackAnimationEditorFolder = "Assets/Resources/Effects/CardPack";
-    public const string CardPackAniPrefix = "CardPackAni_";
-    public const string CardPackSkinPrefix = "CardPackSkin_";
     public const string CardObtainPrefabName = "CardObtain_001";
     public const string CardTrailPrefabName = "CardTrail_001";
 
@@ -69,16 +67,6 @@ public static class GameDefine
     public const string CardObtainPrefabResourcesPath = "Effects/CardFx/CardObtain_001";
     public const string CardTrailPrefabResourcesPath = "Effects/CardFx/CardTrail_001";
     public const string CardFxEditorFolder = "Assets/Resources/Effects/CardFx";
-
-    public static string FormatCardPackAnimationFileName(int bagId)
-    {
-        return $"{CardPackAniPrefix}{bagId:D3}.FBX";
-    }
-
-    public static string FormatCardPackSkinPrefabName(int bagId)
-    {
-        return $"{CardPackSkinPrefix}{bagId:D3}";
-    }
 
     public static string FormatCardBagPrefabResourcesPath(int bagId)
     {

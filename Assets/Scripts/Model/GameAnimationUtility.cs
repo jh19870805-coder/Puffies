@@ -1,8 +1,6 @@
 using System;
 using System.Collections;
-using System.IO;
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
 #if UNITY_EDITOR
@@ -11,15 +9,13 @@ using UnityEditor;
 
 public static class GameAnimationUtility
 {
-    private const string DefaultCardPackStateName = "Take 001";
+    private const string DefaultCardPackStateName = "CardPackOpening";
     private const float CardPackReferenceCoverAspect = 1822f / 2301f;
-    private const string CardPackAnimationFolder = GameDefine.CardPackAnimationEditorFolder;
     private const string CardPackPrefabEditorFolder = GameDefine.CardPackPrefabEditorFolder;
     private const string CardPackMaterialEditorPath = GameDefine.CardPackMaterialEditorPath;
     private const string CardPackPrefabResourcesPath = GameDefine.CardPackPrefabResourcesFolder;
     private const string CardPackMaterialResourcesPath = GameDefine.CardPackMaterialResourcesPath;
-    private static readonly string GenericCardPackObjectName =
-        GameDefine.FormatCardPackSkinPrefabName(GameDefine.DefaultBagId);
+    private const string GenericCardPackObjectName = GameDefine.CardPackOpeningPrefabName;
     private static readonly int BaseMapPropertyId = Shader.PropertyToID("_BaseMap");
     private static readonly int BaseMapTransformPropertyId = Shader.PropertyToID("_BaseMap_ST");
     private static readonly int MainTexturePropertyId = Shader.PropertyToID("_MainTex");
@@ -136,10 +132,11 @@ public static class GameAnimationUtility
     }
 
     /// <summary>
-    /// 用途：按动画文件名播放对应卡包动画。返回：是否成功触发播放。
+    /// 用途：播放通用卡包开包动画并替换为指定封面。返回：是否成功触发播放。
     /// </summary>
-    /// <param name="animationFileName">参数：动画文件名或状态名，例如 CardPackAni_001.FBX。</param>
-    /// <param name="searchRoot">参数：查找对象的根节点；传 null 时在全场景查找。</param>
+    /// <param name="packId">参数：当前卡包编号。</param>
+    /// <param name="coverSprite">参数：需要显示在模型上的卡包封面。</param>
+    /// <param name="anchor">参数：动画模型定位和缩放所参照的 UI 节点。</param>
     /// <returns>返回：true 表示播放成功，false 表示未找到目标或播放失败。</returns>
     public static bool PlayCardPackAnimation(int packId, Sprite coverSprite, Transform anchor)
     {
@@ -216,37 +213,13 @@ public static class GameAnimationUtility
         var clips = animator.runtimeAnimatorController.animationClips;
         for (var i = 0; i < clips.Length; i++)
         {
-            var clip = clips[i];
-            if (clip != null && clip.name.Equals(DefaultCardPackStateName, StringComparison.OrdinalIgnoreCase))
+            if (clips[i] != null)
             {
-                return clip.length;
+                return clips[i].length;
             }
         }
 
-        return clips.Length > 0 && clips[0] != null ? clips[0].length : 0f;
-    }
-
-    /// <summary>
-    /// 用途：获取工程中实际存在的卡包动画文件名列表（仅含文件名）。返回：按名称升序的文件名集合。
-    /// </summary>
-    /// <returns>返回：例如 CardPackAni_001.FBX。</returns>
-    public static List<string> GetAvailableCardPackAnimationFileNames()
-    {
-        var result = new List<string>();
-#if UNITY_EDITOR
-        if (!Directory.Exists(CardPackAnimationFolder))
-        {
-            return result;
-        }
-
-        result = Directory
-            .GetFiles(CardPackAnimationFolder, $"{GameDefine.CardPackAniPrefix}*.FBX")
-            .Select(Path.GetFileName)
-            .Where(name => !string.IsNullOrWhiteSpace(name))
-            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-#endif
-        return result;
+        return 0f;
     }
 
     private static IEnumerator Animate(

@@ -43,7 +43,7 @@
 - The current score presentation performs one 0-to-final roll over 0.8 seconds. It does not yet reveal each qualified bonus or animate cumulative score steps.
 - `CardPackDistributionUtility` applies the current deterministic `R` / held-pack gates and stores pending task entitlements in SQLite.
 - Current content contains 21 configured packs across chapter 1 and chapter 2; only five playable CardBag prefabs currently exist: 001, 002, 003, 008, and 017.
-- Card-pack opening uses `CardPackSkin_001` and its existing animation as the generic model; PackId selects only the runtime cover texture rather than a `CardPackSkin_NNN` prefab.
+- Card-pack opening uses `CardPackOpening.prefab` and `CardPackOpening.controller` as the generic model and Animator Controller; PackId selects only the runtime cover texture rather than a numbered prefab.
 
 ## Persistence
 

@@ -1,30 +1,34 @@
 # Current Task
 
-- Task: Use real covers in a generic card-pack opening animation
+- Task: Rename generic card-pack opening assets
 - Status: Completed
 - Updated At: 2026-07-20
 
 ## User Intent
 
-- Keep the existing card-pack opening animation.
-- Reuse it for every PackId and display the actual corresponding card-pack cover.
-- Keep the animated model centered and sized consistently with the clicked MainScene card pack.
+- Remove the obsolete `001` suffix from the generic card-pack opening animation and related assets.
+- Use clear English semantic names for the reusable opening presentation.
 
 ## Working Notes
 
 - MainScene no longer derives a `CardPackSkin_NNN` prefab from PackId.
-- Every pack now uses `CardPackSkin_001` and its existing `Take 001` Animator state.
+- Every pack now uses `CardPackOpening.prefab` and its `CardPackOpening` Animator state.
 - MainScene passes the selected entry's already-loaded cover Sprite into `GameAnimationUtility` before hiding the 2D entry.
 - `MaterialPropertyBlock` overrides `_BaseMap` and `_MainTex` per renderer, so `CardPackLit.mat` remains unchanged.
 - Cover UV uses the Sprite texture rect and center-crops to the authored reference cover aspect (`1822 / 2301`) instead of stretching different aspect ratios.
 - Existing renderer-bounds fitting uniformly scales the model inside the clicked RectTransform bounds and recenters the rendered bounds on the entry.
-- Missing cover data falls back to the authored `001.png`; failure to load the generic model retains the existing 2D click animation.
+- Missing cover data falls back to the authored `CardPackDefaultCover.png`; failure to load the generic model retains the existing 2D click animation.
 
 ## Files Changed
 
 - `Assets/Scripts/Model/GameAnimationUtility.cs`
-- `Assets/Scripts/Controller/MainScene.cs`
-- `Documents/GAME_DESIGN_REQUIREMENTS.md`
+- `Assets/Scripts/Model/GameDefine.cs`
+- `Assets/Resources/Effects/CardPack/CardPackOpening.prefab`
+- `Assets/Resources/Effects/CardPack/CardPackOpening.controller`
+- `Assets/Resources/Effects/CardPack/CardPackOpeningAnimation.FBX`
+- `Assets/Resources/Effects/CardPack/CardPackOpeningModel.FBX`
+- `Assets/Resources/Effects/CardPack/CardPackDefaultCover.png`
+- `Assets/Resources/Effects/CardPack/CardPackLit.mat`
 - `Documents/PROJECT_CONTEXT.md`
 - `Documents/CURRENT_TASK.md`
 - `specs/task-and-settlement.md`
@@ -33,6 +37,8 @@
 
 - Reuse MainScene's loaded Sprite rather than reading the same cover from disk again.
 - Use one generic animated model for all current and future PackIds.
+- Preserve asset GUIDs while renaming so Prefab, controller, material, and legacy asset references remain valid.
+- Rename the skinned-mesh child to `CardPackMesh`; the animation FBX binds only to the bone hierarchy, not to the mesh object name.
 - Use per-renderer material properties instead of cloning or modifying shared material assets.
 - Preserve uniform model scaling to avoid deforming the 3D pack; fitting may leave a small margin when the model and UI aspect ratios differ.
 - Keep unused legacy `CardPackSkin_002` through `006` assets for now; they are no longer required by the runtime path but were not removed in this task.
@@ -42,10 +48,11 @@
 - Confirmed the generic prefab has one `SkinnedMeshRenderer` and one material slot using `CardPackLit.mat`.
 - Confirmed all current `PackIcon001` through `PackIcon021` textures are `600 x 680` with full-image Alpha coverage.
 - Static references show MainScene is the only opening-animation caller and now uses the generic API.
-- Unity 2022.3.62f2 batch import regenerated `Assembly-CSharp.dll` without C# compiler errors or exceptions.
+- Unity 2022.3.62f2c1 batch import completed successfully and preserved the renamed FBX clip mapping, Animator motion, Prefab controller, mesh, material, and default-cover references.
+- Confirmed the five renamed assets retained their original `.meta` GUIDs.
 - `dotnet build Puffies.sln --no-restore` completed with 0 warnings and 0 errors for first-pass, runtime, and Editor assemblies.
 - Final `git diff --check` completed without whitespace errors; Git only reported line-ending conversion notices.
-- Final change-scope check confirmed no Scene, Prefab, Material, FBX, controller, or cover image was modified.
+- Final old-name scan found no obsolete generic `CardPackAni_001`, `CardPackSkin_001`, `Take 001`, or `001.png` references; numbered `PackIcon001` remains intentionally unchanged as content naming.
 - Play Mode visual verification remains pending.
 
 ## Data Reset
