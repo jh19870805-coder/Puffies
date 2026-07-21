@@ -1,70 +1,56 @@
 # Current Task
 
-- Task: Import the effect artist's card-pack shader revision
+- Task: Import and play the complete card-pack effect package
 - Status: Completed; MainScene visual acceptance pending
-- Updated At: 2026-07-20
+- Updated At: 2026-07-21
 
 ## User Intent
 
-- Inspect `Assets/Resources/shader修改.unitypackage` from the effect artist.
-- Import every resource required by the revised card-pack shader.
-- Keep imported assets organized under the project's existing naming and loading contract.
+- Rescan both supplied card-pack effect archives instead of relying on the previous partial import.
+- Import every asset and dependency from both packages under the existing project naming layout.
+- Play the complete authored opening animation rather than only the first animated mesh layer.
 
 ## Completed
 
-- Inspected all 16 package entries by GUID and dependency reference before importing.
-- Kept the existing generic `CardPackOpening` Prefab, model, animation, controller, back texture, dynamic cover binding, and wave clip mask.
-- Did not import the package's `mesh_skin_cardPack_006` model/Prefab because it is a material preview skin, not a replacement for the generic runtime opening model.
-- Ported the artist's double-sided normal, environment reflection, lighting ramp, metallic/smoothness, and AO behavior from the supplied Built-in Surface Shader into the existing URP-compatible `Puffies/CardPackOpening` shader.
-- Preserved `LightMode=SRPDefaultUnlit`, which is required for the project's URP Renderer2D.
-- Imported and renamed the required new dependencies as `CardPackFrontNormal.png`, `CardPackReflection.hdr`, `CardPackLightingRamp.png`, and `CardPackOcclusion.png` under `Resources/Effects/CardPack/`.
-- Reused the identical existing `Resources/Effects/CardFx/Textures/fx_a_fluid_017_n.png` as the back-face normal input instead of adding a duplicate asset.
-- Updated `CardPackOpeningMaterial` with the artist's authored parameter values and all eight required texture bindings.
-- Removed the full-card red tint by converting the rainbow lighting ramp and HDR reflection to luminance before applying them.
-- Preserved the selected cover's original albedo as the base output; normal, ramp, reflection, specular, and AO now add neutral surface detail instead of replacing or darkening the cover color.
+- Scanned all 44 entries in the card-pack package and all 16 entries in the shader revision package by GUID, type, and dependency.
+- Verified that the playable opening effect is composed of six distinct skinned meshes. All six use the same skeleton, animation controller, state, material, and authored transform.
+- Imported animated models and Prefabs 002 through 006 as `CardPackOpeningModel_002`...`006` and `CardPackOpening_002`...`006`; variant 001 remains the existing `CardPackOpening` asset.
+- Imported the complete static model set as `CardPackStaticModel.FBX` and `CardPackStatic_001`...`006`.
+- Imported `CardPackPlane.prefab`, its URP-compatible material, and every texture/environment dependency from both packages.
+- Kept the previously ported `Puffies/CardPackOpening` URP Renderer2D shader and dynamic `_FrontFacesAlbedo` cover binding. The supplied Built-in/Amplify shader was not restored over it.
+- Updated `GameAnimationUtility` to create one `CardPackOpeningFull` runtime root, instantiate all six animated Prefabs, apply the selected cover to every layer, fit their combined animated bounds to the clicked card-pack UI, and start all six Animators at the same normalized time.
+- `GetCardPackPlayDuration` now returns the longest clip duration across all six layers.
 
-## Files Changed
+## Imported Support Assets
 
-- `Assets/Resources/Effects/CardPack/CardPackOpening.shader`
-- `Assets/Resources/Effects/CardPack/CardPackOpeningMaterial.mat`
-- `Assets/Resources/Effects/CardPack/CardPackFrontNormal.png`
-- `Assets/Resources/Effects/CardPack/CardPackReflection.hdr`
-- `Assets/Resources/Effects/CardPack/CardPackLightingRamp.png`
-- `Assets/Resources/Effects/CardPack/CardPackOcclusion.png`
-- `Documents/PROJECT_CONTEXT.md`
-- `Documents/CURRENT_TASK.md`
-
-## Decisions
-
-- Do not import the package's original `Assets/ArtRes` and `Assets/U3DMake` directory trees.
-- Do not directly replace the URP shader with the supplied Built-in/Amplify Surface Shader; it cannot render through this project's Renderer2D.
-- Preserve the existing Shader, material, animation, and back-texture GUIDs so runtime and Prefab references remain stable.
-- Keep the selected card-pack cover assigned through `MaterialPropertyBlock`; the package's fixed `CardPack02.tga` is not a runtime dependency.
-- Exclude stale or unused package dependencies: `CardPack02A.png`, `studio025.jpg`, `tex_noise_w_032.png`, the 006 model/Prefab, and duplicate controller/animation/back assets.
+- The package also contains six static card meshes, one `Plane`, and one four-mesh `PlaneGroup`.
+- `Plane` and `PlaneGroup` have no Animator, animation clip, particle system, or controlling Prefab. Their authored material contains fixed artwork from the effect sample.
+- Offscreen composition proved that displaying those static samples with the opening animation covers the real card-pack cover. They remain fully imported and usable, but are intentionally not instantiated by runtime opening playback.
+- Both package GUID inventories now report `MissingGuidCount=0` under `Assets`.
 
 ## Validation
 
-- Unity 2022.3.62f2c1 imported all selected assets and compiled `Puffies/CardPackOpening` without Shader errors or warnings.
-- Temporary Editor assertions verified Shader support, the `CardPackForward` pass, all eight material texture slots, and the Prefab's material binding.
-- Renderer2D offscreen validation rendered `322,312` visible pixels at `600 x 680`; the card cover, wave edges, normal highlights, AO, and environment reflections were visible.
-- A follow-up `600 x 680` offscreen preview confirmed the red overlay was removed, the original green/orange cover colors remained intact, and the wave edge plus neutral highlights were still visible.
-- `dotnet build Puffies.sln --no-restore` completed with 0 warnings and 0 errors.
-- The user's existing `Assets/Scenes/LoadingScene.unity` change was left untouched.
-- This visual-only change does not require deleting `LocalData.db` or `LocalData.json`.
+- Unity 2022.3.62f2 imported all assets and completed the temporary Editor validation with `CARD_PACK_FULL_EFFECT_VALIDATION_OK`.
+- Unity assertions found exactly six Animators and six animated renderers at runtime.
+- The six meshes are distinct: vertex counts are 725, 726, 636, 725, 725, and 725.
+- Offscreen `600 x 680` renders at normalized times `0.00`, `0.50`, and `0.95` produced 233,494, 189,975, and 188,260 visible pixels respectively.
+- No C# or Shader compile errors were reported.
+- After Unity refreshed the generated project files, `dotnet build Puffies.sln --no-restore` completed with 0 warnings and 0 errors.
+- This is asset/runtime visual work; no local JSON or SQLite data deletion is required.
 
-## Source Package
+## Decisions
 
-- `Assets/Resources/shader修改.unitypackage` remains as the supplied source package for visual acceptance.
-- `Assets/Resources/卡包.unitypackage` also remains from the preceding opening-effect import.
-- Move or delete both archives outside `Assets/Resources` after acceptance so they cannot enter a player build or repository accidentally.
+- The six animated meshes are layers of one authored opening effect and play simultaneously; they are not selected by `CardPackSize`.
+- Preserve package GUIDs while using flat, normalized project filenames under `Resources/Effects/CardPack/`.
+- Do not reintroduce the package's Built-in shader into the URP Renderer2D runtime path.
+- Do not display fixed sample `Plane`/`PlaneGroup` artwork during production opening playback without a separate content-replacement design.
 
 ## Next Action
 
-1. Open MainScene and test the card-pack opening animation with PackId 1 and PackId 17.
-2. Compare the normal highlights and reflections against the effect artist's reference and tune only material values if necessary.
-3. Confirm the final production animation position and remove the remaining static-to-animation position jump.
-4. After visual acceptance, archive both `.unitypackage` files outside `Assets`.
+1. Open MainScene and click several card packs to accept the six-layer animation's production position, scale, and depth ordering.
+2. Compare the result with the effect artist's reference video, especially the middle and final animation frames.
+3. After visual acceptance, archive the two source `.unitypackage` files outside `Assets/Resources` so they do not enter a player build.
 
 ## Resume Prompt
 
-Continue Puffies card-pack shader visual acceptance. Read AGENTS.md, Documents/WORKFLOW.md, Documents/CURRENT_TASK.md, Documents/PROJECT_CONTEXT.md, and specs/task-and-settlement.md first, then test the revised CardPackOpening material in MainScene with multiple pack covers.
+Continue Puffies full card-pack effect visual acceptance. Read `AGENTS.md`, `Documents/WORKFLOW.md`, `Documents/CURRENT_TASK.md`, and `Documents/PROJECT_CONTEXT.md`, then test the six-layer `CardPackOpeningFull` playback in MainScene with multiple dynamic covers.

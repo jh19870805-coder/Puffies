@@ -14,15 +14,32 @@ public static class GameAnimationUtility
     private const string CardPackMaterialEditorPath = GameDefine.CardPackMaterialEditorPath;
     private const string CardPackPrefabResourcesPath = GameDefine.CardPackPrefabResourcesFolder;
     private const string CardPackMaterialResourcesPath = GameDefine.CardPackMaterialResourcesPath;
-    private const string GenericCardPackObjectName = GameDefine.CardPackOpeningPrefabName;
+    private const string FullCardPackObjectName = "CardPackOpeningFull";
+    private static readonly string[] CardPackAnimatedPrefabNames =
+    {
+        GameDefine.CardPackOpeningPrefabName,
+        "CardPackOpening_002",
+        "CardPackOpening_003",
+        "CardPackOpening_004",
+        "CardPackOpening_005",
+        "CardPackOpening_006"
+    };
     private static readonly int BaseMapPropertyId = Shader.PropertyToID("_BaseMap");
     private static readonly int BaseMapTransformPropertyId = Shader.PropertyToID("_BaseMap_ST");
     private static readonly int MainTexturePropertyId = Shader.PropertyToID("_MainTex");
     private static readonly int MainTextureTransformPropertyId = Shader.PropertyToID("_MainTex_ST");
     private static readonly int FrontFacesAlbedoPropertyId = Shader.PropertyToID("_FrontFacesAlbedo");
     private static readonly int FrontFacesAlbedoTransformPropertyId = Shader.PropertyToID("_FrontFacesAlbedo_ST");
-    private static readonly Dictionary<string, Animator> sSpawnedAnimators = new Dictionary<string, Animator>();
+    private static readonly Dictionary<string, CardPackEffectInstance> sSpawnedEffects =
+        new Dictionary<string, CardPackEffectInstance>();
     private static Material sCardPackMaterial;
+
+    private sealed class CardPackEffectInstance
+    {
+        public GameObject Root;
+        public Animator[] Animators;
+        public Renderer[] CardRenderers;
+    }
 
     public enum EaseType
     {
@@ -153,28 +170,34 @@ public static class GameAnimationUtility
                 $"PlayCardPackAnimation: cover missing for packId={packId}; using the authored model texture.");
         }
 
-        var animator = FindAnimatorByObjectName(GenericCardPackObjectName, anchor);
-        if (animator == null)
-        {
-            animator = TrySpawnCardPackAnimator(GenericCardPackObjectName, anchor);
-        }
-
-        if (animator == null)
+        var effect = GetOrSpawnCardPackEffect(anchor);
+        if (effect == null || effect.Animators == null || effect.Animators.Length == 0)
         {
             return false;
         }
 
-        animator.Rebind();
-        animator.Update(0f);
-        animator.Play(DefaultCardPackStateName, 0, 0f);
-        animator.Update(0f);
+        for (var i = 0; i < effect.Animators.Length; i++)
+        {
+            var animator = effect.Animators[i];
+            if (animator == null)
+            {
+                continue;
+            }
+
+            animator.Rebind();
+            animator.Update(0f);
+            animator.Play(DefaultCardPackStateName, 0, 0f);
+            animator.Update(0f);
+        }
+
         if (anchor != null)
         {
-            ApplyPreviewPose(animator, anchor, coverSprite);
+            ApplyPreviewPose(effect, anchor, coverSprite);
         }
         else
         {
-            ApplyCardPackMaterials(animator.GetComponentsInChildren<Renderer>(true), coverSprite);
+            ApplyCardPackMaterials(effect.CardRenderers, coverSprite);
+            effect.Root.SetActive(true);
         }
 
         return true;
@@ -185,38 +208,32 @@ public static class GameAnimationUtility
     /// </summary>
     public static float GetCardPackPlayDuration(Transform anchor = null)
     {
-        Animator animator = null;
-        if (sSpawnedAnimators.TryGetValue(GenericCardPackObjectName, out var cachedAnimator)
-            && cachedAnimator != null)
-        {
-            animator = cachedAnimator;
-        }
-
-        if (animator == null)
-        {
-            animator = FindAnimatorByObjectName(GenericCardPackObjectName, anchor);
-        }
-
-        if (animator == null)
-        {
-            animator = TrySpawnCardPackAnimator(GenericCardPackObjectName, anchor);
-        }
-
-        if (animator == null || animator.runtimeAnimatorController == null)
+        var effect = GetOrSpawnCardPackEffect(anchor);
+        if (effect == null || effect.Animators == null)
         {
             return 0f;
         }
 
-        var clips = animator.runtimeAnimatorController.animationClips;
-        for (var i = 0; i < clips.Length; i++)
+        var duration = 0f;
+        for (var i = 0; i < effect.Animators.Length; i++)
         {
-            if (clips[i] != null)
+            var animator = effect.Animators[i];
+            if (animator == null || animator.runtimeAnimatorController == null)
             {
-                return clips[i].length;
+                continue;
+            }
+
+            var clips = animator.runtimeAnimatorController.animationClips;
+            for (var j = 0; j < clips.Length; j++)
+            {
+                if (clips[j] != null)
+                {
+                    duration = Mathf.Max(duration, clips[j].length);
+                }
             }
         }
 
-        return 0f;
+        return duration;
     }
 
     private static IEnumerator Animate(
@@ -272,73 +289,62 @@ public static class GameAnimationUtility
         }
     }
 
-    private static Animator FindAnimatorByObjectName(string objectName, Transform searchRoot)
+    private static CardPackEffectInstance GetOrSpawnCardPackEffect(Transform anchor)
     {
-        if (searchRoot != null)
+        if (sSpawnedEffects.TryGetValue(FullCardPackObjectName, out var cachedEffect)
+            && cachedEffect != null
+            && cachedEffect.Root != null)
         {
-            var target = FindDeepChild(searchRoot, objectName);
-            return target != null ? target.GetComponentInChildren<Animator>(true) : null;
+            return cachedEffect;
         }
 
-        var sceneObject = GameObject.Find(objectName);
-        return sceneObject != null ? sceneObject.GetComponentInChildren<Animator>(true) : null;
-    }
-
-    private static Transform FindDeepChild(Transform root, string childName)
-    {
-        if (root == null)
+        if (anchor == null)
         {
             return null;
         }
 
-        if (string.Equals(root.name, childName, StringComparison.OrdinalIgnoreCase))
+        var root = new GameObject(FullCardPackObjectName);
+        var animators = new List<Animator>(CardPackAnimatedPrefabNames.Length);
+        var cardRenderers = new List<Renderer>(CardPackAnimatedPrefabNames.Length);
+        for (var i = 0; i < CardPackAnimatedPrefabNames.Length; i++)
         {
-            return root;
-        }
-
-        for (var i = 0; i < root.childCount; i++)
-        {
-            var result = FindDeepChild(root.GetChild(i), childName);
-            if (result != null)
+            var prefabName = CardPackAnimatedPrefabNames[i];
+            var prefab = LoadCardPackPrefab(prefabName);
+            if (prefab == null)
             {
-                return result;
+                Debug.LogWarning($"Card-pack effect layer missing: {prefabName}.");
+                continue;
             }
+
+            var layer = UnityEngine.Object.Instantiate(prefab, root.transform, false);
+            layer.name = prefabName;
+            var animator = layer.GetComponentInChildren<Animator>(true);
+            if (animator != null)
+            {
+                animators.Add(animator);
+            }
+
+            cardRenderers.AddRange(layer.GetComponentsInChildren<Renderer>(true));
         }
 
-        return null;
-    }
-
-    private static Animator TrySpawnCardPackAnimator(
-        string objectName,
-        Transform anchor)
-    {
-        if (string.IsNullOrWhiteSpace(objectName) || anchor == null)
+        if (animators.Count != CardPackAnimatedPrefabNames.Length
+            || cardRenderers.Count < CardPackAnimatedPrefabNames.Length)
         {
+            Debug.LogWarning(
+                $"Card-pack full effect is incomplete. animators={animators.Count}, "
+                + $"renderers={cardRenderers.Count}, expected={CardPackAnimatedPrefabNames.Length}.");
+            UnityEngine.Object.Destroy(root);
             return null;
         }
 
-        if (sSpawnedAnimators.TryGetValue(objectName, out var cachedAnimator) && cachedAnimator != null)
+        var effect = new CardPackEffectInstance
         {
-            return cachedAnimator;
-        }
-
-        var prefab = LoadCardPackPrefab(objectName);
-        if (prefab == null)
-        {
-            return null;
-        }
-
-        var instance = UnityEngine.Object.Instantiate(prefab);
-        instance.name = objectName;
-        var animator = instance.GetComponentInChildren<Animator>(true);
-        if (animator == null)
-        {
-            UnityEngine.Object.Destroy(instance);
-            return null;
-        }
-
-        sSpawnedAnimators[objectName] = animator;
-        return animator;
+            Root = root,
+            Animators = animators.ToArray(),
+            CardRenderers = cardRenderers.ToArray()
+        };
+        sSpawnedEffects[FullCardPackObjectName] = effect;
+        return effect;
     }
 
     private static GameObject LoadCardPackPrefab(string objectName)
@@ -354,15 +360,17 @@ public static class GameAnimationUtility
         return Resources.Load<GameObject>($"{CardPackPrefabResourcesPath}{objectName}");
     }
 
-    private static void ApplyPreviewPose(Animator animator, Transform anchor, Sprite coverSprite = null)
+    private static void ApplyPreviewPose(
+        CardPackEffectInstance effect,
+        Transform anchor,
+        Sprite coverSprite = null)
     {
-        if (animator == null || anchor == null)
+        if (effect == null || effect.Root == null || anchor == null)
         {
             return;
         }
 
-        var targetTransform = animator.transform;
-        var prefabRotation = targetTransform.rotation;
+        var targetTransform = effect.Root.transform;
         var camera = Camera.main;
         const float worldDepth = 0f;
         Vector3 targetPosition;
@@ -381,29 +389,21 @@ public static class GameAnimationUtility
         }
 
         targetTransform.position = targetPosition;
-        targetTransform.rotation = prefabRotation;
+        targetTransform.rotation = Quaternion.identity;
         targetTransform.localScale = Vector3.one;
         targetTransform.gameObject.SetActive(true);
 
-        var renderers = animator.GetComponentsInChildren<Renderer>(true);
-        for (var i = 0; i < renderers.Length; i++)
-        {
-            if (renderers[i] != null)
-            {
-                renderers[i].enabled = false;
-            }
-        }
+        SetRenderersEnabled(effect.CardRenderers, false);
+        ApplyCardPackMaterials(effect.CardRenderers, coverSprite);
 
-        ApplyCardPackMaterials(renderers, coverSprite);
-
-        if (hasAnchorBounds && TryGetCurrentPoseBounds(renderers, out var modelBounds))
+        if (hasAnchorBounds && TryGetCurrentPoseBounds(effect.CardRenderers, out var modelBounds))
         {
             var scale = Mathf.Min(
                 anchorBounds.size.x / modelBounds.size.x,
                 anchorBounds.size.y / modelBounds.size.y);
             targetTransform.localScale = Vector3.one * Mathf.Max(scale, 0.001f);
 
-            if (TryGetCurrentPoseBounds(renderers, out var scaledBounds))
+            if (TryGetCurrentPoseBounds(effect.CardRenderers, out var scaledBounds))
             {
                 targetTransform.position += targetPosition - scaledBounds.center;
             }
@@ -414,11 +414,21 @@ public static class GameAnimationUtility
             targetTransform.localScale = Vector3.one * Mathf.Max(1.2f, anchorSize * 0.55f);
         }
 
+        SetRenderersEnabled(effect.CardRenderers, true);
+    }
+
+    private static void SetRenderersEnabled(Renderer[] renderers, bool enabled)
+    {
+        if (renderers == null)
+        {
+            return;
+        }
+
         for (var i = 0; i < renderers.Length; i++)
         {
             if (renderers[i] != null)
             {
-                renderers[i].enabled = true;
+                renderers[i].enabled = enabled;
             }
         }
     }
