@@ -295,5 +295,4 @@ Shader "BF/Effect/EffectPacket"
     }
 
 	FallBack Off
-	CustomEditor "InspectorShader_BF_Effect_EffectPacket"
 }

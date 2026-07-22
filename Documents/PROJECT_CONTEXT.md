@@ -103,7 +103,8 @@ Assets/
 - Do not rename `Resources`; code has hardcoded resource paths.
 - GameScene dynamically loads `Resources/CardBagPrefabs/CardBagNNN.prefab` by selected pack id; source textures live under `UI/CardBags/CardBagNNN/` and are included through prefab Sprite references rather than StreamingAssets.
 - 3D effects stay under `Resources/Effects/`; do not duplicate them into StreamingAssets.
-- The imported card-pack dismantle effect is `Resources/Effects/CardPackDismantle/CardPackDismantle_001.prefab`. It contains five authored ParticleSystem layers and currently is not connected to MainScene playback. Its source shaders remain unchanged; two use Built-in `ForwardBase` passes and require visual acceptance under URP Renderer2D before runtime integration.
+- The imported card-pack dismantle effect is `Resources/Effects/CardPackDismantle/CardPackDismantle_001.prefab`. It contains five authored ParticleSystem layers and currently is not connected to MainScene playback. Its two legacy Shader Forge passes use `SRPDefaultUnlit` for Renderer2D, and their unavailable custom material inspectors have been removed without changing the authored particle hierarchy.
+- The editor-only assembled preview is `Resources/Effects/CardPackDismantle/CardPackDismantlePreview.prefab`. It combines all six nested `CardPackOpening` animated layers with the nested `CardPackDismantle_001` particle effect and applies `PackIcon001` through renderer property blocks. Open it through **Puffies -> Effects -> Preview Card Pack Dismantle** (`Ctrl+Shift+D`); the dedicated SceneView loops six Animators and the five-particle hierarchy together.
 
 ---
 

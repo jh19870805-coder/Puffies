@@ -1,51 +1,52 @@
 # Current Task
 
-- Task: Import all supplied card-pack effect packages
-- Status: Completed; dismantle-effect runtime integration pending
+- Task: Assemble complete card-pack opening and dismantle preview
+- Status: In Progress; visual acceptance pending
 - Updated At: 2026-07-22
 
 ## User Intent
 
-- Confirm that all three supplied Unity packages are represented in the project.
-- Import the newly supplied `拆卡包特效.unitypackage` without losing its authored Prefab, materials, textures, shaders, or Unity GUID references.
+- Assemble all delivered card-pack animation layers and dismantle particles with a real project card-pack cover.
+- Make the complete result directly previewable in the Unity Editor like the effect artist's reference image.
 
 ## Completed
 
-- Rechecked `卡包.unitypackage` (44 entries) and `shader修改.unitypackage` (16 entries). Their complete, normalized project import remains under `Assets/Resources/Effects/CardPack/`; the shader revision is already represented by the current adapted runtime assets.
-- Imported all 13 entries from `拆卡包特效.unitypackage` under `Assets/Resources/Effects/CardPackDismantle/` with project-style names.
-- Preserved the package GUIDs while relocating the new assets, so the authored Prefab still resolves its four materials, five textures, and three shaders.
-- Avoided retaining duplicate `Assets/ArtRes` and `Assets/U3DMake` copies of the first two packages because those GUIDs already belong to the normalized `Resources/Effects/CardPack` assets.
+- Audited all three source packages by GUID: shader update 16/16, card-pack animation 44/44, and dismantle particles 13/13 are present in the project.
+- Rebuilt `CardPackDismantlePreview.prefab` with all six `CardPackOpening` animated layers plus the imported dismantle effect as nested Prefab instances. The old static `PackCover` preview object was removed.
+- The preview applies `PackIcon001` through renderer property blocks, fits the animated card pack to `2.4` world units wide, and aligns its top edge with the authored tear origin.
+- Updated `Puffies -> Effects -> Preview Card Pack Dismantle` (`Ctrl+Shift+D`) to restore Scene visibility, open a Unity-managed `Card Pack Preview` SceneView, and loop six Animators with the five-particle hierarchy.
+- Updated the two Shader Forge particle passes from legacy `ForwardBase` to `SRPDefaultUnlit` for URP Renderer2D.
+- Removed three unavailable legacy custom material Inspector declarations so selecting the imported materials no longer logs editor warnings.
 
 ## Files Changed
 
-- Added `Assets/Resources/Effects/CardPackDismantle/CardPackDismantle_001.prefab`.
-- Added four dismantle-effect materials, five textures, and three shaders in the same folder.
-- Added `Assets/Resources/拆卡包特效.unitypackage` as the supplied source archive.
-- Updated `Documents/PROJECT_CONTEXT.md` with the new runtime resource location.
+- Added `Assets/Resources/Effects/CardPackDismantle/CardPackDismantlePreview.prefab`.
+- Added `Assets/Scripts/Editor/CardPackDismantlePreviewEditor.cs`.
+- Updated the three imported dismantle shaders for Renderer2D/editor compatibility.
+- Added `specs/2026-07-22-card-pack-dismantle-preview.md`.
+- Updated `Documents/PROJECT_CONTEXT.md` with the preview asset and menu.
 
 ## Decisions
 
-- Keep one authoritative asset for each Unity GUID. Do not reimport the first two packages into their old `Assets/ArtRes` layout alongside the normalized resources.
-- The new dismantle Prefab is imported as authored and is not yet connected to MainScene card-pack interaction.
-- Runtime playback behavior remains the existing six-layer `CardPackOpening` animation until the user specifies how the dismantle effect should be sequenced.
+- Keep all imported `CardPackOpening` and `CardPackDismantle_001` Prefabs authoritative. The preview references them instead of copying or editing their hierarchies.
+- Treat the source trail's `x=-2.67` as an off-card spawn position, not the cover width. The preview width is calibrated from the visible tear line.
+- Treat the shader update package as an update for shared card-pack dependencies and animated layer 006, not a third standalone animation sequence.
+- Keep the assembled Prefab editor-only for now. MainScene runtime playback remains the existing six-layer `CardPackOpening` animation.
 
 ## Validation
 
-- Verified all 44, 16, and 13 package pathname/meta inventories before normalization.
-- Verified zero duplicate package GUIDs under `Assets` after import.
-- Verified all 13 GUID references used by the dismantle Prefab/materials resolve to imported assets.
-- Confirmed `CardPackDismantle_001.prefab` contains five GameObjects, five ParticleSystems, and five ParticleSystemRenderers.
-- `dotnet build Puffies.sln --no-restore` completed with 0 warnings and 0 errors.
-- The authored `AParticle` shaders declare Built-in `ForwardBase` passes. They were intentionally left unchanged and still require a Unity URP Renderer2D visual check.
-- Unity visual playback has not yet been accepted in Play Mode.
+- Confirmed the generated Prefab contains `AnimatedCardPack`, six nested animated Prefab references, and `DismantleEffect`, with no static `PackCover` node.
+- Unity logged `Card-pack combined preview started. animators=6, particles=5` without an exception.
+- `dotnet build Puffies.sln --no-restore` completed with 0 warnings and 0 errors across runtime, first-pass, and Editor assemblies.
+- Final unobstructed visual comparison remains pending because the current multi-monitor Unity layout and a foreground SourceTree window obscured automated capture.
 - No local JSON or SQLite reset is required.
 
 ## Next Action
 
-1. Open `CardPackDismantle_001.prefab` in Unity and visually verify all five particle layers under the project's URP Renderer2D setup.
-2. Decide whether this dismantle effect replaces, precedes, or overlays the existing six-layer opening animation.
-3. Wire the accepted sequence into MainScene without changing the imported source effect assets.
+1. Bring Unity to the foreground and open `Puffies -> Effects -> Preview Card Pack Dismantle` to compare the combined animation against the artist reference.
+2. If the silver tear edge or upper/lower package separation is still absent, inspect the six-layer source animation at the relevant sampled frame before requesting another artist export.
+3. After visual acceptance, decide the particle timing offset and wire the accepted sequence into MainScene without changing the imported source Prefabs.
 
 ## Resume Prompt
 
-Continue Puffies card-pack effect integration. Read `AGENTS.md`, `Documents/WORKFLOW.md`, and `Documents/CURRENT_TASK.md`, then visually verify `Resources/Effects/CardPackDismantle/CardPackDismantle_001` before changing MainScene playback.
+Continue Puffies card-pack effect integration. Read `AGENTS.md`, `Documents/WORKFLOW.md`, and `Documents/CURRENT_TASK.md`, then review `Resources/Effects/CardPackDismantle/CardPackDismantlePreview` and decide the runtime sequence before changing MainScene playback.

@@ -76,7 +76,7 @@ Shader "BF/Effect/A/AParticleFireClipAdd10" {
         Pass {
             Name "FORWARD"
             Tags {
-                "LightMode"="ForwardBase"
+                "LightMode"="SRPDefaultUnlit"
             }
             Blend One One
             Cull Off
@@ -319,5 +319,4 @@ Shader "BF/Effect/A/AParticleFireClipAdd10" {
             ENDCG
         }
     }
-    CustomEditor "ShaderForgeMaterialInspector"
 }
