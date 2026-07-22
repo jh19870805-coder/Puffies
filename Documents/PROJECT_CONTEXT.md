@@ -86,6 +86,7 @@ Assets/
     Configs/        TaskConfig.csv, CardPacks.csv
     Effects/
       CardPack/     3D card packs
+      CardPackDismantle/ Authored five-layer card-pack dismantle particle effect
       PlaneGroup/
       CardFx/       Card obtain/trail prefabs plus Materials/Textures/Meshes/Shaders
     CardBagPrefabs/ CardBagNNN gameplay prefabs loaded by GameScene
@@ -102,6 +103,7 @@ Assets/
 - Do not rename `Resources`; code has hardcoded resource paths.
 - GameScene dynamically loads `Resources/CardBagPrefabs/CardBagNNN.prefab` by selected pack id; source textures live under `UI/CardBags/CardBagNNN/` and are included through prefab Sprite references rather than StreamingAssets.
 - 3D effects stay under `Resources/Effects/`; do not duplicate them into StreamingAssets.
+- The imported card-pack dismantle effect is `Resources/Effects/CardPackDismantle/CardPackDismantle_001.prefab`. It contains five authored ParticleSystem layers and currently is not connected to MainScene playback. Its source shaders remain unchanged; two use Built-in `ForwardBase` passes and require visual acceptance under URP Renderer2D before runtime integration.
 
 ---
 
@@ -288,6 +290,7 @@ Prefabs and dependencies go under `Resources/Effects/CardFx/`, for example `Card
 | Plane group | `PlaneGroup_001` | `Resources/Effects/PlaneGroup/` |
 | New card obtain | `CardObtain_001` | `Resources/Effects/CardFx/` |
 | Card trail | `CardTrail_001` | Same |
+| Card-pack dismantle effect | `CardPackDismantle_001` | `Resources/Effects/CardPackDismantle/` |
 
 ---
 

@@ -1,56 +1,51 @@
 # Current Task
 
-- Task: Import and play the complete card-pack effect package
-- Status: Completed; MainScene visual acceptance pending
-- Updated At: 2026-07-21
+- Task: Import all supplied card-pack effect packages
+- Status: Completed; dismantle-effect runtime integration pending
+- Updated At: 2026-07-22
 
 ## User Intent
 
-- Rescan both supplied card-pack effect archives instead of relying on the previous partial import.
-- Import every asset and dependency from both packages under the existing project naming layout.
-- Play the complete authored opening animation rather than only the first animated mesh layer.
+- Confirm that all three supplied Unity packages are represented in the project.
+- Import the newly supplied `拆卡包特效.unitypackage` without losing its authored Prefab, materials, textures, shaders, or Unity GUID references.
 
 ## Completed
 
-- Scanned all 44 entries in the card-pack package and all 16 entries in the shader revision package by GUID, type, and dependency.
-- Verified that the playable opening effect is composed of six distinct skinned meshes. All six use the same skeleton, animation controller, state, material, and authored transform.
-- Imported animated models and Prefabs 002 through 006 as `CardPackOpeningModel_002`...`006` and `CardPackOpening_002`...`006`; variant 001 remains the existing `CardPackOpening` asset.
-- Imported the complete static model set as `CardPackStaticModel.FBX` and `CardPackStatic_001`...`006`.
-- Imported `CardPackPlane.prefab`, its URP-compatible material, and every texture/environment dependency from both packages.
-- Kept the previously ported `Puffies/CardPackOpening` URP Renderer2D shader and dynamic `_FrontFacesAlbedo` cover binding. The supplied Built-in/Amplify shader was not restored over it.
-- Updated `GameAnimationUtility` to create one `CardPackOpeningFull` runtime root, instantiate all six animated Prefabs, apply the selected cover to every layer, fit their combined animated bounds to the clicked card-pack UI, and start all six Animators at the same normalized time.
-- `GetCardPackPlayDuration` now returns the longest clip duration across all six layers.
+- Rechecked `卡包.unitypackage` (44 entries) and `shader修改.unitypackage` (16 entries). Their complete, normalized project import remains under `Assets/Resources/Effects/CardPack/`; the shader revision is already represented by the current adapted runtime assets.
+- Imported all 13 entries from `拆卡包特效.unitypackage` under `Assets/Resources/Effects/CardPackDismantle/` with project-style names.
+- Preserved the package GUIDs while relocating the new assets, so the authored Prefab still resolves its four materials, five textures, and three shaders.
+- Avoided retaining duplicate `Assets/ArtRes` and `Assets/U3DMake` copies of the first two packages because those GUIDs already belong to the normalized `Resources/Effects/CardPack` assets.
 
-## Imported Support Assets
+## Files Changed
 
-- The package also contains six static card meshes, one `Plane`, and one four-mesh `PlaneGroup`.
-- `Plane` and `PlaneGroup` have no Animator, animation clip, particle system, or controlling Prefab. Their authored material contains fixed artwork from the effect sample.
-- Offscreen composition proved that displaying those static samples with the opening animation covers the real card-pack cover. They remain fully imported and usable, but are intentionally not instantiated by runtime opening playback.
-- Both package GUID inventories now report `MissingGuidCount=0` under `Assets`.
-
-## Validation
-
-- Unity 2022.3.62f2 imported all assets and completed the temporary Editor validation with `CARD_PACK_FULL_EFFECT_VALIDATION_OK`.
-- Unity assertions found exactly six Animators and six animated renderers at runtime.
-- The six meshes are distinct: vertex counts are 725, 726, 636, 725, 725, and 725.
-- Offscreen `600 x 680` renders at normalized times `0.00`, `0.50`, and `0.95` produced 233,494, 189,975, and 188,260 visible pixels respectively.
-- No C# or Shader compile errors were reported.
-- After Unity refreshed the generated project files, `dotnet build Puffies.sln --no-restore` completed with 0 warnings and 0 errors.
-- This is asset/runtime visual work; no local JSON or SQLite data deletion is required.
+- Added `Assets/Resources/Effects/CardPackDismantle/CardPackDismantle_001.prefab`.
+- Added four dismantle-effect materials, five textures, and three shaders in the same folder.
+- Added `Assets/Resources/拆卡包特效.unitypackage` as the supplied source archive.
+- Updated `Documents/PROJECT_CONTEXT.md` with the new runtime resource location.
 
 ## Decisions
 
-- The six animated meshes are layers of one authored opening effect and play simultaneously; they are not selected by `CardPackSize`.
-- Preserve package GUIDs while using flat, normalized project filenames under `Resources/Effects/CardPack/`.
-- Do not reintroduce the package's Built-in shader into the URP Renderer2D runtime path.
-- Do not display fixed sample `Plane`/`PlaneGroup` artwork during production opening playback without a separate content-replacement design.
+- Keep one authoritative asset for each Unity GUID. Do not reimport the first two packages into their old `Assets/ArtRes` layout alongside the normalized resources.
+- The new dismantle Prefab is imported as authored and is not yet connected to MainScene card-pack interaction.
+- Runtime playback behavior remains the existing six-layer `CardPackOpening` animation until the user specifies how the dismantle effect should be sequenced.
+
+## Validation
+
+- Verified all 44, 16, and 13 package pathname/meta inventories before normalization.
+- Verified zero duplicate package GUIDs under `Assets` after import.
+- Verified all 13 GUID references used by the dismantle Prefab/materials resolve to imported assets.
+- Confirmed `CardPackDismantle_001.prefab` contains five GameObjects, five ParticleSystems, and five ParticleSystemRenderers.
+- `dotnet build Puffies.sln --no-restore` completed with 0 warnings and 0 errors.
+- The authored `AParticle` shaders declare Built-in `ForwardBase` passes. They were intentionally left unchanged and still require a Unity URP Renderer2D visual check.
+- Unity visual playback has not yet been accepted in Play Mode.
+- No local JSON or SQLite reset is required.
 
 ## Next Action
 
-1. Open MainScene and click several card packs to accept the six-layer animation's production position, scale, and depth ordering.
-2. Compare the result with the effect artist's reference video, especially the middle and final animation frames.
-3. After visual acceptance, archive the two source `.unitypackage` files outside `Assets/Resources` so they do not enter a player build.
+1. Open `CardPackDismantle_001.prefab` in Unity and visually verify all five particle layers under the project's URP Renderer2D setup.
+2. Decide whether this dismantle effect replaces, precedes, or overlays the existing six-layer opening animation.
+3. Wire the accepted sequence into MainScene without changing the imported source effect assets.
 
 ## Resume Prompt
 
-Continue Puffies full card-pack effect visual acceptance. Read `AGENTS.md`, `Documents/WORKFLOW.md`, `Documents/CURRENT_TASK.md`, and `Documents/PROJECT_CONTEXT.md`, then test the six-layer `CardPackOpeningFull` playback in MainScene with multiple dynamic covers.
+Continue Puffies card-pack effect integration. Read `AGENTS.md`, `Documents/WORKFLOW.md`, and `Documents/CURRENT_TASK.md`, then visually verify `Resources/Effects/CardPackDismantle/CardPackDismantle_001` before changing MainScene playback.
