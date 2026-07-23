@@ -16,6 +16,9 @@ public static class CardBagPrefabGeneratorEditor
     private const string PreviewRoot = CardBagSourceRoot + "/Previews";
     private const string PrefabRoot = "Assets/Resources/CardBagPrefabs";
     private const string RootBackgroundPath = "Assets/UI/BasicUI/BgCardBoard.png";
+    private const string GameBoardFileName = "GameBoard.png";
+    private const string LegacyGameBoardFileName = "background_base.png";
+    private const string BoardTitleFileName = "BoardTitle.png";
     private const string PendingRequestRelativePath = "Temp/PuffiesCardBagGenerator.request";
     private const byte OpaqueThreshold = 128;
     private const int MaxVerificationSamples = 512;
@@ -42,6 +45,8 @@ public static class CardBagPrefabGeneratorEditor
 
     internal static List<SourcePackInfo> ScanSourcePacks()
     {
+        AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+
         var sourceRoot = ToAbsolutePath(CardBagSourceRoot);
         var packs = new List<SourcePackInfo>();
         if (!Directory.Exists(sourceRoot))
@@ -63,9 +68,20 @@ public static class CardBagPrefabGeneratorEditor
 
             var sourceFolder = $"{CardBagSourceRoot}/{folderName}";
             var missing = new List<string>();
-            if (!File.Exists(ToAbsolutePath($"{sourceFolder}/background_base.png")))
+            var warnings = new List<string>();
+            var migrationError = TryMigrateLegacyGameBoard(sourceFolder, folderName);
+            if (!string.IsNullOrEmpty(migrationError))
             {
-                missing.Add("background_base.png");
+                missing.Add($"{GameBoardFileName} (rename failed)");
+            }
+            else if (!File.Exists(ToAbsolutePath($"{sourceFolder}/{GameBoardFileName}")))
+            {
+                missing.Add(GameBoardFileName);
+            }
+
+            if (!File.Exists(ToAbsolutePath($"{sourceFolder}/{BoardTitleFileName}")))
+            {
+                warnings.Add($"{BoardTitleFileName} missing; generation is allowed");
             }
 
             if (!File.Exists(ToAbsolutePath($"{PreviewRoot}/{folderName}.png")))
@@ -89,7 +105,8 @@ public static class CardBagPrefabGeneratorEditor
                 folderName,
                 pieceCount,
                 File.Exists(ToAbsolutePath($"{PrefabRoot}/{folderName}.prefab")),
-                missing));
+                missing,
+                warnings));
         }
 
         packs.Sort((left, right) => left.PackId.CompareTo(right.PackId));
@@ -189,14 +206,28 @@ public static class CardBagPrefabGeneratorEditor
 
         var bagName = $"CardBag{packId:D3}";
         var sourceFolder = $"{CardBagSourceRoot}/{bagName}";
-        var boardPath = $"{sourceFolder}/background_base.png";
+        var migrationError = TryMigrateLegacyGameBoard(sourceFolder, bagName);
+        if (!string.IsNullOrEmpty(migrationError))
+        {
+            throw new InvalidOperationException(
+                $"CardBag generator: failed to rename {LegacyGameBoardFileName} to " +
+                $"{GameBoardFileName} for {bagName}: {migrationError}");
+        }
+
+        var boardPath = $"{sourceFolder}/{GameBoardFileName}";
         var previewPath = $"{PreviewRoot}/{bagName}.png";
-        var titlePath = $"{sourceFolder}/BoardTitle.png";
+        var titlePath = $"{sourceFolder}/{BoardTitleFileName}";
         var prefabPath = $"{PrefabRoot}/{bagName}.prefab";
 
-        RequireAsset(boardPath, "background image");
+        RequireAsset(boardPath, "GameBoard image");
         RequireAsset(previewPath, "preview image");
         RequireAsset(RootBackgroundPath, "root background image");
+        if (!File.Exists(ToAbsolutePath(titlePath)))
+        {
+            Debug.LogWarning(
+                $"CardBag generator: {bagName} has no {BoardTitleFileName}; " +
+                "the prefab will be generated without a BoardTitle node.");
+        }
 
         var piecePaths = CollectPiecePaths(sourceFolder);
         if (piecePaths.Count == 0)
@@ -302,6 +333,35 @@ public static class CardBagPrefabGeneratorEditor
                 var name = Path.GetFileNameWithoutExtension(path);
                 return NumberedPieceRegex.IsMatch(name) || GameplayPieceRegex.IsMatch(name);
             });
+    }
+
+    private static string TryMigrateLegacyGameBoard(string sourceFolder, string bagName)
+    {
+        var gameBoardPath = $"{sourceFolder}/{GameBoardFileName}";
+        if (File.Exists(ToAbsolutePath(gameBoardPath)))
+        {
+            return null;
+        }
+
+        var legacyPath = $"{sourceFolder}/{LegacyGameBoardFileName}";
+        if (!File.Exists(ToAbsolutePath(legacyPath)))
+        {
+            return null;
+        }
+
+        var error = AssetDatabase.MoveAsset(legacyPath, gameBoardPath);
+        if (!string.IsNullOrEmpty(error))
+        {
+            Debug.LogError(
+                $"CardBag generator: could not rename {legacyPath} to {gameBoardPath}: {error}");
+            return error;
+        }
+
+        AssetDatabase.ImportAsset(gameBoardPath, ImportAssetOptions.ForceSynchronousImport);
+        Debug.Log(
+            $"CardBag generator: renamed {bagName}/{LegacyGameBoardFileName} to " +
+            $"{bagName}/{GameBoardFileName} and preserved its asset metadata.");
+        return null;
     }
 
     private static int GetPieceSortNumber(string path)
@@ -751,21 +811,37 @@ public static class CardBagPrefabGeneratorEditor
         public int PieceCount { get; }
         public bool PrefabExists { get; }
         public IReadOnlyList<string> MissingItems { get; }
+        public IReadOnlyList<string> Warnings { get; }
         public bool IsReady => MissingItems.Count == 0;
-        public string Status => IsReady ? "Ready" : "Missing: " + string.Join(", ", MissingItems);
+        public string Status
+        {
+            get
+            {
+                if (!IsReady)
+                {
+                    return "Missing: " + string.Join(", ", MissingItems);
+                }
+
+                return Warnings.Count == 0
+                    ? "Ready"
+                    : "Warning: " + string.Join(", ", Warnings);
+            }
+        }
 
         public SourcePackInfo(
             int packId,
             string bagName,
             int pieceCount,
             bool prefabExists,
-            IReadOnlyList<string> missingItems)
+            IReadOnlyList<string> missingItems,
+            IReadOnlyList<string> warnings)
         {
             PackId = packId;
             BagName = bagName;
             PieceCount = pieceCount;
             PrefabExists = prefabExists;
             MissingItems = missingItems;
+            Warnings = warnings;
         }
     }
 
@@ -863,6 +939,7 @@ internal sealed class CardBagPrefabGeneratorWindow : EditorWindow
         EditorGUILayout.Space(6f);
         EditorGUILayout.HelpBox(
             "Scans Assets/UI/CardBags/CardBagNNN. New prefabs are selected by default. " +
+            "GameBoard.png is required; a missing BoardTitle.png only shows a warning. " +
             "Generate prefabs first, rename sequential Piece nodes into gameplay groups, " +
             "then run Bake Outline Masks.",
             MessageType.Info);
@@ -953,7 +1030,11 @@ internal sealed class CardBagPrefabGeneratorWindow : EditorWindow
             GUILayout.Label(info.BagName, GUILayout.Width(110f));
             GUILayout.Label(info.PieceCount.ToString(CultureInfo.InvariantCulture), GUILayout.Width(60f));
             GUILayout.Label(info.PrefabExists ? "Overwrite" : "New", GUILayout.Width(80f));
-            GUILayout.Label(info.Status, info.IsReady ? EditorStyles.label : EditorStyles.wordWrappedMiniLabel);
+            GUILayout.Label(
+                info.Status,
+                info.IsReady && info.Warnings.Count == 0
+                    ? EditorStyles.label
+                    : EditorStyles.wordWrappedMiniLabel);
         }
     }
 

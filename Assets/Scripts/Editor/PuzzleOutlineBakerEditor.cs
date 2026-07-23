@@ -229,6 +229,14 @@ public static class PuzzleOutlineBakerEditor
         var groups = new SortedDictionary<int, List<Image>>();
         for (var i = 0; i < images.Length; i++)
         {
+            if (images[i] != null && IsSequentialPlaceholderName(images[i].gameObject.name))
+            {
+                return groups;
+            }
+        }
+
+        for (var i = 0; i < images.Length; i++)
+        {
             var image = images[i];
             if (image == null || image.sprite == null || !TryParsePieceNumber(image.gameObject.name, out var number))
             {
@@ -251,6 +259,18 @@ public static class PuzzleOutlineBakerEditor
         }
 
         return groups;
+    }
+
+    private static bool IsSequentialPlaceholderName(string objectName)
+    {
+        if (string.IsNullOrEmpty(objectName)
+            || !objectName.StartsWith(GameDefine.PieceObjectPrefix, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var numberText = objectName.Substring(GameDefine.PieceObjectPrefix.Length);
+        return numberText.Length == 3 && numberText[0] == '0';
     }
 
     private static bool TryParsePieceNumber(string objectName, out int pieceNumber)
