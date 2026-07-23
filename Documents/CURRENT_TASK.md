@@ -1,70 +1,53 @@
 # 当前任务
 
-- 任务：无 JSON 批量生成 CardBag Prefab
-- 状态：批量工具已完成，等待 Unity 界面确认和 CardBag017 手工分组
+- 任务：整理 Model 目录脚本
+- 状态：已完成
 - 更新时间：2026-07-23
 
 ## 用户意图
 
-- 使用 `Assets/UI/CardBags/Previews/CardBag017.png`、`CardBag017/GameBoard.png` 和透明碎图，在不依赖 `unity_layout.json` 的情况下还原拼图布局。
-- 参考现有 `CardBagNNN.prefab` 的结构和命名，创建 `Assets/Resources/CardBagPrefabs/CardBag017.prefab`。
-- 后续允许通过手工修改碎图名称表达 Piece 分组。
-- 将已验证的017试点扩展为可自动发现新资源、选择多个 PackId 并批量生成的正式编辑器工具。
+- 减少 `Assets/Scripts/Model` 下过多的工具脚本文件。
+- 保持目录扁平，不为了合并制造新的深层目录或万能工具类。
+- 在不改变现有功能、公开 API 和持久化数据的前提下共置相关类型。
 
 ## 已完成
 
-- 新增 `CardBagPrefabGeneratorEditor`，使用碎图保留的裁切 RGB 像素在 `GameBoard.png` 中定位，并使用 Alpha 作为运行时 Piece 形状。
-- 生成前校验预览图与棋盘尺寸、Piece 文件、Sprite 导入设置、重复对象名和像素匹配置信度。
-- 已生成 `CardBag017.prefab`：画布和 GameBoard 为 `1316 x 1316`，包含 `BoardTitle` 和 37 个透明槽位 Image。
-- BoardTitle 和 Piece 均位于 `GameBoard` 下。本次未改名的 `piece_001` 到 `piece_037` 依次生成 `Piece001` 到 `Piece037`，不自动推断游戏分组。
-- 删除017旧的 `Group01.png` 到 `Group05.png`，防止未分组节点误用旧蒙版；用户完成手工分组后再重新烘焙。
-- 菜单 **Puffies -> Puzzles -> Generate CardBag Prefabs From Images** 打开批量窗口，扫描一级 `CardBagNNN` 资源目录并显示 Piece 数、Prefab 状态和缺失资源。
-- 窗口默认只选择尚无 Prefab 的有效新资源，支持选择全部有效资源；覆盖已有 Prefab 前会明确警告手工层级和 Piece 分组将被替换。
-- 批量执行按 PackId 逐个生成，一个卡包失败不会阻断其他卡包；结束后汇总成功和失败项。
-- 批量生成不自动烘焙描边。`Piece001` 这类三位顺序名称会被描边烘焙器跳过，避免 `Piece010` 被误判成正式第1组；没有正式分组时同步删除该卡包的旧描边输出。
-- 正式棋盘文件名改为 `GameBoard.png`。扫描到旧 `background_base.png` 且目标不存在时，通过 `AssetDatabase.MoveAsset` 自动改名并保留 Meta/GUID。
-- `BoardTitle.png` 作为标准资源执行软校验：缺失时窗口显示警告，仍允许生成不含标题节点的 Prefab；直接生成路径也会写入 Console 警告。
-- 对超过99片的卡包增加整包未分组保护：只要还存在任一 `Piece001` 类占位名，就不烘焙该卡包，避免 `Piece100` 被误判成正式分组。
+- 将独立公开类型 `GameFontUtility` 从 `GameFontUtility.cs` 移入 `GameCommonUtility.cs`；Controller 和 View 调用点保持不变。
+- 将 `GameSettingsData` 和独立公开类型 `GameSettingsUtility` 从 `GameSettingsUtility.cs` 移入 `LocalDataStore.cs`；SQLite 集合键、字段默认值和运行时应用逻辑保持不变。
+- 删除 `GameFontUtility.cs/.meta` 和 `GameSettingsUtility.cs/.meta`。
+- Model 目录由10个 `.cs` 减少为8个。
+- 保留动画、卡包、任务、配置、CardFx 和核心定义为独立文件，避免继续扩大现有大文件。
+- 新增并完成 `specs/model-organization.md`，记录长期合并边界。
 
 ## 修改文件
 
-- `Assets/Scripts/Editor/CardBagPrefabGeneratorEditor.cs` 及 `.meta`
-- `Assets/Scripts/Editor/PuzzleOutlineBakerEditor.cs`
-- `Assets/Resources/CardBagPrefabs/CardBag017.prefab`
-- 删除 `Assets/Resources/Generated/PuzzleOutlines/CardBag017/` 下不再匹配当前节点命名的旧蒙版。
-- Unity 同时保存了编辑器内已有的 `CardBag002/009` Piece 层级调整，并重新烘焙了 CardBag009 描边。
-- 更新 `specs/puzzle-outline.md` 和 `Documents/PROJECT_CONTEXT.md`。
+- `Assets/Scripts/Model/GameCommonUtility.cs`
+- `Assets/Scripts/Model/LocalDataStore.cs`
+- 删除 `Assets/Scripts/Model/GameFontUtility.cs` 及 `.meta`
+- 删除 `Assets/Scripts/Model/GameSettingsUtility.cs` 及 `.meta`
+- `specs/model-organization.md`
+- `Documents/PROJECT_CONTEXT.md`
 
 ## 决策
 
-- 定位基准使用无青色切割线的 `GameBoard.png`；`Previews/CardBagNNN.png` 只负责尺寸和后续视觉校验，不进入 Prefab 运行时引用。
-- Prefab 根 Image 继续使用通用 `BgCardBoard.png`，`GameBoard` 使用当前卡包完整成图。
-- Piece 文件名为 `PieceNN.png` 或 `PiecesNN.png` 时，`NN` 直接成为运行时对象编号；`piece_###.png` 只生成从 `Piece001` 开始的顺序名称，不负责分组。
-- 批量窗口只扫描严格匹配 `CardBagNNN` 的一级目录，并硬性要求 `GameBoard.png`、`Previews/CardBagNNN.png` 和至少一张合法 Piece PNG；`BoardTitle.png` 缺失只警告。
-- 已存在的 Prefab 默认不勾选，防止批量操作意外覆盖手工分组；需要重建时由用户主动选择并二次确认。
-- 不恢复用户已经删除的旧017 GameBoard 和 `PiecesNN` 切图。
+- 本次只合并文件归属，不合并公开类，也不修改调用点。
+- 字体辅助属于通用 UI/运行时辅助，与 `GameCommonUtility` 共置。
+- 设置数据与设置持久化依赖本地 SQLite，与 `LocalDataStore` 共置；类职责继续独立。
+- `GameAnimationUtility` 和 `CardPackDataUtility` 已超过1000行，其他独立模块也有明确所有权，不再为减少文件数强行合并。
 
 ## 验证
 
-- Unity 2022.3.62f2 隔离批处理成功生成 Prefab，37张碎图均为 `100.00%` 像素匹配。
-- Prefab 包含1个根、1个 GameBoard、1个 BoardTitle、37个 Piece；BoardTitle 和37个 Piece 使用同一 GameBoard 父节点。
-- Prefab 的40个 Sprite GUID 与根背景、GameBoard、BoardTitle 和37张碎图一一对应，无缺失或额外引用。
-- 顺序命名状态不生成描边；旧的五张017描边已删除。
+- 两个被删除脚本的 Meta GUID 在场景、Prefab 和其他非 Meta 资源中的引用均为0。
+- `GameFontUtility`、`GameSettingsData` 和 `GameSettingsUtility` 均只保留一个定义。
 - `dotnet build Puffies.sln --no-restore` 完成，runtime、first-pass 和 Editor 程序集均为0警告、0错误。
-- `git diff --check` 未发现空白错误。
-- 只读扫描识别到 6 个 `CardBagNNN` 目录：017资源完整且 Prefab 已存在，默认不选中；001/002/003/008/009 缺少新流程要求的背景或预览图，显示缺失并禁止选择。
-- 检查时发现旧烘焙器曾将017顺序节点误生成 `Group01` 到 `Group03`；确认这些不是正式分组结果后已删除，017当前无残留描边目录。
-- 当前资源检查确认 CardBag017 和 CardBag022 均满足从 `background_base.png` 自动迁移为 `GameBoard.png` 的条件；CardBag022 有115张 Piece 且缺少 `BoardTitle.png`，迁移后应保持可选择并显示标题缺失警告。
-- 修改后再次执行 `dotnet build Puffies.sln --no-restore`，三个程序集均为0警告、0错误。
-- Unity 当前持有工程锁，本轮未启动第二个 Unity 批处理实例；需在现有编辑器完成菜单窗口的视觉确认。
-- 当前顺序节点尚未形成有效游戏分组，不能进行正式 GameScene Play Mode 回归。
+- Unity 生成的 `.csproj` 尚未自动刷新删除路径；编译时临时使用两个无类型空脚本兼容旧清单，编译后已删除，未修改生成的 `.csproj`。
+- `git diff --check` 通过。
 
 ## 下一步
 
-1. 在现有 Unity 编辑器打开 **Puffies -> Puzzles -> Generate CardBag Prefabs From Images**，确认列表、默认选择和缺失状态展示。
-2. 用户将 CardBag017 的 `Piece001` 到 `Piece037` 手工改为正式的分组编号。
-3. 执行 **Puffies -> Puzzles -> Bake Outline Masks**，再从 MainScene 进入 PackId 17 验证拖放和描边切换。
+1. Unity 编辑器获得焦点后等待资源刷新，确认 Project 窗口的 Model 目录只剩8个脚本且 Console 无 Missing Script。
+2. 回到 CardBag 批量生成流程：打开 **Puffies -> Puzzles -> Generate CardBag Prefabs From Images**，验证资源列表和自动 `GameBoard.png` 迁移。
 
 ## 恢复提示
 
-继续 Puffies 的无 JSON CardBag 批量生成工作。先阅读 `AGENTS.md`、`Documents/WORKFLOW.md` 和 `Documents/CURRENT_TASK.md`；批量窗口已经完成，CardBag017 已生成 `Piece001` 到 `Piece037`，下一步先确认窗口展示，再等待用户手工改成正式游戏分组并重新烘焙描边。
+继续 Puffies 开发。先阅读 `AGENTS.md`、`Documents/WORKFLOW.md` 和 `Documents/CURRENT_TASK.md`；Model 文件整理已完成，下一项有效行动是回到 Unity 确认脚本刷新，然后继续 CardBag 批量生成与 Piece 分组验证。
