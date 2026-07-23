@@ -182,6 +182,7 @@ public static class GameAnimationUtility
         Sprite coverSprite,
         Sprite sizeSprite,
         Color tint,
+        int sortingOrder,
         out CardPackIdleDisplay display)
     {
         display = null;
@@ -201,6 +202,7 @@ public static class GameAnimationUtility
         var meshRenderer = root.AddComponent<MeshRenderer>();
         meshFilter.sharedMesh = idleMesh;
         meshRenderer.sharedMaterial = material;
+        meshRenderer.sortingOrder = sortingOrder;
         ApplyCardPackAppearance(meshRenderer, coverSprite, tint, default, false);
 
         GameObject sizeRoot = null;
@@ -212,6 +214,7 @@ public static class GameAnimationUtility
             sizeRenderer = sizeRoot.AddComponent<MeshRenderer>();
             sizeMeshFilter.sharedMesh = GetCardPackOverlayMesh();
             sizeRenderer.sharedMaterial = GetCardPackOverlayMaterial(material);
+            sizeRenderer.sortingOrder = sortingOrder + 1;
             ApplyCardPackOverlayAppearance(sizeRenderer, sizeSprite, tint);
         }
 
@@ -271,7 +274,14 @@ public static class GameAnimationUtility
             * Mathf.Max(0.001f, baseScale * Mathf.Max(0.001f, scaleMultiplier));
         ApplyCardPackClip(display.Renderer, screenClipRect, true);
         display.Renderer.enabled = true;
-        UpdateCardPackOverlay(display, sizeAnchor, camera, screenClipRect, visible);
+        UpdateCardPackOverlay(
+            display,
+            sizeAnchor,
+            camera,
+            screenClipRect,
+            anchorBounds.center,
+            scaleMultiplier,
+            visible);
     }
 
     private static void UpdateCardPackOverlay(
@@ -279,6 +289,8 @@ public static class GameAnimationUtility
         RectTransform sizeAnchor,
         Camera camera,
         Rect screenClipRect,
+        Vector3 cardCenter,
+        float scaleMultiplier,
         bool visible)
     {
         if (display?.SizeRoot == null || display.SizeRenderer == null)
@@ -299,12 +311,15 @@ public static class GameAnimationUtility
             return;
         }
 
+        var multiplier = Mathf.Max(0.001f, scaleMultiplier);
         var overlayTransform = display.SizeRoot.transform;
-        overlayTransform.position = overlayBounds.center - camera.transform.forward * 0.01f;
+        overlayTransform.position = cardCenter
+            + (overlayBounds.center - cardCenter) * multiplier
+            - camera.transform.forward * 0.01f;
         overlayTransform.rotation = Quaternion.identity;
         overlayTransform.localScale = new Vector3(
-            overlayBounds.size.x,
-            overlayBounds.size.y,
+            overlayBounds.size.x * multiplier,
+            overlayBounds.size.y * multiplier,
             1f);
         ApplyCardPackClip(display.SizeRenderer, screenClipRect, true);
         display.SizeRenderer.enabled = true;
@@ -393,10 +408,58 @@ public static class GameAnimationUtility
             return;
         }
 
+        SetPreparedCardPackPose(scaleMultiplier, effect.ScaleCenter);
+    }
+
+    public static bool TryGetPreparedCardPackCenter(out Vector3 center)
+    {
+        center = default;
+        if (!TryGetSpawnedCardPackEffect(out var effect) || !effect.HasPreparedPose)
+        {
+            return false;
+        }
+
+        center = effect.ScaleCenter;
+        return true;
+    }
+
+    public static void SetPreparedCardPackPose(float scaleMultiplier, Vector3 center)
+    {
+        if (!TryGetSpawnedCardPackEffect(out var effect) || !effect.HasPreparedPose)
+        {
+            return;
+        }
+
         var multiplier = Mathf.Max(0.001f, scaleMultiplier);
+        effect.Root.SetActive(true);
         effect.Root.transform.localScale = effect.BaseRootScale * multiplier;
-        effect.Root.transform.position = effect.ScaleCenter
+        effect.Root.transform.position = center
             + (effect.BaseRootPosition - effect.ScaleCenter) * multiplier;
+    }
+
+    public static void SetPreparedCardPackVisible(bool visible)
+    {
+        if (TryGetSpawnedCardPackEffect(out var effect))
+        {
+            effect.Root.SetActive(visible);
+        }
+    }
+
+    public static void SetPreparedCardPackSortingOrder(int sortingOrder)
+    {
+        if (!TryGetSpawnedCardPackEffect(out var effect) || effect.CardRenderers == null)
+        {
+            return;
+        }
+
+        for (var i = 0; i < effect.CardRenderers.Length; i++)
+        {
+            var renderer = effect.CardRenderers[i];
+            if (renderer != null)
+            {
+                renderer.sortingOrder = sortingOrder;
+            }
+        }
     }
 
     public static bool PlayPreparedCardPackAnimation()
@@ -627,7 +690,7 @@ public static class GameAnimationUtility
         sCardPackOverlayMaterial = new Material(sourceMaterial)
         {
             name = "CardPackOverlayMaterial",
-            renderQueue = sourceMaterial.renderQueue + 1
+            renderQueue = sourceMaterial.renderQueue
         };
         sCardPackOverlayMaterial.SetFloat(
             DepthTestPropertyId,

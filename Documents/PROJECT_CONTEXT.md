@@ -27,7 +27,7 @@ Unity **2022.3** / URP 2D 项目。核心循环：打开卡包 -> 拖放拼图 -
 | 场景 | 需求 |
 |------|------|
 | LoadingScene | 初始化 JSON、SQLite、任务数据和卡包数据；加载结束后进入 MainScene |
-| MainScene | 根据 `CardPacks.csv` 与 SQLite 解锁状态刷新卡包列表；每页按 6 列 x 3 行显示 18 个带呼吸动画的轻量常驻卡包特效；将选中特效放大到 `600 x 680`，使用真实封面播放完整通用 3D 开包模型，然后进入 GameScene；提供 Rank、Achieve 和 Menu 入口 |
+| MainScene | 根据 `CardPacks.csv` 与 SQLite 解锁状态刷新卡包列表；每页按 6 列 x 3 行显示 18 个带呼吸动画的轻量常驻卡包特效；点击后将闭合卡包移动并放大到屏幕中心，同时显示 `PanelBagSelect`，由 Play 确认播放开包动画并进入 GameScene，Back 取消并复原；提供 Rank、Achieve 和 Menu 入口 |
 | GameScene | 根据选中 PackId 加载 `CardBagNNN` Prefab；按照 `PieceNN` 数字命名组织拼图分组；一组完成后切换分组并清理上一组碎片；全部完成后显示 RewardPanel |
 | RankScene | 仅占位；首个 Demo 不包含排行榜功能 |
 | AchieveScene | 当前显示 20 条模拟成就，前 5 条已达成、后 15 条未达成；接入 Steam 后替换数据源 |
@@ -120,7 +120,9 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
                     -> BtnSet        -> PanelSet -> BtnClose / BtnReturn -> 关闭设置
                     -> BtnUsable     -> PanelUsable -> BtnClose / BtnReturn -> 关闭辅助选项
                     -> BtnData       -> PanelSave -> BtnClose / BtnReturn -> 关闭存档面板
-      -> 已解锁卡包运行时列表项 -> 开包动画 -> GameScene
+      -> 已解锁卡包运行时列表项 -> 居中放大 + PanelBagSelect
+                                      -> BtnPlay -> 开包动画 -> GameScene
+                                      -> BtnBack -> 卡包返回列表并关闭面板
           -> BtnReturn -> Main
           -> RewardPanel / BtnFinish -> Main
 effect（调试）：CardFx 预览；菜单 Puffies -> Preview CardFx Effects
@@ -221,7 +223,7 @@ effect（调试）：CardFx 预览；菜单 Puffies -> Preview CardFx Effects
 - `Assets/Scripts/Model` 有意保持单层扁平目录。相关纯 C# 类型按以下方式合并：`GameManager` 位于 `GameDefine.cs`，CSV 解析类型位于 `GameConfigRepository.cs`，`JsonLocalStore`、`SqliteLocalStore`、`GameSettingsData` 和 `GameSettingsUtility` 位于 `LocalDataStore.cs`，积分类型和 `GameScoreUtility` 位于 `GameTaskUtility.cs`，`GameFontUtility` 位于 `GameCommonUtility.cs`。公开类型名和调用点保持不变。
 - Model 当前保留8个脚本。`GameAnimationUtility`、`CardPackDataUtility`、`GameTaskUtility`、`GameConfigRepository`、`CardFxRuntimeUtility` 和 `GameDefine` 属于大型或独立模块，不为减少文件数量继续互相合并。
 - MainScene 开包时创建运行时根节点 `CardPackOpeningFull`，并实例化全部六个原始蒙皮层：`CardPackOpening.prefab` 及 `CardPackOpening_002` 到 `006`。六个 Animator 同时启动共享 `CardPackOpening` 状态。`GameAnimationUtility` 通过 `MaterialPropertyBlock` 将选中列表项的完整 `PackIconNNN` Sprite 贴图矩形应用到每一层，测量组合动画第零帧蒙皮边界，在启用 Renderer 前将完整特效等比适配到点击的 UI 边界。共享材质不被修改。URP Shader 在正面渲染选中封面、背面渲染原始卡背，并使用 `CardPackClipMask.png` 保留波浪形边缘；同时应用美术提供的正反面法线、HDR 环境反射、光照渐变、金属度/光滑度和 AO。选中封面颜色保持为未改变的基础色，渐变和反射贡献已中和，不会为整张卡包染色。项目使用 URP `Renderer2D`，因此 Mesh Shader Pass 必须使用 `LightMode=SRPDefaultUnlit` 或 `Universal2D`；交付的 Built-in/Amplify Surface Shader 必须移植，不能直接导入。资源包中的静态 `CardPackStatic_001`...`006`、`CardPackPlane` 和 `PlaneGroup_001` 是支持或参考资源，不是运行时开包层；Plane 资源没有动画且使用固定示例图，会遮挡动态卡包。
-- MainScene 空闲卡包使用六个开包层第零帧烘焙的一份共享 Mesh。每个可见卡包只使用一个带真实封面和生命周期颜色的轻量 Renderer，在 `2.4s` 内进行 `0.98` 到 `1.02` 呼吸缩放，跟随 `PackCover` 锚点，并裁剪到卡包 ScrollRect 视口。点击后使用可复用六层开包器替换空闲 Renderer，在 `0.3s` 内放大到原始 `600 x 680` 设计尺寸，再播放开包动画并进入 GameScene。编辑器配置的 `PackSize` Image 继续作为位置、Sprite、颜色和前景视觉依据。
+- MainScene 空闲卡包使用六个开包层第零帧烘焙的一份共享 Mesh。每个可见卡包只使用一个带真实封面和生命周期颜色的轻量 Renderer，在 `2.4s` 内进行 `0.98` 到 `1.02` 呼吸缩放，跟随 `PackCover` 锚点，并裁剪到卡包 ScrollRect 视口。点击后只将被选中的卡包替换为可复用六层开包器，在 `0.3s` 内同时移动到屏幕中心并放大到原始 `600 x 680` 设计尺寸，静止等待 `PanelBagSelect` 操作；其他列表卡包继续显示并保持呼吸动效。`BtnPlay` 播放开包动画并进入 GameScene，`BtnBack` 反向复原到列表位置并恢复选中卡包的呼吸动效。编辑器配置的 `PackSize` Image 作为位置、Sprite 和颜色来源；3D 空闲显示可用时由轻量前景 Renderer 代替该 Image，并围绕本卡包中心使用相同倍率呼吸。列表本体和尺寸图标成对排序；运行时将 `PanelBagSelect` 迁移到独立根级 Screen Space Camera Canvas，面板 Canvas 位于普通列表世界 Renderer 与选中卡包 Renderer 之间，选中卡包使用最高 Renderer 排序。面板根背景运行时使用 `0.92` Alpha，使其他列表卡包保持可辨认但明显压暗。
 
 ### 开发期持久化策略
 

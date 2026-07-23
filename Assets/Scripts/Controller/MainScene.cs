@@ -40,6 +40,13 @@ public class MainScene : MonoBehaviour
     private const int PackagesPerPageRowCount = 3;
     private const int PackagesPerPageColumnCount = 6;
     private const int PackagesPerPage = PackagesPerPageRowCount * PackagesPerPageColumnCount;
+    private const int PackageListSortingOrderBase = 1000;
+    private const int PackageSortingOrderStride = 2;
+    private const int BagSelectPanelSortingOrder = 20000;
+    private const int SelectedPackageSortingOrder = 30000;
+    private const float BagSelectBackdropAlpha = 0.92f;
+    private const float BagSelectPanelWorldDepth = -0.1f;
+    private const float SelectedPackageWorldDepth = -0.2f;
     private const int MainPackageBagId = GameDefine.DefaultBagId;
     private const string BootstrapObjectName = "MainSceneBootstrap";
     private const string PackageScrollViewObjectName = "PackageScrollView";
@@ -67,6 +74,10 @@ public class MainScene : MonoBehaviour
     private const string UsableToggle3ObjectName = "Toggle3";
     private const string SavePanelObjectName = "PanelSave";
     private const string SaveButtonObjectName = "BtnData";
+    private const string BagSelectPanelObjectName = "PanelBagSelect";
+    private const string BagSelectCanvasObjectName = "PanelBagSelectCanvas";
+    private const string BagSelectPlayButtonObjectName = "BtnPlay";
+    private const string BagSelectBackButtonObjectName = "BtnBack";
     private const string TaskItemObjectName = "TaskItem";
     private static readonly Color CompletedPackageTint = new Color(0.78f, 0.78f, 0.78f, 1f);
     private static bool sHookedSceneLoaded;
@@ -82,6 +93,8 @@ public class MainScene : MonoBehaviour
     private GameObject mSettingsPanelRoot;
     private GameObject mUsablePanelRoot;
     private GameObject mSavePanelRoot;
+    private GameObject mBagSelectPanelRoot;
+    private Canvas mBagSelectOverlayCanvas;
     private FakeSettingsSliderInput mMusicSlider;
     private FakeSettingsSliderInput mEffectSlider;
     private Toggle mWindowedToggle;
@@ -94,6 +107,13 @@ public class MainScene : MonoBehaviour
     private bool mIsApplyingSettingsToUi;
     private Coroutine mPlayAnimationCoroutine;
     private PackageEntry mSelectedPackageEntry;
+    private Button mBagSelectPlayButton;
+    private Button mBagSelectBackButton;
+    private int mSelectedBagId;
+    private float mSelectedPackageStartScale;
+    private float mSelectedPackageOpenScale;
+    private Vector3 mSelectedPackageStartCenter;
+    private Vector3 mSelectedPackageDisplayCenter;
 
     private sealed class PackageEntry
     {
@@ -106,6 +126,7 @@ public class MainScene : MonoBehaviour
         public GameAnimationUtility.CardPackIdleDisplay IdleDisplay;
         public Color DisplayTint = Color.white;
         public float BreathPhase;
+        public int RenderOrder;
         public bool SuppressDisplay;
     }
 
@@ -160,6 +181,8 @@ public class MainScene : MonoBehaviour
         mHasSwitchedToGameScene = false;
         mIsPlayingAnimation = false;
         mPlayAnimationCoroutine = null;
+        mSelectedPackageEntry = null;
+        mSelectedBagId = 0;
 
         GameManager.Initialize();
         if (!GameSettingsUtility.Initialize())
@@ -185,6 +208,7 @@ public class MainScene : MonoBehaviour
 
         ConfigureRankButton();
         ConfigureAchieveButton();
+        ConfigureBagSelectPanel();
         ConfigureMenuPanel();
         ConfigureSettingsPanel();
         ConfigureUsablePanel();
@@ -217,7 +241,9 @@ public class MainScene : MonoBehaviour
 
     public bool CanAcceptPackageInput()
     {
-        return !mHasSwitchedToGameScene && !mIsPlayingAnimation;
+        return !mHasSwitchedToGameScene
+            && !mIsPlayingAnimation
+            && mSelectedPackageEntry == null;
     }
 
     public bool TryGetPackageFlyTarget(int bagId, out RectTransform target)
@@ -267,11 +293,117 @@ public class MainScene : MonoBehaviour
                 Root = image.gameObject,
                 Image = image,
                 RectTransform = image.rectTransform,
-                BreathPhase = resolvedBagId * 0.6180339f
+                BreathPhase = resolvedBagId * 0.6180339f,
+                RenderOrder = PackageListSortingOrderBase
             };
         }
 
-        mPlayAnimationCoroutine = StartCoroutine(PlayPackageInteraction(resolvedBagId, entry));
+        mPlayAnimationCoroutine = StartCoroutine(ShowPackageSelection(resolvedBagId, entry));
+    }
+
+    private void ConfigureBagSelectPanel()
+    {
+        mBagSelectPanelRoot = GameCommonUtility.FindSceneObject(BagSelectPanelObjectName);
+        if (mBagSelectPanelRoot == null)
+        {
+            Debug.LogWarning($"MainScene: bag selection panel not found. Expected {BagSelectPanelObjectName}.");
+            return;
+        }
+
+        ConfigureBagSelectOverlayCanvas();
+        var panelImage = mBagSelectPanelRoot.GetComponent<Image>();
+        if (panelImage != null)
+        {
+            var panelColor = panelImage.color;
+            panelColor.a = BagSelectBackdropAlpha;
+            panelImage.color = panelColor;
+        }
+
+        mBagSelectPlayButton = FindChild(
+            mBagSelectPanelRoot.transform,
+            BagSelectPlayButtonObjectName)?.GetComponent<Button>();
+        if (mBagSelectPlayButton == null)
+        {
+            Debug.LogWarning(
+                $"MainScene: bag selection play button not found. Expected {BagSelectPlayButtonObjectName}.");
+        }
+        else
+        {
+            mBagSelectPlayButton.onClick.RemoveListener(OnBagSelectPlayClicked);
+            mBagSelectPlayButton.onClick.AddListener(OnBagSelectPlayClicked);
+        }
+
+        var backTransform = FindChild(mBagSelectPanelRoot.transform, BagSelectBackButtonObjectName);
+        if (backTransform != null)
+        {
+            mBagSelectBackButton = backTransform.GetComponent<Button>();
+            if (mBagSelectBackButton == null)
+            {
+                mBagSelectBackButton = backTransform.gameObject.AddComponent<Button>();
+                mBagSelectBackButton.targetGraphic = backTransform.GetComponent<Graphic>();
+            }
+
+            mBagSelectBackButton.onClick.RemoveListener(OnBagSelectBackClicked);
+            mBagSelectBackButton.onClick.AddListener(OnBagSelectBackClicked);
+        }
+        else
+        {
+            Debug.LogWarning(
+                $"MainScene: bag selection back button not found. Expected {BagSelectBackButtonObjectName}.");
+        }
+
+        SetBagSelectPanelVisible(false);
+    }
+
+    private void ConfigureBagSelectOverlayCanvas()
+    {
+        var camera = Camera.main;
+        var sourceCanvas = mBagSelectPanelRoot.GetComponentInParent<Canvas>();
+        if (camera == null || sourceCanvas == null)
+        {
+            Debug.LogWarning("MainScene: bag selection overlay canvas could not be configured.");
+            return;
+        }
+
+        var canvasObject = new GameObject(
+            BagSelectCanvasObjectName,
+            typeof(RectTransform),
+            typeof(Canvas),
+            typeof(CanvasScaler),
+            typeof(GraphicRaycaster));
+        canvasObject.layer = mBagSelectPanelRoot.layer;
+        mBagSelectOverlayCanvas = canvasObject.GetComponent<Canvas>();
+        GameCommonUtility.ConfigureCanvasForGameplay(
+            mBagSelectOverlayCanvas,
+            camera,
+            GameDefine.DesignWidth,
+            ReferenceHeight,
+            PixelsPerUnit,
+            BagSelectPanelWorldDepth);
+        mBagSelectOverlayCanvas.sortingLayerID = sourceCanvas.sortingLayerID;
+        mBagSelectOverlayCanvas.sortingOrder = BagSelectPanelSortingOrder;
+
+        mBagSelectPanelRoot.transform.SetParent(mBagSelectOverlayCanvas.transform, false);
+    }
+
+    private void OnBagSelectPlayClicked()
+    {
+        if (mIsPlayingAnimation || mSelectedPackageEntry == null || mSelectedBagId <= 0)
+        {
+            return;
+        }
+
+        mPlayAnimationCoroutine = StartCoroutine(PlaySelectedPackage());
+    }
+
+    private void OnBagSelectBackClicked()
+    {
+        if (mIsPlayingAnimation || mSelectedPackageEntry == null)
+        {
+            return;
+        }
+
+        mPlayAnimationCoroutine = StartCoroutine(HidePackageSelection());
     }
 
     private bool TryResolvePackageList()
@@ -473,7 +605,8 @@ public class MainScene : MonoBehaviour
             Root = slotObject,
             Image = image,
             RectTransform = image != null ? image.rectTransform : null,
-            BreathPhase = packId * 0.6180339f
+            BreathPhase = packId * 0.6180339f,
+            RenderOrder = PackageListSortingOrderBase + index * PackageSortingOrderStride
         };
     }
 
@@ -510,7 +643,8 @@ public class MainScene : MonoBehaviour
             ShadowImage = shadowImage,
             SizeImage = sizeImage,
             RectTransform = rootRect,
-            BreathPhase = packId * 0.6180339f
+            BreathPhase = packId * 0.6180339f,
+            RenderOrder = PackageListSortingOrderBase + index * PackageSortingOrderStride
         };
     }
 
@@ -617,10 +751,12 @@ public class MainScene : MonoBehaviour
                     entry.Image.sprite,
                     entry.SizeImage != null ? entry.SizeImage.sprite : null,
                     entry.DisplayTint,
+                    entry.RenderOrder,
                     out var display))
                 {
                     entry.IdleDisplay = display;
                     SetPackageCoverAndShadowVisible(entry, false);
+                    SetPackageSizeImageVisible(entry, false);
                 }
             }
 
@@ -710,6 +846,14 @@ public class MainScene : MonoBehaviour
         if (entry.ShadowImage != null)
         {
             entry.ShadowImage.enabled = visible && entry.ShadowImage.sprite != null;
+        }
+    }
+
+    private static void SetPackageSizeImageVisible(PackageEntry entry, bool visible)
+    {
+        if (entry?.SizeImage != null)
+        {
+            entry.SizeImage.enabled = visible && entry.SizeImage.sprite != null;
         }
     }
 
@@ -1924,7 +2068,11 @@ public class MainScene : MonoBehaviour
         yield return new WaitForSecondsRealtime(1.5f);
     }
 
-    private static IEnumerator ScalePreparedCardPack(float fromScale, float toScale)
+    private static IEnumerator AnimatePreparedCardPack(
+        float fromScale,
+        float toScale,
+        Vector3 fromCenter,
+        Vector3 toCenter)
     {
         var elapsed = 0f;
         while (elapsed < PackageOpenScaleDuration)
@@ -1932,12 +2080,27 @@ public class MainScene : MonoBehaviour
             elapsed += Time.unscaledDeltaTime;
             var normalized = Mathf.Clamp01(elapsed / PackageOpenScaleDuration);
             var eased = Mathf.SmoothStep(0f, 1f, normalized);
-            GameAnimationUtility.SetPreparedCardPackScale(
-                Mathf.LerpUnclamped(fromScale, toScale, eased));
+            GameAnimationUtility.SetPreparedCardPackPose(
+                Mathf.LerpUnclamped(fromScale, toScale, eased),
+                Vector3.LerpUnclamped(fromCenter, toCenter, eased));
             yield return null;
         }
 
-        GameAnimationUtility.SetPreparedCardPackScale(toScale);
+        GameAnimationUtility.SetPreparedCardPackPose(toScale, toCenter);
+    }
+
+    private Vector3 GetBagSelectCenterWorld(Vector3 fallback)
+    {
+        var camera = Camera.main;
+        var panelRect = mBagSelectPanelRoot != null
+            ? mBagSelectPanelRoot.transform as RectTransform
+            : null;
+        if (camera == null || panelRect == null)
+        {
+            return fallback;
+        }
+
+        return GameCommonUtility.RectTransformToCameraWorld(panelRect, camera, 0f);
     }
 
     private IEnumerator PlayPackageClickFallback(RectTransform rectTransform)
@@ -1987,18 +2150,18 @@ public class MainScene : MonoBehaviour
             SetPackageCoverAndShadowVisible(entry, visible);
         }
 
-        if (entry.SizeImage != null)
-        {
-            entry.SizeImage.enabled = visible && entry.SizeImage.sprite != null;
-        }
+        SetPackageSizeImageVisible(
+            entry,
+            visible && (entry.IdleDisplay == null || !entry.IdleDisplay.IsValid));
 
         GameAnimationUtility.SetCardPackIdleDisplayVisible(entry.IdleDisplay, visible);
     }
 
-    private IEnumerator PlayPackageInteraction(int bagId, PackageEntry entry)
+    private IEnumerator ShowPackageSelection(int bagId, PackageEntry entry)
     {
         mIsPlayingAnimation = true;
         mSelectedPackageEntry = entry;
+        mSelectedBagId = bagId;
         var anchor = entry.Image != null ? entry.Image.rectTransform : entry.RectTransform;
         var coverSprite = entry.Image != null ? entry.Image.sprite : null;
         var idleScale = GetPackageBreathScale(entry);
@@ -2009,25 +2172,33 @@ public class MainScene : MonoBehaviour
             idleScale);
         if (prepared)
         {
-            SetPackageVisualsVisible(entry, false);
-            var targetScale = Mathf.Min(
+            GameAnimationUtility.TryGetPreparedCardPackCenter(out mSelectedPackageStartCenter);
+            mSelectedPackageStartCenter.z = SelectedPackageWorldDepth;
+            mSelectedPackageStartScale = idleScale;
+            mSelectedPackageOpenScale = Mathf.Min(
                 PackageOpenWidth / PackageCoverWidth,
                 PackageOpenHeight / PackageCoverHeight);
-            yield return ScalePreparedCardPack(idleScale, targetScale);
-            if (!GameAnimationUtility.PlayPreparedCardPackAnimation())
-            {
-                prepared = false;
-            }
+            mSelectedPackageDisplayCenter = GetBagSelectCenterWorld(mSelectedPackageStartCenter);
+            mSelectedPackageDisplayCenter.z = SelectedPackageWorldDepth;
+            GameAnimationUtility.SetPreparedCardPackSortingOrder(SelectedPackageSortingOrder);
+            GameAnimationUtility.SetPreparedCardPackPose(
+                mSelectedPackageStartScale,
+                mSelectedPackageStartCenter);
+            SetPackageVisualsVisible(entry, false);
+            SetBagSelectPanelVisible(true);
+            SetBagSelectButtonsInteractable(false);
+            yield return AnimatePreparedCardPack(
+                mSelectedPackageStartScale,
+                mSelectedPackageOpenScale,
+                mSelectedPackageStartCenter,
+                mSelectedPackageDisplayCenter);
+            SetBagSelectButtonsInteractable(true);
         }
 
-        if (prepared)
+        if (!prepared)
         {
-            yield return WaitForCardPackAnimation(anchor);
-        }
-        else
-        {
-            Debug.LogWarning($"Card pack animation not played. packId={bagId}");
-            mSelectedPackageEntry = null;
+            Debug.LogWarning($"Card pack selection preview not prepared. packId={bagId}");
+            SetBagSelectPanelVisible(false);
             SetPackageVisualsVisible(entry, true);
             var fallbackRect = entry.RectTransform != null
                 ? entry.RectTransform
@@ -2036,12 +2207,94 @@ public class MainScene : MonoBehaviour
             {
                 yield return PlayPackageClickFallback(fallbackRect);
             }
+
+            ClearPackageSelection();
+            mIsPlayingAnimation = false;
+            mPlayAnimationCoroutine = null;
+            mHasSwitchedToGameScene = true;
+            GameManager.EnterGameScene(bagId);
+            yield break;
         }
 
         mIsPlayingAnimation = false;
         mPlayAnimationCoroutine = null;
-        mSelectedPackageEntry = null;
+    }
+
+    private IEnumerator PlaySelectedPackage()
+    {
+        mIsPlayingAnimation = true;
+        SetBagSelectButtonsInteractable(false);
+        var selectedEntry = mSelectedPackageEntry;
+        var selectedBagId = mSelectedBagId;
+        var anchor = selectedEntry != null && selectedEntry.Image != null
+            ? selectedEntry.Image.rectTransform
+            : selectedEntry?.RectTransform;
+
+        if (GameAnimationUtility.PlayPreparedCardPackAnimation())
+        {
+            yield return WaitForCardPackAnimation(anchor);
+        }
+        else
+        {
+            Debug.LogWarning($"Card pack animation not played. packId={selectedBagId}");
+            GameAnimationUtility.SetPreparedCardPackVisible(false);
+            SetBagSelectPanelVisible(false);
+            SetPackageVisualsVisible(selectedEntry, true);
+            if (anchor != null)
+            {
+                yield return PlayPackageClickFallback(anchor);
+            }
+        }
+
+        mPlayAnimationCoroutine = null;
         mHasSwitchedToGameScene = true;
-        GameManager.EnterGameScene(bagId);
+        GameManager.EnterGameScene(selectedBagId);
+    }
+
+    private IEnumerator HidePackageSelection()
+    {
+        mIsPlayingAnimation = true;
+        SetBagSelectButtonsInteractable(false);
+        SetBagSelectPanelVisible(false);
+        yield return AnimatePreparedCardPack(
+            mSelectedPackageOpenScale,
+            mSelectedPackageStartScale,
+            mSelectedPackageDisplayCenter,
+            mSelectedPackageStartCenter);
+
+        var selectedEntry = mSelectedPackageEntry;
+        GameAnimationUtility.SetPreparedCardPackVisible(false);
+        SetPackageVisualsVisible(selectedEntry, true);
+        ClearPackageSelection();
+        mIsPlayingAnimation = false;
+        mPlayAnimationCoroutine = null;
+    }
+
+    private void SetBagSelectButtonsInteractable(bool interactable)
+    {
+        if (mBagSelectPlayButton != null)
+        {
+            mBagSelectPlayButton.interactable = interactable;
+        }
+
+        if (mBagSelectBackButton != null)
+        {
+            mBagSelectBackButton.interactable = interactable;
+        }
+    }
+
+    private void SetBagSelectPanelVisible(bool visible)
+    {
+        SetPanelVisible(mBagSelectPanelRoot, visible);
+    }
+
+    private void ClearPackageSelection()
+    {
+        mSelectedPackageEntry = null;
+        mSelectedBagId = 0;
+        mSelectedPackageStartScale = 0f;
+        mSelectedPackageOpenScale = 0f;
+        mSelectedPackageStartCenter = default;
+        mSelectedPackageDisplayCenter = default;
     }
 }
