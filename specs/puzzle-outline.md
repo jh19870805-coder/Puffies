@@ -24,10 +24,10 @@
 ## 设计
 
 1. 在不改变导入设置的情况下，读取每个 Prefab 的 GameBoard 和 Piece 源贴图。
-2. 将 Piece Alpha 蒙版转换到 GameBoard 像素坐标，生成完整拼图蒙版和每个数字分组的独立蒙版。
-3. 完整拼图外边界只计算一次，同时分别计算当前组自身边界。
-4. 第 1 组只选择归属于第 1 组的最终外边界像素。
-5. 后续每组增加当前组边界中与累计低编号已完成蒙版相邻的像素。`ColorBridgeRadius` 用于跨越美术资源中较窄的抗锯齿间隙。
+2. 将 Piece Alpha 蒙版转换到 GameBoard 像素坐标，生成每个数字分组的独立蒙版和 Piece 并集。
+3. 最终拼图外边界优先来自 `GameBoard.png` 的透明挖空 Alpha，因此与运行时可见的浅色缝隙使用同一视觉来源；GameBoard 挖空无效或与 Piece 区域不重合时，回退到 Piece Alpha 并集。
+4. 第 1 组只选择靠近该组 Piece 的最终外边界像素。`FinalBoundaryAssignmentRadius` 只扩大边界归属判断范围，不移动描边位置。
+5. 后续每组从累计低编号已完成 Piece 的真实 Alpha 外边界中选择靠近当前组的接触边，不再把线画在当前组另一侧的 Alpha 边界上。`ContactSearchRadius` 只负责识别相邻关系。
 6. 在推进已完成蒙版前写出当前图片，避免未来组边界泄漏到较早阶段。
 7. 将全棋盘尺寸的透明 Sprite 写入 `Assets/Resources/Generated/PuzzleOutlines/CardBagNNN/GroupNN.png`，运行时只显示当前组对应的 Sprite。
 8. `CardBag Prefab Generator` 编辑器窗口扫描一级 `CardBagNNN` 目录，提供刷新、选择新卡包、选择全部有效卡包、清空选择和批量生成操作。
@@ -47,14 +47,13 @@
 - 使用 `PieceNN.png` 或 `PiecesNN.png` 时，文件名直接定义游戏分组；使用 `piece_###.png` 时生成器只创建 `Piece001` 开始的顺序节点，不推断分组，也不烘焙该卡包描边。
 - 默认使用 **Select New** 只选择尚未生成 Prefab 的卡包。使用 **Select All Ready** 并覆盖已有 Prefab 会丢失 Prefab 内手工修改的分组，执行前必须确认。
 - 批量 Prefab 生成完成后，先手工完成顺序节点分组，再执行 **Puffies -> Puzzles -> Bake Outline Masks**。
-- 当前有效生成内容包括 CardBag001、002、003、008 和 009 的19张分组蒙版。CardBag017 等待手工分组后重新加入。
+- 当前有效生成内容包括 CardBag001、002、003、008、009 和 017 的 24 张分组蒙版。CardBag022 等待手工分组后加入。
 
 ## 验证
 
-- Unity 2022.3.62f2 成功烘焙全部24张蒙版，没有编译错误或异常。
-- CardBag017 的37张新碎图均与完整背景达到 `100.00%` 像素匹配；旧分组蒙版已在切换为顺序命名后删除。
+- Unity 2022.3.62f2 在隔离临时工程中成功烘焙全部 24 张蒙版，没有编译错误或异常。
+- CardBag002、003、008、009 和 017 的 GameBoard 透明挖空与 Piece 区域重合率为 `99.7%..100.0%`；CardBag001 不满足条件并正确回退到 Piece Alpha 并集。
 - `GameBoard.png` 迁移、`BoardTitle.png` 软警告和超过99片的整包未分组保护通过 C# 编译；CardBag017 与 CardBag022 当前都满足旧棋盘文件自动迁移条件，CardBag022 的标题缺失不会阻断选择。
-- 重新生成并受版本控制的 Group01 PNG 与此前正确版本的字节完全一致。
-- CardBag001 Group01 包含 14,674 个描边像素；修正后的 Group02 包含 9,372 个，旧叠加版本为 24,018 个。
+- CardBag003 Group04 包含 8,460 个描边像素；诊断合成确认右侧和底部最终外边界贴合 GameBoard 透明缝隙，左侧接触边来自已完成 Piece Alpha。
 - 静态代码检查确认成功放置碎片后不再调用托盘布局路径。
 - 仍需在 Play Mode 中验证固定 Piece 坐标、分组切换，以及描边与已完成组和未来组的关系。

@@ -11,9 +11,10 @@ public static class PuzzleOutlineBakerEditor
     private const string PrefabFolder = "Assets/Resources/CardBagPrefabs";
     private const string OutputRoot = "Assets/Resources/Generated/PuzzleOutlines";
     private const byte PieceAlphaThreshold = 32;
+    private const byte BoardCutoutAlphaThreshold = 128;
     private const int MaskCloseRadius = 2;
-    private const int ColorBridgeRadius = 6;
-    private const int GroupAssignmentRadius = 3;
+    private const int ContactSearchRadius = 6;
+    private const int FinalBoundaryAssignmentRadius = 12;
     private const int StrokeRadius = 1;
     private static readonly Color32 OutlineColor = new Color32(0x3f, 0x42, 0x3e, 0xff);
     private static readonly Vector2Int[] Neighbors =
@@ -127,23 +128,16 @@ public static class PuzzleOutlineBakerEditor
                 groupMasks[pair.Key] = mask;
             }
 
-            var unionMask = UnionMasks(groupMasks, width * height);
-            var closedUnionMask = CloseMask(unionMask, width, height, MaskCloseRadius);
-            var finalExteriorMask = FloodExterior(closedUnionMask, width, height);
-            var finalGeometricBoundary = BuildExteriorBoundary(
-                closedUnionMask,
+            var pieceUnionMask = UnionMasks(groupMasks, width * height);
+            var boardCutoutMask = BuildBoardCutoutMask(boardPixels, width, height);
+            var finalMask = IsUsableBoardCutout(boardCutoutMask, pieceUnionMask)
+                ? boardCutoutMask
+                : pieceUnionMask;
+            var closedFinalMask = CloseMask(finalMask, width, height, MaskCloseRadius);
+            var finalExteriorMask = FloodExterior(closedFinalMask, width, height);
+            var finalBoundary = BuildExteriorBoundary(
+                closedFinalMask,
                 finalExteriorMask,
-                width,
-                height);
-            var finalColorBoundary = ValidateGrayLightBoundary(
-                finalGeometricBoundary,
-                finalExteriorMask,
-                boardPixels,
-                width,
-                height);
-            var finalValidatedBoundary = BridgeColorBoundary(
-                finalGeometricBoundary,
-                finalColorBoundary,
                 width,
                 height);
 
@@ -152,33 +146,18 @@ public static class PuzzleOutlineBakerEditor
             var completedMask = new bool[width * height];
             foreach (var pair in groupMasks)
             {
-                var closedCurrentMask = CloseMask(pair.Value, width, height, MaskCloseRadius);
-                var currentExteriorMask = FloodExterior(closedCurrentMask, width, height);
-                var currentGeometricBoundary = BuildExteriorBoundary(
-                    closedCurrentMask,
-                    currentExteriorMask,
-                    width,
-                    height);
-                var currentColorBoundary = ValidateGrayLightBoundary(
-                    currentGeometricBoundary,
-                    currentExteriorMask,
-                    boardPixels,
-                    width,
-                    height);
-                var currentValidatedBoundary = BridgeColorBoundary(
-                    currentGeometricBoundary,
-                    currentColorBoundary,
+                var completedContactBoundary = BuildCompletedContactBoundary(
+                    completedMask,
+                    pair.Value,
                     width,
                     height);
                 var activeBoundary = BuildActiveGroupBoundary(
                     pair.Value,
-                    completedMask,
-                    finalValidatedBoundary,
-                    currentValidatedBoundary,
+                    finalBoundary,
+                    completedContactBoundary,
                     width,
                     height);
                 var outputPixels = BuildGroupOutline(
-                    pair.Value,
                     activeBoundary,
                     width,
                     height);
@@ -431,16 +410,74 @@ public static class PuzzleOutlineBakerEditor
         return union;
     }
 
+    private static bool[] BuildBoardCutoutMask(SpritePixels board, int width, int height)
+    {
+        var cutout = new bool[width * height];
+        for (var y = 0; y < height; y++)
+        {
+            for (var x = 0; x < width; x++)
+            {
+                cutout[y * width + x] = board.SampleAlpha(
+                    (x + 0.5f) / width,
+                    (y + 0.5f) / height) < BoardCutoutAlphaThreshold;
+            }
+        }
+
+        return cutout;
+    }
+
+    private static bool IsUsableBoardCutout(bool[] boardCutout, bool[] pieceUnion)
+    {
+        var cutoutCount = CountTrue(boardCutout);
+        var pieceCount = CountTrue(pieceUnion);
+        if (cutoutCount < 64
+            || cutoutCount >= boardCutout.Length * 0.95f
+            || pieceCount == 0)
+        {
+            Debug.LogWarning(
+                "Puzzle outline baker: GameBoard has no usable transparent puzzle cutout; " +
+                "using the Piece Alpha union for the final exterior.");
+            return false;
+        }
+
+        var overlapCount = CountOverlap(boardCutout, pieceUnion);
+        var overlapRatio = overlapCount / (float)Mathf.Min(cutoutCount, pieceCount);
+        if (overlapRatio < 0.8f)
+        {
+            Debug.LogWarning(
+                $"Puzzle outline baker: GameBoard cutout overlaps only {overlapRatio:P1} " +
+                "of the Piece region; using the Piece Alpha union for the final exterior.");
+            return false;
+        }
+
+        Debug.Log(
+            $"Puzzle outline baker: using GameBoard Alpha cutout for the final exterior " +
+            $"({cutoutCount} pixels, {overlapRatio:P1} Piece overlap).");
+        return true;
+    }
+
+    private static int CountOverlap(bool[] first, bool[] second)
+    {
+        var count = 0;
+        for (var i = 0; i < first.Length; i++)
+        {
+            if (first[i] && second[i])
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
     private static bool[] BuildActiveGroupBoundary(
         bool[] currentMask,
-        bool[] completedMask,
         bool[] finalBoundary,
-        bool[] currentBoundary,
+        bool[] completedContactBoundary,
         int width,
         int height)
     {
         var activeBoundary = new bool[currentMask.Length];
-        var hasCompletedPieces = CountTrue(completedMask) > 0;
         for (var y = 0; y < height; y++)
         {
             for (var x = 0; x < width; x++)
@@ -453,21 +490,54 @@ public static class PuzzleOutlineBakerEditor
                                              y,
                                              width,
                                              height,
-                                             GroupAssignmentRadius);
-                var isCompletedContactEdge = hasCompletedPieces
-                                             && currentBoundary[index]
-                                             && IsNearMask(
-                                                 completedMask,
-                                                 x,
-                                                 y,
-                                                 width,
-                                                 height,
-                                                 ColorBridgeRadius);
-                activeBoundary[index] = isCurrentOuterEdge || isCompletedContactEdge;
+                                             FinalBoundaryAssignmentRadius);
+                activeBoundary[index] = isCurrentOuterEdge || completedContactBoundary[index];
             }
         }
 
         return activeBoundary;
+    }
+
+    private static bool[] BuildCompletedContactBoundary(
+        bool[] completedMask,
+        bool[] currentMask,
+        int width,
+        int height)
+    {
+        var contactBoundary = new bool[completedMask.Length];
+        for (var y = 0; y < height; y++)
+        {
+            for (var x = 0; x < width; x++)
+            {
+                var index = y * width + x;
+                if (!completedMask[index]
+                    || !IsMaskBoundary(completedMask, x, y, width, height)
+                    || !IsNearMask(currentMask, x, y, width, height, ContactSearchRadius))
+                {
+                    continue;
+                }
+
+                contactBoundary[index] = true;
+            }
+        }
+
+        return contactBoundary;
+    }
+
+    private static bool IsMaskBoundary(bool[] mask, int x, int y, int width, int height)
+    {
+        for (var i = 0; i < Neighbors.Length; i++)
+        {
+            var nx = x + Neighbors[i].x;
+            var ny = y + Neighbors[i].y;
+            if (nx < 0 || nx >= width || ny < 0 || ny >= height
+                || !mask[ny * width + nx])
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool[] FloodExterior(bool[] unionMask, int width, int height)
@@ -613,69 +683,6 @@ public static class PuzzleOutlineBakerEditor
         return boundary;
     }
 
-    private static bool[] ValidateGrayLightBoundary(
-        bool[] geometricBoundary,
-        bool[] exterior,
-        SpritePixels board,
-        int width,
-        int height)
-    {
-        var confirmed = new bool[geometricBoundary.Length];
-        for (var y = 0; y < height; y++)
-        {
-            for (var x = 0; x < width; x++)
-            {
-                var index = y * width + x;
-                if (!geometricBoundary[index]
-                    || !TryFindExteriorDirection(x, y, exterior, width, height, out var dx, out var dy))
-                {
-                    continue;
-                }
-
-                var inner = AverageBoardColor(board, x, y, -dx, -dy, width, height);
-                var outer = AverageBoardColor(board, x, y, dx, dy, width, height);
-                var luminanceDelta = outer.Luminance - inner.Luminance;
-                var colorDistance = Mathf.Abs(outer.Red - inner.Red)
-                                    + Mathf.Abs(outer.Green - inner.Green)
-                                    + Mathf.Abs(outer.Blue - inner.Blue);
-                confirmed[index] = outer.Luminance > inner.Luminance
-                                   && luminanceDelta >= 0.025f
-                                   && colorDistance >= 0.075f
-                                   && inner.Chroma <= 0.22f
-                                   && outer.Chroma <= 0.22f;
-            }
-        }
-
-        return confirmed;
-    }
-
-    private static SampledColor AverageBoardColor(
-        SpritePixels board,
-        int originX,
-        int originY,
-        int directionX,
-        int directionY,
-        int width,
-        int height)
-    {
-        var red = 0f;
-        var green = 0f;
-        var blue = 0f;
-        var count = 0;
-        for (var distance = 2; distance <= 6; distance++)
-        {
-            var x = Mathf.Clamp(originX + directionX * distance, 0, width - 1);
-            var y = Mathf.Clamp(originY + directionY * distance, 0, height - 1);
-            var color = board.Sample(x / (float)width, y / (float)height);
-            red += color.r / 255f;
-            green += color.g / 255f;
-            blue += color.b / 255f;
-            count++;
-        }
-
-        return new SampledColor(red / count, green / count, blue / count);
-    }
-
     private static bool TryFindExteriorDirection(
         int x,
         int y,
@@ -709,60 +716,6 @@ public static class PuzzleOutlineBakerEditor
         return false;
     }
 
-    private static bool[] BridgeColorBoundary(
-        bool[] geometricBoundary,
-        bool[] colorBoundary,
-        int width,
-        int height)
-    {
-        var geometricCount = CountTrue(geometricBoundary);
-        var colorCount = CountTrue(colorBoundary);
-        Debug.Log(
-            $"Puzzle outline baker: gray/light validation confirmed {colorCount} of " +
-            $"{geometricCount} exterior pixels.");
-        if (colorCount < Mathf.Max(16, geometricCount / 2))
-        {
-            Debug.LogWarning(
-                $"Puzzle outline baker: gray/light validation found only {colorCount} of " +
-                $"{geometricCount} exterior pixels; using the geometric exterior boundary.");
-            return geometricBoundary;
-        }
-
-        var validated = new bool[geometricBoundary.Length];
-        for (var y = 0; y < height; y++)
-        {
-            for (var x = 0; x < width; x++)
-            {
-                var index = y * width + x;
-                if (!geometricBoundary[index])
-                {
-                    continue;
-                }
-
-                for (var oy = -ColorBridgeRadius; oy <= ColorBridgeRadius && !validated[index]; oy++)
-                {
-                    var ny = y + oy;
-                    if (ny < 0 || ny >= height)
-                    {
-                        continue;
-                    }
-
-                    for (var ox = -ColorBridgeRadius; ox <= ColorBridgeRadius; ox++)
-                    {
-                        var nx = x + ox;
-                        if (nx >= 0 && nx < width && colorBoundary[ny * width + nx])
-                        {
-                            validated[index] = true;
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-
-        return validated;
-    }
-
     private static int CountTrue(bool[] values)
     {
         var count = 0;
@@ -792,19 +745,17 @@ public static class PuzzleOutlineBakerEditor
     }
 
     private static Color32[] BuildGroupOutline(
-        bool[] groupMask,
         bool[] validatedBoundary,
         int width,
         int height)
     {
-        var output = new Color32[groupMask.Length];
+        var output = new Color32[validatedBoundary.Length];
         for (var y = 0; y < height; y++)
         {
             for (var x = 0; x < width; x++)
             {
                 var index = y * width + x;
-                if (!validatedBoundary[index]
-                    || !IsNearMask(groupMask, x, y, width, height, GroupAssignmentRadius))
+                if (!validatedBoundary[index])
                 {
                     continue;
                 }
@@ -928,22 +879,5 @@ public static class PuzzleOutlineBakerEditor
         }
     }
 
-    private readonly struct SampledColor
-    {
-        public readonly float Red;
-        public readonly float Green;
-        public readonly float Blue;
-        public readonly float Luminance;
-        public readonly float Chroma;
-
-        public SampledColor(float red, float green, float blue)
-        {
-            Red = red;
-            Green = green;
-            Blue = blue;
-            Luminance = red * 0.2126f + green * 0.7152f + blue * 0.0722f;
-            Chroma = Mathf.Max(red, Mathf.Max(green, blue)) - Mathf.Min(red, Mathf.Min(green, blue));
-        }
-    }
 }
 #endif

@@ -255,7 +255,7 @@ effect（调试）：CardFx 预览；菜单 Puffies -> Preview CardFx Effects
 4. 源贴图放在 `Assets/UI/CardBags/CardBagNNN/`，按分组命名，例如 `Pieces11`...`Pieces14` 和 `Pieces21`...`Pieces25`。
 5. 不使用 `PieceGroup` 父节点；分组只读取 `Piece` 后面的数字。
 6. 不创建 Package JSON；运行时数据来自已加载 Prefab 的 Image。
-7. 新增或修改 CardBag 后，执行 **Puffies -> Puzzles -> Bake Outline Masks**。烘焙器在 GameBoard 坐标中合并 Piece Alpha、闭合窄间隙，并写入 `Resources/Generated/PuzzleOutlines/CardBagNNN/GroupNN.png`。第 1 组只包含自身最终拼图外边界；后续每张图只包含当前组最终外边界及其与低编号已完成组的接触边。
+7. 新增或修改 CardBag 后，执行 **Puffies -> Puzzles -> Bake Outline Masks**。烘焙器优先使用 `GameBoard.png` 的透明挖空 Alpha 作为最终拼图外边界，并使用已完成 Piece 的 Alpha 作为后续组接触边；GameBoard 没有有效挖空时回退到全部 Piece Alpha 并集。结果写入 `Resources/Generated/PuzzleOutlines/CardBagNNN/GroupNN.png`。第 1 组只包含自身最终拼图外边界；后续每张图只包含当前组最终外边界及其与低编号已完成组的接触边。
 8. `GameScene` 将烘焙的 `#3f423e` 当前组 Sprite 作为不可交互的 `GameBoard` 子 Image 显示。蒙版排除已完成组的无关边界、当前组与未来组的边界以及同组各 Piece 之间的接缝。不要在 Prefab 中手工制作描边对象。
 9. 缺少生成 Sprite 时，运行时记录制作警告，并在无描边情况下继续游戏。交付前重新运行烘焙器。
 - 创建一组碎片时只定位一次。成功放置 Piece 后，托盘中其他 Piece 保持既定 X、Y 位置；空位直到下一组创建时才重新布局。
@@ -273,7 +273,7 @@ effect（调试）：CardFx 预览；菜单 Puffies -> Preview CardFx Effects
 - 窗口默认只选择资源完整且尚无 Prefab 的卡包。选择已有 Prefab 时显示 `Overwrite`，执行前必须确认；覆盖会替换已有层级和手工 Piece 分组。
 - 批量生成逐个隔离失败并汇总结果，只负责创建 Prefab，不自动烘焙描边。完成手工 Piece 分组后再执行 **Bake Outline Masks**。
 - `Piece001` 这类带前导零的三位顺序名是制作中间状态。Prefab 中只要仍有任一此类节点，描边烘焙器将整包跳过，避免超过99片时把 `Piece100` 等后续顺序节点误判为正式分组；卡包没有正式分组时删除对应旧描边目录。
-- 当前 CardBag017 为 `1316 x 1316`、37片，节点暂命名为 `Piece001` 到 `Piece037`。这些名称是供编辑器整理的中间状态；完成手工分组并改为正式 `PieceNN` 后，必须重新烘焙描边才能进入 GameScene 测试。
+- 当前 CardBag017 为 `1316 x 1316`、37 片，已完成正式分组并生成 5 张描边蒙版。CardBag022 仍使用 `Piece001` 开始的顺序名称，完成手工分组并改为正式 `PieceNN` 后才能烘焙描边并进入 GameScene 测试。
 
 ### 拼图描边渲染
 
