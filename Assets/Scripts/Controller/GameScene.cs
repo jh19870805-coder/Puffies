@@ -1655,7 +1655,7 @@ public class GameScene : MonoBehaviour
             return;
         }
 
-        _settlementBagCountText.text = CardPackDataUtility.GetUnlockedPackIds().Count.ToString();
+        _settlementBagCountText.text = CardPackDataUtility.GetCompletedPackCount().ToString();
     }
 
     private void QueuePackReward(int rewardPackId)

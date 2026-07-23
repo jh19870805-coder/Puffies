@@ -1,6 +1,5 @@
 using TMPro;
 using UnityEngine;
-using UnityEngine.UI;
 
 /// <summary>
 /// 用途：统一刷新 MainScene 与 GameScene 中共享 TaskItem 的任务内容和进度。返回：按方法说明。
@@ -11,7 +10,6 @@ public static class TaskProgressUIUtility
     private const string TextProgressPath = "ProgressBg/TextProgress";
     private const string ProgressMaskPath = "ProgressBg/ProgressMask";
     private const string ProgressFillPath = "ProgressBg/ProgressMask/Progress";
-    private const string BagIconPath = "BagBg/BagIcon";
     private const string RewardCountPath = "BagBg/TextAddNum";
 
     /// <summary>
@@ -113,19 +111,7 @@ public static class TaskProgressUIUtility
 
     private static void RefreshReward(Transform taskItem, TaskConfigData taskConfig)
     {
-        var rewardPackId = taskConfig.RewardId > 0
-            ? taskConfig.RewardId
-            : GameDefine.DefaultBagId;
         var rewardValue = taskConfig.RewardValue > 0 ? taskConfig.RewardValue : 1;
-        var packSprite = GameCommonUtility.LoadSpriteByPath(
-            GameDefine.FormatPackImagePath(rewardPackId),
-            GameDefine.PixelsPerUnit);
-
-        var bagIcon = taskItem.Find(BagIconPath)?.GetComponent<Image>();
-        if (bagIcon != null && packSprite != null)
-        {
-            bagIcon.sprite = packSprite;
-        }
 
         var rewardCountText = taskItem.Find(RewardCountPath)?.GetComponent<TMP_Text>();
         if (rewardCountText != null)

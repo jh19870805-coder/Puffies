@@ -191,6 +191,19 @@ public static class CardPackDataUtility
         return packIds;
     }
 
+    /// <summary>
+    /// 用途：获取已完成卡包数量。返回：生命周期为 Completed 的卡包记录数。
+    /// </summary>
+    public static int GetCompletedPackCount()
+    {
+        EnsureInitialized();
+        return SqliteLocalStore.ExecuteScalar<int>(
+            $@"SELECT COUNT(1)
+               FROM {GameDefine.LocalSqliteCardPackTable}
+               WHERE LifecycleState = ?",
+            (int)CardPackLifecycleState.Completed);
+    }
+
     public static List<int> TakeMainSceneOrderedPackIds()
     {
         EnsureInitialized();

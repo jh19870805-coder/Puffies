@@ -211,9 +211,9 @@ effect（调试）：CardFx 预览；菜单 Puffies -> Preview CardFx Effects
 - `UsableOption1` 是关卡外框开关，新建设置时默认开启；`UsableOption2` 是贴纸完整轮廓开关；`UsableOption3` 是高对比度。已持久化的用户选择优先。
 - MainScene 和 GameScene 引用相同 `TaskItem.prefab` GUID。场景 Override 只定位根节点（`MainScene`：`10,508`；`GameScene`：`-6,455`）；子节点布局和视觉必须在共享 Prefab 中修改。
 - 共享 TaskItem 子节点名称为 `TaskContent`、`TextProgress`、`ProgressMask`、`BagIcon` 和 `BagBg`。任务 UI 绑定代码应相对 TaskItem 实例解析这些名称，不得使用场景专属后缀。
-- `TaskProgressUIUtility` 是两个 TaskItem 实例共用的运行时绑定。`TextProgress` 显示 `CurrentCompleteValue / TaskConfig.CompleteValue`，可见 `ProgressMask` 宽度使用两者比值并限制在有效范围。
+- `TaskProgressUIUtility` 是两个 TaskItem 实例共用的运行时绑定。`TextProgress` 显示 `CurrentCompleteValue / TaskConfig.CompleteValue`，可见 `ProgressMask` 宽度使用两者比值并限制在有效范围。`BagIcon` 始终使用共享 Prefab 中配置的固定 Sprite，运行时不得按任务奖励或卡包编号替换。
 - MainScene 在 `Start` 时从持久化任务数据刷新 TaskItem。GameScene 结算使用不受 TimeScale 影响的时间，在 0.8 秒内同步滚动 `TaskScore`、`TextProgress` 和 `ProgressMask`；任务奖励和推进在动画前持久化。
-- GameScene 结算摘要将 `TaskBg2/TaskScore` 绑定到当局结算分数，将 `TaskBg2/TaskBagNum` 绑定到 SQLite 当前已解锁卡包数；本次任务奖励解锁的卡包立即计入。
+- GameScene 结算摘要将 `TaskBg2/TaskScore` 绑定到当局结算分数，将 `TaskBg2/TaskBagNum` 绑定到 SQLite 中生命周期为 `Completed` 的卡包数量；未完成的已解锁卡包和进行中卡包不计入，重玩不会重复计数。
 - GameScene 进入时记录描边设置快照，点击 `BtnTips` 时记录提示使用，首个 Piece 成功放置时开始不受 TimeScale 影响的积分计时，RewardPanel 结算开始时冻结。
 - MainScene `PanelSet/SliderMusic` 和 `PanelSet/SliderEffect` 是手工拼装的仿 Slider：根 Image 背景加 `SliderFill`、`SliderHandle` 子节点。运行时使用 `FakeSettingsSliderInput` 处理指针拖动、刷新视觉并保存数值。
 - 不使用 `PlayerPrefs`。
