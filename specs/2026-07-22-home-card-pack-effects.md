@@ -1,6 +1,6 @@
 # Home Card-Pack Effects
 
-- Status: In Progress
+- Status: Completed
 - Scope: Replace MainScene card-pack cover images with persistent lightweight 3D displays and preserve the authored opening transition.
 
 ## Requirements
@@ -57,11 +57,22 @@
 ## Tasks
 
 - [x] Inspect package list, ScrollRect, canvas conversion, effect lifecycle, and animation resources.
-- [ ] Add shared idle-mesh display APIs and reusable selected-pack animation pose APIs.
-- [ ] Add shader viewport clipping properties.
-- [ ] Bind one idle display to each package entry and update alignment/breathing/visibility.
-- [ ] Change click flow to stop breathing, scale to `600 x 680`, play opening, and enter GameScene.
-- [ ] Preserve static fallback, reward-flight suppression, PackSize placement/layer, and cleanup.
-- [ ] Build C# projects and perform MainScene Play Mode validation.
-- [ ] Update `Documents/CURRENT_TASK.md` and stable project context.
+- [x] Add shared idle-mesh display APIs and reusable selected-pack animation pose APIs.
+- [x] Add shader viewport clipping properties.
+- [x] Bind one idle display to each package entry and update alignment/breathing/visibility.
+- [x] Change click flow to stop breathing, scale to `600 x 680`, play opening, and enter GameScene.
+- [x] Preserve static fallback, reward-flight suppression, PackSize placement/layer, and cleanup.
+- [x] Perform MainScene Play Mode visual validation and compile all C# assemblies.
+- [x] Update `Documents/CURRENT_TASK.md` and stable project context.
+
+## Implementation Validation
+
+- Full compilation: `dotnet build Puffies.sln --no-restore` completed with 0 warnings and 0 errors.
+- MainScene creates lightweight frame-zero displays from one shared mesh, applies each pack's real cover and lifecycle tint, and drives the `0.98..1.02` breathing scale in `LateUpdate`.
+- The existing `PackSize` Image remains authoritative. Its RectTransform, Sprite, and tint are unchanged; a clipped world overlay mirrors that same Image only to preserve its visual foreground layer over the world-space card.
+- Click handling prepares the reusable six-layer opener at the idle pose, scales it by exactly `min(600/240, 680/272) = 2.5`, starts the authored animation, waits for its longest clip, and enters the selected GameScene.
+- Static cover/shadow fallback, reward-flight suppression/reveal, viewport clipping, off-page renderer disabling, and generated object/mesh cleanup are implemented.
+- Automated MainScene Play Mode validation passed with four generated idle displays. PackId 1 breathed from scale `2.449215` to `2.52881527`, retained its PackSize authoring data, enlarged to opening scale `6.246120`, started six Animators/six Renderers, and entered GameScene.
+- Captured and visually inspected `2560 x 1440` idle/opening frames. The list effects use the correct covers and size badges; the selected cover enlarges and visibly enters the authored tear animation without overlap corruption.
+- A final Unity batch refresh exited successfully with no C# or Shader compile errors.
 

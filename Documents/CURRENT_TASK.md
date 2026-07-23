@@ -1,52 +1,59 @@
 # Current Task
 
-- Task: Assemble complete card-pack opening and dismantle preview
-- Status: In Progress; visual acceptance pending
-- Updated At: 2026-07-22
+- Task: Replace MainScene static card-pack covers with persistent effects
+- Status: Completed
+- Updated At: 2026-07-23
 
 ## User Intent
 
-- Assemble all delivered card-pack animation layers and dismantle particles with a real project card-pack cover.
-- Make the complete result directly previewable in the Unity Editor like the effect artist's reference image.
+- Replace every card-pack static cover in the MainScene list with a persistent lightweight card-pack effect using that pack's real cover.
+- Start a subtle breathing animation automatically when MainScene opens.
+- Keep the card-pack size image at its authored position and visual layer.
+- On click, stop breathing, enlarge the selected pack from list size to the original `600 x 680` design size, play the complete six-layer opening animation, then enter GameScene for that PackId.
 
 ## Completed
 
-- Audited all three source packages by GUID: shader update 16/16, card-pack animation 44/44, and dismantle particles 13/13 are present in the project.
-- Rebuilt `CardPackDismantlePreview.prefab` with all six `CardPackOpening` animated layers plus the imported dismantle effect as nested Prefab instances. The old static `PackCover` preview object was removed.
-- The preview applies `PackIcon001` through renderer property blocks, fits the animated card pack to `2.4` world units wide, and aligns its top edge with the authored tear origin.
-- Updated `Puffies -> Effects -> Preview Card Pack Dismantle` (`Ctrl+Shift+D`) to restore Scene visibility, open a Unity-managed `Card Pack Preview` SceneView, and loop six Animators with the five-particle hierarchy.
-- Updated the two Shader Forge particle passes from legacy `ForwardBase` to `SRPDefaultUnlit` for URP Renderer2D.
-- Removed three unavailable legacy custom material Inspector declarations so selecting the imported materials no longer logs editor warnings.
+- `GameAnimationUtility` builds one shared frame-zero mesh from all six authored `CardPackOpening` layers, avoiding six SkinnedMeshRenderers and Animators per list item.
+- Each visible MainScene package owns one lightweight MeshRenderer display with its real cover and completed-state tint.
+- MainScene aligns displays to their `PackCover` anchors in `LateUpdate`, applies a staggered `0.98..1.02` breathing scale over `2.4s`, disables off-page renderers, and clips visible fragments to the ScrollRect viewport.
+- The existing `PackSize` Image remains the source of position, Sprite, and tint. A matching clipped world overlay preserves its foreground presentation over the world card without changing the authored RectTransform or hierarchy.
+- Clicking a pack switches from its idle display to the reusable six-layer opener at the same pose, scales to `600 x 680` over `0.3s`, starts the authored animation, waits for its longest clip, and enters GameScene.
+- Static cover/shadow fallback remains available when effect creation fails. Pending reward-flight packs remain hidden until the existing reveal callback.
+- Generated per-pack objects and shared runtime meshes/materials are released when the list rebuilds or MainScene is destroyed.
+- Removed `TemporaryOpenGameView`, which incorrectly forced Play Mode after every script reload.
 
 ## Files Changed
 
-- Added `Assets/Resources/Effects/CardPackDismantle/CardPackDismantlePreview.prefab`.
-- Added `Assets/Scripts/Editor/CardPackDismantlePreviewEditor.cs`.
-- Updated the three imported dismantle shaders for Renderer2D/editor compatibility.
-- Added `specs/2026-07-22-card-pack-dismantle-preview.md`.
-- Updated `Documents/PROJECT_CONTEXT.md` with the preview asset and menu.
+- `Assets/Scripts/Controller/MainScene.cs`
+- `Assets/Scripts/Model/GameAnimationUtility.cs`
+- `Assets/Resources/Effects/CardPack/CardPackOpening.shader`
+- `Assets/Scripts/View/PackageInteractionHandler.cs`
+- Removed `Assets/Scripts/Editor/TemporaryOpenGameView.cs` and its `.meta`.
+- Updated `specs/2026-07-22-home-card-pack-effects.md`.
+- Updated `Documents/PROJECT_CONTEXT.md`.
 
 ## Decisions
 
-- Keep all imported `CardPackOpening` and `CardPackDismantle_001` Prefabs authoritative. The preview references them instead of copying or editing their hierarchies.
-- Treat the source trail's `x=-2.67` as an off-card spawn position, not the cover width. The preview width is calibrated from the visible tear line.
-- Treat the shader update package as an update for shared card-pack dependencies and animated layer 006, not a third standalone animation sequence.
-- Keep the assembled Prefab editor-only for now. MainScene runtime playback remains the existing six-layer `CardPackOpening` animation.
+- Reuse one shared baked idle mesh plus one reusable six-layer animated opener. Do not create six live animated layers for every list item.
+- The list effect uses the selected pack's real cover and preserves existing `PackSize` authoring data.
+- The click sequence is scale-up first, authored opening animation second, GameScene transition last.
+- The imported dismantle particle Prefab remains separate from this accepted MainScene sequence until its timing is explicitly approved.
 
 ## Validation
 
-- Confirmed the generated Prefab contains `AnimatedCardPack`, six nested animated Prefab references, and `DismantleEffect`, with no static `PackCover` node.
-- Unity logged `Card-pack combined preview started. animators=6, particles=5` without an exception.
+- Automated MainScene Play Mode validation created four idle card-pack effects and selected PackId 1.
+- The selected idle effect breathed from scale `2.449215` to `2.52881527`; its PackSize position, sibling index, Sprite, and tint remained unchanged.
+- The click flow enlarged the reusable opener to scale `6.246120`, started all six Animators and six Renderers, then entered GameScene.
+- `2560 x 1440` idle and opening screenshots were visually inspected. Dynamic covers, foreground size badges, list alignment, and the visible tear animation rendered without overlap corruption.
+- Unity completed a clean batch refresh with no C# or Shader compile errors.
 - `dotnet build Puffies.sln --no-restore` completed with 0 warnings and 0 errors across runtime, first-pass, and Editor assemblies.
-- Final unobstructed visual comparison remains pending because the current multi-monitor Unity layout and a foreground SourceTree window obscured automated capture.
 - No local JSON or SQLite reset is required.
 
 ## Next Action
 
-1. Bring Unity to the foreground and open `Puffies -> Effects -> Preview Card Pack Dismantle` to compare the combined animation against the artist reference.
-2. If the silver tear edge or upper/lower package separation is still absent, inspect the six-layer source animation at the relevant sampled frame before requesting another artist export.
-3. After visual acceptance, decide the particle timing offset and wire the accepted sequence into MainScene without changing the imported source Prefabs.
+1. Let the user evaluate the breathing amplitude and `0.3s` scale-up pacing in the normal Unity Editor workflow.
+2. Keep the dismantle particle timing as a separate follow-up; do not add it to the accepted sequence without explicit approval.
 
 ## Resume Prompt
 
-Continue Puffies card-pack effect integration. Read `AGENTS.md`, `Documents/WORKFLOW.md`, and `Documents/CURRENT_TASK.md`, then review `Resources/Effects/CardPackDismantle/CardPackDismantlePreview` and decide the runtime sequence before changing MainScene playback.
+Continue Puffies development. Read `AGENTS.md`, `Documents/WORKFLOW.md`, and `Documents/CURRENT_TASK.md`; the MainScene persistent card-pack effect sequence is implemented and validated, so follow the user's next instruction without changing it implicitly.
