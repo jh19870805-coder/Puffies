@@ -30,15 +30,43 @@ public static class GameAnimationUtility
     private static readonly int MainTextureTransformPropertyId = Shader.PropertyToID("_MainTex_ST");
     private static readonly int FrontFacesAlbedoPropertyId = Shader.PropertyToID("_FrontFacesAlbedo");
     private static readonly int FrontFacesAlbedoTransformPropertyId = Shader.PropertyToID("_FrontFacesAlbedo_ST");
+    private static readonly int FrontFacesColorPropertyId = Shader.PropertyToID("_FrontFacesColor");
+    private static readonly int BackFacesAlbedoPropertyId = Shader.PropertyToID("_BackFacesAlbedo");
+    private static readonly int BackFacesAlbedoTransformPropertyId = Shader.PropertyToID("_BackFacesAlbedo_ST");
+    private static readonly int BackFacesColorPropertyId = Shader.PropertyToID("_BackFacesColor");
+    private static readonly int ClipTexturePropertyId = Shader.PropertyToID("_ClipTex");
+    private static readonly int ClipTextureTransformPropertyId = Shader.PropertyToID("_ClipTex_ST");
+    private static readonly int UnlitOverlayPropertyId = Shader.PropertyToID("_UnlitOverlay");
+    private static readonly int DepthTestPropertyId = Shader.PropertyToID("_DepthTest");
+    private static readonly int UiClipRectPropertyId = Shader.PropertyToID("_UiClipRect");
+    private static readonly int UseUiClipRectPropertyId = Shader.PropertyToID("_UseUiClipRect");
     private static readonly Dictionary<string, CardPackEffectInstance> sSpawnedEffects =
         new Dictionary<string, CardPackEffectInstance>();
     private static Material sCardPackMaterial;
+    private static Material sCardPackOverlayMaterial;
+    private static Mesh sCardPackIdleMesh;
+    private static Mesh sCardPackOverlayMesh;
+    private static int sCardPackIdleDisplayCount;
 
     private sealed class CardPackEffectInstance
     {
         public GameObject Root;
         public Animator[] Animators;
         public Renderer[] CardRenderers;
+        public Vector3 BaseRootPosition;
+        public Vector3 BaseRootScale;
+        public Vector3 ScaleCenter;
+        public bool HasPreparedPose;
+    }
+
+    public sealed class CardPackIdleDisplay
+    {
+        internal GameObject Root;
+        internal MeshRenderer Renderer;
+        internal GameObject SizeRoot;
+        internal MeshRenderer SizeRenderer;
+
+        public bool IsValid => Root != null && Renderer != null;
     }
 
     public enum EaseType
@@ -149,6 +177,239 @@ public static class GameAnimationUtility
             onComplete));
     }
 
+    public static bool TryCreateCardPackIdleDisplay(
+        int packId,
+        Sprite coverSprite,
+        Sprite sizeSprite,
+        Color tint,
+        out CardPackIdleDisplay display)
+    {
+        display = null;
+        if (packId <= 0 || !TryGetCardPackIdleMesh(out var idleMesh))
+        {
+            return false;
+        }
+
+        var material = GetCardPackMaterial();
+        if (material == null)
+        {
+            return false;
+        }
+
+        var root = new GameObject($"CardPackIdle_{packId:D3}");
+        var meshFilter = root.AddComponent<MeshFilter>();
+        var meshRenderer = root.AddComponent<MeshRenderer>();
+        meshFilter.sharedMesh = idleMesh;
+        meshRenderer.sharedMaterial = material;
+        ApplyCardPackAppearance(meshRenderer, coverSprite, tint, default, false);
+
+        GameObject sizeRoot = null;
+        MeshRenderer sizeRenderer = null;
+        if (sizeSprite != null)
+        {
+            sizeRoot = new GameObject($"CardPackSize_{packId:D3}");
+            var sizeMeshFilter = sizeRoot.AddComponent<MeshFilter>();
+            sizeRenderer = sizeRoot.AddComponent<MeshRenderer>();
+            sizeMeshFilter.sharedMesh = GetCardPackOverlayMesh();
+            sizeRenderer.sharedMaterial = GetCardPackOverlayMaterial(material);
+            ApplyCardPackOverlayAppearance(sizeRenderer, sizeSprite, tint);
+        }
+
+        display = new CardPackIdleDisplay
+        {
+            Root = root,
+            Renderer = meshRenderer,
+            SizeRoot = sizeRoot,
+            SizeRenderer = sizeRenderer
+        };
+        sCardPackIdleDisplayCount++;
+        return true;
+    }
+
+    public static void UpdateCardPackIdleDisplay(
+        CardPackIdleDisplay display,
+        RectTransform anchor,
+        RectTransform sizeAnchor,
+        Rect screenClipRect,
+        float scaleMultiplier,
+        bool visible)
+    {
+        if (display == null || !display.IsValid)
+        {
+            return;
+        }
+
+        var camera = Camera.main;
+        if (!visible || anchor == null || camera == null || sCardPackIdleMesh == null)
+        {
+            display.Renderer.enabled = false;
+            if (display.SizeRenderer != null)
+            {
+                display.SizeRenderer.enabled = false;
+            }
+            return;
+        }
+
+        var anchorBounds = GameCommonUtility.GetRectTransformCameraWorldBounds(anchor, camera);
+        var meshBounds = sCardPackIdleMesh.bounds;
+        if (anchorBounds.size.x <= 0.001f
+            || anchorBounds.size.y <= 0.001f
+            || meshBounds.size.x <= 0.001f
+            || meshBounds.size.y <= 0.001f)
+        {
+            display.Renderer.enabled = false;
+            return;
+        }
+
+        var baseScale = Mathf.Min(
+            anchorBounds.size.x / meshBounds.size.x,
+            anchorBounds.size.y / meshBounds.size.y);
+        var rootTransform = display.Root.transform;
+        rootTransform.position = anchorBounds.center;
+        rootTransform.rotation = Quaternion.identity;
+        rootTransform.localScale = Vector3.one
+            * Mathf.Max(0.001f, baseScale * Mathf.Max(0.001f, scaleMultiplier));
+        ApplyCardPackClip(display.Renderer, screenClipRect, true);
+        display.Renderer.enabled = true;
+        UpdateCardPackOverlay(display, sizeAnchor, camera, screenClipRect, visible);
+    }
+
+    private static void UpdateCardPackOverlay(
+        CardPackIdleDisplay display,
+        RectTransform sizeAnchor,
+        Camera camera,
+        Rect screenClipRect,
+        bool visible)
+    {
+        if (display?.SizeRoot == null || display.SizeRenderer == null)
+        {
+            return;
+        }
+
+        if (!visible || sizeAnchor == null || !sizeAnchor.gameObject.activeInHierarchy)
+        {
+            display.SizeRenderer.enabled = false;
+            return;
+        }
+
+        var overlayBounds = GameCommonUtility.GetRectTransformCameraWorldBounds(sizeAnchor, camera);
+        if (overlayBounds.size.x <= 0.001f || overlayBounds.size.y <= 0.001f)
+        {
+            display.SizeRenderer.enabled = false;
+            return;
+        }
+
+        var overlayTransform = display.SizeRoot.transform;
+        overlayTransform.position = overlayBounds.center - camera.transform.forward * 0.01f;
+        overlayTransform.rotation = Quaternion.identity;
+        overlayTransform.localScale = new Vector3(
+            overlayBounds.size.x,
+            overlayBounds.size.y,
+            1f);
+        ApplyCardPackClip(display.SizeRenderer, screenClipRect, true);
+        display.SizeRenderer.enabled = true;
+    }
+
+    public static void SetCardPackIdleDisplayVisible(CardPackIdleDisplay display, bool visible)
+    {
+        if (display != null && display.IsValid)
+        {
+            display.Renderer.enabled = visible;
+            if (display.SizeRenderer != null)
+            {
+                display.SizeRenderer.enabled = visible;
+            }
+        }
+    }
+
+    public static void DestroyCardPackIdleDisplay(CardPackIdleDisplay display)
+    {
+        if (display == null)
+        {
+            return;
+        }
+
+        if (display.Root != null)
+        {
+            UnityEngine.Object.Destroy(display.Root);
+        }
+
+        if (display.SizeRoot != null)
+        {
+            UnityEngine.Object.Destroy(display.SizeRoot);
+        }
+
+        display.Root = null;
+        display.Renderer = null;
+        display.SizeRoot = null;
+        display.SizeRenderer = null;
+        sCardPackIdleDisplayCount = Mathf.Max(0, sCardPackIdleDisplayCount - 1);
+        if (sCardPackIdleDisplayCount == 0 && sCardPackIdleMesh != null)
+        {
+            UnityEngine.Object.Destroy(sCardPackIdleMesh);
+            sCardPackIdleMesh = null;
+            if (sCardPackOverlayMesh != null)
+            {
+                UnityEngine.Object.Destroy(sCardPackOverlayMesh);
+                sCardPackOverlayMesh = null;
+            }
+
+            if (sCardPackOverlayMaterial != null)
+            {
+                UnityEngine.Object.Destroy(sCardPackOverlayMaterial);
+                sCardPackOverlayMaterial = null;
+            }
+        }
+    }
+
+    public static bool PrepareCardPackAnimation(
+        int packId,
+        Sprite coverSprite,
+        Transform anchor,
+        float scaleMultiplier = 1f)
+    {
+        if (packId <= 0 || anchor == null)
+        {
+            return false;
+        }
+
+        var effect = GetOrSpawnCardPackEffect(anchor);
+        if (effect == null || effect.Animators == null || effect.Animators.Length == 0)
+        {
+            return false;
+        }
+
+        ResetCardPackAnimators(effect, pause: true);
+        ApplyPreviewPose(effect, anchor, coverSprite);
+        ApplyCardPackClip(effect.CardRenderers, default, false);
+        SetPreparedCardPackScale(scaleMultiplier);
+        return true;
+    }
+
+    public static void SetPreparedCardPackScale(float scaleMultiplier)
+    {
+        if (!TryGetSpawnedCardPackEffect(out var effect) || !effect.HasPreparedPose)
+        {
+            return;
+        }
+
+        var multiplier = Mathf.Max(0.001f, scaleMultiplier);
+        effect.Root.transform.localScale = effect.BaseRootScale * multiplier;
+        effect.Root.transform.position = effect.ScaleCenter
+            + (effect.BaseRootPosition - effect.ScaleCenter) * multiplier;
+    }
+
+    public static bool PlayPreparedCardPackAnimation()
+    {
+        if (!TryGetSpawnedCardPackEffect(out var effect) || !effect.HasPreparedPose)
+        {
+            return false;
+        }
+
+        ResetCardPackAnimators(effect, pause: false);
+        return true;
+    }
+
     /// <summary>
     /// 用途：播放通用卡包开包动画并替换为指定封面。返回：是否成功触发播放。
     /// </summary>
@@ -170,37 +431,12 @@ public static class GameAnimationUtility
                 $"PlayCardPackAnimation: cover missing for packId={packId}; using the authored model texture.");
         }
 
-        var effect = GetOrSpawnCardPackEffect(anchor);
-        if (effect == null || effect.Animators == null || effect.Animators.Length == 0)
+        if (!PrepareCardPackAnimation(packId, coverSprite, anchor))
         {
             return false;
         }
 
-        for (var i = 0; i < effect.Animators.Length; i++)
-        {
-            var animator = effect.Animators[i];
-            if (animator == null)
-            {
-                continue;
-            }
-
-            animator.Rebind();
-            animator.Update(0f);
-            animator.Play(DefaultCardPackStateName, 0, 0f);
-            animator.Update(0f);
-        }
-
-        if (anchor != null)
-        {
-            ApplyPreviewPose(effect, anchor, coverSprite);
-        }
-        else
-        {
-            ApplyCardPackMaterials(effect.CardRenderers, coverSprite);
-            effect.Root.SetActive(true);
-        }
-
-        return true;
+        return PlayPreparedCardPackAnimation();
     }
 
     /// <summary>
@@ -286,6 +522,221 @@ public static class GameAnimationUtility
             case EaseType.Linear:
             default:
                 return t;
+        }
+    }
+
+    private static bool TryGetSpawnedCardPackEffect(out CardPackEffectInstance effect)
+    {
+        return sSpawnedEffects.TryGetValue(FullCardPackObjectName, out effect)
+            && effect != null
+            && effect.Root != null;
+    }
+
+    private static void ResetCardPackAnimators(CardPackEffectInstance effect, bool pause)
+    {
+        if (effect == null || effect.Animators == null)
+        {
+            return;
+        }
+
+        for (var i = 0; i < effect.Animators.Length; i++)
+        {
+            var animator = effect.Animators[i];
+            if (animator == null)
+            {
+                continue;
+            }
+
+            animator.enabled = true;
+            animator.speed = 1f;
+            animator.Rebind();
+            animator.Update(0f);
+            animator.Play(DefaultCardPackStateName, 0, 0f);
+            animator.Update(0f);
+            animator.speed = pause ? 0f : 1f;
+        }
+    }
+
+    private static bool TryGetCardPackIdleMesh(out Mesh mesh)
+    {
+        if (sCardPackIdleMesh == null)
+        {
+            sCardPackIdleMesh = BuildCardPackIdleMesh();
+        }
+
+        mesh = sCardPackIdleMesh;
+        return mesh != null;
+    }
+
+    private static Mesh GetCardPackOverlayMesh()
+    {
+        if (sCardPackOverlayMesh != null)
+        {
+            return sCardPackOverlayMesh;
+        }
+
+        sCardPackOverlayMesh = new Mesh
+        {
+            name = "CardPackOverlayQuad",
+            vertices = new[]
+            {
+                new Vector3(-0.5f, -0.5f, 0f),
+                new Vector3(-0.5f, 0.5f, 0f),
+                new Vector3(0.5f, 0.5f, 0f),
+                new Vector3(0.5f, -0.5f, 0f)
+            },
+            uv = new[]
+            {
+                new Vector2(0f, 0f),
+                new Vector2(0f, 1f),
+                new Vector2(1f, 1f),
+                new Vector2(1f, 0f)
+            },
+            triangles = new[] { 0, 1, 2, 0, 2, 3 },
+            normals = new[]
+            {
+                Vector3.back,
+                Vector3.back,
+                Vector3.back,
+                Vector3.back
+            },
+            tangents = new[]
+            {
+                new Vector4(1f, 0f, 0f, 1f),
+                new Vector4(1f, 0f, 0f, 1f),
+                new Vector4(1f, 0f, 0f, 1f),
+                new Vector4(1f, 0f, 0f, 1f)
+            }
+        };
+        sCardPackOverlayMesh.RecalculateBounds();
+        return sCardPackOverlayMesh;
+    }
+
+    private static Material GetCardPackOverlayMaterial(Material sourceMaterial)
+    {
+        if (sCardPackOverlayMaterial != null)
+        {
+            return sCardPackOverlayMaterial;
+        }
+
+        if (sourceMaterial == null)
+        {
+            return null;
+        }
+
+        sCardPackOverlayMaterial = new Material(sourceMaterial)
+        {
+            name = "CardPackOverlayMaterial",
+            renderQueue = sourceMaterial.renderQueue + 1
+        };
+        sCardPackOverlayMaterial.SetFloat(
+            DepthTestPropertyId,
+            (float)UnityEngine.Rendering.CompareFunction.Always);
+        return sCardPackOverlayMaterial;
+    }
+
+    private static Mesh BuildCardPackIdleMesh()
+    {
+        var sourceRoot = new GameObject("CardPackIdleMeshSource")
+        {
+            hideFlags = HideFlags.HideAndDontSave
+        };
+        var bakedMeshes = new List<Mesh>();
+        var combineInstances = new List<CombineInstance>();
+        try
+        {
+            for (var prefabIndex = 0; prefabIndex < CardPackAnimatedPrefabNames.Length; prefabIndex++)
+            {
+                var prefab = LoadCardPackPrefab(CardPackAnimatedPrefabNames[prefabIndex]);
+                if (prefab == null)
+                {
+                    return null;
+                }
+
+                var layer = UnityEngine.Object.Instantiate(prefab, sourceRoot.transform, false);
+                var animator = layer.GetComponentInChildren<Animator>(true);
+                if (animator != null)
+                {
+                    animator.Rebind();
+                    animator.Update(0f);
+                    animator.Play(DefaultCardPackStateName, 0, 0f);
+                    animator.Update(0f);
+                }
+
+                var skinnedRenderers = layer.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+                for (var rendererIndex = 0; rendererIndex < skinnedRenderers.Length; rendererIndex++)
+                {
+                    var renderer = skinnedRenderers[rendererIndex];
+                    var bakedMesh = new Mesh { name = $"CardPackIdleLayer_{prefabIndex}_{rendererIndex}" };
+                    renderer.BakeMesh(bakedMesh, false);
+                    renderer.enabled = false;
+                    bakedMeshes.Add(bakedMesh);
+
+                    for (var subMesh = 0; subMesh < bakedMesh.subMeshCount; subMesh++)
+                    {
+                        combineInstances.Add(new CombineInstance
+                        {
+                            mesh = bakedMesh,
+                            subMeshIndex = subMesh,
+                            transform = sourceRoot.transform.worldToLocalMatrix
+                                * renderer.transform.localToWorldMatrix
+                        });
+                    }
+                }
+            }
+
+            if (combineInstances.Count == 0)
+            {
+                return null;
+            }
+
+            var combinedMesh = new Mesh
+            {
+                name = "CardPackIdleSharedMesh",
+                indexFormat = UnityEngine.Rendering.IndexFormat.UInt32
+            };
+            combinedMesh.CombineMeshes(combineInstances.ToArray(), true, true, false);
+            var center = combinedMesh.bounds.center;
+            var vertices = combinedMesh.vertices;
+            for (var i = 0; i < vertices.Length; i++)
+            {
+                vertices[i] -= center;
+            }
+
+            combinedMesh.vertices = vertices;
+            combinedMesh.RecalculateBounds();
+            return combinedMesh;
+        }
+        catch (Exception exception)
+        {
+            Debug.LogWarning($"Failed to build shared card-pack idle mesh: {exception.Message}");
+            return null;
+        }
+        finally
+        {
+            for (var i = 0; i < bakedMeshes.Count; i++)
+            {
+                DestroyTemporaryObject(bakedMeshes[i]);
+            }
+
+            DestroyTemporaryObject(sourceRoot);
+        }
+    }
+
+    private static void DestroyTemporaryObject(UnityEngine.Object target)
+    {
+        if (target == null)
+        {
+            return;
+        }
+
+        if (Application.isPlaying)
+        {
+            UnityEngine.Object.Destroy(target);
+        }
+        else
+        {
+            UnityEngine.Object.DestroyImmediate(target);
         }
     }
 
@@ -415,6 +866,10 @@ public static class GameAnimationUtility
         }
 
         SetRenderersEnabled(effect.CardRenderers, true);
+        effect.BaseRootPosition = targetTransform.position;
+        effect.BaseRootScale = targetTransform.localScale;
+        effect.ScaleCenter = targetPosition;
+        effect.HasPreparedPose = true;
     }
 
     private static void SetRenderersEnabled(Renderer[] renderers, bool enabled)
@@ -587,6 +1042,94 @@ public static class GameAnimationUtility
         propertyBlock.SetTexture(MainTexturePropertyId, coverTexture);
         propertyBlock.SetVector(MainTextureTransformPropertyId, uvTransform);
         renderer.SetPropertyBlock(propertyBlock);
+    }
+
+    private static void ApplyCardPackAppearance(
+        Renderer renderer,
+        Sprite coverSprite,
+        Color tint,
+        Rect screenClipRect,
+        bool useClipRect)
+    {
+        ApplyCardPackCover(renderer, coverSprite);
+        if (renderer == null)
+        {
+            return;
+        }
+
+        var propertyBlock = new MaterialPropertyBlock();
+        renderer.GetPropertyBlock(propertyBlock);
+        propertyBlock.SetColor(FrontFacesColorPropertyId, tint);
+        SetClipProperties(propertyBlock, screenClipRect, useClipRect);
+        renderer.SetPropertyBlock(propertyBlock);
+    }
+
+    private static void ApplyCardPackOverlayAppearance(
+        Renderer renderer,
+        Sprite sprite,
+        Color tint)
+    {
+        if (renderer == null || sprite == null || sprite.texture == null)
+        {
+            return;
+        }
+
+        var texture = sprite.texture;
+        texture.wrapMode = TextureWrapMode.Clamp;
+        texture.filterMode = FilterMode.Bilinear;
+        var uvTransform = CalculateCoverUvTransform(sprite);
+        var propertyBlock = new MaterialPropertyBlock();
+        propertyBlock.SetTexture(FrontFacesAlbedoPropertyId, texture);
+        propertyBlock.SetVector(FrontFacesAlbedoTransformPropertyId, uvTransform);
+        propertyBlock.SetColor(FrontFacesColorPropertyId, tint);
+        propertyBlock.SetTexture(BackFacesAlbedoPropertyId, texture);
+        propertyBlock.SetVector(BackFacesAlbedoTransformPropertyId, uvTransform);
+        propertyBlock.SetColor(BackFacesColorPropertyId, tint);
+        propertyBlock.SetTexture(ClipTexturePropertyId, Texture2D.whiteTexture);
+        propertyBlock.SetVector(ClipTextureTransformPropertyId, new Vector4(1f, 1f, 0f, 0f));
+        propertyBlock.SetFloat(UnlitOverlayPropertyId, 1f);
+        renderer.SetPropertyBlock(propertyBlock);
+    }
+
+    private static void ApplyCardPackClip(Renderer[] renderers, Rect screenClipRect, bool useClipRect)
+    {
+        if (renderers == null)
+        {
+            return;
+        }
+
+        for (var i = 0; i < renderers.Length; i++)
+        {
+            ApplyCardPackClip(renderers[i], screenClipRect, useClipRect);
+        }
+    }
+
+    private static void ApplyCardPackClip(Renderer renderer, Rect screenClipRect, bool useClipRect)
+    {
+        if (renderer == null)
+        {
+            return;
+        }
+
+        var propertyBlock = new MaterialPropertyBlock();
+        renderer.GetPropertyBlock(propertyBlock);
+        SetClipProperties(propertyBlock, screenClipRect, useClipRect);
+        renderer.SetPropertyBlock(propertyBlock);
+    }
+
+    private static void SetClipProperties(
+        MaterialPropertyBlock propertyBlock,
+        Rect screenClipRect,
+        bool useClipRect)
+    {
+        propertyBlock.SetVector(
+            UiClipRectPropertyId,
+            new Vector4(
+                screenClipRect.xMin,
+                screenClipRect.yMin,
+                screenClipRect.xMax,
+                screenClipRect.yMax));
+        propertyBlock.SetFloat(UseUiClipRectPropertyId, useClipRect ? 1f : 0f);
     }
 
     private static Vector4 CalculateCoverUvTransform(Sprite coverSprite)

@@ -396,6 +396,12 @@ public static class CardPackDismantlePreviewEditor
 
     private static void UpdateCombinedPreview()
     {
+        if (!AnimationMode.InAnimationMode())
+        {
+            StopCombinedPreview();
+            return;
+        }
+
         var stage = PrefabStageUtility.GetCurrentPrefabStage();
         if (stage == null || stage.assetPath != PreviewPrefabPath)
         {

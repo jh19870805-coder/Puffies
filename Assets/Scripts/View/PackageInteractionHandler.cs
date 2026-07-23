@@ -84,7 +84,6 @@ public class PackageInteractionHandler : MonoBehaviour,
     {
         return mOwner != null
             && mImage != null
-            && mImage.enabled
             && mImage.sprite != null
             && mOwner.CanAcceptPackageInput();
     }

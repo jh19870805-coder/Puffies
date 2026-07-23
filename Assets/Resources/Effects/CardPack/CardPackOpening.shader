@@ -25,6 +25,10 @@ Shader "Puffies/CardPackOpening"
         _OcclutionValue("Occlusion Strength", Range(0, 1.5)) = 1
         _ClipTex("Wave Clip Mask", 2D) = "white" {}
         _Cutoff("Alpha Cutoff", Range(0, 1)) = 0.35
+        [HideInInspector] _UiClipRect("UI Clip Rect", Vector) = (0, 0, 0, 0)
+        [HideInInspector] _UseUiClipRect("Use UI Clip Rect", Float) = 0
+        [HideInInspector] _UnlitOverlay("Unlit Overlay", Float) = 0
+        [HideInInspector] _DepthTest("Depth Test", Float) = 4
     }
 
     SubShader
@@ -43,7 +47,7 @@ Shader "Puffies/CardPackOpening"
 
             Cull Off
             ZWrite On
-            ZTest LEqual
+            ZTest [_DepthTest]
 
             HLSLPROGRAM
             #pragma target 3.0
@@ -68,6 +72,7 @@ Shader "Puffies/CardPackOpening"
                 half3 normalWS : TEXCOORD1;
                 half4 tangentWS : TEXCOORD2;
                 float2 uv : TEXCOORD3;
+                float4 screenPosition : TEXCOORD4;
             };
 
             TEXTURE2D(_FrontFacesAlbedo);
@@ -100,6 +105,7 @@ Shader "Puffies/CardPackOpening"
                 half4 _RampColor;
                 half4 _CubeMap_HDR;
                 float4 _CubeMapPosition;
+                float4 _UiClipRect;
                 half _BackLightScale;
                 half _SmoothnessParameters;
                 half _MetallicParameters;
@@ -111,6 +117,8 @@ Shader "Puffies/CardPackOpening"
                 half _RampTexValue;
                 half _OcclutionValue;
                 half _Cutoff;
+                half _UseUiClipRect;
+                half _UnlitOverlay;
             CBUFFER_END
 
             Varyings Vert(Attributes input)
@@ -125,11 +133,22 @@ Shader "Puffies/CardPackOpening"
                     normalInputs.tangentWS,
                     input.tangentOS.w * GetOddNegativeScale());
                 output.uv = input.uv;
+                output.screenPosition = ComputeScreenPos(positionInputs.positionCS);
                 return output;
             }
 
             half4 Frag(Varyings input, FRONT_FACE_TYPE isFrontFace : FRONT_FACE_SEMANTIC) : SV_Target
             {
+                if (_UseUiClipRect > 0.5h)
+                {
+                    float2 screenPixel = input.screenPosition.xy
+                        / input.screenPosition.w * _ScreenParams.xy;
+                    clip(screenPixel.x - _UiClipRect.x);
+                    clip(screenPixel.y - _UiClipRect.y);
+                    clip(_UiClipRect.z - screenPixel.x);
+                    clip(_UiClipRect.w - screenPixel.y);
+                }
+
                 half isFront = IS_FRONT_VFACE(isFrontFace, 1.0h, 0.0h);
                 float2 frontUv = input.uv * _FrontFacesAlbedo_ST.xy + _FrontFacesAlbedo_ST.zw;
                 float2 backUv = input.uv * _BackFacesAlbedo_ST.xy + _BackFacesAlbedo_ST.zw;
@@ -146,6 +165,11 @@ Shader "Puffies/CardPackOpening"
                 float2 clipUv = input.uv * _ClipTex_ST.xy + _ClipTex_ST.zw;
                 half clipMask = SAMPLE_TEXTURE2D(_ClipTex, sampler_ClipTex, clipUv).r;
                 clip(min(clipMask, albedoSample.a) - _Cutoff);
+
+                if (_UnlitOverlay > 0.5h)
+                {
+                    return half4(albedoSample.rgb, 1.0h);
+                }
 
                 float2 frontNormalUv = input.uv * _FrontFacesNormal_ST.xy + _FrontFacesNormal_ST.zw;
                 float2 backNormalUv = input.uv * _BackFacesNormal_ST.xy + _BackFacesNormal_ST.zw;

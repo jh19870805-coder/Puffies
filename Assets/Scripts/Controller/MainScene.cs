@@ -14,6 +14,12 @@ public class MainScene : MonoBehaviour
     private const float PixelsPerUnit = GameDefine.PixelsPerUnit;
     private const float PackageClickScaleRatio = 1.15f;
     private const float PackageClickAnimDuration = 0.12f;
+    private const float PackageBreathMinScale = 0.98f;
+    private const float PackageBreathMaxScale = 1.02f;
+    private const float PackageBreathDuration = 2.4f;
+    private const float PackageOpenScaleDuration = 0.3f;
+    private const float PackageOpenWidth = 600f;
+    private const float PackageOpenHeight = 680f;
     private const float PackageSlotWidth = 240f;
     private const float PackageSlotHeight = 272f;
     private const float PackageCoverWidth = 240f;
@@ -87,8 +93,9 @@ public class MainScene : MonoBehaviour
     private bool mHasSwitchedToGameScene;
     private bool mIsApplyingSettingsToUi;
     private Coroutine mPlayAnimationCoroutine;
+    private PackageEntry mSelectedPackageEntry;
 
-    private struct PackageEntry
+    private sealed class PackageEntry
     {
         public int BagId;
         public GameObject Root;
@@ -96,6 +103,10 @@ public class MainScene : MonoBehaviour
         public Image ShadowImage;
         public Image SizeImage;
         public RectTransform RectTransform;
+        public GameAnimationUtility.CardPackIdleDisplay IdleDisplay;
+        public Color DisplayTint = Color.white;
+        public float BreathPhase;
+        public bool SuppressDisplay;
     }
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -109,6 +120,11 @@ public class MainScene : MonoBehaviour
 
     private void OnDestroy()
     {
+        foreach (var pair in mPackageSlotsById)
+        {
+            ReleasePackageDisplay(pair.Value);
+        }
+
         foreach (var pair in mPackageShadowSpritesById)
         {
             var shadowSprite = pair.Value;
@@ -126,6 +142,11 @@ public class MainScene : MonoBehaviour
         }
 
         mPackageShadowSpritesById.Clear();
+    }
+
+    private void LateUpdate()
+    {
+        UpdatePackageDisplays();
     }
 
     private void Start()
@@ -245,7 +266,8 @@ public class MainScene : MonoBehaviour
                 BagId = resolvedBagId,
                 Root = image.gameObject,
                 Image = image,
-                RectTransform = image.rectTransform
+                RectTransform = image.rectTransform,
+                BreathPhase = resolvedBagId * 0.6180339f
             };
         }
 
@@ -381,6 +403,7 @@ public class MainScene : MonoBehaviour
     {
         foreach (var pair in mPackageSlotsById)
         {
+            ReleasePackageDisplay(pair.Value);
             if (pair.Value.Root != null)
             {
                 Destroy(pair.Value.Root);
@@ -449,7 +472,8 @@ public class MainScene : MonoBehaviour
             BagId = packId,
             Root = slotObject,
             Image = image,
-            RectTransform = image != null ? image.rectTransform : null
+            RectTransform = image != null ? image.rectTransform : null,
+            BreathPhase = packId * 0.6180339f
         };
     }
 
@@ -485,7 +509,8 @@ public class MainScene : MonoBehaviour
             Image = coverImage,
             ShadowImage = shadowImage,
             SizeImage = sizeImage,
-            RectTransform = rootRect
+            RectTransform = rootRect,
+            BreathPhase = packId * 0.6180339f
         };
     }
 
@@ -559,11 +584,152 @@ public class MainScene : MonoBehaviour
         EnsurePackageInteractionHandler(entry.Root, entry.Image, packId);
     }
 
+    private void UpdatePackageDisplays()
+    {
+        if (mPackageSlotsById.Count == 0 || Camera.main == null)
+        {
+            return;
+        }
+
+        var viewport = mPackageScrollRect != null ? mPackageScrollRect.viewport : null;
+        var clipRect = viewport != null
+            ? GetScreenRect(viewport, Camera.main)
+            : new Rect(0f, 0f, Screen.width, Screen.height);
+        var panelsObscurePackages = IsAnyPackagePanelOpen();
+        foreach (var pair in mPackageSlotsById)
+        {
+            var entry = pair.Value;
+            if (entry == null || entry.Root == null || entry.Image == null)
+            {
+                continue;
+            }
+
+            var anchor = entry.Image.rectTransform;
+            var shouldRender = !entry.SuppressDisplay
+                && entry != mSelectedPackageEntry
+                && !panelsObscurePackages
+                && entry.Root.activeInHierarchy
+                && IsRectVisibleInViewport(anchor, viewport);
+            if (shouldRender && entry.IdleDisplay == null)
+            {
+                if (GameAnimationUtility.TryCreateCardPackIdleDisplay(
+                    entry.BagId,
+                    entry.Image.sprite,
+                    entry.SizeImage != null ? entry.SizeImage.sprite : null,
+                    entry.DisplayTint,
+                    out var display))
+                {
+                    entry.IdleDisplay = display;
+                    SetPackageCoverAndShadowVisible(entry, false);
+                }
+            }
+
+            if (entry.IdleDisplay != null)
+            {
+                GameAnimationUtility.UpdateCardPackIdleDisplay(
+                    entry.IdleDisplay,
+                    anchor,
+                    entry.SizeImage != null ? entry.SizeImage.rectTransform : null,
+                    clipRect,
+                    GetPackageBreathScale(entry),
+                    shouldRender);
+            }
+        }
+    }
+
+    private bool IsAnyPackagePanelOpen()
+    {
+        return mMenuPanelRoot != null && mMenuPanelRoot.activeInHierarchy
+            || mSettingsPanelRoot != null && mSettingsPanelRoot.activeInHierarchy
+            || mUsablePanelRoot != null && mUsablePanelRoot.activeInHierarchy
+            || mSavePanelRoot != null && mSavePanelRoot.activeInHierarchy;
+    }
+
+    private static float GetPackageBreathScale(PackageEntry entry)
+    {
+        var phase = entry != null ? entry.BreathPhase : 0f;
+        var normalized = Mathf.Sin(
+            (Time.unscaledTime / PackageBreathDuration + phase) * Mathf.PI * 2f) * 0.5f + 0.5f;
+        return Mathf.Lerp(PackageBreathMinScale, PackageBreathMaxScale, normalized);
+    }
+
+    private static bool IsRectVisibleInViewport(RectTransform target, RectTransform viewport)
+    {
+        if (target == null || !target.gameObject.activeInHierarchy)
+        {
+            return false;
+        }
+
+        if (viewport == null)
+        {
+            return true;
+        }
+
+        var bounds = RectTransformUtility.CalculateRelativeRectTransformBounds(viewport, target);
+        var viewportRect = viewport.rect;
+        return bounds.max.x >= viewportRect.xMin
+            && bounds.min.x <= viewportRect.xMax
+            && bounds.max.y >= viewportRect.yMin
+            && bounds.min.y <= viewportRect.yMax;
+    }
+
+    private static Rect GetScreenRect(RectTransform rectTransform, Camera camera)
+    {
+        if (rectTransform == null)
+        {
+            return new Rect(0f, 0f, Screen.width, Screen.height);
+        }
+
+        var corners = new Vector3[4];
+        rectTransform.GetWorldCorners(corners);
+        var first = RectTransformUtility.WorldToScreenPoint(camera, corners[0]);
+        var min = first;
+        var max = first;
+        for (var i = 1; i < corners.Length; i++)
+        {
+            var screenPoint = RectTransformUtility.WorldToScreenPoint(camera, corners[i]);
+            min = Vector2.Min(min, screenPoint);
+            max = Vector2.Max(max, screenPoint);
+        }
+
+        return Rect.MinMaxRect(min.x, min.y, max.x, max.y);
+    }
+
+    private static void SetPackageCoverAndShadowVisible(PackageEntry entry, bool visible)
+    {
+        if (entry == null)
+        {
+            return;
+        }
+
+        if (entry.Image != null)
+        {
+            entry.Image.enabled = visible;
+        }
+
+        if (entry.ShadowImage != null)
+        {
+            entry.ShadowImage.enabled = visible && entry.ShadowImage.sprite != null;
+        }
+    }
+
+    private static void ReleasePackageDisplay(PackageEntry entry)
+    {
+        if (entry == null || entry.IdleDisplay == null)
+        {
+            return;
+        }
+
+        GameAnimationUtility.DestroyCardPackIdleDisplay(entry.IdleDisplay);
+        entry.IdleDisplay = null;
+    }
+
     private static void ApplyPackageLifecycleVisual(PackageEntry entry, int packId)
     {
         var tint = CardPackDataUtility.IsPackCompleted(packId)
             ? CompletedPackageTint
             : Color.white;
+        entry.DisplayTint = tint;
         if (entry.Image != null)
         {
             entry.Image.color = tint;
@@ -1751,11 +1917,27 @@ public class MainScene : MonoBehaviour
         var duration = GameAnimationUtility.GetCardPackPlayDuration(anchor);
         if (duration > 0f)
         {
-            yield return new WaitForSeconds(duration);
+            yield return new WaitForSecondsRealtime(duration);
             yield break;
         }
 
-        yield return new WaitForSeconds(1.5f);
+        yield return new WaitForSecondsRealtime(1.5f);
+    }
+
+    private static IEnumerator ScalePreparedCardPack(float fromScale, float toScale)
+    {
+        var elapsed = 0f;
+        while (elapsed < PackageOpenScaleDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            var normalized = Mathf.Clamp01(elapsed / PackageOpenScaleDuration);
+            var eased = Mathf.SmoothStep(0f, 1f, normalized);
+            GameAnimationUtility.SetPreparedCardPackScale(
+                Mathf.LerpUnclamped(fromScale, toScale, eased));
+            yield return null;
+        }
+
+        GameAnimationUtility.SetPreparedCardPackScale(toScale);
     }
 
     private IEnumerator PlayPackageClickFallback(RectTransform rectTransform)
@@ -1790,36 +1972,63 @@ public class MainScene : MonoBehaviour
 
     private static void SetPackageVisualsVisible(PackageEntry entry, bool visible)
     {
-        if (entry.Image != null)
+        if (entry == null)
         {
-            entry.Image.enabled = visible;
+            return;
         }
 
-        if (entry.ShadowImage != null)
+        entry.SuppressDisplay = !visible;
+        if (visible && entry.IdleDisplay != null && entry.IdleDisplay.IsValid)
         {
-            entry.ShadowImage.enabled = visible && entry.ShadowImage.sprite != null;
+            SetPackageCoverAndShadowVisible(entry, false);
+        }
+        else
+        {
+            SetPackageCoverAndShadowVisible(entry, visible);
         }
 
         if (entry.SizeImage != null)
         {
             entry.SizeImage.enabled = visible && entry.SizeImage.sprite != null;
         }
+
+        GameAnimationUtility.SetCardPackIdleDisplayVisible(entry.IdleDisplay, visible);
     }
 
     private IEnumerator PlayPackageInteraction(int bagId, PackageEntry entry)
     {
         mIsPlayingAnimation = true;
+        mSelectedPackageEntry = entry;
         var anchor = entry.Image != null ? entry.Image.rectTransform : entry.RectTransform;
         var coverSprite = entry.Image != null ? entry.Image.sprite : null;
-        var hasPlayed = GameAnimationUtility.PlayCardPackAnimation(bagId, coverSprite, anchor);
-        if (hasPlayed)
+        var idleScale = GetPackageBreathScale(entry);
+        var prepared = GameAnimationUtility.PrepareCardPackAnimation(
+            bagId,
+            coverSprite,
+            anchor,
+            idleScale);
+        if (prepared)
         {
             SetPackageVisualsVisible(entry, false);
+            var targetScale = Mathf.Min(
+                PackageOpenWidth / PackageCoverWidth,
+                PackageOpenHeight / PackageCoverHeight);
+            yield return ScalePreparedCardPack(idleScale, targetScale);
+            if (!GameAnimationUtility.PlayPreparedCardPackAnimation())
+            {
+                prepared = false;
+            }
+        }
+
+        if (prepared)
+        {
             yield return WaitForCardPackAnimation(anchor);
         }
         else
         {
             Debug.LogWarning($"Card pack animation not played. packId={bagId}");
+            mSelectedPackageEntry = null;
+            SetPackageVisualsVisible(entry, true);
             var fallbackRect = entry.RectTransform != null
                 ? entry.RectTransform
                 : anchor;
@@ -1831,6 +2040,7 @@ public class MainScene : MonoBehaviour
 
         mIsPlayingAnimation = false;
         mPlayAnimationCoroutine = null;
+        mSelectedPackageEntry = null;
         mHasSwitchedToGameScene = true;
         GameManager.EnterGameScene(bagId);
     }
