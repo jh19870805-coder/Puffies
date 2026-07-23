@@ -1,331 +1,331 @@
-# Project Context
+﻿# 项目上下文
 
-Unity **2022.3** / URP 2D project. Core loop: card pack opening -> puzzle drag/drop -> task reward. This is the stable project reference for requirements, scenes, data, assets, build rules, and naming.
+Unity **2022.3** / URP 2D 项目。核心循环：打开卡包 -> 拖放拼图 -> 任务奖励。本文档是需求、场景、数据、资源、构建规则和命名的稳定项目参考。
 
-Current work state is tracked in [CURRENT_TASK.md](CURRENT_TASK.md). Workflow rules are in [WORKFLOW.md](WORKFLOW.md). Confirmed long-term game-design rules are recorded in [GAME_DESIGN_REQUIREMENTS.md](GAME_DESIGN_REQUIREMENTS.md).
-
----
-
-## 1. Feature Requirements
-
-### Core Loop
-
-1. `LoadingScene` initializes local data, task config, card pack config, and persistent storage.
-2. `MainScene` displays playable card packs based on unlock state.
-3. Clicking an unlocked pack plays pack-opening presentation and enters `GameScene`.
-4. The player drags puzzle pieces to complete the selected pack puzzle.
-5. Puzzle completion shows `RewardPanel`, settles task progress, and saves card pack state.
-6. `BtnFinish` returns to `MainScene`, where the card pack list refreshes from latest unlock state.
-
-### First Demo Scope
-
-- The first Demo does not implement leaderboard functionality. Do not connect ranking backend data, replace mock rows, add leaderboard persistence, or fix player-build loading for `RankItem.prefab` unless the Demo scope changes.
-- The existing `RankScene` and MainScene rank entry are placeholders only and are not part of Demo acceptance.
-
-### Scene Requirements
-
-| Scene | Requirements |
-|------|--------------|
-| LoadingScene | Initialize JSON, SQLite, task data, and card pack data; enter MainScene after loading |
-| MainScene | Refresh card pack list from `CardPacks.csv` plus SQLite unlock state; display card packs in pages of 6 columns x 3 rows (18 per page) using persistent lightweight card-pack effects with breathing motion; enlarge the selected effect to `600 x 680`, play the complete generic 3D opening model with the selected pack's real cover, then enter GameScene; provide Rank, Achieve, and Menu entry points |
-| GameScene | Load `CardBagNNN` prefab by selected pack id; organize puzzle pieces by `PieceNN` group-number naming; when a group completes, switch groups and clear previous pieces; show RewardPanel after all pieces complete |
-| RankScene | Placeholder only; leaderboard functionality is excluded from the first Demo |
-| AchieveScene | Currently displays 20 mock achievements: the first 5 are achieved and the remaining 15 are unachieved; replace the data source when Steam integration is added |
-| effect | Preview and debug CardFx |
-
-### Data And Reward Requirements
-
-- Task config comes from `Resources/Configs/TaskConfig.csv`.
-- Card pack config comes from `Resources/Configs/CardPacks.csv`.
-- Accumulate-score task type is `AccumulateScore` (`TaskType=1`); completing a puzzle adds that game's settlement score once.
-- Settlement starts from the card-pack base score (XS 60, S 80, M 100, L 120, XL 140, XXL 160, XXXL 200), adds every qualified bonus percentage, multiplies once, and rounds upward.
-- Score bonuses are: no `BtnTips` click +5%, MainScene `Toggle1` level outline disabled +2%, `Toggle2` sticker outline disabled +5%, and completion time <=15 / <=30 / <=60 seconds +3% / +2% / +1%.
-- Completed tasks grant rewards and advance to the next task.
-- Completing a task always creates a persisted new-card-pack entitlement. If the chapter hand-count gate is closed, the reward remains pending and is retried later. First-time completion performs one deterministic stage-gated grant attempt; replaying an already `Completed` pack does not perform this attempt. A replay may still create a task entitlement.
-- Card-pack distribution uses 8 internal, player-invisible chapters for approximately 150 total packs (18.75 per chapter on average). Chapters constrain the eligible locked-pack reward pool but are not shown in MainScene or other player-facing UI. Exact PackId allocation and chapter advancement rules remain pending.
-- Internal chapter stage uses `R`, the number of still-`Locked` packs in the active chapter: initial `17..9`, mid-to-late `8..3`, final `2..1`. Held playable count means `Unlocked + InProgress` and targets approximately `5-6`, `2-3`, and `1` packs respectively. For chapters larger than 18 packs, extra `R` values above 17 are also initial-stage values.
-- Current distribution gates are: `R>=9` allows `H<=5`; `R=8` allows `H<=3`; `R=7..3` allows `H<=2`; `R=2..1` allows `H<=1`. A blocked first-completion attempt is skipped, while a blocked task reward remains pending. Both sources may grant in one settlement. RewardPanel keeps its authored default `ImgBag` Sprite; after `BtnFinish`, every pack granted in that settlement flies from `ImgBag` to a centered row, pauses, survives the MainScene load, and then flies to its corresponding list slot.
-- When an accumulate-score task advances to another accumulate-score task, progress above the completed target carries forward (`nextProgress = currentProgress - completedTarget`).
-- Card pack lifecycle state is stored in SQLite table `CardPacks` as `Locked`, `Unlocked`, `InProgress`, or `Completed`.
-- MainScene card-pack order is: newly granted since the previous list presentation (one presentation only, newest grant first), then `InProgress`, then `Unlocked` by ascending unlock time, then `Completed` by ascending first-completion time. PackId is the deterministic tie-breaker; daily challenge priority is deferred.
-- MainScene lightly tints `Completed` card-pack covers and size icons gray while keeping them replayable.
-- Task progress is stored in JSON root object `TaskProgressData`.
-- Business progress must not use `PlayerPrefs`.
-
-### Content Extension Requirements
-
-- New card packs use the existing `Package001` template; `MainScene` dynamically creates runtime slots.
-- New puzzles are created by adding `CardBagNNN` prefabs under `Resources/CardBagPrefabs/`; each prefab contains `GameBoard` and `Piece01`...`PieceNN`; do not create Package JSON.
-- The generic 3D card-pack opening model and CardFx assets live under `Resources/Effects/` and are loaded with `Resources.Load`.
-- Before builds, run `Puffies -> Sync Build Resources` to sync runtime disk-loaded UI folders to `StreamingAssets/UI`.
-
-### Pending Or Unfinished Requirements
-
-- Formal Rank page content.
-- Steam achievement integration, replacing AchieveScene mock data.
-- Sequential settlement presentation that reveals each qualified bonus and rolls through cumulative step scores; current runtime performs one 0-to-final-score roll.
-- Final chapter PackId allocation, chapter advancement rules, empty-pool handling, and final card-pack selection policy.
-- Full Play Mode regression for card-pack lifecycle/distribution, reward flight, list ordering/paging, stable tray positions, and staged outlines.
-- Formal build regression.
-- Board sliding to slot center was discussed but not merged; if still needed, implement as a separate small task.
+当前工作状态记录在 [CURRENT_TASK.md](CURRENT_TASK.md)，工作流规则记录在 [WORKFLOW.md](WORKFLOW.md)，已确认的长期游戏设计规则记录在 [GAME_DESIGN_REQUIREMENTS.md](GAME_DESIGN_REQUIREMENTS.md)。
 
 ---
 
-## 2. Directory And Loading Strategy
+## 1. 功能需求
+
+### 核心循环
+
+1. `LoadingScene` 初始化本地数据、任务配置、卡包配置和持久化存储。
+2. `MainScene` 根据解锁状态显示可玩的卡包。
+3. 点击已解锁卡包，播放开包表现并进入 `GameScene`。
+4. 玩家拖动拼图碎片，完成选中卡包对应的拼图。
+5. 拼图完成后显示 `RewardPanel`，结算任务进度并保存卡包状态。
+6. `BtnFinish` 返回 `MainScene`，卡包列表按最新解锁状态刷新。
+
+### 首个 Demo 范围
+
+- 首个 Demo 不实现排行榜功能。除非 Demo 范围发生变化，否则不要接入排行榜后端数据、替换模拟列表、增加排行榜持久化，或修复 Player Build 中 `RankItem.prefab` 的加载。
+- 现有 `RankScene` 和 MainScene 排行榜入口仅为占位，不属于 Demo 验收范围。
+
+### 场景需求
+
+| 场景 | 需求 |
+|------|------|
+| LoadingScene | 初始化 JSON、SQLite、任务数据和卡包数据；加载结束后进入 MainScene |
+| MainScene | 根据 `CardPacks.csv` 与 SQLite 解锁状态刷新卡包列表；每页按 6 列 x 3 行显示 18 个带呼吸动画的轻量常驻卡包特效；将选中特效放大到 `600 x 680`，使用真实封面播放完整通用 3D 开包模型，然后进入 GameScene；提供 Rank、Achieve 和 Menu 入口 |
+| GameScene | 根据选中 PackId 加载 `CardBagNNN` Prefab；按照 `PieceNN` 数字命名组织拼图分组；一组完成后切换分组并清理上一组碎片；全部完成后显示 RewardPanel |
+| RankScene | 仅占位；首个 Demo 不包含排行榜功能 |
+| AchieveScene | 当前显示 20 条模拟成就，前 5 条已达成、后 15 条未达成；接入 Steam 后替换数据源 |
+| effect | 预览和调试 CardFx |
+
+### 数据与奖励需求
+
+- 任务配置来自 `Resources/Configs/TaskConfig.csv`。
+- 卡包配置来自 `Resources/Configs/CardPacks.csv`。
+- 累计积分任务类型为 `AccumulateScore`（`TaskType=1`）；每次完成拼图只累计一次当局结算分数。
+- 结算以卡包基础分开始（XS 60、S 80、M 100、L 120、XL 140、XXL 160、XXXL 200），将所有符合条件的百分比加成相加后统一相乘，并向上取整。
+- 分数加成为：未点击 `BtnTips` +5%；关闭 MainScene `Toggle1` 关卡描边 +2%；关闭 `Toggle2` 贴纸描边 +5%；完成时间 <=15 / <=30 / <=60 秒分别 +3% / +2% / +1%。
+- 完成任务后发放奖励并推进到下一个任务。
+- 完成任务必定创建一条持久化的新卡包权益。章节持有数量门槛关闭时，奖励保持待发并稍后重试。卡包首次完成时执行一次确定性的阶段门槛发包尝试；重玩已经 `Completed` 的卡包不执行该尝试，但仍可能通过完成任务创建任务权益。
+- 卡包发放使用 8 个玩家不可见的内部章节，总量约 150 个卡包，平均每章 18.75 个。章节限制可选的锁定卡包奖励池，但不显示在 MainScene 或其他玩家界面。准确 PackId 分配和章节推进规则仍待确认。
+- 内部章节阶段使用 `R` 表示当前章节仍为 `Locked` 的卡包数：初期 `17..9`、中期后段 `8..3`、末期 `2..1`。持有可玩数量为 `Unlocked + InProgress`，各阶段目标约为 `5-6`、`2-3` 和 `1`。章节超过 18 个卡包时，`R>17` 的额外范围同样属于初期。
+- 当前发包门槛：`R>=9` 时允许 `H<=5`；`R=8` 时允许 `H<=3`；`R=7..3` 时允许 `H<=2`；`R=2..1` 时允许 `H<=1`。被拦截的首次完成发包直接跳过；被拦截的任务奖励保持待发。两个来源可在同一轮结算中同时发包。RewardPanel 保留默认 `ImgBag` Sprite；点击 `BtnFinish` 后，本次发放的全部卡包从 `ImgBag` 飞到屏幕居中行，停顿后跨越 MainScene 加载，再分别飞到对应列表位置。
+- 累计积分任务推进到另一个累计积分任务时，超过已完成目标的进度向后结转（`nextProgress = currentProgress - completedTarget`）。
+- 卡包生命周期保存在 SQLite `CardPacks` 表中，状态为 `Locked`、`Unlocked`、`InProgress` 或 `Completed`。
+- MainScene 卡包排序：上次列表展示后新发放的卡包优先展示一次，且最新发放的在前；随后依次为 `InProgress`、按解锁时间升序的 `Unlocked`、按首次完成时间升序的 `Completed`。PackId 是确定性并列排序依据；每日挑战优先级暂缓实现。
+- MainScene 对 `Completed` 卡包封面和尺寸图标进行轻微置灰，但保持可重玩。
+- 任务进度保存在 JSON 根对象 `TaskProgressData`。
+- 业务进度不得使用 `PlayerPrefs`。
+
+### 内容扩展需求
+
+- 新卡包沿用唯一 `Package001` 模板；`MainScene` 在运行时动态创建列表项。
+- 新拼图通过在 `Resources/CardBagPrefabs/` 下新增 `CardBagNNN` Prefab 实现；每个 Prefab 包含 `GameBoard` 和 `Piece01`...`PieceNN`，不创建 Package JSON。
+- 通用 3D 开包模型和 CardFx 资源放在 `Resources/Effects/` 下，通过 `Resources.Load` 加载。
+- 构建前执行 `Puffies -> Sync Build Resources`，将运行时磁盘加载的 UI 目录同步到 `StreamingAssets/UI`。
+
+### 待完成需求
+
+- 正式排行榜页面内容。
+- Steam 成就接入，用真实数据替换 AchieveScene 模拟数据。
+- 逐项显示符合条件的加成并滚动累计阶段分数；当前运行时只执行一次从 0 到最终分数的滚动。
+- 最终章节 PackId 分配、章节推进规则、空卡包池处理和最终卡包选择策略。
+- 卡包生命周期和发放、奖励飞行、列表排序和分页、碎片托盘固定位置、分阶段描边的完整 Play Mode 回归。
+- 正式构建回归。
+- 曾讨论让棋盘滑动到槽位中心，但未合并；仍需要时应作为独立小任务实现。
+
+---
+
+## 2. 目录与加载策略
 
 ```text
 Assets/
-  Scenes/           LoadingScene (startup), MainScene, GameScene, RankScene, AchieveScene, effect
-  UI/               2D source textures (PackImages, CardBags/CardBagNNN, BasicUI...)
+  Scenes/           LoadingScene（启动）、MainScene、GameScene、RankScene、AchieveScene、effect
+  UI/               2D 源贴图（PackImages、CardBags/CardBagNNN、BasicUI...）
   Scripts/          MVC
-    Model/          Intentionally flat: core, config, persistence, task/card-pack data, and runtime utilities
+    Model/          有意保持扁平：核心、配置、持久化、任务/卡包数据和运行时工具
     View/           PackageInteractionHandler
-    Controller/     Scene scripts
-    Editor/         Build sync, Canvas resolution, Chinese font, CardFx preview
+    Controller/     场景脚本
+    Editor/         构建同步、Canvas 分辨率、中文字体、CardFx 预览
   Resources/
-    Configs/        TaskConfig.csv, CardPacks.csv
+    Configs/        TaskConfig.csv、CardPacks.csv
     Effects/
-      CardPack/     3D card packs
-      CardPackDismantle/ Authored five-layer card-pack dismantle particle effect
+      CardPack/     3D 卡包
+      CardPackDismantle/ 美术制作的五层卡包拆包粒子特效
       PlaneGroup/
-      CardFx/       Card obtain/trail prefabs plus Materials/Textures/Meshes/Shaders
-    CardBagPrefabs/ CardBagNNN gameplay prefabs loaded by GameScene
-  Prefabs/          Shared UI prefabs
-  StreamingAssets/  UI build-sync output
+      CardFx/       卡包获得/轨迹 Prefab 及 Materials/Textures/Meshes/Shaders
+    CardBagPrefabs/ GameScene 加载的 CardBagNNN 游戏 Prefab
+  Prefabs/          共享 UI Prefab
+  StreamingAssets/  UI 构建同步输出
   Plugins/SQLite/   sqlite-net
 ```
 
-| Phase | 2D UI | 3D / FX |
+| 阶段 | 2D UI | 3D / FX |
 |------|-------|---------|
-| Editor | `Assets/UI` (scene Images reference directly) | `Assets/Resources/Effects` |
-| Build | Runtime disk-loaded folders in `StreamingAssets/UI` (`ToDiskPath`) | `Resources.Load("Effects/...")` |
+| Editor | `Assets/UI`，场景 Image 直接引用 | `Assets/Resources/Effects` |
+| Build | `StreamingAssets/UI` 中运行时磁盘加载的目录（`ToDiskPath`） | `Resources.Load("Effects/...")` |
 
-- Do not rename `Resources`; code has hardcoded resource paths.
-- GameScene dynamically loads `Resources/CardBagPrefabs/CardBagNNN.prefab` by selected pack id; source textures live under `UI/CardBags/CardBagNNN/` and are included through prefab Sprite references rather than StreamingAssets.
-- 3D effects stay under `Resources/Effects/`; do not duplicate them into StreamingAssets.
-- The imported card-pack dismantle effect is `Resources/Effects/CardPackDismantle/CardPackDismantle_001.prefab`. It contains five authored ParticleSystem layers and currently is not connected to MainScene playback. Its two legacy Shader Forge passes use `SRPDefaultUnlit` for Renderer2D, and their unavailable custom material inspectors have been removed without changing the authored particle hierarchy.
-- The editor-only assembled preview is `Resources/Effects/CardPackDismantle/CardPackDismantlePreview.prefab`. It combines all six nested `CardPackOpening` animated layers with the nested `CardPackDismantle_001` particle effect and applies `PackIcon001` through renderer property blocks. Open it through **Puffies -> Effects -> Preview Card Pack Dismantle** (`Ctrl+Shift+D`); the dedicated SceneView loops six Animators and the five-particle hierarchy together.
+- 不要重命名 `Resources`；代码中存在硬编码资源路径。
+- GameScene 根据选中 PackId 动态加载 `Resources/CardBagPrefabs/CardBagNNN.prefab`。源贴图位于 `UI/CardBags/CardBagNNN/`，通过 Prefab 的 Sprite 引用进入构建，不放入 StreamingAssets。
+- 3D 特效保留在 `Resources/Effects/`，不要复制到 StreamingAssets。
+- 导入的卡包拆包特效为 `Resources/Effects/CardPackDismantle/CardPackDismantle_001.prefab`，包含五个原始 ParticleSystem 层，目前未接入 MainScene。两个旧 Shader Forge Pass 为 Renderer2D 使用 `SRPDefaultUnlit`，不可用的自定义材质 Inspector 已移除，原始粒子层级未改变。
+- 编辑器组合预览为 `Resources/Effects/CardPackDismantle/CardPackDismantlePreview.prefab`，将六个嵌套 `CardPackOpening` 动画层与嵌套 `CardPackDismantle_001` 粒子组合，并通过 Renderer PropertyBlock 应用 `PackIcon001`。使用 **Puffies -> Effects -> Preview Card Pack Dismantle**（`Ctrl+Shift+D`）打开；专用 SceneView 会同步循环六个 Animator 和五层粒子结构。
 
 ---
 
-## 3. Scenes And Navigation
+## 3. 场景与导航
 
 ```text
-LoadingScene (2.5s, TextLoading 0% -> 100%)
+LoadingScene（2.5s，TextLoading 0% -> 100%）
   -> MainScene
       -> BtnRank     -> RankScene     -> BtnReturn -> Main
       -> BtnAchieve  -> AchieveScene  -> CloseBtn  -> Main
-      -> BtnMenu     -> PanelMenu     -> BtnClose / BtnReturn -> close menu
-                    -> BtnSet        -> PanelSet -> BtnClose / BtnReturn -> close settings
-                    -> BtnUsable     -> PanelUsable -> BtnClose / BtnReturn -> close usable options
-                    -> BtnData       -> PanelSave -> BtnClose / BtnReturn -> close save panel
-      -> unlocked pack runtime slot -> pack animation -> GameScene
+      -> BtnMenu     -> PanelMenu     -> BtnClose / BtnReturn -> 关闭菜单
+                    -> BtnSet        -> PanelSet -> BtnClose / BtnReturn -> 关闭设置
+                    -> BtnUsable     -> PanelUsable -> BtnClose / BtnReturn -> 关闭辅助选项
+                    -> BtnData       -> PanelSave -> BtnClose / BtnReturn -> 关闭存档面板
+      -> 已解锁卡包运行时列表项 -> 开包动画 -> GameScene
           -> BtnReturn -> Main
           -> RewardPanel / BtnFinish -> Main
-effect (debug): CardFx preview, menu Puffies -> Preview CardFx Effects
+effect（调试）：CardFx 预览；菜单 Puffies -> Preview CardFx Effects
 ```
 
-| Scene | Script | Notes |
-|------|--------|-------|
-| LoadingScene | `LoadingScene.cs` | Initializes JSON / SQLite / `GameTaskUtility` / `CardPackDataUtility` |
-| MainScene | `MainScene.cs` | Card pack UI; refreshes by unlock state; 3D opening or 2D fallback |
-| GameScene | `GameScene.cs` | Puzzle grouping and RewardPanel; saves the pack, accumulates settlement score task progress, and settles task rewards |
-| RankScene / AchieveScene | Scene scripts | Return to Main |
-| effect | `CardFxPreviewScene.cs` | CardObtain / CardTrail preview |
+| 场景 | 脚本 | 说明 |
+|------|------|------|
+| LoadingScene | `LoadingScene.cs` | 初始化 JSON / SQLite / `GameTaskUtility` / `CardPackDataUtility` |
+| MainScene | `MainScene.cs` | 卡包 UI；按解锁状态刷新；3D 开包或 2D 回退 |
+| GameScene | `GameScene.cs` | 拼图分组和 RewardPanel；保存卡包、累计结算积分任务进度并结算任务奖励 |
+| RankScene / AchieveScene | 场景脚本 | 返回 Main |
+| effect | `CardFxPreviewScene.cs` | CardObtain / CardTrail 预览 |
 
-**Build Settings**: `LoadingScene` must be Index **0**.
+**Build Settings**：`LoadingScene` 必须为 Index **0**。
 
-| Object Name | Purpose |
-|-------------|---------|
+| 对象名称 | 用途 |
+|---------|------|
 | `BtnRank` / `BtnAchieve` | Main -> Rank / Achieve |
-| `BtnMenu` | MainScene opens `PanelMenu` |
-| `PanelMenu` | MainScene menu popup, hidden on startup |
-| `PanelMenu/BtnClose` | Close MainScene menu |
-| `PanelMenu/BtnSet` | Open MainScene `PanelSet` settings popup |
-| `PanelMenu/BtnUsable` | Open MainScene `PanelUsable` usable-options popup |
-| `PanelMenu/BtnData` | Open MainScene `PanelSave` popup |
-| `PanelSet` | MainScene settings popup for music, effect, and windowed mode |
-| `PanelSet/SliderMusic` | Music volume setting |
-| `PanelSet/SliderEffect` | Effect volume setting |
-| `PanelSet/ToggleFrame` | Windowed-mode setting |
-| `PanelSet/BtnClose` / `PanelSet/BtnReturn` | Close MainScene settings popup |
-| `PanelUsable` | MainScene usable-options popup |
-| `PanelUsable/Toggle1` / `Toggle2` / `Toggle3` | Persisted usable option toggles |
-| `PanelUsable/BtnClose` / `PanelUsable/BtnReturn` | Close MainScene usable-options popup |
-| `PanelSave` | MainScene save/data popup, currently display/hide only |
-| `PanelSave/BtnClose` / `PanelSave/BtnReturn` | Close MainScene save/data popup |
-| `BtnReturn` | Rank / Game -> Main; under `PanelMenu`, closes the MainScene menu |
+| `BtnMenu` | MainScene 打开 `PanelMenu` |
+| `PanelMenu` | MainScene 菜单弹窗，启动时隐藏 |
+| `PanelMenu/BtnClose` | 关闭 MainScene 菜单 |
+| `PanelMenu/BtnSet` | 打开 MainScene `PanelSet` 设置弹窗 |
+| `PanelMenu/BtnUsable` | 打开 MainScene `PanelUsable` 辅助选项弹窗 |
+| `PanelMenu/BtnData` | 打开 MainScene `PanelSave` 弹窗 |
+| `PanelSet` | 音乐、音效和窗口模式设置弹窗 |
+| `PanelSet/SliderMusic` | 音乐音量 |
+| `PanelSet/SliderEffect` | 音效音量 |
+| `PanelSet/ToggleFrame` | 窗口模式 |
+| `PanelSet/BtnClose` / `PanelSet/BtnReturn` | 关闭设置弹窗 |
+| `PanelUsable` | MainScene 辅助选项弹窗 |
+| `PanelUsable/Toggle1` / `Toggle2` / `Toggle3` | 持久化辅助选项开关 |
+| `PanelUsable/BtnClose` / `PanelUsable/BtnReturn` | 关闭辅助选项弹窗 |
+| `PanelSave` | MainScene 存档/数据弹窗，目前仅显示和隐藏 |
+| `PanelSave/BtnClose` / `PanelSave/BtnReturn` | 关闭存档弹窗 |
+| `BtnReturn` | Rank / Game -> Main；位于 `PanelMenu` 时关闭 MainScene 菜单 |
 | `CloseBtn` | Achieve -> Main |
-| `BtnFinish` | Animate newly granted packs from RewardPanel into their MainScene list slots, then complete the return to Main |
-| `TextLoading` | Loading progress text; supports TextMeshPro `TMP_Text` and legacy `UnityEngine.UI.Text` |
-| `CardBagNNN` | Runtime gameplay prefab loaded from `Resources/CardBagPrefabs/` |
-| `GameBoard` / `Piece01`... | Board and slots inside a `CardBagNNN` prefab |
-| `ActiveGroupOutline` | Runtime baked-outline UGUI Image under `GameBoard` |
-| `PieceBoard` | Puzzle piece tray |
-| `RewardPanel` | Puzzle completion reward panel |
-| `TaskItem` | Shared `Assets/Prefabs/TaskItem.prefab` instance used by MainScene task progress and GameScene RewardPanel settlement |
-| `Package001` | MainScene card pack slot template, hidden and cloned at runtime |
-| `PackItem/PackCover` | MainScene card pack cover Image; runtime assigns `PackIconNNN.png` |
-| `PackItem/PackSize` | Card pack size icon; runtime selects `PackSize_1.png` through `PackSize_7.png` from the configured `CardPackSize` value |
+| `BtnFinish` | 将新发卡包从 RewardPanel 动画移动到 MainScene 列表位置，然后完成返回 |
+| `TextLoading` | 加载进度文字，支持 TextMeshPro `TMP_Text` 和旧 `UnityEngine.UI.Text` |
+| `CardBagNNN` | 从 `Resources/CardBagPrefabs/` 加载的运行时游戏 Prefab |
+| `GameBoard` / `Piece01`... | `CardBagNNN` Prefab 内的棋盘和槽位 |
+| `ActiveGroupOutline` | `GameBoard` 下运行时显示的烘焙描边 UGUI Image |
+| `PieceBoard` | 拼图碎片托盘 |
+| `RewardPanel` | 拼图完成奖励面板 |
+| `TaskItem` | MainScene 任务进度和 GameScene RewardPanel 结算共用的 `Assets/Prefabs/TaskItem.prefab` 实例 |
+| `Package001` | MainScene 卡包列表项模板，隐藏并在运行时克隆 |
+| `PackItem/PackCover` | MainScene 卡包封面 Image；运行时设置 `PackIconNNN.png` |
+| `PackItem/PackSize` | 卡包尺寸图标；运行时根据 `CardPackSize` 配置选择 `PackSize_1.png` 到 `PackSize_7.png` |
 
 ---
 
-## 4. Design Resolution And Fonts
+## 4. 设计分辨率与字体
 
-| Item | Value |
-|------|-------|
-| Design resolution | **2560 x 1440** |
-| PPU | 100 (`GameDefine.PixelsPerUnit`) |
+| 项目 | 值 |
+|------|----|
+| 设计分辨率 | **2560 x 1440** |
+| PPU | 100（`GameDefine.PixelsPerUnit`） |
 
-| Menu | Purpose |
-|------|---------|
-| **Puffies -> Canvas -> Apply Design Resolution** | Apply 2560 x 1440 in bulk |
+| 菜单 | 用途 |
+|------|------|
+| **Puffies -> Canvas -> Apply Design Resolution** | 批量应用 2560 x 1440 |
 | **Puffies -> Fonts -> Setup Default Chinese Font** | Noto Sans SC TMP + UI Text |
 
-New `CanvasScaler` values are written by `CanvasDesignResolutionEditor.cs`. Use `GameFontUtility` in code; do not hardcode font paths.
+新的 `CanvasScaler` 值由 `CanvasDesignResolutionEditor.cs` 写入。代码中使用 `GameFontUtility`，不要硬编码字体路径。
 
 ---
 
-## 5. Data And Config
+## 5. 数据与配置
 
-| Data | Source | Runtime Persistence |
-|------|--------|---------------------|
-| Task config | `GameConfigRepository` reads `Resources/Configs/TaskConfig.csv` | Read-only |
-| Task progress | `GameTaskUtility` | `persistentDataPath/LocalData.json` root object `TaskProgressData` |
-| Card pack config (`PackId`, `PackSize`, `ChapterId`) | `GameConfigRepository` reads `Resources/Configs/CardPacks.csv` | Read-only |
-| Card pack lifecycle state | `CardPackDataUtility` | `LocalData.db` table `CardPacks` |
-| Generic collection + key storage | `SqliteLocalStore` API | `LocalData.db` table `AppRecords` |
+| 数据 | 来源 | 运行时持久化 |
+|------|------|-------------|
+| 任务配置 | `GameConfigRepository` 读取 `Resources/Configs/TaskConfig.csv` | 只读 |
+| 任务进度 | `GameTaskUtility` | `persistentDataPath/LocalData.json` 根对象 `TaskProgressData` |
+| 卡包配置（`PackId`、`PackSize`、`ChapterId`） | `GameConfigRepository` 读取 `Resources/Configs/CardPacks.csv` | 只读 |
+| 卡包生命周期 | `CardPackDataUtility` | `LocalData.db` 的 `CardPacks` 表 |
+| 通用集合与键值存储 | `SqliteLocalStore` API | `LocalData.db` 的 `AppRecords` 表 |
 
-- `GameConfigRepository` loads and caches task/card pack config. Current source is `ResourcesGameConfigTextSource`, which prefers `Resources.Load<TextAsset>` and falls back to editor disk path.
-- `CsvTable` is the unified CSV parser with header access, quoted fields, and empty-line filtering; business code should not directly `Split(',')`.
-- `JsonLocalStore` reads/writes one root object for the whole file, currently task progress.
-- `SqliteLocalStore` uses collection/key records in `AppRecords`; card pack business state uses the dedicated `CardPacks` table.
-- `CardPackLifecycleState` is `Locked=0`, `Unlocked=1`, `InProgress=2`, and `Completed=3`. Completing the first group of a multi-group pack marks it `InProgress`; completing the final group marks it `Completed`.
-- The SQLite `CardPacks` table contains `PackId`, `PackSize`, `LifecycleState`, `UnlockTime`, and `CompletionTime`; the former `IsUnlocked` and `IsPlayed` columns are not retained. Unlock/completion timestamps use invariant `yyyy-MM-dd HH:mm:ss.fff` local time. `CompletionTime` is written on the first transition to `Completed` and is not changed by replay.
-- `CardPackDistributionUtility` lives with `CardPackDataUtility` and owns chapter selection, `R` / held-count evaluation, deterministic locked-candidate selection, and first-completion grant attempts. Replays skip this attempt based on the lifecycle snapshot taken when GameScene starts.
-- Pending task card-pack entitlements are stored in SQLite `AppRecords` under `CardPackDistribution/Progress`, deduplicated by TaskId.
-- GameScene persists the task entitlement before advancing the task and only attempts delivery after task advancement succeeds, preventing duplicate grants when task-progress persistence fails.
-- MainScene settings are stored in `AppRecords` as collection/key `GameSettings/Runtime`: music volume, effect volume, and windowed mode.
-- MainScene usable option toggles are stored in the same `GameSettings/Runtime` record as `UsableOption1`, `UsableOption2`, and `UsableOption3`.
-- `UsableOption1` is the level outer-frame toggle and defaults to enabled for newly created settings; `UsableOption2` is the sticker/full-contour toggle, and `UsableOption3` is high contrast. Persisted user choices remain authoritative.
-- MainScene and GameScene both reference the same `TaskItem.prefab` GUID. Their scene overrides only position the root (`MainScene`: `10,508`; `GameScene`: `-6,455`); child layout and visuals must be changed in the shared prefab.
-- Shared TaskItem child names are `TaskContent`, `TextProgress`, `ProgressMask`, `BagIcon`, and `BagBg`. Task UI binding code should resolve these names relative to the TaskItem instance and must not use scene-specific suffixes.
-- `TaskProgressUIUtility` is the shared runtime binding for both TaskItem instances. `TextProgress` displays `CurrentCompleteValue / TaskConfig.CompleteValue`, and the visible `ProgressMask` width uses the clamped ratio of those values.
-- MainScene refreshes TaskItem from persisted task data during `Start`. GameScene settlement rolls `TaskScore`, `TextProgress`, and `ProgressMask` together over 0.8 seconds using unscaled time; task reward and advancement are persisted before the animation.
-- GameScene settlement summary binds `TaskBg2/TaskScore` to the current game's settlement score and `TaskBg2/TaskBagNum` to the current SQLite count of unlocked card packs. A pack unlocked by the current task reward is included immediately.
-- GameScene snapshots outline settings on entry, marks hint use on `BtnTips` click, starts its unscaled score timer on the first successful Piece placement, and freezes time when RewardPanel settlement begins.
-- MainScene `PanelSet/SliderMusic` and `PanelSet/SliderEffect` are hand-built fake sliders: root Image background plus `SliderFill` and `SliderHandle` children. Runtime uses `FakeSettingsSliderInput` to handle pointer drag, refresh visuals, and save values.
-- Do not use `PlayerPrefs`.
-- Initialization happens in `LoadingScene.Start` for `JsonLocalStore`, `SqliteLocalStore`, `GameTaskUtility`, and `CardPackDataUtility`.
-- `Assets/Scripts/Model` intentionally remains a single flat folder. Related pure C# types are consolidated as follows: `GameManager` lives in `GameDefine.cs`, CSV parser types live in `GameConfigRepository.cs`, both `JsonLocalStore` and `SqliteLocalStore` live in `LocalDataStore.cs`, and score types/`GameScoreUtility` live in `GameTaskUtility.cs`. Public type names and call sites remain unchanged.
-- MainScene card-pack opening creates a runtime `CardPackOpeningFull` root and instantiates all six authored skinned layers: `CardPackOpening.prefab` plus `CardPackOpening_002` through `006`. All six Animators start the shared `CardPackOpening` state together. `GameAnimationUtility` applies the selected entry's complete `PackIconNNN` Sprite texture rectangle to every layer through `MaterialPropertyBlock`, measures the combined animation-time-zero skinned bounds, and uniformly fits the full effect inside the clicked UI bounds before enabling renderers. The shared material is not mutated. Its URP shader renders the selected cover on the front face, the authored back texture on the back face, and uses `CardPackClipMask.png` for the wave-shaped edge. It also applies the effect artist's front/back normal mapping, HDR environment reflection, lighting ramp, metallic/smoothness, and AO inputs. The selected cover albedo remains the unchanged base color; ramp and reflection contributions are neutralized so they cannot tint the whole card. The project uses URP `Renderer2D`, so this mesh shader pass must use `LightMode=SRPDefaultUnlit` (or `Universal2D`); supplied Built-in/Amplify Surface Shaders must be ported instead of imported directly. The package's static `CardPackStatic_001`...`006`, `CardPackPlane`, and `PlaneGroup_001` resources are imported support/reference assets, not runtime opening layers; the Plane assets have no animation and use fixed sample artwork that would cover the dynamic pack.
-- MainScene idle card packs use one shared mesh baked from the six opening layers at frame zero. Each visible package uses one lightweight renderer with its real cover and lifecycle tint, breathes between `0.98` and `1.02` scale over `2.4s`, follows its `PackCover` anchor, and is clipped to the package ScrollRect viewport. Clicking replaces that idle renderer with the reusable six-layer opener, scales it to the original `600 x 680` design size over `0.3s`, then plays the opening clip before entering GameScene. The authored `PackSize` Image remains the position/Sprite/tint source and foreground visual reference.
+- `GameConfigRepository` 加载并缓存任务和卡包配置。当前数据源为 `ResourcesGameConfigTextSource`，优先使用 `Resources.Load<TextAsset>`，失败时回退到编辑器磁盘路径。
+- `CsvTable` 是统一 CSV 解析器，支持表头访问、引号字段和空行过滤；业务代码不得直接 `Split(',')`。
+- `JsonLocalStore` 读写整个文件的单一根对象，目前用于任务进度。
+- `SqliteLocalStore` 在 `AppRecords` 中使用集合/键记录；卡包业务状态使用专用 `CardPacks` 表。
+- `CardPackLifecycleState` 为 `Locked=0`、`Unlocked=1`、`InProgress=2`、`Completed=3`。完成多组卡包第一组后标记为 `InProgress`，完成最后一组后标记为 `Completed`。
+- SQLite `CardPacks` 表包含 `PackId`、`PackSize`、`LifecycleState`、`UnlockTime` 和 `CompletionTime`，不保留旧 `IsUnlocked`、`IsPlayed` 字段。解锁和完成时间使用固定格式的本地时间 `yyyy-MM-dd HH:mm:ss.fff`。`CompletionTime` 仅在首次进入 `Completed` 时写入，重玩不修改。
+- `CardPackDistributionUtility` 与 `CardPackDataUtility` 放在一起，负责章节选择、`R` / 持有数量判断、确定性锁定候选选择和首次完成发包。重玩根据 GameScene 启动时记录的生命周期快照跳过该尝试。
+- 待发任务卡包权益保存在 SQLite `AppRecords` 的 `CardPackDistribution/Progress` 下，并按 TaskId 去重。
+- GameScene 在推进任务前先持久化任务权益，且仅在任务推进保存成功后尝试发放，避免任务进度保存失败时重复发包。
+- MainScene 设置以集合/键 `GameSettings/Runtime` 保存在 `AppRecords`：音乐音量、音效音量和窗口模式。
+- MainScene 辅助选项开关同样保存在 `GameSettings/Runtime`，字段为 `UsableOption1`、`UsableOption2` 和 `UsableOption3`。
+- `UsableOption1` 是关卡外框开关，新建设置时默认开启；`UsableOption2` 是贴纸完整轮廓开关；`UsableOption3` 是高对比度。已持久化的用户选择优先。
+- MainScene 和 GameScene 引用相同 `TaskItem.prefab` GUID。场景 Override 只定位根节点（`MainScene`：`10,508`；`GameScene`：`-6,455`）；子节点布局和视觉必须在共享 Prefab 中修改。
+- 共享 TaskItem 子节点名称为 `TaskContent`、`TextProgress`、`ProgressMask`、`BagIcon` 和 `BagBg`。任务 UI 绑定代码应相对 TaskItem 实例解析这些名称，不得使用场景专属后缀。
+- `TaskProgressUIUtility` 是两个 TaskItem 实例共用的运行时绑定。`TextProgress` 显示 `CurrentCompleteValue / TaskConfig.CompleteValue`，可见 `ProgressMask` 宽度使用两者比值并限制在有效范围。
+- MainScene 在 `Start` 时从持久化任务数据刷新 TaskItem。GameScene 结算使用不受 TimeScale 影响的时间，在 0.8 秒内同步滚动 `TaskScore`、`TextProgress` 和 `ProgressMask`；任务奖励和推进在动画前持久化。
+- GameScene 结算摘要将 `TaskBg2/TaskScore` 绑定到当局结算分数，将 `TaskBg2/TaskBagNum` 绑定到 SQLite 当前已解锁卡包数；本次任务奖励解锁的卡包立即计入。
+- GameScene 进入时记录描边设置快照，点击 `BtnTips` 时记录提示使用，首个 Piece 成功放置时开始不受 TimeScale 影响的积分计时，RewardPanel 结算开始时冻结。
+- MainScene `PanelSet/SliderMusic` 和 `PanelSet/SliderEffect` 是手工拼装的仿 Slider：根 Image 背景加 `SliderFill`、`SliderHandle` 子节点。运行时使用 `FakeSettingsSliderInput` 处理指针拖动、刷新视觉并保存数值。
+- 不使用 `PlayerPrefs`。
+- `LoadingScene.Start` 初始化 `JsonLocalStore`、`SqliteLocalStore`、`GameTaskUtility` 和 `CardPackDataUtility`。
+- `Assets/Scripts/Model` 有意保持单层扁平目录。相关纯 C# 类型按以下方式合并：`GameManager` 位于 `GameDefine.cs`，CSV 解析类型位于 `GameConfigRepository.cs`，`JsonLocalStore` 和 `SqliteLocalStore` 位于 `LocalDataStore.cs`，积分类型和 `GameScoreUtility` 位于 `GameTaskUtility.cs`。公开类型名和调用点保持不变。
+- MainScene 开包时创建运行时根节点 `CardPackOpeningFull`，并实例化全部六个原始蒙皮层：`CardPackOpening.prefab` 及 `CardPackOpening_002` 到 `006`。六个 Animator 同时启动共享 `CardPackOpening` 状态。`GameAnimationUtility` 通过 `MaterialPropertyBlock` 将选中列表项的完整 `PackIconNNN` Sprite 贴图矩形应用到每一层，测量组合动画第零帧蒙皮边界，在启用 Renderer 前将完整特效等比适配到点击的 UI 边界。共享材质不被修改。URP Shader 在正面渲染选中封面、背面渲染原始卡背，并使用 `CardPackClipMask.png` 保留波浪形边缘；同时应用美术提供的正反面法线、HDR 环境反射、光照渐变、金属度/光滑度和 AO。选中封面颜色保持为未改变的基础色，渐变和反射贡献已中和，不会为整张卡包染色。项目使用 URP `Renderer2D`，因此 Mesh Shader Pass 必须使用 `LightMode=SRPDefaultUnlit` 或 `Universal2D`；交付的 Built-in/Amplify Surface Shader 必须移植，不能直接导入。资源包中的静态 `CardPackStatic_001`...`006`、`CardPackPlane` 和 `PlaneGroup_001` 是支持或参考资源，不是运行时开包层；Plane 资源没有动画且使用固定示例图，会遮挡动态卡包。
+- MainScene 空闲卡包使用六个开包层第零帧烘焙的一份共享 Mesh。每个可见卡包只使用一个带真实封面和生命周期颜色的轻量 Renderer，在 `2.4s` 内进行 `0.98` 到 `1.02` 呼吸缩放，跟随 `PackCover` 锚点，并裁剪到卡包 ScrollRect 视口。点击后使用可复用六层开包器替换空闲 Renderer，在 `0.3s` 内放大到原始 `600 x 680` 设计尺寸，再播放开包动画并进入 GameScene。编辑器配置的 `PackSize` Image 继续作为位置、Sprite、颜色和前景视觉依据。
 
-### Development Persistence Policy
+### 开发期持久化策略
 
-- Local persistence has no backward-compatibility guarantee during active development. Change data structures and SQLite field types directly to the current required shape; do not add migrations or legacy fallbacks unless explicitly requested.
-- After an incompatible SQLite schema change, close Unity and delete `%USERPROFILE%/AppData/LocalLow/MainTown/Puffies/LocalData.db` before testing.
-- Also delete `LocalData.json` when JSON task progress or behavior spanning both persistence stores changed. The assistant must identify the required files after each incompatible change and must not delete them without an explicit request.
+- 开发阶段的本地持久化不保证向后兼容。数据结构和 SQLite 字段类型可直接改为当前需求，不增加迁移或旧数据回退，除非用户明确要求。
+- SQLite 表结构发生不兼容修改后，关闭 Unity，并在测试前删除 `%USERPROFILE%/AppData/LocalLow/MainTown/Puffies/LocalData.db`。
+- JSON 任务进度或跨两个存储的行为发生变化时，同时删除 `LocalData.json`。每次不兼容修改后，助手必须指出需要删除的文件；未经明确要求不得自动删除。
 
 ---
 
-## 6. Adding Content
+## 6. 添加内容
 
-### Card Packs
+### 卡包
 
-`MainScene.RefreshPackageList` dynamically creates slots for unlocked packs from the database. Do not manually duplicate `Package002`, `Package003`, etc. in the scene.
+`MainScene.RefreshPackageList` 根据数据库动态创建已解锁卡包槽位。不要在场景中手工复制 `Package002`、`Package003` 等对象。
 
-Shared size icons are `UI/PackImages/PackSize_1.png` through `PackSize_7.png`, matching the numeric values of `CardPackSize` (`XS=1` through `XXXL=7`). `PackItem` must contain Image children named `PackCover` and `PackSize`; MainScene assigns both Sprites at runtime and scales the size icon with the authored cover dimensions.
+共享尺寸图标为 `UI/PackImages/PackSize_1.png` 到 `PackSize_7.png`，对应 `CardPackSize` 数值（`XS=1` 到 `XXXL=7`）。`PackItem` 必须包含名为 `PackCover` 和 `PackSize` 的 Image 子节点；MainScene 在运行时设置两者 Sprite，并根据编辑器封面尺寸缩放尺寸图标。
 
-`PackItem/PackShadow` is a sibling Image rendered behind `PackCover`. MainScene samples the readable runtime cover texture, downsizes its alpha to the `240 x 272` display size, and applies three separable box-blur passes with horizontal radius 2 and vertical radius 5. It creates a cached `256 x 344` shadow Sprite at offset `(0,-20)`, so the directional projection appears below rather than to the right. Horizontal/vertical padding is `8/36` pixels. Shadow color is `#1f292d` with maximum alpha `0.52`. Generated shadow Sprites and textures are released when MainScene is destroyed. Keep `PackSize` above both images.
+`PackItem/PackShadow` 是渲染在 `PackCover` 后方的同级 Image。MainScene 读取运行时可读封面贴图，将 Alpha 缩小到 `240 x 272` 显示尺寸，并执行三次可分离 Box Blur，水平半径 2、垂直半径 5。缓存阴影 Sprite 尺寸为 `256 x 344`、偏移为 `(0,-20)`，使投影只向下而不是向右。水平/垂直内边距为 `8/36` 像素，阴影颜色 `#1f292d`，最大 Alpha `0.52`。MainScene 销毁时释放生成的阴影 Sprite 和 Texture。`PackSize` 保持在两张图片上方。
 
-1. Keep exactly one scene template object: `Package001`.
-2. Add a row to `CardPacks.csv` (`PackId`, `PackSize`, `ChapterId`).
-3. Add the corresponding cover under `UI/PackImages/` using `PackIconNNN.png` names. `GameDefine.FormatPackImagePath` maps pack id `1` to `UI/PackImages/PackIcon001.png`.
-4. Write lifecycle state through `CardPackDataUtility` into SQLite table `CardPacks`.
-5. Do not create per-pack 3D assets. The runtime reuses the shared animation/controller/material and all six `CardPackOpening` skinned layers; the selected `PackIconNNN.png` becomes the cover on every animated layer. If the shared assets are missing, MainScene uses the 2D fallback.
+1. 场景中只保留一个模板对象：`Package001`。
+2. 在 `CardPacks.csv` 增加一行（`PackId`、`PackSize`、`ChapterId`）。
+3. 在 `UI/PackImages/` 下按 `PackIconNNN.png` 命名增加对应封面。`GameDefine.FormatPackImagePath` 将 PackId `1` 映射到 `UI/PackImages/PackIcon001.png`。
+4. 通过 `CardPackDataUtility` 将生命周期写入 SQLite `CardPacks` 表。
+5. 不创建每个卡包专属的 3D 资源。运行时复用共享动画、Controller、材质和全部六个 `CardPackOpening` 蒙皮层；选中的 `PackIconNNN.png` 成为每个动画层的封面。共享资源缺失时，MainScene 使用 2D 回退。
 
-### Puzzles
+### 拼图
 
-1. Create a prefab named `CardBagNNN` under `Assets/Resources/CardBagPrefabs/` where `NNN` matches `PackId`.
-2. Put one child object named `GameBoard` inside the prefab.
-3. Add grouped piece objects under `GameBoard` as `Image` objects using `Piece11`, `Piece12`, ... for group 1; `Piece21`, `Piece22`, ... for group 2; `Piece31`, ... for group 3. The group number is `PieceNN / 10`, sorted ascending.
-4. Store source textures under `Assets/UI/CardBags/CardBagNNN/` using grouped names such as `Pieces11`...`Pieces14` and `Pieces21`...`Pieces25`.
-5. Do not use `PieceGroup` parent nodes; grouping comes only from the number after `Piece`.
-6. Do not create Package JSON; runtime data comes from the loaded prefab's Images.
-7. Run **Puffies -> Puzzles -> Bake Outline Masks** after adding or changing a CardBag. The baker merges Piece Alpha in GameBoard coordinates, closes narrow gaps, and writes `Resources/Generated/PuzzleOutlines/CardBagNNN/GroupNN.png`. Group 1 contains only its final-puzzle exterior. Every later image contains only the current group's final-puzzle exterior and its contact edges with lower-number completed groups.
-8. `GameScene` displays the baked `#3f423e` current-group Sprite as a non-interactive `GameBoard` child. The mask excludes completed groups' unrelated boundaries, current-to-future-group edges, and individual Piece seams inside the same group. Do not author outline objects in prefabs.
-9. If a generated Sprite is missing, runtime logs an authoring warning and continues gameplay without an outline. Re-run the baker before delivery.
-- Draggable pieces are positioned once when a group is created. After a Piece is placed, every remaining tray Piece retains its established X and Y position; gaps are not compacted until the next group is created.
+1. 在 `Assets/Resources/CardBagPrefabs/` 下创建 `CardBagNNN` Prefab，`NNN` 与 `PackId` 一致。
+2. Prefab 内放置一个名为 `GameBoard` 的子对象。
+3. 在 `GameBoard` 下用 Image 对象添加分组碎片：第 1 组使用 `Piece11`、`Piece12`...；第 2 组使用 `Piece21`、`Piece22`...；第 3 组使用 `Piece31`...。分组号为 `PieceNN / 10`，按升序处理。
+4. 源贴图放在 `Assets/UI/CardBags/CardBagNNN/`，按分组命名，例如 `Pieces11`...`Pieces14` 和 `Pieces21`...`Pieces25`。
+5. 不使用 `PieceGroup` 父节点；分组只读取 `Piece` 后面的数字。
+6. 不创建 Package JSON；运行时数据来自已加载 Prefab 的 Image。
+7. 新增或修改 CardBag 后，执行 **Puffies -> Puzzles -> Bake Outline Masks**。烘焙器在 GameBoard 坐标中合并 Piece Alpha、闭合窄间隙，并写入 `Resources/Generated/PuzzleOutlines/CardBagNNN/GroupNN.png`。第 1 组只包含自身最终拼图外边界；后续每张图只包含当前组最终外边界及其与低编号已完成组的接触边。
+8. `GameScene` 将烘焙的 `#3f423e` 当前组 Sprite 作为不可交互的 `GameBoard` 子 Image 显示。蒙版排除已完成组的无关边界、当前组与未来组的边界以及同组各 Piece 之间的接缝。不要在 Prefab 中手工制作描边对象。
+9. 缺少生成 Sprite 时，运行时记录制作警告，并在无描边情况下继续游戏。交付前重新运行烘焙器。
+- 创建一组碎片时只定位一次。成功放置 Piece 后，托盘中其他 Piece 保持既定 X、Y 位置；空位直到下一组创建时才重新布局。
 
-### Puzzle Outline Rendering
+### 拼图描边渲染
 
-- Puzzle outlines are generated offline by `PuzzleOutlineBakerEditor` and rendered with Unity UGUI `Image`.
-- The project has no runtime outline Shader, Renderer Feature, or third-party outline package.
-- Keep baked-outline loading isolated from puzzle interaction; a missing outline must not prevent draggable pieces from being created.
+- 拼图描边由 `PuzzleOutlineBakerEditor` 离线生成，并通过 Unity UGUI `Image` 渲染。
+- 项目没有运行时描边 Shader、Renderer Feature 或第三方描边包。
+- 描边加载与拼图交互保持隔离；缺少描边不得阻止可拖拽碎片创建。
 
 ### CardFx
 
-Prefabs and dependencies go under `Resources/Effects/CardFx/`, for example `CardObtain_001` and `CardTrail_001`.
+Prefab 和依赖放在 `Resources/Effects/CardFx/`，例如 `CardObtain_001` 和 `CardTrail_001`。
 
 ---
 
-## 7. Naming
+## 7. 命名
 
-| Type | Name | Path |
+| 类型 | 名称 | 路径 |
 |------|------|------|
-| Card pack animated layers | `CardPackOpening`, `CardPackOpening_002`...`006` | `Resources/Effects/CardPack/` |
-| Generic card pack controller | `CardPackOpening.controller` | Same |
-| Generic pack animation | `CardPackOpeningAnimation.FBX` | Same |
-| Card pack animated models | `CardPackOpeningModel.FBX`, `CardPackOpeningModel_002`...`006` | Same |
-| Static card pack references | `CardPackStaticModel.FBX`, `CardPackStatic_001`...`006` | Same |
-| Static card sample | `CardPackPlane` | Same |
-| Default card pack cover | `CardPackDefaultCover.png` | Same |
-| Material | `CardPackOpeningMaterial` | Same |
-| URP shader | `CardPackOpening.shader` | Same |
-| Front normal | `CardPackFrontNormal.png` | Same |
-| HDR reflection | `CardPackReflection.hdr` | Same |
-| Lighting ramp | `CardPackLightingRamp.png` | Same |
-| Occlusion map | `CardPackOcclusion.png` | Same |
-| Back texture | `CardPackBack.png` | Same |
-| Wave clip mask | `CardPackClipMask.png` | Same |
-| Plane group | `PlaneGroup_001` | `Resources/Effects/PlaneGroup/` |
-| New card obtain | `CardObtain_001` | `Resources/Effects/CardFx/` |
-| Card trail | `CardTrail_001` | Same |
-| Card-pack dismantle effect | `CardPackDismantle_001` | `Resources/Effects/CardPackDismantle/` |
+| 卡包动画层 | `CardPackOpening`、`CardPackOpening_002`...`006` | `Resources/Effects/CardPack/` |
+| 通用卡包 Controller | `CardPackOpening.controller` | 同上 |
+| 通用卡包动画 | `CardPackOpeningAnimation.FBX` | 同上 |
+| 卡包动画模型 | `CardPackOpeningModel.FBX`、`CardPackOpeningModel_002`...`006` | 同上 |
+| 静态卡包参考 | `CardPackStaticModel.FBX`、`CardPackStatic_001`...`006` | 同上 |
+| 静态卡包示例 | `CardPackPlane` | 同上 |
+| 默认卡包封面 | `CardPackDefaultCover.png` | 同上 |
+| 材质 | `CardPackOpeningMaterial` | 同上 |
+| URP Shader | `CardPackOpening.shader` | 同上 |
+| 正面法线 | `CardPackFrontNormal.png` | 同上 |
+| HDR 反射 | `CardPackReflection.hdr` | 同上 |
+| 光照渐变 | `CardPackLightingRamp.png` | 同上 |
+| AO 贴图 | `CardPackOcclusion.png` | 同上 |
+| 背面贴图 | `CardPackBack.png` | 同上 |
+| 波浪裁切蒙版 | `CardPackClipMask.png` | 同上 |
+| Plane 组 | `PlaneGroup_001` | `Resources/Effects/PlaneGroup/` |
+| 新卡包获得 | `CardObtain_001` | `Resources/Effects/CardFx/` |
+| 卡包轨迹 | `CardTrail_001` | 同上 |
+| 卡包拆包特效 | `CardPackDismantle_001` | `Resources/Effects/CardPackDismantle/` |
 
 ---
 
-## 8. Build
+## 8. 构建
 
-Before building, run **Puffies -> Sync Build Resources**. It copies `PackImages`, `BasicUI`, `AchieveScene`, and `RankScene` to `StreamingAssets/UI`; CardBag source textures stay out because their Sprite references are included through gameplay prefabs.
+构建前执行 **Puffies -> Sync Build Resources**。该命令将 `PackImages`、`BasicUI`、`AchieveScene` 和 `RankScene` 复制到 `StreamingAssets/UI`；CardBag 源贴图通过游戏 Prefab 的 Sprite 引用进入构建，因此不复制。
 
-Suggested Build Settings order: LoadingScene -> MainScene -> GameScene -> effect -> RankScene -> AchieveScene.
+建议 Build Settings 顺序：LoadingScene -> MainScene -> GameScene -> effect -> RankScene -> AchieveScene。
 
-### Development Workstation
+### 开发工作站
 
-- Required command-line SDK: .NET 8 SDK. A specific patch version is not pinned.
-- Required VS Code extensions: C# (`ms-dotnettools.csharp`), C# Dev Kit (`ms-dotnettools.csdevkit`), and Microsoft Unity (`visualstudiotoolsforunity.vstuc`).
-- `.vscode/extensions.json` provides editor recommendations; extension binaries and the .NET SDK are installed separately on each device.
-- On a new device, Codex should check these prerequisites and request approval to install missing items before investigating Unity C# project-load errors.
-- `Assembly-CSharp*.csproj` files are generated by Unity and must not be manually converted or edited for VS Code compatibility.
-
----
-
-## 9. Editor Menu Reference
-
-| Menu | Purpose |
-|------|---------|
-| Puffies -> Sync Build Resources | Copy runtime disk-loaded UI folders to StreamingAssets |
-| Puffies -> Canvas -> Apply Design Resolution | Apply Canvas resolution |
-| Puffies -> Fonts -> Setup Default Chinese Font | Chinese font setup |
-| Puffies -> Preview CardFx Effects | Open effect scene |
-| Puffies -> Puzzles -> Bake Outline Masks | Rebuild per-group exterior outlines for every CardBag prefab |
+- 必需命令行 SDK：.NET 8 SDK，不固定具体补丁版本。
+- 必需 VS Code 扩展：C#（`ms-dotnettools.csharp`）、C# Dev Kit（`ms-dotnettools.csdevkit`）和 Microsoft Unity（`visualstudiotoolsforunity.vstuc`）。
+- `.vscode/extensions.json` 提供编辑器推荐；扩展程序和 .NET SDK 需要在每台设备上单独安装。
+- 在新设备上，Codex 应先检查这些前置条件；缺失时请求安装授权，然后再排查 Unity C# 项目加载错误。
+- `Assembly-CSharp*.csproj` 由 Unity 生成，不得为了兼容 VS Code 手工转换或修改。
 
 ---
 
-## 10. Deprecated
+## 9. 编辑器菜单参考
 
-- `Assets/ArtRes/`, `Assets/Configs/`
-- `Resources/Config/Package001.json` and JSON puzzle config flow
-- One-off migration scripts under `Tools/*.ps1`
+| 菜单 | 用途 |
+|------|------|
+| Puffies -> Sync Build Resources | 将运行时磁盘加载的 UI 目录复制到 StreamingAssets |
+| Puffies -> Canvas -> Apply Design Resolution | 应用 Canvas 设计分辨率 |
+| Puffies -> Fonts -> Setup Default Chinese Font | 设置中文字体 |
+| Puffies -> Preview CardFx Effects | 打开特效场景 |
+| Puffies -> Puzzles -> Bake Outline Masks | 为每个 CardBag Prefab 重建各分组外边界描边 |
+
+---
+
+## 10. 已弃用
+
+- `Assets/ArtRes/`、`Assets/Configs/`
+- `Resources/Config/Package001.json` 及 JSON 拼图配置流程
+- `Tools/*.ps1` 下的一次性迁移脚本

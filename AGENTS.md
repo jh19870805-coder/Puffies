@@ -1,32 +1,32 @@
-# Project Instructions
+﻿# 项目协作说明
 
-This repository is maintained with Codex-first project notes.
+本仓库使用 Codex 优先的项目记录方式维护。
 
-Before changing code, Unity scenes, assets, configuration, or documented behavior:
+修改代码、Unity 场景、资源、配置或已记录行为前：
 
-1. Read `Documents/WORKFLOW.md`.
-2. Read `Documents/CURRENT_TASK.md`.
-3. Read `Documents/PROJECT_CONTEXT.md` for stable project facts relevant to the task.
-4. Follow the user's latest instruction when it differs from the recorded next action.
+1. 阅读 `Documents/WORKFLOW.md`。
+2. 阅读 `Documents/CURRENT_TASK.md`。
+3. 阅读 `Documents/PROJECT_CONTEXT.md` 中与任务相关的稳定项目事实。
+4. 记录的下一步与用户最新指令不一致时，以用户最新指令为准。
 
-After behavior-changing work, update `Documents/CURRENT_TASK.md` in the same turn with what changed, how it was checked, and the next useful action. If a stable project fact changes, update `Documents/PROJECT_CONTEXT.md`.
+完成影响行为的修改后，在同一轮更新 `Documents/CURRENT_TASK.md`，记录修改内容、验证方式和下一项有效行动。稳定项目事实发生变化时，同时更新 `Documents/PROJECT_CONTEXT.md`。
 
-For read-only investigation, simple questions, or workspace housekeeping, do not update task notes unless the user asks.
+对于只读调查、简单问题或工作区整理，除非用户要求，否则不要更新任务记录。
 
-## New Device Bootstrap
+## 新设备环境准备
 
-When this repository is opened on a different device, proactively verify the development environment before diagnosing C# project-load errors:
+在另一台设备首次打开本仓库时，排查 C# 项目加载错误前应主动确认开发环境：
 
-1. Check for a .NET 8 SDK with `dotnet --list-sdks`.
-2. Check for the VS Code extensions `ms-dotnettools.csharp`, `ms-dotnettools.csdevkit`, and `visualstudiotoolsforunity.vstuc`.
-3. If an item is missing, ask for the required system/network approval and install it for the user. Prefer `winget install --id Microsoft.DotNet.SDK.8 --exact` for the SDK when WinGet is available, and `code --install-extension <extension-id>` for VS Code extensions.
-4. Reload the VS Code window after installing or changing C# tooling.
+1. 使用 `dotnet --list-sdks` 检查是否安装 .NET 8 SDK。
+2. 检查 VS Code 扩展 `ms-dotnettools.csharp`、`ms-dotnettools.csdevkit` 和 `visualstudiotoolsforunity.vstuc`。
+3. 缺少任何项目时，请求必要的系统或网络授权并为用户安装。WinGet 可用时，SDK 优先使用 `winget install --id Microsoft.DotNet.SDK.8 --exact`；VS Code 扩展使用 `code --install-extension <extension-id>`。
+4. 安装或调整 C# 工具后，重新加载 VS Code 窗口。
 
-Do not edit Unity-generated `Assembly-CSharp*.csproj` files to work around editor project-load errors. Unity 2022.3 generates legacy project files that require the Microsoft Unity VS Code extension or the existing `dotnet.preferCSharpExtension` compatibility setting.
+不要为了绕过编辑器项目加载错误而修改 Unity 生成的 `Assembly-CSharp*.csproj`。Unity 2022.3 生成的是旧格式项目文件，需要 Microsoft Unity VS Code 扩展，或使用现有的 `dotnet.preferCSharpExtension` 兼容设置。
 
-## Code Layout Preference
+## 代码目录偏好
 
-- Prefer a shallow, flat source layout with a small number of meaningful folders.
-- Do not introduce deep directory hierarchies or many single-purpose folders unless the user explicitly requests them.
-- Within one flat folder, related pure C# types may share a file when they belong to the same domain and the resulting file remains understandable.
-- Preserve separate files for large or independently owned modules; reducing file count must not create a new catch-all utility file.
+- 源码目录优先保持浅层、扁平，只使用少量有明确含义的文件夹。
+- 除非用户明确要求，不要引入深层目录或大量单一用途文件夹。
+- 在同一个扁平目录内，属于同一领域的相关纯 C# 类型可以共用一个文件，但文件仍须清晰易懂。
+- 大型模块或所有权独立的模块继续使用独立文件；减少文件数量不能产生新的万能工具文件。

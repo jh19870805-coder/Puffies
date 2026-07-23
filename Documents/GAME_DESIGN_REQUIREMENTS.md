@@ -1,26 +1,26 @@
-# Game Design Requirements
+﻿# 游戏设计需求
 
-- Purpose: Long-term source of truth for confirmed game-design requirements
-- Status: In Progress
-- Last Updated: 2026-07-20
+- 用途：已确认游戏设计需求的长期唯一信息源
+- 状态：进行中
+- 最后更新：2026-07-20
 
-This document records confirmed design rules as provided by the game designer. Items marked `Confirmed` are implementation requirements. Items marked `Pending` must not be inferred during implementation.
+本文档记录游戏设计方提供并确认的设计规则。标记为“已确认”的内容属于实现要求；标记为“待确认”的内容不得在实现过程中自行推断。
 
 ---
 
-## 1. Card Pack Scoring
+## 1. 卡包积分
 
-### 1.1 Base Score By Card Pack Size
+### 1.1 按卡包尺寸确定基础分
 
-Status: `Confirmed`
+状态：`已确认`
 
-Each card pack size has one base score.
+每种卡包尺寸对应一个基础分。
 
-- A card pack's size is configured by `PackSize` in `Resources/Configs/CardPacks.csv`.
-- `PackSize` uses `CardPackSize` numeric values `XS=1` through `XXXL=7`.
-- The base-score mapping is owned by `GameScoreUtility`.
+- 卡包尺寸由 `Resources/Configs/CardPacks.csv` 中的 `PackSize` 配置。
+- `PackSize` 使用 `CardPackSize` 数值，范围为 `XS=1` 到 `XXXL=7`。
+- 基础分映射由 `GameScoreUtility` 管理。
 
-| Card Pack Size | Base Score |
+| 卡包尺寸 | 基础分 |
 |---|---:|
 | XS | 60 |
 | S | 80 |
@@ -30,22 +30,22 @@ Each card pack size has one base score.
 | 2XL | 160 |
 | 3XL | 200 |
 
-### 1.2 Score Calculation Timing
+### 1.2 积分计算时机
 
-Status: `Confirmed`
+状态：`已确认`
 
-- Calculate the score during game settlement after the current puzzle game is completed.
-- The score calculation belongs to the GameScene settlement flow.
+- 当前拼图完成后，在游戏结算期间计算积分。
+- 积分计算属于 GameScene 结算流程。
 
-### 1.3 No-Hint Bonus
+### 1.3 未使用提示加成
 
-Status: `Confirmed`
+状态：`已确认`
 
-- Track whether the in-game hint feature was used during the current puzzle game.
-- If the player completes the game without using a hint, add 5% of the card pack's base score during settlement.
-- If at least one hint was used, this 5% bonus is not applied.
+- 记录玩家在当前拼图游戏中是否使用过提示功能。
+- 玩家未使用提示完成游戏时，结算增加卡包基础分的 5%。
+- 只要使用过至少一次提示，就不应用该 5% 加成。
 
-| Card Pack Size | Base Score | Score With No-Hint Bonus |
+| 卡包尺寸 | 基础分 | 未使用提示时的分数 |
 |---|---:|---:|
 | XS | 60 | 63 |
 | S | 80 | 84 |
@@ -55,54 +55,54 @@ Status: `Confirmed`
 | 2XL | 160 | 168 |
 | 3XL | 200 | 210 |
 
-### 1.4 Outline-Disabled Bonus
+### 1.4 关闭关卡描边加成
 
-Status: `Confirmed`
+状态：`已确认`
 
-- Track whether the level-outline feature was enabled during the current puzzle game.
-- If the player completes the game without enabling the level outline, apply an additional 2% score bonus during settlement.
-- If the level outline was enabled during the current game, this 2% bonus is not applied.
+- 记录当前拼图游戏中是否启用过关卡描边。
+- 玩家未启用关卡描边完成游戏时，结算额外增加 2%。
+- 当前游戏中启用过关卡描边时，不应用该 2% 加成。
 
-### 1.5 Sticker-Outline-Disabled Bonus
+### 1.5 关闭贴纸描边加成
 
-Status: `Confirmed`
+状态：`已确认`
 
-- Track whether the sticker-outline feature was enabled during the current puzzle game.
-- If the player completes the game without enabling the sticker outline, apply an additional 5% score bonus during settlement.
-- If the sticker outline was enabled during the current game, this 5% bonus is not applied.
-- This rule is independent from the level-outline 2% bonus.
+- 记录当前拼图游戏中是否启用过贴纸描边。
+- 玩家未启用贴纸描边完成游戏时，结算额外增加 5%。
+- 当前游戏中启用过贴纸描边时，不应用该 5% 加成。
+- 此规则与关闭关卡描边的 2% 加成相互独立。
 
-### 1.6 Completion-Time Bonus
+### 1.6 完成时间加成
 
-Status: `Confirmed`
+状态：`已确认`
 
-- Record the elapsed time for the current puzzle game and evaluate a time bonus during settlement.
-- Start recording time when the first puzzle Piece is successfully placed. Failed placement attempts do not start the timer.
-- Stop recording time when the completed puzzle begins the RewardPanel settlement flow.
-- The three time thresholds are configurable and will be tuned later.
-- Initial threshold values:
+- 记录当前拼图游戏的耗时，并在结算时计算时间加成。
+- 第一个拼图 Piece 成功放置时开始计时；放置失败不启动计时。
+- 完成拼图并开始 RewardPanel 结算流程时停止计时。
+- 三个时间阈值可配置，后续继续调优。
+- 初始阈值：
 
-| Parameter | Initial Value |
+| 参数 | 初始值 |
 |---|---:|
-| A | 15 seconds |
-| B | 30 seconds |
-| C | 60 seconds |
+| A | 15 秒 |
+| B | 30 秒 |
+| C | 60 秒 |
 
-| Completion Time | Time Bonus |
+| 完成时间 | 时间加成 |
 |---|---:|
-| Time `<= A` | +3% |
-| Time `> A` and `<= B` | +2% |
-| Time `> B` and `<= C` | +1% |
-| Time `> C` | No time bonus |
+| 时间 `<= A` | +3% |
+| 时间 `> A` 且 `<= B` | +2% |
+| 时间 `> B` 且 `<= C` | +1% |
+| 时间 `> C` | 无时间加成 |
 
-### 1.7 Final Score Formula
+### 1.7 最终积分公式
 
-Status: `Confirmed`
+状态：`已确认`
 
-- The card pack size determines `BaseScore`.
-- Add together every percentage bonus for which the current game qualifies.
-- Multiply `BaseScore` by one plus the total bonus percentage.
-- Round the resulting score upward to the next integer.
+- 卡包尺寸决定 `BaseScore`。
+- 将当前游戏符合条件的所有百分比加成相加。
+- `BaseScore` 乘以 1 加总加成比例。
+- 结果向上取整到下一个整数。
 
 ```text
 TotalBonusRate = NoHintBonus
@@ -113,228 +113,228 @@ TotalBonusRate = NoHintBonus
 FinalScore = Ceil(BaseScore * (1 + TotalBonusRate))
 ```
 
-Example: an M card pack has `BaseScore=100`. If it qualifies for no hint `+5%`, level outline disabled `+2%`, sticker outline disabled `+5%`, and the fastest time tier `+3%`, then:
+示例：M 卡包的 `BaseScore=100`。如果同时满足未使用提示 `+5%`、关闭关卡描边 `+2%`、关闭贴纸描边 `+5%` 和最快时间档 `+3%`：
 
 ```text
 TotalBonusRate = 5% + 2% + 5% + 3% = 15%
 FinalScore = Ceil(100 * 1.15) = 115
 ```
 
-### 1.8 Settlement Score Presentation
+### 1.8 结算积分表现
 
-Status: `Confirmed`
+状态：`已确认`
 
-The settlement score must be presented as a sequence instead of appearing immediately at its final value:
+结算分数必须分阶段展示，不能直接显示最终值：
 
-1. Show the card pack's base score first.
-2. Reveal one qualified bonus.
-3. Animate the displayed score rolling upward to that step's cumulative score.
-4. Repeat bonus reveal and score rolling for every qualified bonus.
-5. Finish the final roll at `FinalScore`.
+1. 先显示卡包基础分。
+2. 展示一项符合条件的加成。
+3. 将显示分数动画滚动到该阶段的累计分数。
+4. 对每项符合条件的加成重复展示和分数滚动。
+5. 最后一次滚动停在 `FinalScore`。
 
-During every score-roll animation:
+每次分数滚动动画期间：
 
-- The progress bar and its progress value must refresh continuously.
-- The score displayed on the settlement page must roll at the same time.
-- Both displays must use the same animated score value and finish simultaneously.
-- Score calculation produces the base score, qualified bonus entries, cumulative step scores, and final score before presentation begins; UI code only presents this result.
+- 进度条和进度值必须持续刷新。
+- 结算页面显示的分数必须同时滚动。
+- 两处显示必须使用相同的动画分数值，并同时结束。
+- 播放表现前，积分计算应产出基础分、符合条件的加成项、累计阶段分数和最终分数；UI 代码只负责展示结果。
 
-### 1.9 Pending Scoring Details
+### 1.9 待确认的积分细节
 
-Status: `Pending`
+状态：`待确认`
 
-- The exact point inside settlement at which the score is persisted, displayed, and applied to task progress.
-- The order in which qualified bonuses are revealed during settlement.
-- Duration, easing, and minimum visual step for each score-roll animation.
-- Whether intermediate cumulative step scores are rounded upward or only `FinalScore` is rounded upward.
-- Whether switching the outline on and then off during the same game disqualifies the bonus; the current wording is recorded as "never enabled during the current game."
-- Whether switching the sticker outline on and then off during the same game disqualifies the bonus; the current wording is recorded as "never enabled during the current game."
-- What exact hint-button action counts as using a hint if the hint cannot be completed or displayed.
-- Whether future score modifiers or caps apply in addition to the confirmed bonuses.
+- 结算流程中积分持久化、显示和应用到任务进度的准确时机。
+- 符合条件的加成项展示顺序。
+- 每次分数滚动的时长、缓动和最小视觉步长。
+- 中间累计分数是否也向上取整，还是只对 `FinalScore` 取整。
+- 同一局先打开再关闭关卡描边是否失去加成资格；当前文字记录为“当前游戏中从未启用”。
+- 同一局先打开再关闭贴纸描边是否失去加成资格；当前文字记录为“当前游戏中从未启用”。
+- 提示无法完成或显示时，提示按钮的哪一步操作算作使用提示。
+- 未来是否在已确认加成之外增加其他积分修正或上限。
 
 ---
 
-## 2. Card Pack Lifecycle
+## 2. 卡包生命周期
 
-Status: `Confirmed`
+状态：`已确认`
 
-Every card pack has one persisted lifecycle state:
+每个卡包有一个持久化生命周期状态：
 
-| State | Meaning |
+| 状态 | 含义 |
 |---|---|
-| `Locked` | The card pack has not been granted and is not displayed in MainScene. |
-| `Unlocked` | The card pack has been granted but the first puzzle group has not been completed. Opening the pack and leaving before completing the first group keeps this state. |
-| `InProgress` | The first puzzle group has been completed, but at least one later group remains. |
-| `Completed` | Every puzzle group in the card pack has been completed. |
+| `Locked` | 卡包尚未发放，不显示在 MainScene。 |
+| `Unlocked` | 卡包已发放，但尚未完成第一组拼图。开包后在第一组完成前退出，仍保持此状态。 |
+| `InProgress` | 第一组拼图已完成，但后续至少还有一组未完成。 |
+| `Completed` | 卡包中的所有拼图分组均已完成。 |
 
-Lifecycle transitions:
+生命周期转换：
 
-1. Granting a card pack changes `Locked` to `Unlocked`.
-2. Entering GameScene or opening a pack does not by itself change `Unlocked`.
-3. Completing the first group of a multi-group card pack changes `Unlocked` to `InProgress`.
-4. Completing the final group changes the state to `Completed`.
-5. `InProgress` and `Completed` do not downgrade during normal play. A future explicit replay-reset flow may define a separate reset transition.
+1. 发放卡包时，`Locked` 变为 `Unlocked`。
+2. 仅进入 GameScene 或打开卡包不会改变 `Unlocked`。
+3. 完成多组卡包的第一组后，`Unlocked` 变为 `InProgress`。
+4. 完成最后一组后，状态变为 `Completed`。
+5. 正常游戏中，`InProgress` 和 `Completed` 不降级。未来明确的重玩重置流程可以定义独立的重置转换。
 
-MainScene presentation and ordering must use this lifecycle state.
+MainScene 的展示和排序必须使用该生命周期状态。
 
-### MainScene Card Pack Ordering
+### MainScene 卡包排序
 
-Status: `Confirmed`
+状态：`已确认`
 
-The first release does not include daily-challenge packs. MainScene uses the following order:
+首个版本不包含每日挑战卡包。MainScene 使用以下顺序：
 
-1. Card packs granted since the previous MainScene list presentation. These packs are shown first once; when several are granted together, the latest grant appears first.
-2. `InProgress` packs.
-3. `Unlocked` packs, ordered by unlock time from earliest to latest.
-4. `Completed` packs, ordered by first-completion time from earliest to latest.
+1. 自上一次 MainScene 列表展示后新发放的卡包。这些卡包只优先展示一次；同时发放多个时，最新发放的在前。
+2. `InProgress` 卡包。
+3. `Unlocked` 卡包，按解锁时间从早到晚。
+4. `Completed` 卡包，按首次完成时间从早到晚。
 
-After MainScene consumes the temporary newly-granted priority, those packs use their normal lifecycle priority. Restarting the application also clears this temporary priority. Equal or invalid timestamps use ascending PackId as the deterministic tie-breaker. A future daily-challenge implementation will insert its packs ahead of these priorities.
-
----
-
-## 3. Card Pack Acquisition
-
-Status: `Confirmed` except for the parameters listed as pending.
-
-New card packs have two acquisition sources:
-
-1. Completing a task always creates one guaranteed new-card-pack entitlement.
-2. First-time completion of a card pack performs one stage-gated grant attempt.
-
-Replay rules:
-
-- Replaying a card pack that was already `Completed` does not perform the first-completion grant attempt.
-- A replay can still complete a task. If it does, the task's guaranteed card pack reward is granted normally.
-- A first completion from `Unlocked` or `InProgress` to `Completed` is eligible for the stage-gated grant attempt.
-
-"New card pack" means a card pack that is currently `Locked`; these acquisition sources do not grant an already unlocked card pack.
-
-Both acquisition sources select from the currently active internal chapter's eligible `Locked` card-pack pool.
-
-Pending parameters:
-
-- Final selection and ordering rules for choosing from eligible `Locked` card packs.
-- Behavior when no eligible `Locked` card pack remains.
-- Whether playtest results justify reintroducing a probability inside any stage.
-
-Current playtest implementation:
-
-- Initial stage (`R >= 9`): a grant is allowed while `H <= 5`, producing at most `H=6`.
-- Mid-to-late transition (`R = 8`): one grant is allowed while `H <= 3`, producing at most `H=4`.
-- Remaining mid-to-late stage (`R = 7..3`): a grant is allowed only while `H <= 2`, producing at most `H=3`.
-- Final stage (`R = 2..1`): a grant is allowed while `H <= 1`, producing at most `H=2`.
-- A blocked first-completion grant is skipped. A blocked task reward is persisted as pending and retried after a later first completion or task completion; it is never discarded.
-- Pending task rewards are identified by TaskId so a failed task-advance save cannot enqueue the same task reward twice.
-- A newly queued task reward is not delivered until task advancement has persisted successfully; if advancement fails, the entitlement remains queued for retry.
-- Pending task rewards are attempted before the current first-completion grant.
-- Task and first-completion sources may grant two different packs in one settlement when both pass the current stage gate.
-- Locked candidates are selected by ascending `Index` inside the active chapter. A task's configured `RewardId` is preferred only when it is still locked and belongs to that chapter.
-- RewardPanel keeps the authored default `ImgBag` icon instead of replacing it with a granted pack cover. When `BtnFinish` is clicked, all packs granted by the settlement fly together from `ImgBag` into a centered row, pause, survive the MainScene load, and then fly to their corresponding card-pack list slots.
+MainScene 消费新发卡包的临时优先级后，它们恢复为正常生命周期优先级。重启应用也会清除此临时优先级。时间戳相同或无效时，按 PackId 升序作为确定性并列规则。未来每日挑战实现会将相应卡包插入到这些优先级之前。
 
 ---
 
-## 4. Internal Chapter Model
+## 3. 卡包获取
 
-Status: `Confirmed` except for the exact per-chapter allocation and transition parameters.
+状态：除明确列出的待确认参数外，其余均为 `已确认`。
 
-- The game has 8 internal chapters for card-pack data organization and acquisition control.
-- The full game plans approximately 150 card packs in total.
-- Each internal chapter contains approximately 18 card packs; the mathematical average is 18.75 packs per chapter.
-- Chapters are not exposed to the player. MainScene does not display chapter names, chapter numbers, chapter selection, or chapter-transition messaging.
-- The active internal chapter limits the card-pack pool used by task rewards and first-completion grants.
+新卡包有两个获取来源：
 
-Chapter-stage counters:
+1. 完成任务必定创建一条新卡包权益。
+2. 首次完成一个卡包时，执行一次受阶段门槛控制的发包尝试。
 
-- `R` is the number of card packs in the active chapter that have not been granted and remain `Locked`.
-- Held playable pack count includes `Unlocked` and `InProgress` packs, and excludes `Completed` packs.
-- A standard 18-pack chapter starts at `R=17` after its initial pack has been granted. A larger chapter's extra `R` values belong to the initial stage.
+重玩规则：
 
-| Chapter Stage | `R` Range | Held Playable Pack Target |
+- 重玩已经 `Completed` 的卡包不执行首次完成发包尝试。
+- 重玩仍可完成任务；完成任务时正常发放任务必得卡包奖励。
+- 从 `Unlocked` 或 `InProgress` 首次转换为 `Completed` 时，具备阶段门槛发包资格。
+
+“新卡包”指当前状态为 `Locked` 的卡包；两个来源都不会重复发放已经解锁的卡包。
+
+两个来源均从当前内部章节中符合条件的 `Locked` 卡包池选择。
+
+待确认参数：
+
+- 从符合条件的 `Locked` 卡包中选择时的最终规则和顺序。
+- 没有符合条件的 `Locked` 卡包时的处理方式。
+- 根据试玩结果，是否需要在某个阶段重新引入概率判定。
+
+当前试玩实现：
+
+- 初期（`R >= 9`）：`H <= 5` 时允许发包，发放后最多 `H=6`。
+- 中期后段过渡点（`R = 8`）：`H <= 3` 时允许发一个包，发放后最多 `H=4`。
+- 中期后段剩余阶段（`R = 7..3`）：仅 `H <= 2` 时允许发包，发放后最多 `H=3`。
+- 末期（`R = 2..1`）：`H <= 1` 时允许发包，发放后最多 `H=2`。
+- 被拦截的首次完成发包直接跳过。被拦截的任务奖励持久化为待发，在之后首次完成或任务完成后重试，永不丢弃。
+- 待发任务奖励按 TaskId 标识，任务推进保存失败时不会重复加入同一任务奖励。
+- 新加入队列的任务奖励只有在任务推进持久化成功后才发放；推进失败时，权益保留在队列等待重试。
+- 待发任务奖励先于当前首次完成发包尝试。
+- 同一轮结算中，任务和首次完成来源都通过阶段门槛时，可以发放两个不同卡包。
+- 在当前章节内，锁定候选按 `Index` 升序选择。任务配置的 `RewardId` 只有在仍为锁定状态且属于该章节时才优先。
+- RewardPanel 保留编辑器设置的默认 `ImgBag` 图标，不替换为发放卡包封面。点击 `BtnFinish` 时，本次结算发放的全部卡包从 `ImgBag` 一起飞到居中行，停顿并跨越 MainScene 加载，再分别飞到对应卡包列表位置。
+
+---
+
+## 4. 内部章节模型
+
+状态：除每章准确分配和转换参数外，其余均为 `已确认`。
+
+- 游戏使用 8 个内部章节组织卡包数据并控制发放。
+- 完整游戏计划约 150 个卡包。
+- 每个内部章节约 18 个卡包，数学平均值为每章 18.75 个。
+- 章节不向玩家展示。MainScene 不显示章节名、章节编号、章节选择或章节切换提示。
+- 当前内部章节限制任务奖励和首次完成发包使用的卡包池。
+
+章节阶段计数：
+
+- `R` 是当前章节尚未发放、仍为 `Locked` 的卡包数量。
+- 持有可玩卡包数包括 `Unlocked` 和 `InProgress`，不包括 `Completed`。
+- 标准 18 包章节在初始卡包发放后从 `R=17` 开始。较大章节额外的 `R` 值属于初期。
+
+| 章节阶段 | `R` 范围 | 持有可玩卡包目标 |
 |---|---:|---|
-| Initial | 17 down to 9 | Grow toward approximately 5-6 packs. |
-| Mid-to-late | 8 down to 3 | Decline toward approximately 2-3 packs. |
-| Final | 2 down to 1 | Converge toward 1 pack before internal chapter advancement. |
+| 初期 | 17 降至 9 | 增长到约 5-6 个。 |
+| 中期后段 | 8 降至 3 | 逐步降到约 2-3 个。 |
+| 末期 | 2 降至 1 | 内部章节推进前收敛到 1 个。 |
 
-Pending parameters:
+待确认参数：
 
-- Exact card-pack count and PackId membership for each chapter.
-- Initial active chapter and persisted chapter-progress data.
-- Exact condition for advancing to the next internal chapter.
-- How special card packs count toward the 150 total and chapter allocations.
-- How task pacing and first-completion grants maintain the confirmed stage targets.
-
----
-
-## 5. Puzzle Group Presentation
-
-Status: `Confirmed`
-
-### Tray Stability
-
-- Pieces are laid out once when the current group is created.
-- After a Piece is placed successfully, every remaining Piece keeps its established X and Y position.
-- The empty position left by a placed Piece is not compacted until the next group is created.
-
-### Staged Outline Boundary
-
-- Group 1 displays only the part of Group 1's boundary that belongs to the final puzzle exterior.
-- Every later group displays its own final-puzzle exterior plus its contact edges with all lower-number groups that are already completed.
-- A current group must not display completed groups' unrelated boundaries.
-- A current group must not display contact edges with future groups.
-- Seams between individual Pieces inside the same group must not be displayed.
-- Runtime displays only the current group's baked outline image; previous stage images are not overlaid.
-- Outline baking is an Editor-time content step. Missing generated data must not block puzzle interaction.
+- 每章准确卡包数量及 PackId 成员。
+- 初始当前章节及持久化章节进度数据。
+- 推进到下一内部章节的准确条件。
+- 特殊卡包如何计入约 150 总量和章节分配。
+- 任务节奏和首次完成发包如何维持已确认的阶段目标。
 
 ---
 
-## 6. Card Pack Opening Presentation
+## 5. 拼图分组表现
 
-Status: `Confirmed`
+状态：`已确认`
 
-- Every card pack reuses the existing generic 3D opening model and Animator animation.
-- The animated model displays the selected PackId's real card-pack cover instead of a fixed authored cover.
-- The animated cover uses the complete original Sprite rectangle and must not center-crop it to the generic model's old default-cover aspect.
-- The generic effect itself must be authored for the common `600 x 680` (`15:17`) cover format; runtime code must not compensate for an incompatible effect aspect by cropping or non-uniform stretching.
-- The generic effect uses a URP Renderer2D-compatible two-sided material: the selected PackId cover is the front face, the authored card-pack back is the back face, and the authored clip mask keeps the wave-shaped top and bottom edge.
-- The runtime changes the front cover through per-renderer material properties and must not modify the shared material asset.
-- Runtime centers and uniformly fits the compatible generic model inside the clicked MainScene card-pack UI bounds before playback.
-- The closed 3D first frame must replace the clicked 2D cover without a visible position, size, aspect, crop, or blank-edge transition.
-- Adding a card pack does not require creating a matching `CardPackSkin_NNN` prefab or animation FBX.
-- If the generic model or animation cannot be loaded, MainScene keeps the existing 2D fallback interaction.
+### 托盘位置稳定
 
----
+- 创建当前组时只布局一次 Piece。
+- 成功放置一个 Piece 后，其他所有 Piece 保持既定 X、Y 位置。
+- 放置 Piece 留下的空位直到下一组创建时才重新布局。
 
-## 7. First Demo Scope
+### 分阶段描边边界
 
-Status: `Confirmed`
-
-- The first Demo does not include leaderboard functionality.
-- Do not connect ranking backend data or replace the current mock presentation during this Demo milestone.
-- The existing RankScene may remain as a placeholder and is not part of Demo acceptance.
+- 第 1 组只显示自身边界中属于最终拼图外边界的部分。
+- 后续每组显示自身最终拼图外边界，以及与所有已完成低编号组的接触边。
+- 当前组不得显示已完成组的无关边界。
+- 当前组不得显示与未来组的接触边。
+- 同组内各 Piece 之间的接缝不得显示。
+- 运行时只显示当前组的烘焙描边图，不叠加之前阶段的图片。
+- 描边烘焙属于编辑器内容制作步骤；缺少生成数据不得阻止拼图交互。
 
 ---
 
-## Change Log
+## 6. 卡包打开表现
 
-| Date | Change |
+状态：`已确认`
+
+- 每个卡包复用现有通用 3D 开包模型和 Animator 动画。
+- 动画模型显示选中 PackId 的真实卡包封面，不使用固定的原始封面。
+- 动态封面使用完整原始 Sprite 矩形，不得按旧通用模型默认封面比例居中裁切。
+- 通用特效本身必须按照统一 `600 x 680`（`15:17`）封面格式制作；运行时代码不得通过裁切或非等比拉伸补偿不兼容的特效宽高比。
+- 通用特效使用兼容 URP Renderer2D 的双面材质：选中 PackId 封面为正面，原始卡背为背面，原始裁切蒙版保留上下波浪边缘。
+- 运行时通过每个 Renderer 的材质属性修改正面封面，不得修改共享材质资源。
+- 播放前，运行时将兼容的通用模型居中并等比适配到点击的 MainScene 卡包 UI 边界。
+- 闭合状态的 3D 第一帧替换点击的 2D 封面时，不得出现可见的位置、尺寸、比例、裁切或空白边变化。
+- 新增卡包无需创建对应 `CardPackSkin_NNN` Prefab 或动画 FBX。
+- 通用模型或动画无法加载时，MainScene 保留现有 2D 回退交互。
+
+---
+
+## 7. 首个 Demo 范围
+
+状态：`已确认`
+
+- 首个 Demo 不包含排行榜功能。
+- 本 Demo 里程碑期间，不接入排行榜后端数据，也不替换当前模拟展示。
+- 现有 RankScene 可继续作为占位，不属于 Demo 验收范围。
+
+---
+
+## 变更记录
+
+| 日期 | 变更 |
 |---|---|
-| 2026-07-20 | Confirmed that leaderboard functionality is excluded from the first Demo. |
-| 2026-07-20 | Confirmed a generic 3D opening model with the selected PackId's real cover and UI-bounds alignment. |
-| 2026-07-20 | Confirmed stable tray positions and staged outline rules: current-group exterior plus contacts with completed groups only. |
-| 2026-07-20 | Recorded `CardPacks.csv/PackSize` and `GameScoreUtility` as the implemented size/base-score data path. |
-| 2026-07-19 | Confirmed the settlement-to-MainScene reward transition: keep the default ImgBag icon, center all granted packs after Finish, pause, then fly each one into its MainScene list slot. |
-| 2026-07-19 | Confirmed internal chapter stages by remaining locked-pack count R: 17-9 initial, 8-3 mid-to-late, and 2-1 final, with corresponding held-pack targets. |
-| 2026-07-19 | Replaced the provisional random roll with deterministic stage gates and persisted deferred task rewards for playtesting. |
-| 2026-07-19 | Confirmed 8 player-invisible internal chapters for distributing approximately 150 card packs, averaging 18.75 packs per chapter. |
-| 2026-07-19 | Confirmed two new-pack sources: guaranteed task entitlement and a first-completion grant attempt; replay does not receive the first-completion attempt. |
-| 2026-07-18 | Confirmed the four-state card pack lifecycle: Locked, Unlocked, InProgress after the first completed group, and Completed after the final group. |
-| 2026-07-17 | Confirmed that score beyond a completed accumulate-score task target carries into the next accumulate-score task. |
-| 2026-07-17 | Confirmed that scoring time starts on the first successfully placed Piece and stops when completed-puzzle settlement begins. |
-| 2026-07-17 | Confirmed additive bonus stacking, `Ceil(BaseScore * (1 + TotalBonusRate))`, and sequential settlement score-roll presentation with synchronized progress/score updates. |
-| 2026-07-17 | Confirmed that exact threshold values belong to the faster tier: <=A, (A,B], and (B,C]. Time above C has no time bonus. |
-| 2026-07-17 | Confirmed three configurable completion-time bonus tiers; initial thresholds are A=15s, B=30s, C=60s. |
-| 2026-07-17 | Confirmed an additional 5% settlement bonus when the sticker outline is not enabled during the current game. |
-| 2026-07-17 | Confirmed an additional 2% settlement bonus when the level outline is not enabled during the current game. |
-| 2026-07-17 | Confirmed a 5% base-score bonus when the current game is completed without using an in-game hint. |
-| 2026-07-17 | Confirmed that score is calculated during GameScene settlement after puzzle completion. |
-| 2026-07-17 | Recorded the confirmed XS through 3XL card-pack base-score table. |
+| 2026-07-20 | 确认排行榜功能不属于首个 Demo。 |
+| 2026-07-20 | 确认使用选中 PackId 真实封面的通用 3D 开包模型，并对齐 UI 边界。 |
+| 2026-07-20 | 确认碎片托盘位置稳定和分阶段描边规则：只显示当前组外边界及其与已完成组的接触边。 |
+| 2026-07-20 | 记录 `CardPacks.csv/PackSize` 和 `GameScoreUtility` 为已实现的尺寸与基础分数据路径。 |
+| 2026-07-19 | 确认结算到 MainScene 的奖励过渡：保留默认 ImgBag 图标，点击 Finish 后所有发放卡包先居中，停顿后分别飞入 MainScene 列表位置。 |
+| 2026-07-19 | 确认按剩余锁定卡包数 R 划分内部章节阶段：17-9 初期、8-3 中期后段、2-1 末期，并对应不同持有卡包目标。 |
+| 2026-07-19 | 将临时随机判定替换为确定性阶段门槛和持久化待发任务奖励，用于试玩。 |
+| 2026-07-19 | 确认 8 个玩家不可见的内部章节，用于分发约 150 个卡包，平均每章 18.75 个。 |
+| 2026-07-19 | 确认两个新卡包来源：任务必得权益和首次完成发包尝试；重玩不执行首次完成尝试。 |
+| 2026-07-18 | 确认四种卡包生命周期：Locked、Unlocked、完成第一组后的 InProgress，以及完成最后一组后的 Completed。 |
+| 2026-07-17 | 确认超过已完成累计积分任务目标的分数结转到下一个累计积分任务。 |
+| 2026-07-17 | 确认积分计时从首个 Piece 成功放置开始，在完成拼图并开始结算时停止。 |
+| 2026-07-17 | 确认加成比例相加、`Ceil(BaseScore * (1 + TotalBonusRate))` 公式，以及结算分阶段滚分并同步更新进度和分数。 |
+| 2026-07-17 | 确认阈值边界归入更快档：<=A、(A,B]、(B,C]；超过 C 无时间加成。 |
+| 2026-07-17 | 确认三个可配置的完成时间加成档，初始阈值 A=15s、B=30s、C=60s。 |
+| 2026-07-17 | 确认当前游戏未启用贴纸描边时，结算额外增加 5%。 |
+| 2026-07-17 | 确认当前游戏未启用关卡描边时，结算额外增加 2%。 |
+| 2026-07-17 | 确认当前游戏未使用提示完成时，增加基础分 5%。 |
+| 2026-07-17 | 确认拼图完成后在 GameScene 结算期间计算积分。 |
+| 2026-07-17 | 记录已确认的 XS 到 3XL 卡包基础分表。 |

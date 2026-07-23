@@ -1,96 +1,105 @@
-# Codex Workflow
+﻿# Codex 工作流
 
-This project uses a compact Codex-first workflow. Keep durable facts separate from current task state.
+本项目使用精简的 Codex 优先工作流。长期稳定信息与当前任务状态分开维护。
 
-## Single Sources
+## 唯一信息源
 
-| File | Purpose |
-|------|---------|
-| [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) | Stable requirements, architecture, scenes, data, assets, build rules, naming |
-| [CURRENT_TASK.md](CURRENT_TASK.md) | Current task, status, decisions, checks, and next action |
-| [WORKFLOW.md](WORKFLOW.md) | This workflow |
-| [../AGENTS.md](../AGENTS.md) | Repository-level instructions for AI agents |
+| 文件 | 用途 |
+|------|------|
+| [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) | 稳定需求、架构、场景、数据、资源、构建规则和命名 |
+| [CURRENT_TASK.md](CURRENT_TASK.md) | 当前任务、状态、决策、验证结果和下一步 |
+| [WORKFLOW.md](WORKFLOW.md) | 本工作流 |
+| [../AGENTS.md](../AGENTS.md) | 仓库级 AI 协作说明 |
 
-## Start Of Work
+## 开始工作
 
-For feature work, bug fixes, scene changes, asset/config changes, or behavior changes:
+进行功能开发、缺陷修复、场景调整、资源或配置修改以及行为变更前：
 
-1. Read `AGENTS.md`.
-2. Read `Documents/WORKFLOW.md`.
-3. Read `Documents/CURRENT_TASK.md`.
-4. Read the relevant sections of `Documents/PROJECT_CONTEXT.md`.
-5. Inspect the code/assets before deciding implementation details.
+1. 阅读 `AGENTS.md`。
+2. 阅读 `Documents/WORKFLOW.md`。
+3. 阅读 `Documents/CURRENT_TASK.md`。
+4. 阅读 `Documents/PROJECT_CONTEXT.md` 中与任务相关的部分。
+5. 先检查代码和资源，再决定实现方式。
 
-For simple read-only questions, only read the files needed to answer accurately.
+对于简单的只读问题，只读取准确回答所需的文件。
 
-## During Work
+## 工作期间
 
-- Prefer existing project patterns over new abstractions.
-- Keep changes scoped to the user request.
-- Do not rewrite project documentation unless the project facts or current task state changed.
-- If implementation reveals a new stable fact, update `PROJECT_CONTEXT.md`.
-- If code, scene, asset, config, or behavior changes are made, update `CURRENT_TASK.md` in the same turn.
+- 优先沿用项目现有模式，不随意引入新抽象。
+- 修改范围严格对应用户需求。
+- 只有项目事实或当前任务状态发生变化时，才更新项目文档。
+- 实现过程中发现新的稳定事实时，更新 `PROJECT_CONTEXT.md`。
+- 修改代码、场景、资源、配置或行为后，在同一轮更新 `CURRENT_TASK.md`。
 
-## Development Data Policy
+## 文档组织
 
-- The project is in active development. Data models, serialized structures, and SQLite schemas may be changed directly to the current required shape.
-- Do not add migrations, legacy-column synchronization, fallback readers, or other backward-compatibility code for existing local development data unless the user explicitly requests it.
-- After an incompatible persistence change, record the reset requirement in `CURRENT_TASK.md` and tell the user which local files must be deleted before testing.
-- Delete `persistentDataPath/LocalData.db` for SQLite schema changes. Also delete `persistentDataPath/LocalData.json` when JSON progress or related cross-store state is affected.
-- Never delete local persistence automatically unless the user explicitly asks for it.
+- 尽量减少文档数量。某个主题已有明确归属文件时，直接扩充该文件。
+- 使用稳定的主题型文件名，例如 `card-pack-effects.md`；文件名不要使用日期前缀。
+- 历史变更使用对应主题文件内部的日期小节记录。
+- 只有主题具备独立需求，并且继续放入现有文档会明显降低可维护性时，才新建文件。
+- 文档目录保持扁平；不要按任务、日期或单次开发过程分别创建文件或目录。
+- Codex 维护的工作流、任务、上下文和规格文档统一使用中文；代码标识符、路径、资源名和菜单名保留原文。
 
-## Current Task Update Rules
+## 开发期数据策略
 
-Update `CURRENT_TASK.md` with:
+- 项目处于开发阶段，数据模型、序列化结构和 SQLite 表结构可以直接修改为当前需要的形式。
+- 除非用户明确要求，不为已有本地开发数据增加迁移、旧字段同步、回退读取或其他兼容代码。
+- 发生不兼容的持久化修改后，在 `CURRENT_TASK.md` 记录重置要求，并明确告知用户测试前需要删除哪些本地文件。
+- SQLite 表结构变化时删除 `persistentDataPath/LocalData.db`；如果还影响 JSON 进度或跨存储状态，同时删除 `persistentDataPath/LocalData.json`。
+- 未经用户明确允许，不自动删除本地持久化数据。
 
-- task name and status
-- user intent or requirement
-- files changed
-- important decisions
-- validation performed or explicitly not performed
-- next useful action
+## 当前任务更新规则
 
-Do not update `CURRENT_TASK.md` for:
+`CURRENT_TASK.md` 应记录：
 
-- simple explanations
-- read-only investigation
-- hidden/exclude list housekeeping
-- formatting-only edits that do not affect project behavior, unless the user asks for documentation tracking
+- 任务名称和状态
+- 用户意图或需求
+- 修改的文件
+- 重要决策
+- 已完成的验证，或明确说明未验证
+- 下一项有效行动
 
-## Task Template
+以下情况不更新 `CURRENT_TASK.md`：
+
+- 简单解释
+- 只读调查
+- 隐藏或排除列表整理
+- 不影响项目行为的纯格式修改，除非用户要求记录
+
+## 任务模板
 
 ```markdown
-# Current Task
+# 当前任务
 
-- Task: <short name>
-- Status: In Progress
-- Updated At: <YYYY-MM-DD>
+- 任务：<简短名称>
+- 状态：进行中
+- 更新时间：<YYYY-MM-DD>
 
-## User Intent
+## 用户意图
 
-- 
+-
 
-## Working Notes
+## 工作记录
 
-- 
+-
 
-## Files Changed
+## 修改文件
 
-- 
+-
 
-## Decisions
+## 决策
 
-- 
+-
 
-## Validation
+## 验证
 
-- 
+-
 
-## Next Action
+## 下一步
 
-1. 
+1.
 
-## Resume Prompt
+## 恢复提示
 
-Continue this Puffies task. Read AGENTS.md, Documents/WORKFLOW.md, and Documents/CURRENT_TASK.md first, then follow Next Action unless the user gives a newer instruction.
+继续 Puffies 当前任务。先阅读 AGENTS.md、Documents/WORKFLOW.md 和 Documents/CURRENT_TASK.md；除非用户给出更新指令，否则按照“下一步”继续。
 ```

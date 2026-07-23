@@ -1,39 +1,38 @@
-# Staged Puzzle Outline And Tray Layout
+﻿# 分阶段拼图描边与碎片托盘布局
 
-- Status: Implemented; Play Mode regression pending
-- Scope: Editor-baked group outlines and runtime Piece tray stability
+- 状态：已实现，待完成 Play Mode 回归
+- 范围：编辑器烘焙的分组描边，以及运行时碎片托盘位置稳定性
 
-## Requirements
+## 需求
 
-1. Pieces are laid out once when a group is created. Successfully placing one Piece must not change any remaining Piece's X or Y position.
-2. Group 1 displays only its own contribution to the final puzzle exterior.
-3. Every later group displays its own final-puzzle exterior plus its contact edges with all lower-number completed groups.
-4. The current image excludes completed groups' unrelated boundaries, current-to-future-group edges, and seams between Pieces in the same group.
-5. Previous `GroupNN.png` images are not overlaid onto the current stage.
-6. Existing `CardBagNNN` prefabs remain the source of Piece layout and numeric grouping.
-7. The stroke color is `#3f423e`; scenes, Canvas dimensions, and authored prefab transforms are not modified by baking.
-8. A missing baked Sprite logs a warning and does not block draggable Piece creation.
+1. 创建一组碎片时只执行一次布局。成功放置一个 Piece 后，不得改变其他 Piece 的 X 或 Y 位置。
+2. 第 1 组只显示该组对最终拼图外边界的贡献。
+3. 后续每组显示自身的最终拼图外边界，以及与所有已完成低编号组的接触边。
+4. 当前描边图必须排除已完成组的无关边界、当前组与未来组之间的边，以及同组 Piece 之间的接缝。
+5. 不得将之前的 `GroupNN.png` 叠加到当前阶段。
+6. 现有 `CardBagNNN` Prefab 继续作为 Piece 布局和数字分组的信息源。
+7. 描边颜色为 `#3f423e`；烘焙不得修改场景、Canvas 尺寸和 Prefab 中已设置的 Transform。
+8. 缺少烘焙 Sprite 时记录警告，但不得阻止可拖拽 Piece 创建。
 
-## Design
+## 设计
 
-1. Decode each prefab's GameBoard and Piece source textures without changing import settings.
-2. Transform Piece Alpha masks into GameBoard pixel coordinates and build the complete puzzle mask plus one mask per numbered group.
-3. Calculate the complete puzzle exterior once and calculate each current group's own boundary separately.
-4. For Group 1, select only final-exterior pixels assigned to Group 1.
-5. For every later group, add current-group boundary pixels adjacent to the accumulated lower-number completed mask. `ColorBridgeRadius` bridges narrow anti-aliased artwork gaps.
-6. Write the current image before advancing the completed mask so future-group boundaries cannot leak into an earlier stage.
-7. Bake one transparent full-board Sprite to `Assets/Resources/Generated/PuzzleOutlines/CardBagNNN/GroupNN.png` and display only that current-group Sprite at runtime.
+1. 在不改变导入设置的情况下，读取每个 Prefab 的 GameBoard 和 Piece 源贴图。
+2. 将 Piece Alpha 蒙版转换到 GameBoard 像素坐标，生成完整拼图蒙版和每个数字分组的独立蒙版。
+3. 完整拼图外边界只计算一次，同时分别计算当前组自身边界。
+4. 第 1 组只选择归属于第 1 组的最终外边界像素。
+5. 后续每组增加当前组边界中与累计低编号已完成蒙版相邻的像素。`ColorBridgeRadius` 用于跨越美术资源中较窄的抗锯齿间隙。
+6. 在推进已完成蒙版前写出当前图片，避免未来组边界泄漏到较早阶段。
+7. 将全棋盘尺寸的透明 Sprite 写入 `Assets/Resources/Generated/PuzzleOutlines/CardBagNNN/GroupNN.png`，运行时只显示当前组对应的 Sprite。
 
-## Content Workflow
+## 内容制作流程
 
-- Run `Puffies -> Puzzles -> Bake Outline Masks` after adding or changing a CardBag prefab or Piece texture.
-- Current generated content contains 19 group masks for CardBag001, 002, 003, 008, and 017.
+- 新增或修改 CardBag Prefab 或 Piece 贴图后，执行 **Puffies -> Puzzles -> Bake Outline Masks**。
+- 当前生成内容包括 CardBag001、002、003、008 和 017 的 19 张分组蒙版。
 
-## Validation
+## 验证
 
-- Unity 2022.3.62f2 successfully baked all 19 masks without compiler errors or exceptions.
-- Regenerated tracked Group01 PNGs were byte-equivalent to the prior correct versions.
-- CardBag001 Group01 contains 14,674 outline pixels; corrected Group02 contains 9,372 instead of the old 24,018-pixel overlay.
-- Static code inspection confirms successful placement no longer calls the tray layout path.
-- Play Mode still must verify fixed Piece coordinates and group transitions against completed and future groups.
-
+- Unity 2022.3.62f2 成功烘焙全部 19 张蒙版，没有编译错误或异常。
+- 重新生成并受版本控制的 Group01 PNG 与此前正确版本的字节完全一致。
+- CardBag001 Group01 包含 14,674 个描边像素；修正后的 Group02 包含 9,372 个，旧叠加版本为 24,018 个。
+- 静态代码检查确认成功放置碎片后不再调用托盘布局路径。
+- 仍需在 Play Mode 中验证固定 Piece 坐标、分组切换，以及描边与已完成组和未来组的关系。
