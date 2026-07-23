@@ -25,16 +25,130 @@ public static class CardBagPrefabGeneratorEditor
     private static readonly Regex GameplayPieceRegex = new Regex(
         @"^pieces?(\d+)$",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex CardBagFolderRegex = new Regex(
+        @"^CardBag(\d{3})$",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
-    [MenuItem("Puffies/Puzzles/Generate CardBag017 From Images")]
-    public static void GenerateCardBag017Menu()
+    [MenuItem("Puffies/Puzzles/Generate CardBag Prefabs From Images")]
+    public static void OpenGeneratorWindow()
     {
-        Generate(17, true, true);
+        CardBagPrefabGeneratorWindow.Open();
     }
 
     public static void GenerateCardBag017FromCommandLine()
     {
         Generate(17, true, false);
+    }
+
+    internal static List<SourcePackInfo> ScanSourcePacks()
+    {
+        var sourceRoot = ToAbsolutePath(CardBagSourceRoot);
+        var packs = new List<SourcePackInfo>();
+        if (!Directory.Exists(sourceRoot))
+        {
+            return packs;
+        }
+
+        var directories = Directory.GetDirectories(sourceRoot, "*", SearchOption.TopDirectoryOnly);
+        for (var i = 0; i < directories.Length; i++)
+        {
+            var folderName = Path.GetFileName(directories[i]);
+            var match = CardBagFolderRegex.Match(folderName);
+            if (!match.Success
+                || !int.TryParse(match.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var packId)
+                || packId <= 0)
+            {
+                continue;
+            }
+
+            var sourceFolder = $"{CardBagSourceRoot}/{folderName}";
+            var missing = new List<string>();
+            if (!File.Exists(ToAbsolutePath($"{sourceFolder}/background_base.png")))
+            {
+                missing.Add("background_base.png");
+            }
+
+            if (!File.Exists(ToAbsolutePath($"{PreviewRoot}/{folderName}.png")))
+            {
+                missing.Add($"Previews/{folderName}.png");
+            }
+
+            if (!File.Exists(ToAbsolutePath(RootBackgroundPath)))
+            {
+                missing.Add("BgCardBoard.png");
+            }
+
+            var pieceCount = CountPieceFiles(directories[i]);
+            if (pieceCount == 0)
+            {
+                missing.Add("Piece PNG files");
+            }
+
+            packs.Add(new SourcePackInfo(
+                packId,
+                folderName,
+                pieceCount,
+                File.Exists(ToAbsolutePath($"{PrefabRoot}/{folderName}.prefab")),
+                missing));
+        }
+
+        packs.Sort((left, right) => left.PackId.CompareTo(right.PackId));
+        return packs;
+    }
+
+    internal static BatchGenerationResult GenerateBatch(IReadOnlyList<int> packIds)
+    {
+        var result = new BatchGenerationResult();
+        var orderedIds = packIds
+            .Where(packId => packId > 0)
+            .Distinct()
+            .OrderBy(packId => packId)
+            .ToList();
+
+        try
+        {
+            for (var i = 0; i < orderedIds.Count; i++)
+            {
+                var packId = orderedIds[i];
+                EditorUtility.DisplayProgressBar(
+                    "Generate CardBag Prefabs",
+                    $"Generating CardBag{packId:D3} ({i + 1}/{orderedIds.Count})",
+                    orderedIds.Count == 0 ? 1f : (i + 1f) / orderedIds.Count);
+                try
+                {
+                    Generate(packId, false, false);
+                    result.GeneratedPackIds.Add(packId);
+                }
+                catch (Exception exception)
+                {
+                    result.Failures.Add(packId, exception.Message);
+                    Debug.LogException(exception);
+                }
+            }
+        }
+        finally
+        {
+            EditorUtility.ClearProgressBar();
+        }
+
+        if (result.GeneratedPackIds.Count > 0)
+        {
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            var lastPackId = result.GeneratedPackIds[result.GeneratedPackIds.Count - 1];
+            var lastPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(
+                $"{PrefabRoot}/CardBag{lastPackId:D3}.prefab");
+            if (lastPrefab != null)
+            {
+                Selection.activeObject = lastPrefab;
+                EditorGUIUtility.PingObject(lastPrefab);
+            }
+        }
+
+        Debug.Log(
+            $"CardBag generator: batch finished. " +
+            $"generated={result.GeneratedPackIds.Count}, failed={result.Failures.Count}.");
+        return result;
     }
 
     [DidReloadScripts]
@@ -71,6 +185,8 @@ public static class CardBagPrefabGeneratorEditor
 
     private static void Generate(int packId, bool bakeOutlines, bool openPrefab)
     {
+        AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+
         var bagName = $"CardBag{packId:D3}";
         var sourceFolder = $"{CardBagSourceRoot}/{bagName}";
         var boardPath = $"{sourceFolder}/background_base.png";
@@ -141,10 +257,10 @@ public static class CardBagPrefabGeneratorEditor
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
         var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
-        Selection.activeObject = prefab;
-        EditorGUIUtility.PingObject(prefab);
         if (openPrefab && prefab != null)
         {
+            Selection.activeObject = prefab;
+            EditorGUIUtility.PingObject(prefab);
             AssetDatabase.OpenAsset(prefab);
         }
 
@@ -171,6 +287,21 @@ public static class CardBagPrefabGeneratorEditor
             .OrderBy(GetPieceSortNumber)
             .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
             .ToList();
+    }
+
+    private static int CountPieceFiles(string absoluteFolder)
+    {
+        if (!Directory.Exists(absoluteFolder))
+        {
+            return 0;
+        }
+
+        return Directory.GetFiles(absoluteFolder, "*.png", SearchOption.TopDirectoryOnly)
+            .Count(path =>
+            {
+                var name = Path.GetFileNameWithoutExtension(path);
+                return NumberedPieceRegex.IsMatch(name) || GameplayPieceRegex.IsMatch(name);
+            });
     }
 
     private static int GetPieceSortNumber(string path)
@@ -613,6 +744,37 @@ public static class CardBagPrefabGeneratorEditor
         return absolutePath.Substring(projectRoot.Length + 1).Replace('\\', '/');
     }
 
+    internal sealed class SourcePackInfo
+    {
+        public int PackId { get; }
+        public string BagName { get; }
+        public int PieceCount { get; }
+        public bool PrefabExists { get; }
+        public IReadOnlyList<string> MissingItems { get; }
+        public bool IsReady => MissingItems.Count == 0;
+        public string Status => IsReady ? "Ready" : "Missing: " + string.Join(", ", MissingItems);
+
+        public SourcePackInfo(
+            int packId,
+            string bagName,
+            int pieceCount,
+            bool prefabExists,
+            IReadOnlyList<string> missingItems)
+        {
+            PackId = packId;
+            BagName = bagName;
+            PieceCount = pieceCount;
+            PrefabExists = prefabExists;
+            MissingItems = missingItems;
+        }
+    }
+
+    internal sealed class BatchGenerationResult
+    {
+        public List<int> GeneratedPackIds { get; } = new List<int>();
+        public Dictionary<int, string> Failures { get; } = new Dictionary<int, string>();
+    }
+
     private sealed class RawTexture : IDisposable
     {
         private readonly Texture2D _texture;
@@ -673,6 +835,201 @@ public static class CardBagPrefabGeneratorEditor
         public int Height;
         public float Score;
         public int EquivalentBestCount;
+    }
+}
+
+internal sealed class CardBagPrefabGeneratorWindow : EditorWindow
+{
+    private readonly HashSet<int> _selectedPackIds = new HashSet<int>();
+    private List<CardBagPrefabGeneratorEditor.SourcePackInfo> _sourcePacks =
+        new List<CardBagPrefabGeneratorEditor.SourcePackInfo>();
+    private Vector2 _scrollPosition;
+
+    public static void Open()
+    {
+        var window = GetWindow<CardBagPrefabGeneratorWindow>("CardBag Generator");
+        window.minSize = new Vector2(680f, 360f);
+        window.RefreshSources();
+        window.Show();
+    }
+
+    private void OnEnable()
+    {
+        RefreshSources();
+    }
+
+    private void OnGUI()
+    {
+        EditorGUILayout.Space(6f);
+        EditorGUILayout.HelpBox(
+            "Scans Assets/UI/CardBags/CardBagNNN. New prefabs are selected by default. " +
+            "Generate prefabs first, rename sequential Piece nodes into gameplay groups, " +
+            "then run Bake Outline Masks.",
+            MessageType.Info);
+
+        DrawToolbar();
+        EditorGUILayout.Space(4f);
+        DrawSourceList();
+        EditorGUILayout.Space(6f);
+        DrawGenerateButton();
+        EditorGUILayout.Space(6f);
+    }
+
+    private void DrawToolbar()
+    {
+        using (new EditorGUILayout.HorizontalScope(EditorStyles.toolbar))
+        {
+            if (GUILayout.Button("Refresh", EditorStyles.toolbarButton, GUILayout.Width(70f)))
+            {
+                RefreshSources();
+            }
+
+            if (GUILayout.Button("Select New", EditorStyles.toolbarButton, GUILayout.Width(80f)))
+            {
+                SelectSources(info => info.IsReady && !info.PrefabExists);
+            }
+
+            if (GUILayout.Button("Select All Ready", EditorStyles.toolbarButton, GUILayout.Width(110f)))
+            {
+                SelectSources(info => info.IsReady);
+            }
+
+            if (GUILayout.Button("Clear", EditorStyles.toolbarButton, GUILayout.Width(60f)))
+            {
+                _selectedPackIds.Clear();
+            }
+
+            GUILayout.FlexibleSpace();
+            GUILayout.Label($"Found {_sourcePacks.Count}", EditorStyles.miniLabel);
+        }
+    }
+
+    private void DrawSourceList()
+    {
+        using (new EditorGUILayout.HorizontalScope())
+        {
+            GUILayout.Space(24f);
+            GUILayout.Label("CardBag", EditorStyles.boldLabel, GUILayout.Width(110f));
+            GUILayout.Label("Pieces", EditorStyles.boldLabel, GUILayout.Width(60f));
+            GUILayout.Label("Prefab", EditorStyles.boldLabel, GUILayout.Width(80f));
+            GUILayout.Label("Status", EditorStyles.boldLabel);
+        }
+
+        _scrollPosition = EditorGUILayout.BeginScrollView(_scrollPosition, GUI.skin.box);
+        if (_sourcePacks.Count == 0)
+        {
+            EditorGUILayout.HelpBox("No CardBagNNN source folders were found.", MessageType.Warning);
+        }
+
+        for (var i = 0; i < _sourcePacks.Count; i++)
+        {
+            DrawSourceRow(_sourcePacks[i]);
+        }
+
+        EditorGUILayout.EndScrollView();
+    }
+
+    private void DrawSourceRow(CardBagPrefabGeneratorEditor.SourcePackInfo info)
+    {
+        using (new EditorGUILayout.HorizontalScope())
+        {
+            var selected = _selectedPackIds.Contains(info.PackId);
+            using (new EditorGUI.DisabledScope(!info.IsReady))
+            {
+                var updated = EditorGUILayout.Toggle(selected, GUILayout.Width(20f));
+                if (updated != selected)
+                {
+                    if (updated)
+                    {
+                        _selectedPackIds.Add(info.PackId);
+                    }
+                    else
+                    {
+                        _selectedPackIds.Remove(info.PackId);
+                    }
+                }
+            }
+
+            GUILayout.Label(info.BagName, GUILayout.Width(110f));
+            GUILayout.Label(info.PieceCount.ToString(CultureInfo.InvariantCulture), GUILayout.Width(60f));
+            GUILayout.Label(info.PrefabExists ? "Overwrite" : "New", GUILayout.Width(80f));
+            GUILayout.Label(info.Status, info.IsReady ? EditorStyles.label : EditorStyles.wordWrappedMiniLabel);
+        }
+    }
+
+    private void DrawGenerateButton()
+    {
+        var selectedReady = _sourcePacks
+            .Where(info => info.IsReady && _selectedPackIds.Contains(info.PackId))
+            .ToList();
+
+        using (new EditorGUI.DisabledScope(selectedReady.Count == 0))
+        {
+            if (!GUILayout.Button(
+                    $"Generate Selected ({selectedReady.Count})",
+                    GUILayout.Height(32f)))
+            {
+                return;
+            }
+        }
+
+        var overwrite = selectedReady.Where(info => info.PrefabExists).ToList();
+        if (overwrite.Count > 0
+            && !EditorUtility.DisplayDialog(
+                "Overwrite Existing Prefabs?",
+                $"{overwrite.Count} selected prefab(s) already exist. " +
+                "Generating them will replace their hierarchy and manual Piece grouping.",
+                "Generate and Overwrite",
+                "Cancel"))
+        {
+            return;
+        }
+
+        var result = CardBagPrefabGeneratorEditor.GenerateBatch(
+            selectedReady.Select(info => info.PackId).ToList());
+        RefreshSources();
+        ShowResult(result);
+    }
+
+    private void RefreshSources()
+    {
+        _sourcePacks = CardBagPrefabGeneratorEditor.ScanSourcePacks();
+        SelectSources(info => info.IsReady && !info.PrefabExists);
+        Repaint();
+    }
+
+    private void SelectSources(Func<CardBagPrefabGeneratorEditor.SourcePackInfo, bool> predicate)
+    {
+        _selectedPackIds.Clear();
+        for (var i = 0; i < _sourcePacks.Count; i++)
+        {
+            if (predicate(_sourcePacks[i]))
+            {
+                _selectedPackIds.Add(_sourcePacks[i].PackId);
+            }
+        }
+    }
+
+    private static void ShowResult(CardBagPrefabGeneratorEditor.BatchGenerationResult result)
+    {
+        var message = $"Generated: {result.GeneratedPackIds.Count}\nFailed: {result.Failures.Count}";
+        if (result.Failures.Count > 0)
+        {
+            var failureLines = result.Failures
+                .Take(8)
+                .Select(pair => $"CardBag{pair.Key:D3}: {pair.Value}");
+            message += "\n\n" + string.Join("\n", failureLines);
+            if (result.Failures.Count > 8)
+            {
+                message += "\nSee Console for remaining failures.";
+            }
+        }
+        else if (result.GeneratedPackIds.Count > 0)
+        {
+            message += "\n\nComplete Piece grouping before baking outline masks.";
+        }
+
+        EditorUtility.DisplayDialog("CardBag Generation Finished", message, "OK");
     }
 }
 #endif

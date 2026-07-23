@@ -94,7 +94,10 @@ public static class PuzzleOutlineBakerEditor
             var groups = CollectPieceGroups(images);
             if (groups.Count == 0)
             {
-                Debug.LogWarning($"Puzzle outline baker: {prefabPath} has no numbered Piece images.");
+                DeleteStaleOutlines(bagId);
+                Debug.LogWarning(
+                    $"Puzzle outline baker: {prefabPath} has no grouped Piece images; " +
+                    "stale outline masks were removed.");
                 return 0;
             }
 
@@ -259,10 +262,24 @@ public static class PuzzleOutlineBakerEditor
             return false;
         }
 
-        return int.TryParse(
-                   objectName.Substring(GameDefine.PieceObjectPrefix.Length),
-                   out pieceNumber)
+        var numberText = objectName.Substring(GameDefine.PieceObjectPrefix.Length);
+        if (numberText.Length > 1 && numberText[0] == '0')
+        {
+            return false;
+        }
+
+        return int.TryParse(numberText, out pieceNumber)
                && pieceNumber > 0;
+    }
+
+    private static void DeleteStaleOutlines(int bagId)
+    {
+        var outputFolder = $"{OutputRoot}/{GameDefine.CardBagPrefabPrefix}{bagId:D3}";
+        if (AssetDatabase.IsValidFolder(outputFolder) && !AssetDatabase.DeleteAsset(outputFolder))
+        {
+            throw new InvalidOperationException(
+                $"Puzzle outline baker: failed to delete stale outline folder {outputFolder}.");
+        }
     }
 
     private static bool TryParseBagId(string prefabPath, out int bagId)

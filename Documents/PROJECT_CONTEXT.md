@@ -56,7 +56,7 @@ Unity **2022.3** / URP 2D 项目。核心循环：打开卡包 -> 拖放拼图 -
 
 - 新卡包沿用唯一 `Package001` 模板；`MainScene` 在运行时动态创建列表项。
 - 新拼图通过在 `Resources/CardBagPrefabs/` 下新增 `CardBagNNN` Prefab 实现；每个 Prefab 包含 `GameBoard` 和 `Piece01`...`PieceNN`，不创建 Package JSON。
-- 当前017试点可通过编辑器生成器从 `background_base.png` 和透明 Piece PNG 进行像素匹配，自动创建 Prefab，不依赖 Package JSON 或 `unity_layout.json`。
+- 编辑器批量生成器可扫描 `CardBagNNN` 资源目录，从 `background_base.png` 和透明 Piece PNG 进行像素匹配，批量创建 Prefab，不依赖 Package JSON 或 `unity_layout.json`。
 - 通用 3D 开包模型和 CardFx 资源放在 `Resources/Effects/` 下，通过 `Resources.Load` 加载。
 - 构建前执行 `Puffies -> Sync Build Resources`，将运行时磁盘加载的 UI 目录同步到 `StreamingAssets/UI`。
 
@@ -259,13 +259,17 @@ effect（调试）：CardFx 预览；菜单 Puffies -> Preview CardFx Effects
 9. 缺少生成 Sprite 时，运行时记录制作警告，并在无描边情况下继续游戏。交付前重新运行烘焙器。
 - 创建一组碎片时只定位一次。成功放置 Piece 后，托盘中其他 Piece 保持既定 X、Y 位置；空位直到下一组创建时才重新布局。
 
-#### 无 JSON Prefab 生成试点
+#### 无 JSON Prefab 批量生成
 
-- 菜单 **Puffies -> Puzzles -> Generate CardBag017 From Images** 从 `UI/CardBags/CardBag017/background_base.png` 和同目录透明 Piece PNG 生成017 Prefab。
-- `UI/CardBags/Previews/CardBag017.png` 只用于验证画布尺寸和效果图，不作为运行时 Prefab Sprite。
+- 菜单 **Puffies -> Puzzles -> Generate CardBag Prefabs From Images** 打开批量窗口，扫描 `UI/CardBags/` 下严格匹配 `CardBagNNN` 的一级目录。
+- 每个卡包需要 `CardBagNNN/background_base.png`、`Previews/CardBagNNN.png` 和至少一张合法 Piece PNG；缺失项会显示在列表中并禁止选择。
+- `UI/CardBags/Previews/CardBagNNN.png` 只用于验证画布尺寸和效果图，不作为运行时 Prefab Sprite。
 - 生成器利用 Piece PNG 保留的原始裁切 RGB 在完整背景中做像素匹配，Piece Alpha 继续作为运行时形状。
 - `PieceNN.png` 或 `PiecesNN.png` 中的 `NN` 直接成为对象编号；未改名的 `piece_###.png` 依次生成 `Piece001`、`Piece002` 等未分组对象，不自动推断游戏分组。
 - 生成结构为 `CardBagNNN/GameBoard/BoardTitle` 和 `CardBagNNN/GameBoard/PieceNN`；棋盘标题与全部碎片统一归属 `GameBoard`。
+- 窗口默认只选择资源完整且尚无 Prefab 的卡包。选择已有 Prefab 时显示 `Overwrite`，执行前必须确认；覆盖会替换已有层级和手工 Piece 分组。
+- 批量生成逐个隔离失败并汇总结果，只负责创建 Prefab，不自动烘焙描边。完成手工 Piece 分组后再执行 **Bake Outline Masks**。
+- `Piece001` 这类带前导零的三位顺序名是制作中间状态，描边烘焙器必须跳过，不能把 `Piece010` 误判为第1组；卡包没有正式分组时删除对应旧描边目录。
 - 当前 CardBag017 为 `1316 x 1316`、37片，节点暂命名为 `Piece001` 到 `Piece037`。这些名称是供编辑器整理的中间状态；完成手工分组并改为正式 `PieceNN` 后，必须重新烘焙描边才能进入 GameScene 测试。
 
 ### 拼图描边渲染
@@ -331,7 +335,7 @@ Prefab 和依赖放在 `Resources/Effects/CardFx/`，例如 `CardObtain_001` 和
 | Puffies -> Fonts -> Setup Default Chinese Font | 设置中文字体 |
 | Puffies -> Preview CardFx Effects | 打开特效场景 |
 | Puffies -> Puzzles -> Bake Outline Masks | 为每个 CardBag Prefab 重建各分组外边界描边 |
-| Puffies -> Puzzles -> Generate CardBag017 From Images | 不使用布局 JSON，从017完整背景和透明碎图生成试点 Prefab |
+| Puffies -> Puzzles -> Generate CardBag Prefabs From Images | 扫描完整背景和透明碎图，选择并批量生成 CardBag Prefab |
 
 ---
 

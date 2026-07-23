@@ -13,6 +13,11 @@
 6. 现有 `CardBagNNN` Prefab 继续作为 Piece 布局和数字分组的信息源。
 7. 描边颜色为 `#3f423e`；烘焙不得修改场景、Canvas 尺寸和 Prefab 中已设置的 Transform。
 8. 缺少烘焙 Sprite 时记录警告，但不得阻止可拖拽 Piece 创建。
+9. 当 `Assets/UI/CardBags/` 下加入符合 `CardBagNNN` 命名的新资源目录时，编辑器工具应自动发现该卡包，不再为单个 PackId 增加专用菜单。
+10. 当资源缺少 `background_base.png`、对应预览图或 Piece PNG 时，工具应显示缺失原因并禁止选择该卡包生成。
+11. 批量窗口默认只选择尚无 Prefab 的资源；当选择已有 Prefab 时，执行前必须明确提示将覆盖已有层级和手工分组。
+12. 当一批资源中的某个卡包生成失败时，工具应继续处理其他已选卡包，并在结束后汇总成功与失败结果。
+13. 批量生成只创建 Prefab，不自动烘焙描边；使用者完成 Piece 分组后，再通过独立菜单统一烘焙。
 
 ## 设计
 
@@ -23,13 +28,19 @@
 5. 后续每组增加当前组边界中与累计低编号已完成蒙版相邻的像素。`ColorBridgeRadius` 用于跨越美术资源中较窄的抗锯齿间隙。
 6. 在推进已完成蒙版前写出当前图片，避免未来组边界泄漏到较早阶段。
 7. 将全棋盘尺寸的透明 Sprite 写入 `Assets/Resources/Generated/PuzzleOutlines/CardBagNNN/GroupNN.png`，运行时只显示当前组对应的 Sprite。
+8. `CardBag Prefab Generator` 编辑器窗口扫描一级 `CardBagNNN` 目录，提供刷新、选择新卡包、选择全部有效卡包、清空选择和批量生成操作。
+9. 每个扫描项显示 Piece 数量、Prefab 是否已存在以及校验状态；默认勾选资源完整且尚无 Prefab 的卡包。
+10. 批量执行逐个捕获异常，成功项正常保存，失败项写入 Console 并在结果对话框中汇总。
+11. `Piece001` 这类三位顺序名称明确表示尚未分组，描边烘焙器不得将 `Piece010` 到 `Piece099` 误判成正式游戏分组；卡包没有正式分组时应删除该卡包的旧描边输出。
 
 ## 内容制作流程
 
 - 新增或修改 CardBag Prefab 或 Piece 贴图后，执行 **Puffies -> Puzzles -> Bake Outline Masks**。
-- CardBag017 试点可执行 **Puffies -> Puzzles -> Generate CardBag017 From Images**，从完整背景和透明碎图进行像素匹配，不需要布局 JSON。
+- 执行 **Puffies -> Puzzles -> Generate CardBag Prefabs From Images** 打开批量窗口；窗口会发现所有符合命名规则且资源完整的 `CardBagNNN` 目录。
 - 生成器要求 `background_base.png` 与 `Previews/CardBagNNN.png` 尺寸一致。效果图只用于校验，不进入运行时 Prefab 引用。
 - 使用 `PieceNN.png` 或 `PiecesNN.png` 时，文件名直接定义游戏分组；使用 `piece_###.png` 时生成器只创建 `Piece001` 开始的顺序节点，不推断分组，也不烘焙该卡包描边。
+- 默认使用 **Select New** 只选择尚未生成 Prefab 的卡包。使用 **Select All Ready** 并覆盖已有 Prefab 会丢失 Prefab 内手工修改的分组，执行前必须确认。
+- 批量 Prefab 生成完成后，先手工完成顺序节点分组，再执行 **Puffies -> Puzzles -> Bake Outline Masks**。
 - 当前有效生成内容包括 CardBag001、002、003、008 和 009 的19张分组蒙版。CardBag017 等待手工分组后重新加入。
 
 ## 验证
