@@ -1,35 +1,34 @@
 # 当前任务
 
-- 任务：按卡包生命周期刷新选择面板操作
-- 状态：已完成，待 Unity Play Mode 视觉复测
+- 任务：按参考视频实现首页卡包到游戏场景的连续流程
+- 状态：代码已完成，等待可见 Unity Play Mode 视觉与手感验收
 - 更新时间：2026-07-24
 
 ## 用户意图
 
-- 点击 MainScene 卡包后，卡包移动到屏幕中心并同步放大到 `600 x 680`，同时显示 `PanelBagSelect`。
-- 点击 Play 后才播放开包动画，动画结束进入 GameScene。
-- 点击返回后，卡包回到原列表位置并恢复原尺寸，`PanelBagSelect` 隐藏。
-- 新卡包显示 `Play` 且不显示相机按钮；已玩过的卡包显示 `重玩` 且显示相机按钮。
+- 参考 `微信视频2026-07-24_123407_055.mp4`，复刻从 MainScene 卡包列表、选择、手势拆包到 GameScene 拼图入场的状态顺序和节奏。
+- 保持 Puffies 现有 `2560 x 1440` 横屏布局，不照搬参考视频的竖屏坐标。
+- 玩家确认 Play/重玩后必须沿卡包顶部封口向右横划，不能自动开包。
 
-## 已完成
+## 工作记录
 
-- 将原本点击后立即开包的流程拆分为选择预览、确认开包和取消返回三个状态。
-- 选择预览复用现有六层 3D 卡包的闭合第一帧，在 `0.3s` 内同步移动到屏幕中心并等比放大到 `600 x 680`。
-- 绑定 `PanelBagSelect/BtnPlay`，仅点击后启动开包 Animator，等待动画结束后进入 GameScene。
-- 绑定 `PanelBagSelect/BtnBack`；该场景节点没有 Button 组件，运行时会补齐 Button 并使用现有 Image 作为点击目标。
-- 返回时先关闭面板，再将卡包反向移动、缩放回原列表锚点，隐藏开包器并恢复列表呼吸特效。
-- 选择面板显示期间，其他列表卡包继续保持原位置和呼吸动效；只有被选中的卡包由列表实例切换为居中开包器。
-- 通用 3D 开包资源不可用时保留原有 2D 点击回退，并直接进入 GameScene，避免卡死在选择状态。
-- 卡包尺寸图标改为围绕所属卡包中心应用相同呼吸倍率，位置和尺寸随卡包一起缩放。
-- 3D 空闲卡包创建成功后隐藏原 UI 尺寸图标；只有 3D 显示不可用时才显示 UI 图标作为回退，避免静态图标跨卡包压层。
-- 每个列表卡包使用相邻的本体/尺寸图标排序值，尺寸图标仅高于本卡包本体；选择面板继续使用场景原有主 Canvas 和末尾兄弟节点顺序。
-- 运行时层级固定为选中卡包高于 `PanelBagSelect`，`PanelBagSelect` 高于其他列表卡包；选择与返回过程中保持该层级。
-- 每次打开 `PanelBagSelect` 时根据 `CardPackRecord.IsPlayed` 刷新操作状态：`Unlocked` 显示 `Play` 并隐藏 `BtnCamera`，`InProgress` 和 `Completed` 显示 `重玩` 并显示 `BtnCamera`。
+- 点击列表卡包后先截取首页，使用低分辨率双线性重采样形成柔化背景；卡包约 `0.3s` 居中放大，继续显示返回和 Play/重玩。
+- Play/重玩后首页内容和选择操作退场，显示与 GameScene 同源的 `BgGame` 开包舞台，卡包轻微缩放定场。
+- 运行时生成圆形手势提示 Sprite，不依赖 Unity 已移除的内置 `UI/Skin/Knob.psd`；提示沿顶部封口从左向右循环移动。
+- 手势从左侧区域开始、向右移动超过卡包宽度 `50%` 且垂直偏移不超过高度 `20%` 时才生效；无效手势松开后恢复提示。
+- 有效横划同步播放六层 `CardPackOpening` 和 `CardPackDismantle_001`；粒子短暂跨场景保留并自动释放动态材质。
+- 正常拆包进入 GameScene 时播放一次入场：CardBag/棋盘从上方进入，PieceBoard 从下方进入，当前组 Piece 从棋盘附近错峰落入托盘，返回和提示按钮淡入；动画结束前屏蔽拖拽。
+- 直接在编辑器启动 GameScene 或其他入口不播放入场，保持原有制作和调试方式。
+- 修正 Piece 入场起点重复叠加 `WorldGameplayDepth` 的问题，入场全过程沿用 Piece 原目标 Z。
+- 用于自动化排查的 `TemporaryCardPackFlowValidation` 已删除，不保留临时编辑器代码。
 
 ## 修改文件
 
 - `Assets/Scripts/Controller/MainScene.cs`
+- `Assets/Scripts/Controller/GameScene.cs`
 - `Assets/Scripts/Model/GameAnimationUtility.cs`
+- `Assets/Scripts/Model/CardFxRuntimeUtility.cs`
+- `Assets/Scripts/Model/GameDefine.cs`
 - `Documents/GAME_DESIGN_REQUIREMENTS.md`
 - `Documents/PROJECT_CONTEXT.md`
 - `Documents/CURRENT_TASK.md`
@@ -37,37 +36,28 @@
 
 ## 决策
 
-- 不修改用户新搭建的 `PanelBagSelect` 布局和资源引用。
-- 选择预览和正式开包复用同一个已准备的六层 3D 卡包实例，Play 前 Animator 保持暂停。
-- 位移、缩放和等待动画均使用不受 `Time.timeScale` 影响的时间。
-- 列表卡包和选中卡包使用独立排序值；`PanelBagSelect` 运行时迁移到独立的根级 Screen Space Camera Canvas，该 Canvas 位于普通列表卡包与选中卡包之间。
-- 重玩继续复用 `BtnPlay` 的现有开包流程；本轮只控制 `BtnCamera` 显隐，不增加拍照点击逻辑。
+- 保持工程横屏设计分辨率，只复刻参考视频的交互状态、相对运动和节奏。
+- 横划区域根据当前六层卡包 Renderer 的实际 Bounds 动态计算，不使用固定屏幕坐标。
+- 选择页柔化背景只在打开时截取一次，离开选择或进入开包舞台后立即释放。
+- 开包舞台和 GameScene 复用同一张 `BgGame`，拆包粒子跨场景延续，降低场景切换的视觉断点。
+- 本次不修改场景和 Prefab 序列化文件，不改变 Canvas 设计尺寸。
 
 ## 验证
 
-- 2026-07-24 跨设备同步检查：当前分支为 `develop`，与 `origin/develop` 一致；同步前工作区干净，最新提交为 `f303720`。
-- 同步后重新执行 `dotnet build Puffies.sln --no-restore`，runtime、first-pass 和 Editor 程序集均为0警告、0错误。
-- Model 目录保持8个脚本，Unity 生成的 `Assembly-CSharp.csproj` 已不再引用合并前删除的脚本。
-- CardBag017 当前为37个正式分组节点并有5张描边蒙版；CardBag022 仍为115个顺序节点且无描边，状态与项目上下文一致。
-- `dotnet build Puffies.sln --no-restore`：0 警告、0 错误。
-- `git diff --check -- Assets/Scripts/Controller/MainScene.cs Assets/Scripts/Model/GameAnimationUtility.cs`：通过，仅有 LF/CRLF 转换提示。
-- 已确认场景存在未激活的 `PanelBagSelect`、带 Button 的 `BtnPlay`，以及带 Image 但没有 Button 的 `BtnBack`；代码覆盖这两种情况。
-- 已静态确认卡包尺寸图标使用与本体相同的呼吸倍率，并按列表项分配相邻排序值。
-- 已移除会导致 `PanelBagSelect` 不显示的运行时嵌套 Canvas 和世界 Z 坐标改写。
-- 根据 Play Mode 截图修正层级：普通列表卡包 `z=0`、`PanelBagSelect z=-0.1`、选中卡包 `z=-0.2`。
-- 已确认普通和选中卡包由场景根节点下的世界空间 Renderer 创建，原主 Canvas 的兄弟节点顺序无法控制它们；因此不把卡包挂入 UI，而是为完整选择面板建立独立相机空间 Canvas 父节点。
-- `PanelBagSelect` 根背景遮罩 Alpha 运行时设为 `0.92`，普通卡包继续可见但明显压暗，选中卡包保持最高层级和原亮度。
-- 完整 `git diff --check` 已通过；当前工作区没有场景文件差异。
-- 不需要重置 JSON 或 SQLite 本地数据。
-- `git diff --check`：本次修改没有空白错误，仅有工作区既有 LF/CRLF 转换提示。
-- 静态确认 `CardPackRecord.IsPlayed` 只对 `InProgress` 和 `Completed` 返回 true；`Unlocked` 保持未玩状态。
+- 参考视频已按关键帧确认流程：卡包居中、背景退场、顶部横划提示、向右撕包、内容物爆出、棋盘和托盘依次入场。
+- `dotnet build Puffies.sln --no-restore`：Assembly-CSharp-firstpass、Assembly-CSharp 和 Assembly-CSharp-Editor 均成功，`0` 警告、`0` 错误。
+- `git diff --check`：通过，仅有工作区既有 LF/CRLF 转换提示。
+- 自动验证器确认 MainScene 能进入选择流程；Unity Editor `-batchmode` 不产生 `WaitForEndOfFrame`，无法验证截屏柔化。普通 Editor 在当前隐藏会话未完成启动，因此未生成可靠的新流程截图。
+- 尚未完成可见 Unity Play Mode 下的视觉、粒子层级、手势手感和 GameScene 入场位置验收。
+- 不涉及持久化结构变化，无需删除 `LocalData.db` 或 `LocalData.json`。
 
 ## 下一步
 
-1. 在 Unity Play Mode 点击 `Unlocked` 卡包，确认按钮显示 `Play` 且 `BtnCamera` 隐藏。
-2. 点击 `InProgress` 或 `Completed` 卡包，确认按钮显示 `重玩` 且 `BtnCamera` 显示。
-3. 分别验证 Play/重玩完整开包后进入 GameScene，以及 BtnBack 返回准确原位并恢复呼吸动效。
+1. 在 Unity 打开 MainScene 并进入 Play Mode，点击任一卡包，确认居中放大和柔化背景没有位置或尺寸跳变。
+2. 点击 Play/重玩，确认首页平滑退场、`BgGame` 无闪屏、圆形提示位于卡包顶部封口。
+3. 分别测试短划、明显斜划和有效向右横划，确认只有有效手势触发一次拆包动画和粒子。
+4. 观察 GameScene 棋盘、托盘、Piece 和按钮入场，确认层级、位置和节奏后再按实际画面微调参数。
 
 ## 恢复提示
 
-继续 Puffies 开发。先阅读 `AGENTS.md`、`Documents/WORKFLOW.md` 和 `Documents/CURRENT_TASK.md`；MainScene 选择面板已按生命周期区分 `Play`/`重玩` 和相机按钮显隐，下一步是在 Unity Play Mode 分别复测 `Unlocked`、`InProgress`、`Completed` 三种状态及原有开包/返回流程。
+继续 Puffies 当前任务。先阅读 `AGENTS.md`、`Documents/WORKFLOW.md` 和 `Documents/CURRENT_TASK.md`；代码已实现参考视频的首页选择、顶部横划拆包和 GameScene 入场，下一步是在可见 Unity Play Mode 完成视觉与手感验收并按结果微调。

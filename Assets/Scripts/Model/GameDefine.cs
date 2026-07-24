@@ -158,6 +158,7 @@ public static class GameManager
 {
     private static int sBagId = GameDefine.DefaultBagId;
     private static bool sIsInitialized;
+    private static bool sPlayGameEntranceAnimation;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     private static void Bootstrap()
@@ -173,6 +174,7 @@ public static class GameManager
         }
 
         sBagId = GameDefine.DefaultBagId;
+        sPlayGameEntranceAnimation = false;
         sIsInitialized = true;
         Debug.Log("GameManager initialized.");
     }
@@ -187,10 +189,18 @@ public static class GameManager
         sBagId = bagId;
     }
 
-    public static void EnterGameScene(int bagId)
+    public static void EnterGameScene(int bagId, bool playEntranceAnimation = false)
     {
         SetBagId(bagId);
+        sPlayGameEntranceAnimation = playEntranceAnimation;
         SceneManager.LoadScene(GameDefine.SceneGame);
+    }
+
+    public static bool ConsumeGameEntranceAnimation()
+    {
+        var shouldPlay = sPlayGameEntranceAnimation;
+        sPlayGameEntranceAnimation = false;
+        return shouldPlay;
     }
 
     public static void EnterRankScene()

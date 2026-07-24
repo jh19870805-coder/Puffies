@@ -25,7 +25,23 @@ public static class CardFxRuntimeUtility
 
         root.transform.localScale = Vector3.one * GameDefine.PixelsPerUnit;
         PrepareParticleSystems(root);
-        PrepareRenderers(root);
+        PrepareRenderers(root, false, 0, 0);
+    }
+
+    public static void PrepareRuntimeWorldEffect(
+        GameObject root,
+        float worldScale,
+        int sortingLayerId,
+        int sortingOrder)
+    {
+        if (root == null)
+        {
+            return;
+        }
+
+        root.transform.localScale = Vector3.one * Mathf.Max(worldScale, 0.001f);
+        PrepareParticleSystems(root);
+        PrepareRenderers(root, true, sortingLayerId, sortingOrder);
     }
 
     /// <summary>
@@ -71,7 +87,40 @@ public static class CardFxRuntimeUtility
         }
     }
 
-    private static void PrepareRenderers(GameObject root)
+    public static void ReleasePreparedMaterials(GameObject root)
+    {
+        if (root == null)
+        {
+            return;
+        }
+
+        var renderers = root.GetComponentsInChildren<ParticleSystemRenderer>(true);
+        for (var i = 0; i < renderers.Length; i++)
+        {
+            var materials = renderers[i] != null ? renderers[i].sharedMaterials : null;
+            if (materials == null)
+            {
+                continue;
+            }
+
+            for (var materialIndex = 0; materialIndex < materials.Length; materialIndex++)
+            {
+                var material = materials[materialIndex];
+                if (material != null
+                    && (material.name.EndsWith("_Preview")
+                        || material.name.EndsWith("_WorldPreview")))
+                {
+                    Object.Destroy(material);
+                }
+            }
+        }
+    }
+
+    private static void PrepareRenderers(
+        GameObject root,
+        bool overrideSorting,
+        int sortingLayerId,
+        int sortingOrder)
     {
         EnsureWorldFxShader();
         var renderers = root.GetComponentsInChildren<ParticleSystemRenderer>(true);
@@ -86,6 +135,11 @@ public static class CardFxRuntimeUtility
             renderer.enabled = true;
             renderer.maxParticleSize = PreviewMaxParticleSize;
             renderer.minParticleSize = 0f;
+            if (overrideSorting)
+            {
+                renderer.sortingLayerID = sortingLayerId;
+                renderer.sortingOrder = sortingOrder;
+            }
 
             var sourceMaterials = renderer.sharedMaterials;
             var previewMaterials = new Material[sourceMaterials.Length];

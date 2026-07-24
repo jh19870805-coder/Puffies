@@ -44,9 +44,22 @@ public class MainScene : MonoBehaviour
     private const int PackageSortingOrderStride = 2;
     private const int BagSelectPanelSortingOrder = 20000;
     private const int SelectedPackageSortingOrder = 30000;
-    private const float BagSelectBackdropAlpha = 0.92f;
+    private const int TearGuideSortingOrder = 31000;
+    private const float BagSelectBackdropAlpha = 0.34f;
     private const float BagSelectPanelWorldDepth = -0.1f;
     private const float SelectedPackageWorldDepth = -0.2f;
+    private const int BagSelectBlurDownsample = 10;
+    private const float OpeningStageTransitionDuration = 0.28f;
+    private const float OpeningStageSettleDuration = 0.22f;
+    private const float OpeningStageScaleRatio = 0.92f;
+    private const float OpeningStagePunchScaleRatio = 1.04f;
+    private const float TearGuideTravelDuration = 0.85f;
+    private const float TearGuidePauseDuration = 0.25f;
+    private const float TearGuideBandHeightRatio = 0.24f;
+    private const float TearGuideVerticalPositionRatio = 0.82f;
+    private const float TearSwipeStartMaxRatio = 0.38f;
+    private const float TearSwipeRequiredDistanceRatio = 0.5f;
+    private const float TearSwipeMaxVerticalDriftRatio = 0.2f;
     private const int MainPackageBagId = GameDefine.DefaultBagId;
     private const string BootstrapObjectName = "MainSceneBootstrap";
     private const string PackageScrollViewObjectName = "PackageScrollView";
@@ -76,6 +89,11 @@ public class MainScene : MonoBehaviour
     private const string SaveButtonObjectName = "BtnData";
     private const string BagSelectPanelObjectName = "PanelBagSelect";
     private const string BagSelectCanvasObjectName = "PanelBagSelectCanvas";
+    private const string BagSelectBackdropObjectName = "PanelBagSelectBlurredBackdrop";
+    private const string OpeningStageBackgroundObjectName = "CardPackOpeningStageBackground";
+    private const string TearGuideCanvasObjectName = "CardPackTearGuideCanvas";
+    private const string TearGuideObjectName = "CardPackTearGuide";
+    private const string OpeningStageBackgroundPath = GameDefine.UiRoot + "/BasicUI/BgGame.png";
     private const string BagSelectPlayButtonObjectName = "BtnPlay";
     private const string BagSelectBackButtonObjectName = "BtnBack";
     private const string BagSelectCameraButtonObjectName = "BtnCamera";
@@ -98,6 +116,17 @@ public class MainScene : MonoBehaviour
     private GameObject mSavePanelRoot;
     private GameObject mBagSelectPanelRoot;
     private Canvas mBagSelectOverlayCanvas;
+    private Canvas mTearGuideCanvas;
+    private CanvasGroup mMainCanvasGroup;
+    private CanvasGroup mBagSelectPanelCanvasGroup;
+    private RawImage mBagSelectBackdropImage;
+    private Image mOpeningStageBackgroundImage;
+    private Sprite mOpeningStageBackgroundSprite;
+    private Sprite mTearGuideCircleSprite;
+    private Texture2D mTearGuideCircleTexture;
+    private RectTransform mTearGuideRect;
+    private CanvasGroup mTearGuideCanvasGroup;
+    private RenderTexture mBagSelectBackdropTexture;
     private FakeSettingsSliderInput mMusicSlider;
     private FakeSettingsSliderInput mEffectSlider;
     private Toggle mWindowedToggle;
@@ -109,6 +138,7 @@ public class MainScene : MonoBehaviour
     private bool mHasSwitchedToGameScene;
     private bool mIsApplyingSettingsToUi;
     private Coroutine mPlayAnimationCoroutine;
+    private Coroutine mTearGuideCoroutine;
     private PackageEntry mSelectedPackageEntry;
     private Button mBagSelectPlayButton;
     private Button mBagSelectBackButton;
@@ -119,6 +149,11 @@ public class MainScene : MonoBehaviour
     private float mSelectedPackageOpenScale;
     private Vector3 mSelectedPackageStartCenter;
     private Vector3 mSelectedPackageDisplayCenter;
+    private float mSelectedPackageStageScale;
+    private bool mIsAwaitingTearSwipe;
+    private bool mIsTrackingTearSwipe;
+    private Vector2 mTearSwipeStartScreenPosition;
+    private Rect mTearSwipeScreenRect;
 
     private sealed class PackageEntry
     {
@@ -146,6 +181,27 @@ public class MainScene : MonoBehaviour
 
     private void OnDestroy()
     {
+        ReleaseBagSelectBackdropTexture();
+        if (mOpeningStageBackgroundSprite != null)
+        {
+            var texture = mOpeningStageBackgroundSprite.texture;
+            Destroy(mOpeningStageBackgroundSprite);
+            if (texture != null)
+            {
+                Destroy(texture);
+            }
+        }
+
+        if (mTearGuideCircleSprite != null)
+        {
+            Destroy(mTearGuideCircleSprite);
+        }
+
+        if (mTearGuideCircleTexture != null)
+        {
+            Destroy(mTearGuideCircleTexture);
+        }
+
         foreach (var pair in mPackageSlotsById)
         {
             ReleasePackageDisplay(pair.Value);
@@ -175,6 +231,19 @@ public class MainScene : MonoBehaviour
         UpdatePackageDisplays();
     }
 
+    private void Update()
+    {
+        if (!mIsAwaitingTearSwipe)
+        {
+            return;
+        }
+
+        GameCommonUtility.ProcessPointerInput(
+            OnTearSwipeBegin,
+            OnTearSwipeMove,
+            OnTearSwipeEnd);
+    }
+
     private void Start()
     {
         if (!GameCommonUtility.IsSceneMatch(SceneManager.GetActiveScene(), GameDefine.SceneMain))
@@ -186,8 +255,11 @@ public class MainScene : MonoBehaviour
         mHasSwitchedToGameScene = false;
         mIsPlayingAnimation = false;
         mPlayAnimationCoroutine = null;
+        mTearGuideCoroutine = null;
         mSelectedPackageEntry = null;
         mSelectedBagId = 0;
+        mIsAwaitingTearSwipe = false;
+        mIsTrackingTearSwipe = false;
 
         GameManager.Initialize();
         if (!GameSettingsUtility.Initialize())
@@ -392,6 +464,16 @@ public class MainScene : MonoBehaviour
             return;
         }
 
+        mMainCanvasGroup = sourceCanvas.GetComponent<CanvasGroup>();
+        if (mMainCanvasGroup == null)
+        {
+            mMainCanvasGroup = sourceCanvas.gameObject.AddComponent<CanvasGroup>();
+        }
+
+        mMainCanvasGroup.alpha = 1f;
+        mMainCanvasGroup.interactable = true;
+        mMainCanvasGroup.blocksRaycasts = true;
+
         var canvasObject = new GameObject(
             BagSelectCanvasObjectName,
             typeof(RectTransform),
@@ -410,7 +492,165 @@ public class MainScene : MonoBehaviour
         mBagSelectOverlayCanvas.sortingLayerID = sourceCanvas.sortingLayerID;
         mBagSelectOverlayCanvas.sortingOrder = BagSelectPanelSortingOrder;
 
+        CreateOpeningStageBackground();
+        CreateBagSelectBackdrop();
         mBagSelectPanelRoot.transform.SetParent(mBagSelectOverlayCanvas.transform, false);
+        mBagSelectPanelRoot.transform.SetAsLastSibling();
+        mBagSelectPanelCanvasGroup = mBagSelectPanelRoot.GetComponent<CanvasGroup>();
+        if (mBagSelectPanelCanvasGroup == null)
+        {
+            mBagSelectPanelCanvasGroup = mBagSelectPanelRoot.AddComponent<CanvasGroup>();
+        }
+
+        CreateTearGuideCanvas(camera, sourceCanvas);
+    }
+
+    private void CreateOpeningStageBackground()
+    {
+        var backgroundObject = new GameObject(
+            OpeningStageBackgroundObjectName,
+            typeof(RectTransform),
+            typeof(CanvasRenderer),
+            typeof(Image));
+        backgroundObject.layer = mBagSelectPanelRoot.layer;
+        var rectTransform = backgroundObject.GetComponent<RectTransform>();
+        StretchToParent(rectTransform, mBagSelectOverlayCanvas.transform);
+
+        mOpeningStageBackgroundImage = backgroundObject.GetComponent<Image>();
+        mOpeningStageBackgroundSprite = GameCommonUtility.LoadSpriteByPath(
+            OpeningStageBackgroundPath,
+            PixelsPerUnit);
+        var fallbackBackground = GameCommonUtility.FindSceneObject(
+            GameDefine.BackgroundObjectName)?.GetComponent<Image>();
+        mOpeningStageBackgroundImage.sprite = mOpeningStageBackgroundSprite != null
+            ? mOpeningStageBackgroundSprite
+            : fallbackBackground != null ? fallbackBackground.sprite : null;
+        mOpeningStageBackgroundImage.color = Color.white;
+        mOpeningStageBackgroundImage.raycastTarget = true;
+        backgroundObject.SetActive(false);
+    }
+
+    private void CreateBagSelectBackdrop()
+    {
+        var backdropObject = new GameObject(
+            BagSelectBackdropObjectName,
+            typeof(RectTransform),
+            typeof(CanvasRenderer),
+            typeof(RawImage));
+        backdropObject.layer = mBagSelectPanelRoot.layer;
+        var rectTransform = backdropObject.GetComponent<RectTransform>();
+        StretchToParent(rectTransform, mBagSelectOverlayCanvas.transform);
+
+        mBagSelectBackdropImage = backdropObject.GetComponent<RawImage>();
+        mBagSelectBackdropImage.raycastTarget = false;
+        backdropObject.SetActive(false);
+    }
+
+    private void CreateTearGuideCanvas(Camera camera, Canvas sourceCanvas)
+    {
+        var canvasObject = new GameObject(
+            TearGuideCanvasObjectName,
+            typeof(RectTransform),
+            typeof(Canvas),
+            typeof(CanvasScaler));
+        canvasObject.layer = mBagSelectPanelRoot.layer;
+        mTearGuideCanvas = canvasObject.GetComponent<Canvas>();
+        GameCommonUtility.ConfigureCanvasForGameplay(
+            mTearGuideCanvas,
+            camera,
+            GameDefine.DesignWidth,
+            ReferenceHeight,
+            PixelsPerUnit,
+            SelectedPackageWorldDepth - 0.01f);
+        mTearGuideCanvas.sortingLayerID = sourceCanvas.sortingLayerID;
+        mTearGuideCanvas.sortingOrder = TearGuideSortingOrder;
+
+        var guideObject = new GameObject(
+            TearGuideObjectName,
+            typeof(RectTransform),
+            typeof(CanvasGroup));
+        guideObject.layer = mBagSelectPanelRoot.layer;
+        mTearGuideRect = guideObject.GetComponent<RectTransform>();
+        mTearGuideRect.SetParent(mTearGuideCanvas.transform, false);
+        mTearGuideRect.anchorMin = new Vector2(0.5f, 0.5f);
+        mTearGuideRect.anchorMax = new Vector2(0.5f, 0.5f);
+        mTearGuideRect.pivot = new Vector2(0.5f, 0.5f);
+        mTearGuideRect.sizeDelta = new Vector2(112f, 112f);
+        mTearGuideCanvasGroup = guideObject.GetComponent<CanvasGroup>();
+
+        mTearGuideCircleSprite = CreateRuntimeCircleSprite(out mTearGuideCircleTexture);
+        CreateTearGuideCircle("Halo", mTearGuideCircleSprite, 112f, new Color(0.55f, 0.92f, 1f, 0.42f));
+        CreateTearGuideCircle("Core", mTearGuideCircleSprite, 52f, new Color(1f, 1f, 1f, 0.94f));
+        guideObject.SetActive(false);
+    }
+
+    private static Sprite CreateRuntimeCircleSprite(out Texture2D texture)
+    {
+        const int textureSize = 64;
+        const float edgeSoftness = 1.5f;
+        var center = (textureSize - 1f) * 0.5f;
+        var radius = center - 1f;
+        var pixels = new Color32[textureSize * textureSize];
+
+        for (var y = 0; y < textureSize; y++)
+        {
+            for (var x = 0; x < textureSize; x++)
+            {
+                var distance = Vector2.Distance(new Vector2(x, y), new Vector2(center, center));
+                var alpha = Mathf.Clamp01((radius - distance) / edgeSoftness + 0.5f);
+                pixels[y * textureSize + x] = new Color32(255, 255, 255, (byte)Mathf.RoundToInt(alpha * 255f));
+            }
+        }
+
+        texture = new Texture2D(textureSize, textureSize, TextureFormat.RGBA32, false)
+        {
+            name = "CardPackTearGuideCircleTexture",
+            filterMode = FilterMode.Bilinear,
+            wrapMode = TextureWrapMode.Clamp
+        };
+        texture.SetPixels32(pixels);
+        texture.Apply(false, true);
+
+        var sprite = Sprite.Create(
+            texture,
+            new Rect(0f, 0f, textureSize, textureSize),
+            new Vector2(0.5f, 0.5f),
+            textureSize);
+        sprite.name = "CardPackTearGuideCircle";
+        return sprite;
+    }
+
+    private void CreateTearGuideCircle(string objectName, Sprite sprite, float size, Color color)
+    {
+        var circleObject = new GameObject(
+            objectName,
+            typeof(RectTransform),
+            typeof(CanvasRenderer),
+            typeof(Image));
+        circleObject.layer = mBagSelectPanelRoot.layer;
+        var circleRect = circleObject.GetComponent<RectTransform>();
+        circleRect.SetParent(mTearGuideRect, false);
+        circleRect.anchorMin = new Vector2(0.5f, 0.5f);
+        circleRect.anchorMax = new Vector2(0.5f, 0.5f);
+        circleRect.pivot = new Vector2(0.5f, 0.5f);
+        circleRect.anchoredPosition = Vector2.zero;
+        circleRect.sizeDelta = new Vector2(size, size);
+
+        var image = circleObject.GetComponent<Image>();
+        image.sprite = sprite;
+        image.color = color;
+        image.raycastTarget = false;
+    }
+
+    private static void StretchToParent(RectTransform rectTransform, Transform parent)
+    {
+        rectTransform.SetParent(parent, false);
+        rectTransform.anchorMin = Vector2.zero;
+        rectTransform.anchorMax = Vector2.one;
+        rectTransform.pivot = new Vector2(0.5f, 0.5f);
+        rectTransform.offsetMin = Vector2.zero;
+        rectTransform.offsetMax = Vector2.zero;
+        rectTransform.localScale = Vector3.one;
     }
 
     private void OnBagSelectPlayClicked()
@@ -420,7 +660,7 @@ public class MainScene : MonoBehaviour
             return;
         }
 
-        mPlayAnimationCoroutine = StartCoroutine(PlaySelectedPackage());
+        mPlayAnimationCoroutine = StartCoroutine(EnterCardPackOpeningStage());
     }
 
     private void OnBagSelectBackClicked()
@@ -2099,13 +2339,16 @@ public class MainScene : MonoBehaviour
         float fromScale,
         float toScale,
         Vector3 fromCenter,
-        Vector3 toCenter)
+        Vector3 toCenter,
+        float duration = PackageOpenScaleDuration)
     {
         var elapsed = 0f;
-        while (elapsed < PackageOpenScaleDuration)
+        while (elapsed < duration)
         {
             elapsed += Time.unscaledDeltaTime;
-            var normalized = Mathf.Clamp01(elapsed / PackageOpenScaleDuration);
+            var normalized = duration > 0f
+                ? Mathf.Clamp01(elapsed / duration)
+                : 1f;
             var eased = Mathf.SmoothStep(0f, 1f, normalized);
             GameAnimationUtility.SetPreparedCardPackPose(
                 Mathf.LerpUnclamped(fromScale, toScale, eased),
@@ -2189,6 +2432,7 @@ public class MainScene : MonoBehaviour
         mIsPlayingAnimation = true;
         mSelectedPackageEntry = entry;
         mSelectedBagId = bagId;
+        yield return CaptureBagSelectBackdrop();
         var anchor = entry.Image != null ? entry.Image.rectTransform : entry.RectTransform;
         var coverSprite = entry.Image != null ? entry.Image.sprite : null;
         var idleScale = GetPackageBreathScale(entry);
@@ -2213,6 +2457,7 @@ public class MainScene : MonoBehaviour
                 mSelectedPackageStartCenter);
             SetPackageVisualsVisible(entry, false);
             RefreshBagSelectPackState(bagId);
+            SetBagSelectBackdropVisible(true);
             SetBagSelectPanelVisible(true);
             SetBagSelectButtonsInteractable(false);
             yield return AnimatePreparedCardPack(
@@ -2226,6 +2471,8 @@ public class MainScene : MonoBehaviour
         if (!prepared)
         {
             Debug.LogWarning($"Card pack selection preview not prepared. packId={bagId}");
+            SetBagSelectBackdropVisible(false);
+            ReleaseBagSelectBackdropTexture();
             SetBagSelectPanelVisible(false);
             SetPackageVisualsVisible(entry, true);
             var fallbackRect = entry.RectTransform != null
@@ -2248,6 +2495,122 @@ public class MainScene : MonoBehaviour
         mPlayAnimationCoroutine = null;
     }
 
+    private IEnumerator CaptureBagSelectBackdrop()
+    {
+        SetBagSelectBackdropVisible(false);
+        ReleaseBagSelectBackdropTexture();
+        if (mBagSelectBackdropImage == null)
+        {
+            yield break;
+        }
+
+        yield return new WaitForEndOfFrame();
+        var screenshot = ScreenCapture.CaptureScreenshotAsTexture();
+        if (screenshot == null)
+        {
+            yield break;
+        }
+
+        var width = Mathf.Max(1, screenshot.width / BagSelectBlurDownsample);
+        var height = Mathf.Max(1, screenshot.height / BagSelectBlurDownsample);
+        mBagSelectBackdropTexture = new RenderTexture(
+            width,
+            height,
+            0,
+            RenderTextureFormat.ARGB32)
+        {
+            name = "BagSelectBlurredBackdropTexture",
+            filterMode = FilterMode.Bilinear,
+            wrapMode = TextureWrapMode.Clamp
+        };
+        mBagSelectBackdropTexture.Create();
+        Graphics.Blit(screenshot, mBagSelectBackdropTexture);
+        Destroy(screenshot);
+        mBagSelectBackdropImage.texture = mBagSelectBackdropTexture;
+        mBagSelectBackdropImage.color = Color.white;
+    }
+
+    private IEnumerator EnterCardPackOpeningStage()
+    {
+        mIsPlayingAnimation = true;
+        SetBagSelectButtonsInteractable(false);
+        if (mOpeningStageBackgroundImage != null)
+        {
+            mOpeningStageBackgroundImage.gameObject.SetActive(true);
+            SetOpeningStageBackgroundAlpha(0f);
+        }
+
+        if (mBagSelectPanelCanvasGroup != null)
+        {
+            mBagSelectPanelCanvasGroup.alpha = 1f;
+            mBagSelectPanelCanvasGroup.interactable = false;
+            mBagSelectPanelCanvasGroup.blocksRaycasts = false;
+        }
+
+        mSelectedPackageStageScale = mSelectedPackageOpenScale * OpeningStageScaleRatio;
+        var elapsed = 0f;
+        while (elapsed < OpeningStageTransitionDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            var normalized = Mathf.Clamp01(elapsed / OpeningStageTransitionDuration);
+            var eased = Mathf.SmoothStep(0f, 1f, normalized);
+            SetOpeningStageBackgroundAlpha(eased);
+            if (mMainCanvasGroup != null)
+            {
+                mMainCanvasGroup.alpha = 1f - eased;
+            }
+
+            if (mBagSelectPanelCanvasGroup != null)
+            {
+                mBagSelectPanelCanvasGroup.alpha = 1f - eased;
+            }
+
+            if (mBagSelectBackdropImage != null)
+            {
+                var color = mBagSelectBackdropImage.color;
+                color.a = 1f - eased;
+                mBagSelectBackdropImage.color = color;
+            }
+
+            GameAnimationUtility.SetPreparedCardPackPose(
+                Mathf.LerpUnclamped(mSelectedPackageOpenScale, mSelectedPackageStageScale, eased),
+                mSelectedPackageDisplayCenter);
+            yield return null;
+        }
+
+        SetOpeningStageBackgroundAlpha(1f);
+        SetBagSelectPanelVisible(false);
+        SetBagSelectBackdropVisible(false);
+        ReleaseBagSelectBackdropTexture();
+        if (mMainCanvasGroup != null)
+        {
+            mMainCanvasGroup.alpha = 0f;
+            mMainCanvasGroup.interactable = false;
+            mMainCanvasGroup.blocksRaycasts = false;
+        }
+
+        var punchScale = mSelectedPackageStageScale * OpeningStagePunchScaleRatio;
+        var halfSettleDuration = OpeningStageSettleDuration * 0.5f;
+        yield return AnimatePreparedCardPack(
+            mSelectedPackageStageScale,
+            punchScale,
+            mSelectedPackageDisplayCenter,
+            mSelectedPackageDisplayCenter,
+            halfSettleDuration);
+        yield return AnimatePreparedCardPack(
+            punchScale,
+            mSelectedPackageStageScale,
+            mSelectedPackageDisplayCenter,
+            mSelectedPackageDisplayCenter,
+            halfSettleDuration);
+
+        mIsPlayingAnimation = false;
+        mIsAwaitingTearSwipe = true;
+        mIsTrackingTearSwipe = false;
+        mPlayAnimationCoroutine = null;
+        StartTearGuide();
+    }
+
     private IEnumerator PlaySelectedPackage()
     {
         mIsPlayingAnimation = true;
@@ -2260,6 +2623,8 @@ public class MainScene : MonoBehaviour
 
         if (GameAnimationUtility.PlayPreparedCardPackAnimation())
         {
+            GameAnimationUtility.PlayPreparedCardPackDismantleEffect(
+                TearGuideSortingOrder + 10);
             yield return WaitForCardPackAnimation(anchor);
         }
         else
@@ -2276,7 +2641,7 @@ public class MainScene : MonoBehaviour
 
         mPlayAnimationCoroutine = null;
         mHasSwitchedToGameScene = true;
-        GameManager.EnterGameScene(selectedBagId);
+        GameManager.EnterGameScene(selectedBagId, playEntranceAnimation: true);
     }
 
     private IEnumerator HidePackageSelection()
@@ -2284,6 +2649,8 @@ public class MainScene : MonoBehaviour
         mIsPlayingAnimation = true;
         SetBagSelectButtonsInteractable(false);
         SetBagSelectPanelVisible(false);
+        SetBagSelectBackdropVisible(false);
+        ReleaseBagSelectBackdropTexture();
         yield return AnimatePreparedCardPack(
             mSelectedPackageOpenScale,
             mSelectedPackageStartScale,
@@ -2332,12 +2699,254 @@ public class MainScene : MonoBehaviour
         SetPanelVisible(mBagSelectPanelRoot, visible);
     }
 
+    private void SetBagSelectBackdropVisible(bool visible)
+    {
+        if (mBagSelectBackdropImage != null)
+        {
+            mBagSelectBackdropImage.gameObject.SetActive(
+                visible && mBagSelectBackdropTexture != null);
+        }
+    }
+
+    private void SetOpeningStageBackgroundAlpha(float alpha)
+    {
+        if (mOpeningStageBackgroundImage == null)
+        {
+            return;
+        }
+
+        var color = mOpeningStageBackgroundImage.color;
+        color.a = Mathf.Clamp01(alpha);
+        mOpeningStageBackgroundImage.color = color;
+    }
+
+    private void ReleaseBagSelectBackdropTexture()
+    {
+        if (mBagSelectBackdropImage != null)
+        {
+            mBagSelectBackdropImage.texture = null;
+        }
+
+        if (mBagSelectBackdropTexture == null)
+        {
+            return;
+        }
+
+        mBagSelectBackdropTexture.Release();
+        Destroy(mBagSelectBackdropTexture);
+        mBagSelectBackdropTexture = null;
+    }
+
+    private void StartTearGuide()
+    {
+        StopTearGuide();
+        mTearGuideCoroutine = StartCoroutine(AnimateTearGuide());
+    }
+
+    private void StopTearGuide()
+    {
+        if (mTearGuideCoroutine != null)
+        {
+            StopCoroutine(mTearGuideCoroutine);
+            mTearGuideCoroutine = null;
+        }
+
+        if (mTearGuideRect != null)
+        {
+            mTearGuideRect.gameObject.SetActive(false);
+        }
+    }
+
+    private IEnumerator AnimateTearGuide()
+    {
+        while (mIsAwaitingTearSwipe)
+        {
+            if (mIsTrackingTearSwipe || !TryRefreshTearSwipeScreenRect())
+            {
+                if (mTearGuideRect != null)
+                {
+                    mTearGuideRect.gameObject.SetActive(false);
+                }
+
+                yield return null;
+                continue;
+            }
+
+            var startScreen = new Vector2(
+                Mathf.Lerp(mTearSwipeScreenRect.xMin, mTearSwipeScreenRect.xMax, 0.14f),
+                Mathf.Lerp(mTearSwipeScreenRect.yMin, mTearSwipeScreenRect.yMax, TearGuideVerticalPositionRatio));
+            var endScreen = new Vector2(
+                Mathf.Lerp(mTearSwipeScreenRect.xMin, mTearSwipeScreenRect.xMax, 0.86f),
+                startScreen.y);
+            if (!TryScreenPointToTearGuideLocal(startScreen, out var startLocal)
+                || !TryScreenPointToTearGuideLocal(endScreen, out var endLocal))
+            {
+                yield return null;
+                continue;
+            }
+
+            mTearGuideRect.gameObject.SetActive(true);
+            var elapsed = 0f;
+            while (elapsed < TearGuideTravelDuration
+                && mIsAwaitingTearSwipe
+                && !mIsTrackingTearSwipe)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                var normalized = Mathf.Clamp01(elapsed / TearGuideTravelDuration);
+                mTearGuideRect.anchoredPosition = Vector2.LerpUnclamped(
+                    startLocal,
+                    endLocal,
+                    Mathf.SmoothStep(0f, 1f, normalized));
+                if (mTearGuideCanvasGroup != null)
+                {
+                    var fadeIn = Mathf.Clamp01(normalized / 0.16f);
+                    var fadeOut = Mathf.Clamp01((1f - normalized) / 0.16f);
+                    mTearGuideCanvasGroup.alpha = Mathf.Min(fadeIn, fadeOut);
+                }
+
+                yield return null;
+            }
+
+            mTearGuideRect.gameObject.SetActive(false);
+            if (!mIsAwaitingTearSwipe || mIsTrackingTearSwipe)
+            {
+                continue;
+            }
+
+            yield return new WaitForSecondsRealtime(TearGuidePauseDuration);
+        }
+
+        mTearGuideCoroutine = null;
+    }
+
+    private bool TryRefreshTearSwipeScreenRect()
+    {
+        var camera = Camera.main;
+        if (camera == null
+            || !GameAnimationUtility.TryGetPreparedCardPackWorldBounds(out var bounds))
+        {
+            return false;
+        }
+
+        var minimum = camera.WorldToScreenPoint(new Vector3(
+            bounds.min.x,
+            bounds.min.y,
+            bounds.center.z));
+        var maximum = camera.WorldToScreenPoint(new Vector3(
+            bounds.max.x,
+            bounds.max.y,
+            bounds.center.z));
+        if (maximum.x <= minimum.x || maximum.y <= minimum.y)
+        {
+            return false;
+        }
+
+        mTearSwipeScreenRect = Rect.MinMaxRect(
+            minimum.x,
+            minimum.y,
+            maximum.x,
+            maximum.y);
+        return true;
+    }
+
+    private bool TryScreenPointToTearGuideLocal(Vector2 screenPoint, out Vector2 localPoint)
+    {
+        localPoint = default;
+        var canvasRect = mTearGuideCanvas != null
+            ? mTearGuideCanvas.transform as RectTransform
+            : null;
+        return canvasRect != null
+            && RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                canvasRect,
+                screenPoint,
+                mTearGuideCanvas.worldCamera,
+                out localPoint);
+    }
+
+    private void OnTearSwipeBegin(Vector2 screenPosition)
+    {
+        if (!mIsAwaitingTearSwipe || !TryRefreshTearSwipeScreenRect())
+        {
+            return;
+        }
+
+        var bandHalfHeight = mTearSwipeScreenRect.height * TearGuideBandHeightRatio * 0.5f;
+        var bandCenterY = Mathf.Lerp(
+            mTearSwipeScreenRect.yMin,
+            mTearSwipeScreenRect.yMax,
+            TearGuideVerticalPositionRatio);
+        var maximumStartX = Mathf.Lerp(
+            mTearSwipeScreenRect.xMin,
+            mTearSwipeScreenRect.xMax,
+            TearSwipeStartMaxRatio);
+        if (screenPosition.x < mTearSwipeScreenRect.xMin
+            || screenPosition.x > maximumStartX
+            || screenPosition.y < bandCenterY - bandHalfHeight
+            || screenPosition.y > bandCenterY + bandHalfHeight)
+        {
+            return;
+        }
+
+        mIsTrackingTearSwipe = true;
+        mTearSwipeStartScreenPosition = screenPosition;
+        if (mTearGuideRect != null)
+        {
+            mTearGuideRect.gameObject.SetActive(false);
+        }
+    }
+
+    private void OnTearSwipeMove(Vector2 screenPosition)
+    {
+        if (!mIsTrackingTearSwipe)
+        {
+            return;
+        }
+
+        var horizontalDistance = screenPosition.x - mTearSwipeStartScreenPosition.x;
+        var verticalDistance = Mathf.Abs(screenPosition.y - mTearSwipeStartScreenPosition.y);
+        if (horizontalDistance < mTearSwipeScreenRect.width * TearSwipeRequiredDistanceRatio
+            || verticalDistance > mTearSwipeScreenRect.height * TearSwipeMaxVerticalDriftRatio)
+        {
+            return;
+        }
+
+        CompleteTearSwipe();
+    }
+
+    private void OnTearSwipeEnd(Vector2 screenPosition)
+    {
+        if (!mIsTrackingTearSwipe)
+        {
+            return;
+        }
+
+        OnTearSwipeMove(screenPosition);
+        if (mIsAwaitingTearSwipe)
+        {
+            mIsTrackingTearSwipe = false;
+        }
+    }
+
+    private void CompleteTearSwipe()
+    {
+        if (!mIsAwaitingTearSwipe || mIsPlayingAnimation)
+        {
+            return;
+        }
+
+        mIsAwaitingTearSwipe = false;
+        mIsTrackingTearSwipe = false;
+        StopTearGuide();
+        mPlayAnimationCoroutine = StartCoroutine(PlaySelectedPackage());
+    }
+
     private void ClearPackageSelection()
     {
         mSelectedPackageEntry = null;
         mSelectedBagId = 0;
         mSelectedPackageStartScale = 0f;
         mSelectedPackageOpenScale = 0f;
+        mSelectedPackageStageScale = 0f;
         mSelectedPackageStartCenter = default;
         mSelectedPackageDisplayCenter = default;
     }

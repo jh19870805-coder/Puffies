@@ -15,6 +15,12 @@ public static class GameAnimationUtility
     private const string CardPackPrefabResourcesPath = GameDefine.CardPackPrefabResourcesFolder;
     private const string CardPackMaterialResourcesPath = GameDefine.CardPackMaterialResourcesPath;
     private const string FullCardPackObjectName = "CardPackOpeningFull";
+    private const string CardPackDismantleResourcesPath =
+        "Effects/CardPackDismantle/CardPackDismantle_001";
+    private const string RuntimeDismantleObjectName = "CardPackDismantleRuntime";
+    private const float DismantleReferenceCardWidth = 2.4f;
+    private const float DismantleWorldDepthOffset = -0.05f;
+    private const float DismantleLifetime = 2.8f;
     private static readonly string[] CardPackAnimatedPrefabNames =
     {
         GameDefine.CardPackOpeningPrefabName,
@@ -423,6 +429,14 @@ public static class GameAnimationUtility
         return true;
     }
 
+    public static bool TryGetPreparedCardPackWorldBounds(out Bounds bounds)
+    {
+        bounds = default;
+        return TryGetSpawnedCardPackEffect(out var effect)
+            && effect.HasPreparedPose
+            && TryGetCurrentPoseBounds(effect.CardRenderers, out bounds);
+    }
+
     public static void SetPreparedCardPackPose(float scaleMultiplier, Vector3 center)
     {
         if (!TryGetSpawnedCardPackEffect(out var effect) || !effect.HasPreparedPose)
@@ -470,6 +484,48 @@ public static class GameAnimationUtility
         }
 
         ResetCardPackAnimators(effect, pause: false);
+        return true;
+    }
+
+    public static bool PlayPreparedCardPackDismantleEffect(int sortingOrder)
+    {
+        if (!TryGetSpawnedCardPackEffect(out var effect)
+            || !effect.HasPreparedPose
+            || !TryGetCurrentPoseBounds(effect.CardRenderers, out var cardBounds)
+            || cardBounds.size.x <= 0.001f)
+        {
+            return false;
+        }
+
+        var prefab = Resources.Load<GameObject>(CardPackDismantleResourcesPath);
+        if (prefab == null)
+        {
+            Debug.LogWarning(
+                $"Card-pack dismantle effect missing: Resources/{CardPackDismantleResourcesPath}.");
+            return false;
+        }
+
+        var root = UnityEngine.Object.Instantiate(prefab);
+        root.name = RuntimeDismantleObjectName;
+        root.transform.position = new Vector3(
+            cardBounds.center.x,
+            cardBounds.center.y,
+            cardBounds.center.z + DismantleWorldDepthOffset);
+        root.transform.rotation = Quaternion.identity;
+        var worldScale = cardBounds.size.x / DismantleReferenceCardWidth;
+        var sortingLayerId = effect.CardRenderers != null
+            && effect.CardRenderers.Length > 0
+            && effect.CardRenderers[0] != null
+            ? effect.CardRenderers[0].sortingLayerID
+            : 0;
+        CardFxRuntimeUtility.PrepareRuntimeWorldEffect(
+            root,
+            worldScale,
+            sortingLayerId,
+            sortingOrder);
+        CardFxRuntimeUtility.ReplayParticleSystems(root);
+        UnityEngine.Object.DontDestroyOnLoad(root);
+        CardPackDismantleLifetime.Attach(root, DismantleLifetime);
         return true;
     }
 
@@ -1248,6 +1304,34 @@ public static class GameAnimationUtility
             name = "CardPackRuntimeFallback"
         };
         return sCardPackMaterial;
+    }
+}
+
+internal sealed class CardPackDismantleLifetime : MonoBehaviour
+{
+    private float mLifetime;
+
+    public static void Attach(GameObject root, float lifetime)
+    {
+        if (root == null)
+        {
+            return;
+        }
+
+        var component = root.GetComponent<CardPackDismantleLifetime>();
+        if (component == null)
+        {
+            component = root.AddComponent<CardPackDismantleLifetime>();
+        }
+
+        component.mLifetime = Mathf.Max(0.1f, lifetime);
+    }
+
+    private IEnumerator Start()
+    {
+        yield return new WaitForSecondsRealtime(mLifetime);
+        CardFxRuntimeUtility.ReleasePreparedMaterials(gameObject);
+        Destroy(gameObject);
     }
 }
 
