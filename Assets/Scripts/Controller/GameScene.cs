@@ -39,10 +39,10 @@ public class GameScene : MonoBehaviour
     private const float HintShakeAngle = 6f;
     private const float HintShakeCyclesPerSecond = 4.5f;
     private const float HintShakeDuration = 0.8f;
-    private const float HintDashLength = 5.6f;
-    private const float HintDashGap = 4f;
+    private const float HintDashLength = 20f;
+    private const float HintDashGap = 15f;
     private const float HintOutlineWidth = 3f;
-    private const float HintOutlineScrollSpeed = 8f;
+    private const float HintOutlineScrollSpeed = 60f;
     private const string BootstrapObjectName = "GameSceneBootstrap";
     private const string PieceBgFillObjectName = "PieceBgFill";
     private const string PieceBgObjectName = "PieceBg";
