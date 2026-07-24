@@ -60,6 +60,8 @@ public class MainScene : MonoBehaviour
     private const float TearSwipeStartMaxRatio = 0.38f;
     private const float TearSwipeRequiredDistanceRatio = 0.5f;
     private const float TearSwipeMaxVerticalDriftRatio = 0.2f;
+    private const float TearTapMaxTravelRatio = 0.06f;
+    private const float TearTapMinTravelPixels = 18f;
     private const int MainPackageBagId = GameDefine.DefaultBagId;
     private const string BootstrapObjectName = "MainSceneBootstrap";
     private const string PackageScrollViewObjectName = "PackageScrollView";
@@ -152,6 +154,7 @@ public class MainScene : MonoBehaviour
     private float mSelectedPackageStageScale;
     private bool mIsAwaitingTearSwipe;
     private bool mIsTrackingTearSwipe;
+    private bool mIsTrackingTearTap;
     private Vector2 mTearSwipeStartScreenPosition;
     private Rect mTearSwipeScreenRect;
 
@@ -260,6 +263,7 @@ public class MainScene : MonoBehaviour
         mSelectedBagId = 0;
         mIsAwaitingTearSwipe = false;
         mIsTrackingTearSwipe = false;
+        mIsTrackingTearTap = false;
 
         GameManager.Initialize();
         if (!GameSettingsUtility.Initialize())
@@ -2427,6 +2431,18 @@ public class MainScene : MonoBehaviour
         GameAnimationUtility.SetCardPackIdleDisplayVisible(entry.IdleDisplay, visible);
     }
 
+    private void SetUnselectedPackageVisualsVisible(bool visible)
+    {
+        foreach (var pair in mPackageSlotsById)
+        {
+            var entry = pair.Value;
+            if (entry != null && entry != mSelectedPackageEntry)
+            {
+                SetPackageVisualsVisible(entry, visible);
+            }
+        }
+    }
+
     private IEnumerator ShowPackageSelection(int bagId, PackageEntry entry)
     {
         mIsPlayingAnimation = true;
@@ -2534,6 +2550,7 @@ public class MainScene : MonoBehaviour
     {
         mIsPlayingAnimation = true;
         SetBagSelectButtonsInteractable(false);
+        SetUnselectedPackageVisualsVisible(false);
         if (mOpeningStageBackgroundImage != null)
         {
             mOpeningStageBackgroundImage.gameObject.SetActive(true);
@@ -2607,6 +2624,7 @@ public class MainScene : MonoBehaviour
         mIsPlayingAnimation = false;
         mIsAwaitingTearSwipe = true;
         mIsTrackingTearSwipe = false;
+        mIsTrackingTearTap = false;
         mPlayAnimationCoroutine = null;
         StartTearGuide();
     }
@@ -2822,10 +2840,24 @@ public class MainScene : MonoBehaviour
     private bool TryRefreshTearSwipeScreenRect()
     {
         var camera = Camera.main;
-        if (camera == null
-            || !GameAnimationUtility.TryGetPreparedCardPackWorldBounds(out var bounds))
+        if (camera == null)
         {
             return false;
+        }
+
+        Bounds bounds;
+        if (!GameAnimationUtility.TryGetPreparedCardPackWorldBounds(out bounds)
+            || bounds.size.x <= 0.001f
+            || bounds.size.y <= 0.001f)
+        {
+            var stageRatio = mSelectedPackageOpenScale > 0.001f
+                ? mSelectedPackageStageScale / mSelectedPackageOpenScale
+                : OpeningStageScaleRatio;
+            var expectedWorldSize = new Vector3(
+                PackageOpenWidth / PixelsPerUnit * stageRatio,
+                PackageOpenHeight / PixelsPerUnit * stageRatio,
+                0.01f);
+            bounds = new Bounds(mSelectedPackageDisplayCenter, expectedWorldSize);
         }
 
         var minimum = camera.WorldToScreenPoint(new Vector3(
@@ -2870,6 +2902,14 @@ public class MainScene : MonoBehaviour
             return;
         }
 
+        mIsTrackingTearTap = mTearSwipeScreenRect.Contains(screenPosition);
+        if (!mIsTrackingTearTap)
+        {
+            return;
+        }
+
+        mTearSwipeStartScreenPosition = screenPosition;
+
         var bandHalfHeight = mTearSwipeScreenRect.height * TearGuideBandHeightRatio * 0.5f;
         var bandCenterY = Mathf.Lerp(
             mTearSwipeScreenRect.yMin,
@@ -2888,7 +2928,6 @@ public class MainScene : MonoBehaviour
         }
 
         mIsTrackingTearSwipe = true;
-        mTearSwipeStartScreenPosition = screenPosition;
         if (mTearGuideRect != null)
         {
             mTearGuideRect.gameObject.SetActive(false);
@@ -2897,6 +2936,18 @@ public class MainScene : MonoBehaviour
 
     private void OnTearSwipeMove(Vector2 screenPosition)
     {
+        if (mIsTrackingTearTap)
+        {
+            var maximumTapTravel = Mathf.Max(
+                TearTapMinTravelPixels,
+                Mathf.Min(mTearSwipeScreenRect.width, mTearSwipeScreenRect.height)
+                    * TearTapMaxTravelRatio);
+            if (Vector2.Distance(screenPosition, mTearSwipeStartScreenPosition) > maximumTapTravel)
+            {
+                mIsTrackingTearTap = false;
+            }
+        }
+
         if (!mIsTrackingTearSwipe)
         {
             return;
@@ -2915,15 +2966,24 @@ public class MainScene : MonoBehaviour
 
     private void OnTearSwipeEnd(Vector2 screenPosition)
     {
-        if (!mIsTrackingTearSwipe)
+        if (!mIsTrackingTearSwipe && !mIsTrackingTearTap)
         {
             return;
         }
 
         OnTearSwipeMove(screenPosition);
-        if (mIsAwaitingTearSwipe)
+        if (!mIsAwaitingTearSwipe)
         {
-            mIsTrackingTearSwipe = false;
+            return;
+        }
+
+        var shouldOpenFromTap = mIsTrackingTearTap
+            && mTearSwipeScreenRect.Contains(screenPosition);
+        mIsTrackingTearSwipe = false;
+        mIsTrackingTearTap = false;
+        if (shouldOpenFromTap)
+        {
+            CompleteTearSwipe();
         }
     }
 
@@ -2936,6 +2996,7 @@ public class MainScene : MonoBehaviour
 
         mIsAwaitingTearSwipe = false;
         mIsTrackingTearSwipe = false;
+        mIsTrackingTearTap = false;
         StopTearGuide();
         mPlayAnimationCoroutine = StartCoroutine(PlaySelectedPackage());
     }

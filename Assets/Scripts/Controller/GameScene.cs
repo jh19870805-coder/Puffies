@@ -33,6 +33,8 @@ public class GameScene : MonoBehaviour
     private const float GameEntrancePieceStagger = 0.035f;
     private const float GameEntranceControlDelay = 0.18f;
     private const float GameEntranceControlDuration = 0.24f;
+    private const int GameEntranceWarmupFrameCount = 2;
+    private const float GameEntranceMaxFrameDelta = 1f / 30f;
     private const int PieceSortingOrder = 520;
     private const string BootstrapObjectName = "GameSceneBootstrap";
     private const string PieceBgFillObjectName = "PieceBgFill";
@@ -255,6 +257,12 @@ public class GameScene : MonoBehaviour
             renderer.color = color;
         }
 
+        // Let the entrance start pose reach the screen before advancing its clock.
+        for (var frame = 0; frame < GameEntranceWarmupFrameCount; frame++)
+        {
+            yield return null;
+        }
+
         var totalDuration = Mathf.Max(
             GameEntranceBoardDuration,
             GameEntranceTrayDelay + GameEntranceTrayDuration,
@@ -265,7 +273,7 @@ public class GameScene : MonoBehaviour
         var elapsed = 0f;
         while (elapsed < totalDuration)
         {
-            elapsed += Time.unscaledDeltaTime;
+            elapsed += Mathf.Min(Time.unscaledDeltaTime, GameEntranceMaxFrameDelta);
             if (boardRect != null)
             {
                 var boardT = Mathf.SmoothStep(
