@@ -39,8 +39,8 @@ public class GameScene : MonoBehaviour
     private const float HintShakeAngle = 6f;
     private const float HintShakeCyclesPerSecond = 4.5f;
     private const float HintShakeDuration = 0.8f;
-    private const float HintDashPeriod = 8f;
-    private const float HintDashFill = 0.7f;
+    private const float HintDashLength = 5.6f;
+    private const float HintDashGap = 4f;
     private const float HintOutlineWidth = 3f;
     private const float HintOutlineScrollSpeed = 8f;
     private const string BootstrapObjectName = "GameSceneBootstrap";
@@ -152,6 +152,7 @@ public class GameScene : MonoBehaviour
     private void OnDestroy()
     {
         ClearPieceHint();
+        HintDashedOutlineGraphic.ClearPathCache();
     }
 
     private void Update()
@@ -1747,8 +1748,8 @@ public class GameScene : MonoBehaviour
             state.GrooveImage.sprite,
             PieceHintOutlineColor,
             HintOutlineWidth,
-            HintDashPeriod,
-            HintDashFill,
+            HintDashLength,
+            HintDashGap,
             HintOutlineScrollSpeed,
             state.GrooveImage.preserveAspect);
         _pieceHintOutlineRoot = outlineObject;
@@ -2870,29 +2871,38 @@ public class GameScene : MonoBehaviour
 
 internal sealed class HintDashedOutlineGraphic : MaskableGraphic
 {
+    private const byte AlphaThreshold = 26;
+    private const float OutlineSimplifyTolerancePixels = 0.75f;
+    private static readonly Dictionary<Sprite, List<List<Vector2>>> sNormalizedPathCache =
+        new Dictionary<Sprite, List<List<Vector2>>>();
     private readonly List<List<Vector2>> _spritePaths = new List<List<Vector2>>();
     private readonly List<Vector2> _mappedPath = new List<Vector2>();
     private Sprite _sourceSprite;
     private float _lineWidth = 3f;
-    private float _dashPeriod = 8f;
-    private float _dashFill = 0.7f;
+    private float _dashLength = 5.6f;
+    private float _dashGap = 4f;
     private float _scrollSpeed = 8f;
     private bool _preserveAspect;
+
+    public static void ClearPathCache()
+    {
+        sNormalizedPathCache.Clear();
+    }
 
     public void Configure(
         Sprite sourceSprite,
         Color lineColor,
         float lineWidth,
-        float dashPeriod,
-        float dashFill,
+        float dashLength,
+        float dashGap,
         float scrollSpeed,
         bool preserveAspect)
     {
         _sourceSprite = sourceSprite;
         color = lineColor;
         _lineWidth = Mathf.Max(0.5f, lineWidth);
-        _dashPeriod = Mathf.Max(1f, dashPeriod);
-        _dashFill = Mathf.Clamp(dashFill, 0.05f, 0.95f);
+        _dashLength = Mathf.Max(1f, dashLength);
+        _dashGap = Mathf.Max(1f, dashGap);
         _scrollSpeed = scrollSpeed;
         _preserveAspect = preserveAspect;
         raycastTarget = false;
@@ -2925,14 +2935,13 @@ internal sealed class HintDashedOutlineGraphic : MaskableGraphic
         var targetRect = GetDrawingRect(spriteBounds, rectTransform.rect);
         for (var pathIndex = 0; pathIndex < _spritePaths.Count; pathIndex++)
         {
-            AddDashedPath(vertexHelper, _spritePaths[pathIndex], spriteBounds, targetRect);
+            AddDashedPath(vertexHelper, _spritePaths[pathIndex], targetRect);
         }
     }
 
     private void AddDashedPath(
         VertexHelper vertexHelper,
         List<Vector2> spritePath,
-        Bounds spriteBounds,
         Rect targetRect)
     {
         if (spritePath == null || spritePath.Count < 2)
@@ -2944,7 +2953,7 @@ internal sealed class HintDashedOutlineGraphic : MaskableGraphic
         var pathLength = 0f;
         for (var i = 0; i < spritePath.Count; i++)
         {
-            _mappedPath.Add(MapSpritePoint(spritePath[i], spriteBounds, targetRect));
+            _mappedPath.Add(MapNormalizedPoint(spritePath[i], targetRect));
         }
 
         for (var i = 0; i < _mappedPath.Count; i++)
@@ -2957,8 +2966,8 @@ internal sealed class HintDashedOutlineGraphic : MaskableGraphic
             return;
         }
 
-        var dashLength = Mathf.Min(_dashPeriod * _dashFill, pathLength * _dashFill);
-        var dashCount = Mathf.Max(1, Mathf.FloorToInt(pathLength / _dashPeriod));
+        var dashLength = Mathf.Min(_dashLength, pathLength * 0.6f);
+        var dashCount = Mathf.Max(1, Mathf.FloorToInt(pathLength / (_dashLength + _dashGap)));
         var period = pathLength / dashCount;
         var offset = Mathf.Repeat(Time.unscaledTime * _scrollSpeed, period);
         var pathDistance = 0f;
@@ -3050,13 +3059,11 @@ internal sealed class HintDashedOutlineGraphic : MaskableGraphic
         vertexHelper.AddVert(vertex);
     }
 
-    private static Vector2 MapSpritePoint(Vector2 point, Bounds spriteBounds, Rect targetRect)
+    private static Vector2 MapNormalizedPoint(Vector2 point, Rect targetRect)
     {
-        var normalizedX = (point.x - spriteBounds.min.x) / spriteBounds.size.x;
-        var normalizedY = (point.y - spriteBounds.min.y) / spriteBounds.size.y;
         return new Vector2(
-            Mathf.Lerp(targetRect.xMin, targetRect.xMax, normalizedX),
-            Mathf.Lerp(targetRect.yMin, targetRect.yMax, normalizedY));
+            Mathf.Lerp(targetRect.xMin, targetRect.xMax, point.x),
+            Mathf.Lerp(targetRect.yMin, targetRect.yMax, point.y));
     }
 
     private Rect GetDrawingRect(Bounds spriteBounds, Rect targetRect)
@@ -3084,6 +3091,372 @@ internal sealed class HintDashedOutlineGraphic : MaskableGraphic
         return targetRect;
     }
 
+    private static bool TryBuildAlphaPaths(Sprite sprite, List<List<Vector2>> outputPaths)
+    {
+        if (!TryReadSpritePixels(sprite, out var pixels, out var width, out var height))
+        {
+            return false;
+        }
+
+        var outgoingEdges = new Dictionary<Vector2Int, List<Vector2Int>>();
+        var unusedEdges = new HashSet<PixelEdge>();
+        for (var y = 0; y < height; y++)
+        {
+            for (var x = 0; x < width; x++)
+            {
+                if (!IsOpaque(pixels, width, height, x, y))
+                {
+                    continue;
+                }
+
+                if (!IsOpaque(pixels, width, height, x - 1, y))
+                {
+                    AddBoundaryEdge(outgoingEdges, unusedEdges, new Vector2Int(x, y), new Vector2Int(x, y + 1));
+                }
+
+                if (!IsOpaque(pixels, width, height, x, y + 1))
+                {
+                    AddBoundaryEdge(outgoingEdges, unusedEdges, new Vector2Int(x, y + 1), new Vector2Int(x + 1, y + 1));
+                }
+
+                if (!IsOpaque(pixels, width, height, x + 1, y))
+                {
+                    AddBoundaryEdge(outgoingEdges, unusedEdges, new Vector2Int(x + 1, y + 1), new Vector2Int(x + 1, y));
+                }
+
+                if (!IsOpaque(pixels, width, height, x, y - 1))
+                {
+                    AddBoundaryEdge(outgoingEdges, unusedEdges, new Vector2Int(x + 1, y), new Vector2Int(x, y));
+                }
+            }
+        }
+
+        while (unusedEdges.Count > 0)
+        {
+            var startEdge = default(PixelEdge);
+            foreach (var edge in unusedEdges)
+            {
+                startEdge = edge;
+                break;
+            }
+
+            var pixelPath = TraceBoundary(startEdge, outgoingEdges, unusedEdges);
+            if (pixelPath == null || pixelPath.Count < 3 || CalculateSignedArea(pixelPath) < 9f)
+            {
+                continue;
+            }
+
+            var simplifiedPath = SimplifyClosedPath(pixelPath, OutlineSimplifyTolerancePixels);
+            if (simplifiedPath.Count < 3)
+            {
+                continue;
+            }
+
+            var normalizedPath = new List<Vector2>(simplifiedPath.Count);
+            for (var pointIndex = 0; pointIndex < simplifiedPath.Count; pointIndex++)
+            {
+                var point = simplifiedPath[pointIndex];
+                normalizedPath.Add(new Vector2(point.x / width, point.y / height));
+            }
+
+            outputPaths.Add(normalizedPath);
+        }
+
+        return outputPaths.Count > 0;
+    }
+
+    private static bool TryReadSpritePixels(
+        Sprite sprite,
+        out Color32[] pixels,
+        out int width,
+        out int height)
+    {
+        pixels = null;
+        width = 0;
+        height = 0;
+        if (sprite == null || sprite.texture == null || sprite.packed)
+        {
+            return false;
+        }
+
+        var texture = sprite.texture;
+        var spriteRect = sprite.textureRect;
+        var sourceX = Mathf.RoundToInt(spriteRect.x);
+        var sourceY = Mathf.RoundToInt(spriteRect.y);
+        width = Mathf.RoundToInt(spriteRect.width);
+        height = Mathf.RoundToInt(spriteRect.height);
+        if (width <= 0 || height <= 0)
+        {
+            return false;
+        }
+
+        var previousRenderTexture = RenderTexture.active;
+        var renderTexture = RenderTexture.GetTemporary(
+            texture.width,
+            texture.height,
+            0,
+            RenderTextureFormat.ARGB32,
+            RenderTextureReadWrite.Linear);
+        Texture2D readableTexture = null;
+        try
+        {
+            renderTexture.filterMode = FilterMode.Point;
+            Graphics.Blit(texture, renderTexture);
+            RenderTexture.active = renderTexture;
+            readableTexture = new Texture2D(width, height, TextureFormat.RGBA32, false, true);
+            readableTexture.ReadPixels(new Rect(sourceX, sourceY, width, height), 0, 0, false);
+            pixels = readableTexture.GetPixels32();
+            return pixels.Length == width * height;
+        }
+        catch (Exception exception)
+        {
+            Debug.LogWarning($"GameScene: failed to read hint Sprite alpha. {exception.Message}");
+            pixels = null;
+            return false;
+        }
+        finally
+        {
+            RenderTexture.active = previousRenderTexture;
+            RenderTexture.ReleaseTemporary(renderTexture);
+            if (readableTexture != null)
+            {
+                UnityEngine.Object.Destroy(readableTexture);
+            }
+        }
+    }
+
+    private static bool IsOpaque(Color32[] pixels, int width, int height, int x, int y)
+    {
+        return x >= 0
+            && x < width
+            && y >= 0
+            && y < height
+            && pixels[y * width + x].a >= AlphaThreshold;
+    }
+
+    private static void AddBoundaryEdge(
+        Dictionary<Vector2Int, List<Vector2Int>> outgoingEdges,
+        HashSet<PixelEdge> unusedEdges,
+        Vector2Int from,
+        Vector2Int to)
+    {
+        var edge = new PixelEdge(from, to);
+        if (!unusedEdges.Add(edge))
+        {
+            return;
+        }
+
+        if (!outgoingEdges.TryGetValue(from, out var destinations))
+        {
+            destinations = new List<Vector2Int>(2);
+            outgoingEdges[from] = destinations;
+        }
+
+        destinations.Add(to);
+    }
+
+    private static List<Vector2> TraceBoundary(
+        PixelEdge startEdge,
+        Dictionary<Vector2Int, List<Vector2Int>> outgoingEdges,
+        HashSet<PixelEdge> unusedEdges)
+    {
+        var path = new List<Vector2>();
+        var currentEdge = startEdge;
+        var maxSteps = unusedEdges.Count + 1;
+        path.Add(currentEdge.From);
+        for (var step = 0; step < maxSteps; step++)
+        {
+            if (!unusedEdges.Remove(currentEdge))
+            {
+                return null;
+            }
+
+            path.Add(currentEdge.To);
+            if (currentEdge.To == startEdge.From)
+            {
+                path.RemoveAt(path.Count - 1);
+                return path;
+            }
+
+            if (!TryFindNextEdge(currentEdge, outgoingEdges, unusedEdges, out currentEdge))
+            {
+                return null;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool TryFindNextEdge(
+        PixelEdge incomingEdge,
+        Dictionary<Vector2Int, List<Vector2Int>> outgoingEdges,
+        HashSet<PixelEdge> unusedEdges,
+        out PixelEdge nextEdge)
+    {
+        nextEdge = default;
+        if (!outgoingEdges.TryGetValue(incomingEdge.To, out var destinations))
+        {
+            return false;
+        }
+
+        var incomingDirection = incomingEdge.To - incomingEdge.From;
+        var found = false;
+        var bestTurnAngle = float.PositiveInfinity;
+        for (var i = 0; i < destinations.Count; i++)
+        {
+            var candidate = new PixelEdge(incomingEdge.To, destinations[i]);
+            if (!unusedEdges.Contains(candidate))
+            {
+                continue;
+            }
+
+            var outgoingDirection = candidate.To - candidate.From;
+            var cross = incomingDirection.x * outgoingDirection.y - incomingDirection.y * outgoingDirection.x;
+            var dot = incomingDirection.x * outgoingDirection.x
+                + incomingDirection.y * outgoingDirection.y;
+            var turnAngle = Mathf.Atan2(cross, dot);
+            if (!found || turnAngle < bestTurnAngle)
+            {
+                found = true;
+                bestTurnAngle = turnAngle;
+                nextEdge = candidate;
+            }
+        }
+
+        return found;
+    }
+
+    private static float CalculateSignedArea(List<Vector2> path)
+    {
+        var twiceArea = 0f;
+        for (var i = 0; i < path.Count; i++)
+        {
+            var current = path[i];
+            var next = path[(i + 1) % path.Count];
+            twiceArea += current.x * next.y - next.x * current.y;
+        }
+
+        return Mathf.Abs(twiceArea) * 0.5f;
+    }
+
+    private static List<Vector2> SimplifyClosedPath(List<Vector2> path, float tolerance)
+    {
+        if (path.Count < 5)
+        {
+            return path;
+        }
+
+        var firstIndex = 0;
+        var secondIndex = FindFarthestPointIndex(path, firstIndex);
+        firstIndex = FindFarthestPointIndex(path, secondIndex);
+        secondIndex = FindFarthestPointIndex(path, firstIndex);
+        var firstArc = BuildPathArc(path, firstIndex, secondIndex);
+        var secondArc = BuildPathArc(path, secondIndex, firstIndex);
+        var simplifiedFirstArc = SimplifyOpenPath(firstArc, tolerance);
+        var simplifiedSecondArc = SimplifyOpenPath(secondArc, tolerance);
+        var result = new List<Vector2>(simplifiedFirstArc.Count + simplifiedSecondArc.Count - 2);
+        result.AddRange(simplifiedFirstArc);
+        for (var i = 1; i < simplifiedSecondArc.Count - 1; i++)
+        {
+            result.Add(simplifiedSecondArc[i]);
+        }
+
+        return result.Count >= 3 ? result : path;
+    }
+
+    private static int FindFarthestPointIndex(List<Vector2> path, int sourceIndex)
+    {
+        var farthestIndex = sourceIndex;
+        var farthestDistance = -1f;
+        for (var i = 0; i < path.Count; i++)
+        {
+            var distance = (path[i] - path[sourceIndex]).sqrMagnitude;
+            if (distance > farthestDistance)
+            {
+                farthestDistance = distance;
+                farthestIndex = i;
+            }
+        }
+
+        return farthestIndex;
+    }
+
+    private static List<Vector2> BuildPathArc(List<Vector2> path, int startIndex, int endIndex)
+    {
+        var arc = new List<Vector2>();
+        var index = startIndex;
+        arc.Add(path[index]);
+        while (index != endIndex)
+        {
+            index = (index + 1) % path.Count;
+            arc.Add(path[index]);
+        }
+
+        return arc;
+    }
+
+    private static List<Vector2> SimplifyOpenPath(List<Vector2> path, float tolerance)
+    {
+        if (path.Count <= 2)
+        {
+            return path;
+        }
+
+        var keep = new bool[path.Count];
+        keep[0] = true;
+        keep[path.Count - 1] = true;
+        var ranges = new Stack<Vector2Int>();
+        ranges.Push(new Vector2Int(0, path.Count - 1));
+        var toleranceSquared = tolerance * tolerance;
+        while (ranges.Count > 0)
+        {
+            var range = ranges.Pop();
+            var farthestIndex = -1;
+            var farthestDistance = toleranceSquared;
+            for (var i = range.x + 1; i < range.y; i++)
+            {
+                var distance = DistanceToSegmentSquared(path[i], path[range.x], path[range.y]);
+                if (distance > farthestDistance)
+                {
+                    farthestDistance = distance;
+                    farthestIndex = i;
+                }
+            }
+
+            if (farthestIndex < 0)
+            {
+                continue;
+            }
+
+            keep[farthestIndex] = true;
+            ranges.Push(new Vector2Int(range.x, farthestIndex));
+            ranges.Push(new Vector2Int(farthestIndex, range.y));
+        }
+
+        var result = new List<Vector2>();
+        for (var i = 0; i < path.Count; i++)
+        {
+            if (keep[i])
+            {
+                result.Add(path[i]);
+            }
+        }
+
+        return result;
+    }
+
+    private static float DistanceToSegmentSquared(Vector2 point, Vector2 from, Vector2 to)
+    {
+        var segment = to - from;
+        if (segment.sqrMagnitude <= 0.000001f)
+        {
+            return (point - from).sqrMagnitude;
+        }
+
+        var t = Mathf.Clamp01(Vector2.Dot(point - from, segment) / segment.sqrMagnitude);
+        return (point - (from + segment * t)).sqrMagnitude;
+    }
+
     private void RebuildSpritePaths()
     {
         _spritePaths.Clear();
@@ -3092,6 +3465,22 @@ internal sealed class HintDashedOutlineGraphic : MaskableGraphic
             return;
         }
 
+        if (sNormalizedPathCache.TryGetValue(_sourceSprite, out var cachedPaths))
+        {
+            _spritePaths.AddRange(cachedPaths);
+            return;
+        }
+
+        if (TryBuildAlphaPaths(_sourceSprite, _spritePaths))
+        {
+            sNormalizedPathCache[_sourceSprite] = new List<List<Vector2>>(_spritePaths);
+            return;
+        }
+
+        Debug.LogWarning(
+            $"GameScene: hint outline could not read Sprite alpha; using simplified Physics Shape. "
+            + $"sprite={_sourceSprite.name}");
+        var bounds = _sourceSprite.bounds;
         var shapeCount = _sourceSprite.GetPhysicsShapeCount();
         for (var shapeIndex = 0; shapeIndex < shapeCount; shapeIndex++)
         {
@@ -3099,20 +3488,59 @@ internal sealed class HintDashedOutlineGraphic : MaskableGraphic
             _sourceSprite.GetPhysicsShape(shapeIndex, path);
             if (path.Count >= 2)
             {
+                for (var pointIndex = 0; pointIndex < path.Count; pointIndex++)
+                {
+                    var point = path[pointIndex];
+                    path[pointIndex] = new Vector2(
+                        (point.x - bounds.min.x) / bounds.size.x,
+                        (point.y - bounds.min.y) / bounds.size.y);
+                }
+
                 _spritePaths.Add(path);
             }
         }
 
         if (_spritePaths.Count == 0)
         {
-            var bounds = _sourceSprite.bounds;
             _spritePaths.Add(new List<Vector2>
             {
-                new Vector2(bounds.min.x, bounds.min.y),
-                new Vector2(bounds.min.x, bounds.max.y),
-                new Vector2(bounds.max.x, bounds.max.y),
-                new Vector2(bounds.max.x, bounds.min.y)
+                new Vector2(0f, 0f),
+                new Vector2(0f, 1f),
+                new Vector2(1f, 1f),
+                new Vector2(1f, 0f)
             });
+        }
+
+        sNormalizedPathCache[_sourceSprite] = new List<List<Vector2>>(_spritePaths);
+    }
+
+    private readonly struct PixelEdge : IEquatable<PixelEdge>
+    {
+        public PixelEdge(Vector2Int from, Vector2Int to)
+        {
+            From = from;
+            To = to;
+        }
+
+        public Vector2Int From { get; }
+        public Vector2Int To { get; }
+
+        public bool Equals(PixelEdge other)
+        {
+            return From == other.From && To == other.To;
+        }
+
+        public override bool Equals(object obj)
+        {
+            return obj is PixelEdge other && Equals(other);
+        }
+
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                return (From.GetHashCode() * 397) ^ To.GetHashCode();
+            }
         }
     }
 }
