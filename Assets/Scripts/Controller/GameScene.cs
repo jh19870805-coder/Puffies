@@ -36,6 +36,8 @@ public class GameScene : MonoBehaviour
     private const int GameEntranceWarmupFrameCount = 2;
     private const float GameEntranceMaxFrameDelta = 1f / 30f;
     private const int PieceSortingOrder = 520;
+    private const float HintShakeAngle = 6f;
+    private const float HintShakeCyclesPerSecond = 4.5f;
     private const string BootstrapObjectName = "GameSceneBootstrap";
     private const string PieceBgFillObjectName = "PieceBgFill";
     private const string PieceBgObjectName = "PieceBg";
@@ -48,6 +50,9 @@ public class GameScene : MonoBehaviour
     private const string TaskBagCountPath = "TaskBg2/TaskBagNum";
     private const string TaskRewardImgBagPath = "ImgBagBg/ImgBag";
     private const string HintButtonObjectName = "BtnTips";
+    private const string PieceHintOutlineObjectName = "PieceHintOutline";
+    private const string PieceHintOutlineShaderPath = "Effects/HintDashedOutline";
+    private static readonly Color PieceHintOutlineColor = new Color32(112, 151, 75, 255);
     private static bool sHookedSceneLoaded;
     private readonly BoardState _board = new BoardState();
     private readonly DragState _drag = new DragState();
@@ -86,6 +91,10 @@ public class GameScene : MonoBehaviour
     private RectTransform _loadedCardBagRect;
     private Vector2 _originalCardBagAnchoredPosition;
     private bool _hasOriginalCardBagAnchoredPosition;
+    private DraggablePieceState _hintedPiece;
+    private Quaternion _hintedPieceBaseRotation = Quaternion.identity;
+    private GameObject _pieceHintOutlineRoot;
+    private Material _pieceHintOutlineMaterial;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Bootstrap()
@@ -135,8 +144,19 @@ public class GameScene : MonoBehaviour
         Debug.Log("GameScene bootstrap completed.");
     }
 
+    private void OnDestroy()
+    {
+        ClearPieceHint();
+        if (_pieceHintOutlineMaterial != null)
+        {
+            Destroy(_pieceHintOutlineMaterial);
+            _pieceHintOutlineMaterial = null;
+        }
+    }
+
     private void Update()
     {
+        UpdatePieceHintAnimation();
         if (_isEntranceAnimating)
         {
             return;
@@ -932,6 +952,7 @@ public class GameScene : MonoBehaviour
 
     private void ClearCurrentDraggableGroup()
     {
+        ClearPieceHint();
         _drag.DraggingPiece = null;
         _drag.CurrentGroupDraggables.Clear();
         ClearActiveGroupOutline();
@@ -1061,6 +1082,10 @@ public class GameScene : MonoBehaviour
 
             _drag.DraggingPiece = state;
             _drag.DragOffset = state.PieceRenderer.transform.position - world;
+            if (state == _hintedPiece)
+            {
+                state.PieceRenderer.transform.rotation = _hintedPieceBaseRotation;
+            }
             state.DragScale = CalculatePieceScaleOnBoard();
             state.PieceRenderer.transform.localScale = state.DragScale;
             state.PieceRenderer.sortingOrder = PieceSortingOrder + 100;
@@ -1107,6 +1132,10 @@ public class GameScene : MonoBehaviour
             var placedRoot = GetOrCreatePlacedPiecesRoot();
             state.PieceRenderer.transform.SetParent(placedRoot.transform, worldPositionStays: true);
             state.IsPlaced = true;
+            if (state == _hintedPiece)
+            {
+                ClearPieceHint();
+            }
             StartGameplayTimerIfNeeded();
             TryAdvanceGroup();
             return;
@@ -1479,6 +1508,7 @@ public class GameScene : MonoBehaviour
 
     private void RemoveRuntimePuzzlePieces()
     {
+        ClearPieceHint();
         _drag.DraggingPiece = null;
         _drag.CurrentGroupDraggables.Clear();
         ClearActiveGroupOutline();
@@ -1585,13 +1615,153 @@ public class GameScene : MonoBehaviour
 
     private void OnHintButtonClicked()
     {
-        if (_isGameFinished || _wasHintUsed)
+        if (_isGameFinished || _isEntranceAnimating || _drag.DraggingPiece != null)
+        {
+            return;
+        }
+
+        var target = FindHintTarget();
+        if (target == null)
         {
             return;
         }
 
         _wasHintUsed = true;
+        ShowPieceHint(target);
         Debug.Log("GameScene: hint used; no-hint score bonus disabled for this game.");
+    }
+
+    private DraggablePieceState FindHintTarget()
+    {
+        if (_hintedPiece != null
+            && !_hintedPiece.IsPlaced
+            && _hintedPiece.PieceRenderer != null)
+        {
+            return _hintedPiece;
+        }
+
+        DraggablePieceState target = null;
+        var lowestPieceNumber = int.MaxValue;
+        for (var i = 0; i < _drag.CurrentGroupDraggables.Count; i++)
+        {
+            var state = _drag.CurrentGroupDraggables[i];
+            if (state == null || state.IsPlaced || state.PieceRenderer == null || state.GrooveRect == null)
+            {
+                continue;
+            }
+
+            var pieceNumber = GetPieceNumberFromState(state);
+            if (pieceNumber >= lowestPieceNumber)
+            {
+                continue;
+            }
+
+            target = state;
+            lowestPieceNumber = pieceNumber;
+        }
+
+        return target;
+    }
+
+    private void ShowPieceHint(DraggablePieceState state)
+    {
+        ClearPieceHint();
+        if (state == null || state.PieceRenderer == null || state.GrooveImage == null || state.GrooveRect == null)
+        {
+            return;
+        }
+
+        _hintedPiece = state;
+        _hintedPieceBaseRotation = state.PieceRenderer.transform.rotation;
+        CreatePieceHintOutline(state);
+    }
+
+    private void UpdatePieceHintAnimation()
+    {
+        if (_hintedPiece == null)
+        {
+            return;
+        }
+
+        var renderer = _hintedPiece.PieceRenderer;
+        if (_hintedPiece.IsPlaced || renderer == null)
+        {
+            ClearPieceHint();
+            return;
+        }
+
+        if (_drag.DraggingPiece == _hintedPiece)
+        {
+            renderer.transform.rotation = _hintedPieceBaseRotation;
+            return;
+        }
+
+        var angle = Mathf.Sin(
+            Time.unscaledTime * HintShakeCyclesPerSecond * Mathf.PI * 2f) * HintShakeAngle;
+        renderer.transform.rotation = _hintedPieceBaseRotation * Quaternion.Euler(0f, 0f, angle);
+    }
+
+    private void CreatePieceHintOutline(DraggablePieceState state)
+    {
+        var shader = Resources.Load<Shader>(PieceHintOutlineShaderPath);
+        if (shader == null)
+        {
+            Debug.LogWarning(
+                $"GameScene: hint outline shader missing at Resources/{PieceHintOutlineShaderPath}.");
+            return;
+        }
+
+        if (_pieceHintOutlineMaterial == null)
+        {
+            _pieceHintOutlineMaterial = new Material(shader)
+            {
+                name = "PieceHintOutlineMaterial"
+            };
+        }
+
+        var grooveRect = state.GrooveRect;
+        var outlineObject = new GameObject(
+            PieceHintOutlineObjectName,
+            typeof(RectTransform),
+            typeof(CanvasRenderer),
+            typeof(Image));
+        var outlineRect = outlineObject.GetComponent<RectTransform>();
+        outlineRect.SetParent(grooveRect.parent, false);
+        outlineRect.anchorMin = grooveRect.anchorMin;
+        outlineRect.anchorMax = grooveRect.anchorMax;
+        outlineRect.pivot = grooveRect.pivot;
+        outlineRect.anchoredPosition = grooveRect.anchoredPosition;
+        outlineRect.sizeDelta = grooveRect.sizeDelta;
+        outlineRect.localRotation = grooveRect.localRotation;
+        outlineRect.localScale = grooveRect.localScale;
+        outlineRect.SetAsLastSibling();
+
+        var outlineImage = outlineObject.GetComponent<Image>();
+        outlineImage.sprite = state.GrooveImage.sprite;
+        outlineImage.type = state.GrooveImage.type;
+        outlineImage.preserveAspect = state.GrooveImage.preserveAspect;
+        outlineImage.color = PieceHintOutlineColor;
+        outlineImage.material = _pieceHintOutlineMaterial;
+        outlineImage.raycastTarget = false;
+        outlineImage.maskable = false;
+        _pieceHintOutlineRoot = outlineObject;
+    }
+
+    private void ClearPieceHint()
+    {
+        if (_hintedPiece?.PieceRenderer != null)
+        {
+            _hintedPiece.PieceRenderer.transform.rotation = _hintedPieceBaseRotation;
+        }
+
+        _hintedPiece = null;
+        _hintedPieceBaseRotation = Quaternion.identity;
+        if (_pieceHintOutlineRoot != null)
+        {
+            _pieceHintOutlineRoot.SetActive(false);
+            Destroy(_pieceHintOutlineRoot);
+            _pieceHintOutlineRoot = null;
+        }
     }
 
     private void StartGameplayTimerIfNeeded()
