@@ -18,6 +18,8 @@
 8. 卡包随 ScrollRect 移动时，特效必须持续对齐 `PackCover` RectTransform，且不得渲染到卡包列表视口之外。
 9. MainScene 销毁或列表重建时，必须释放全部动态显示对象和 Mesh。
 10. 卡包等待奖励飞行动画展示时，首页特效必须保持隐藏，直到现有显示回调执行。
+11. 当玩家选择生命周期为 `Unlocked` 的未玩卡包时，`PanelBagSelect/BtnPlay` 必须显示 `Play`，`BtnCamera` 必须隐藏。
+12. 当玩家选择生命周期为 `InProgress` 或 `Completed` 的已玩卡包时，`PanelBagSelect/BtnPlay` 必须显示 `重玩`，`BtnCamera` 必须显示。
 
 ### 编辑器拆包预览
 
@@ -37,6 +39,7 @@
 - `GameAnimationUtility` 根据六个动画层的第零帧创建一份共享空闲 Mesh。每个卡包只使用一个带独立封面和生命周期颜色的轻量 MeshRenderer，不常驻六个动画层。
 - MainScene 在 `LateUpdate` 中将显示对象对齐 UI 锚点，按错峰方式在 `2.4s` 内进行 `0.98..1.02` 呼吸缩放，关闭页面外 Renderer，并将 ScrollRect 视口裁剪矩形传给 `CardPackOpening.shader`。
 - 点击后，选中卡包从空闲 Renderer 切换到相同姿态的可复用六层开包器，在 `0.3s` 内放大到 `600 x 680`，播放原始动画，然后进入 GameScene。
+- MainScene 每次打开 `PanelBagSelect` 时根据 `CardPackRecord.IsPlayed` 刷新操作状态：`Unlocked` 显示 `Play` 并隐藏相机按钮，`InProgress` 和 `Completed` 显示 `重玩` 并显示相机按钮。
 - `PackSize` 继续提供位置、Sprite、颜色和前景显示依据。静态封面与阴影回退、奖励飞行隐藏和动态资源清理均保留。
 - 拆包粒子 Prefab 不属于当前已确认的 MainScene 流程。其播放时机明确批准前不得接入。
 

@@ -78,6 +78,9 @@ public class MainScene : MonoBehaviour
     private const string BagSelectCanvasObjectName = "PanelBagSelectCanvas";
     private const string BagSelectPlayButtonObjectName = "BtnPlay";
     private const string BagSelectBackButtonObjectName = "BtnBack";
+    private const string BagSelectCameraButtonObjectName = "BtnCamera";
+    private const string BagSelectNewPackActionText = "Play";
+    private const string BagSelectReplayActionText = "重玩";
     private const string TaskItemObjectName = "TaskItem";
     private static readonly Color CompletedPackageTint = new Color(0.78f, 0.78f, 0.78f, 1f);
     private static bool sHookedSceneLoaded;
@@ -109,6 +112,8 @@ public class MainScene : MonoBehaviour
     private PackageEntry mSelectedPackageEntry;
     private Button mBagSelectPlayButton;
     private Button mBagSelectBackButton;
+    private GameObject mBagSelectCameraButtonRoot;
+    private TMP_Text mBagSelectPlayLabel;
     private int mSelectedBagId;
     private float mSelectedPackageStartScale;
     private float mSelectedPackageOpenScale;
@@ -329,8 +334,30 @@ public class MainScene : MonoBehaviour
         }
         else
         {
+            mBagSelectPlayLabel = mBagSelectPlayButton.GetComponentInChildren<TMP_Text>(true);
+            if (mBagSelectPlayLabel == null)
+            {
+                Debug.LogWarning("MainScene: bag selection play button label not found.");
+            }
+
             mBagSelectPlayButton.onClick.RemoveListener(OnBagSelectPlayClicked);
             mBagSelectPlayButton.onClick.AddListener(OnBagSelectPlayClicked);
+        }
+
+        var cameraTransform = FindChild(
+            mBagSelectPanelRoot.transform,
+            BagSelectCameraButtonObjectName);
+        mBagSelectCameraButtonRoot = cameraTransform != null
+            ? cameraTransform.gameObject
+            : null;
+        if (mBagSelectCameraButtonRoot == null)
+        {
+            Debug.LogWarning(
+                $"MainScene: bag selection camera button not found. Expected {BagSelectCameraButtonObjectName}.");
+        }
+        else
+        {
+            mBagSelectCameraButtonRoot.SetActive(false);
         }
 
         var backTransform = FindChild(mBagSelectPanelRoot.transform, BagSelectBackButtonObjectName);
@@ -2185,6 +2212,7 @@ public class MainScene : MonoBehaviour
                 mSelectedPackageStartScale,
                 mSelectedPackageStartCenter);
             SetPackageVisualsVisible(entry, false);
+            RefreshBagSelectPackState(bagId);
             SetBagSelectPanelVisible(true);
             SetBagSelectButtonsInteractable(false);
             yield return AnimatePreparedCardPack(
@@ -2280,6 +2308,22 @@ public class MainScene : MonoBehaviour
         if (mBagSelectBackButton != null)
         {
             mBagSelectBackButton.interactable = interactable;
+        }
+    }
+
+    private void RefreshBagSelectPackState(int bagId)
+    {
+        var isPlayed = CardPackDataUtility.IsPackPlayed(bagId);
+        if (mBagSelectPlayLabel != null)
+        {
+            mBagSelectPlayLabel.text = isPlayed
+                ? BagSelectReplayActionText
+                : BagSelectNewPackActionText;
+        }
+
+        if (mBagSelectCameraButtonRoot != null)
+        {
+            mBagSelectCameraButtonRoot.SetActive(isPlayed);
         }
     }
 
