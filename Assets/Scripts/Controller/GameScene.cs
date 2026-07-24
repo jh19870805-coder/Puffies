@@ -39,8 +39,10 @@ public class GameScene : MonoBehaviour
     private const float HintShakeAngle = 6f;
     private const float HintShakeCyclesPerSecond = 4.5f;
     private const float HintShakeDuration = 0.8f;
-    private const float HintDashCount = 120f;
+    private const float HintDashPeriod = 8f;
     private const float HintDashFill = 0.7f;
+    private const float HintOutlineWidth = 3f;
+    private const float HintOutlineScrollSpeed = 8f;
     private const string BootstrapObjectName = "GameSceneBootstrap";
     private const string PieceBgFillObjectName = "PieceBgFill";
     private const string PieceBgObjectName = "PieceBg";
@@ -54,7 +56,6 @@ public class GameScene : MonoBehaviour
     private const string TaskRewardImgBagPath = "ImgBagBg/ImgBag";
     private const string HintButtonObjectName = "BtnTips";
     private const string PieceHintOutlineObjectName = "PieceHintOutline";
-    private const string PieceHintOutlineShaderPath = "Effects/HintDashedOutline";
     private static readonly Color PieceHintOutlineColor = new Color32(112, 151, 75, 255);
     private static bool sHookedSceneLoaded;
     private readonly BoardState _board = new BoardState();
@@ -99,7 +100,6 @@ public class GameScene : MonoBehaviour
     private float _hintShakeStartTime;
     private bool _isHintPieceShaking;
     private GameObject _pieceHintOutlineRoot;
-    private Material _pieceHintOutlineMaterial;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Bootstrap()
@@ -152,11 +152,6 @@ public class GameScene : MonoBehaviour
     private void OnDestroy()
     {
         ClearPieceHint();
-        if (_pieceHintOutlineMaterial != null)
-        {
-            Destroy(_pieceHintOutlineMaterial);
-            _pieceHintOutlineMaterial = null;
-        }
     }
 
     private void Update()
@@ -1729,30 +1724,12 @@ public class GameScene : MonoBehaviour
 
     private void CreatePieceHintOutline(DraggablePieceState state)
     {
-        var shader = Resources.Load<Shader>(PieceHintOutlineShaderPath);
-        if (shader == null)
-        {
-            Debug.LogWarning(
-                $"GameScene: hint outline shader missing at Resources/{PieceHintOutlineShaderPath}.");
-            return;
-        }
-
-        if (_pieceHintOutlineMaterial == null)
-        {
-            _pieceHintOutlineMaterial = new Material(shader)
-            {
-                name = "PieceHintOutlineMaterial"
-            };
-            _pieceHintOutlineMaterial.SetFloat("_DashCount", HintDashCount);
-            _pieceHintOutlineMaterial.SetFloat("_DashFill", HintDashFill);
-        }
-
         var grooveRect = state.GrooveRect;
         var outlineObject = new GameObject(
             PieceHintOutlineObjectName,
             typeof(RectTransform),
             typeof(CanvasRenderer),
-            typeof(Image));
+            typeof(HintDashedOutlineGraphic));
         var outlineRect = outlineObject.GetComponent<RectTransform>();
         outlineRect.SetParent(grooveRect.parent, false);
         outlineRect.anchorMin = grooveRect.anchorMin;
@@ -1764,14 +1741,16 @@ public class GameScene : MonoBehaviour
         outlineRect.localScale = grooveRect.localScale;
         outlineRect.SetAsLastSibling();
 
-        var outlineImage = outlineObject.GetComponent<Image>();
-        outlineImage.sprite = state.GrooveImage.sprite;
-        outlineImage.type = state.GrooveImage.type;
-        outlineImage.preserveAspect = state.GrooveImage.preserveAspect;
-        outlineImage.color = PieceHintOutlineColor;
-        outlineImage.material = _pieceHintOutlineMaterial;
-        outlineImage.raycastTarget = false;
-        outlineImage.maskable = false;
+        var outlineGraphic = outlineObject.GetComponent<HintDashedOutlineGraphic>();
+        outlineGraphic.maskable = false;
+        outlineGraphic.Configure(
+            state.GrooveImage.sprite,
+            PieceHintOutlineColor,
+            HintOutlineWidth,
+            HintDashPeriod,
+            HintDashFill,
+            HintOutlineScrollSpeed,
+            state.GrooveImage.preserveAspect);
         _pieceHintOutlineRoot = outlineObject;
     }
 
@@ -2886,5 +2865,254 @@ public class GameScene : MonoBehaviour
     private void OnReturnButtonClicked()
     {
         GameManager.EnterMainScene();
+    }
+}
+
+internal sealed class HintDashedOutlineGraphic : MaskableGraphic
+{
+    private readonly List<List<Vector2>> _spritePaths = new List<List<Vector2>>();
+    private readonly List<Vector2> _mappedPath = new List<Vector2>();
+    private Sprite _sourceSprite;
+    private float _lineWidth = 3f;
+    private float _dashPeriod = 8f;
+    private float _dashFill = 0.7f;
+    private float _scrollSpeed = 8f;
+    private bool _preserveAspect;
+
+    public void Configure(
+        Sprite sourceSprite,
+        Color lineColor,
+        float lineWidth,
+        float dashPeriod,
+        float dashFill,
+        float scrollSpeed,
+        bool preserveAspect)
+    {
+        _sourceSprite = sourceSprite;
+        color = lineColor;
+        _lineWidth = Mathf.Max(0.5f, lineWidth);
+        _dashPeriod = Mathf.Max(1f, dashPeriod);
+        _dashFill = Mathf.Clamp(dashFill, 0.05f, 0.95f);
+        _scrollSpeed = scrollSpeed;
+        _preserveAspect = preserveAspect;
+        raycastTarget = false;
+        RebuildSpritePaths();
+        SetAllDirty();
+    }
+
+    private void Update()
+    {
+        if (_sourceSprite != null && _spritePaths.Count > 0 && Mathf.Abs(_scrollSpeed) > 0.001f)
+        {
+            SetVerticesDirty();
+        }
+    }
+
+    protected override void OnPopulateMesh(VertexHelper vertexHelper)
+    {
+        vertexHelper.Clear();
+        if (_sourceSprite == null || _spritePaths.Count == 0)
+        {
+            return;
+        }
+
+        var spriteBounds = _sourceSprite.bounds;
+        if (spriteBounds.size.x <= 0.0001f || spriteBounds.size.y <= 0.0001f)
+        {
+            return;
+        }
+
+        var targetRect = GetDrawingRect(spriteBounds, rectTransform.rect);
+        for (var pathIndex = 0; pathIndex < _spritePaths.Count; pathIndex++)
+        {
+            AddDashedPath(vertexHelper, _spritePaths[pathIndex], spriteBounds, targetRect);
+        }
+    }
+
+    private void AddDashedPath(
+        VertexHelper vertexHelper,
+        List<Vector2> spritePath,
+        Bounds spriteBounds,
+        Rect targetRect)
+    {
+        if (spritePath == null || spritePath.Count < 2)
+        {
+            return;
+        }
+
+        _mappedPath.Clear();
+        var pathLength = 0f;
+        for (var i = 0; i < spritePath.Count; i++)
+        {
+            _mappedPath.Add(MapSpritePoint(spritePath[i], spriteBounds, targetRect));
+        }
+
+        for (var i = 0; i < _mappedPath.Count; i++)
+        {
+            pathLength += Vector2.Distance(_mappedPath[i], _mappedPath[(i + 1) % _mappedPath.Count]);
+        }
+
+        if (pathLength <= 0.001f)
+        {
+            return;
+        }
+
+        var dashLength = Mathf.Min(_dashPeriod * _dashFill, pathLength * _dashFill);
+        var dashCount = Mathf.Max(1, Mathf.FloorToInt(pathLength / _dashPeriod));
+        var period = pathLength / dashCount;
+        var offset = Mathf.Repeat(Time.unscaledTime * _scrollSpeed, period);
+        var pathDistance = 0f;
+        for (var i = 0; i < _mappedPath.Count; i++)
+        {
+            var from = _mappedPath[i];
+            var to = _mappedPath[(i + 1) % _mappedPath.Count];
+            var edge = to - from;
+            var edgeLength = edge.magnitude;
+            if (edgeLength <= 0.001f)
+            {
+                continue;
+            }
+
+            var vertexPhase = Mathf.Repeat(pathDistance + offset, period);
+            if (vertexPhase > 0.001f && vertexPhase < dashLength - 0.001f)
+            {
+                AddRoundJoin(vertexHelper, from);
+            }
+
+            var edgeDirection = edge / edgeLength;
+            var edgeOffset = 0f;
+            while (edgeOffset < edgeLength - 0.001f)
+            {
+                var phase = Mathf.Repeat(pathDistance + edgeOffset + offset, period);
+                var inDash = phase < dashLength;
+                var remainingPatternLength = inDash
+                    ? dashLength - phase
+                    : period - phase;
+                var step = Mathf.Min(
+                    Mathf.Max(remainingPatternLength, 0.001f),
+                    edgeLength - edgeOffset);
+                if (inDash)
+                {
+                    AddLineSegment(
+                        vertexHelper,
+                        from + edgeDirection * edgeOffset,
+                        from + edgeDirection * (edgeOffset + step));
+                }
+
+                edgeOffset += step;
+            }
+
+            pathDistance += edgeLength;
+        }
+    }
+
+    private void AddRoundJoin(VertexHelper vertexHelper, Vector2 center)
+    {
+        const int segmentCount = 8;
+        var centerIndex = vertexHelper.currentVertCount;
+        AddVertex(vertexHelper, center);
+        for (var i = 0; i <= segmentCount; i++)
+        {
+            var angle = i * Mathf.PI * 2f / segmentCount;
+            var offset = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * (_lineWidth * 0.5f);
+            AddVertex(vertexHelper, center + offset);
+            if (i > 0)
+            {
+                vertexHelper.AddTriangle(centerIndex, centerIndex + i, centerIndex + i + 1);
+            }
+        }
+    }
+
+    private void AddLineSegment(VertexHelper vertexHelper, Vector2 from, Vector2 to)
+    {
+        var direction = to - from;
+        if (direction.sqrMagnitude <= 0.000001f)
+        {
+            return;
+        }
+
+        direction.Normalize();
+        var normal = new Vector2(-direction.y, direction.x) * (_lineWidth * 0.5f);
+        var startIndex = vertexHelper.currentVertCount;
+        AddVertex(vertexHelper, from - normal);
+        AddVertex(vertexHelper, from + normal);
+        AddVertex(vertexHelper, to + normal);
+        AddVertex(vertexHelper, to - normal);
+        vertexHelper.AddTriangle(startIndex, startIndex + 1, startIndex + 2);
+        vertexHelper.AddTriangle(startIndex, startIndex + 2, startIndex + 3);
+    }
+
+    private void AddVertex(VertexHelper vertexHelper, Vector2 position)
+    {
+        var vertex = UIVertex.simpleVert;
+        vertex.position = position;
+        vertex.color = color;
+        vertexHelper.AddVert(vertex);
+    }
+
+    private static Vector2 MapSpritePoint(Vector2 point, Bounds spriteBounds, Rect targetRect)
+    {
+        var normalizedX = (point.x - spriteBounds.min.x) / spriteBounds.size.x;
+        var normalizedY = (point.y - spriteBounds.min.y) / spriteBounds.size.y;
+        return new Vector2(
+            Mathf.Lerp(targetRect.xMin, targetRect.xMax, normalizedX),
+            Mathf.Lerp(targetRect.yMin, targetRect.yMax, normalizedY));
+    }
+
+    private Rect GetDrawingRect(Bounds spriteBounds, Rect targetRect)
+    {
+        if (!_preserveAspect)
+        {
+            return targetRect;
+        }
+
+        var spriteAspect = spriteBounds.size.x / spriteBounds.size.y;
+        var rectAspect = targetRect.width / targetRect.height;
+        if (spriteAspect > rectAspect)
+        {
+            var originalHeight = targetRect.height;
+            targetRect.height = targetRect.width / spriteAspect;
+            targetRect.y += (originalHeight - targetRect.height) * rectTransform.pivot.y;
+        }
+        else
+        {
+            var originalWidth = targetRect.width;
+            targetRect.width = targetRect.height * spriteAspect;
+            targetRect.x += (originalWidth - targetRect.width) * rectTransform.pivot.x;
+        }
+
+        return targetRect;
+    }
+
+    private void RebuildSpritePaths()
+    {
+        _spritePaths.Clear();
+        if (_sourceSprite == null)
+        {
+            return;
+        }
+
+        var shapeCount = _sourceSprite.GetPhysicsShapeCount();
+        for (var shapeIndex = 0; shapeIndex < shapeCount; shapeIndex++)
+        {
+            var path = new List<Vector2>();
+            _sourceSprite.GetPhysicsShape(shapeIndex, path);
+            if (path.Count >= 2)
+            {
+                _spritePaths.Add(path);
+            }
+        }
+
+        if (_spritePaths.Count == 0)
+        {
+            var bounds = _sourceSprite.bounds;
+            _spritePaths.Add(new List<Vector2>
+            {
+                new Vector2(bounds.min.x, bounds.min.y),
+                new Vector2(bounds.min.x, bounds.max.y),
+                new Vector2(bounds.max.x, bounds.max.y),
+                new Vector2(bounds.max.x, bounds.min.y)
+            });
+        }
     }
 }
