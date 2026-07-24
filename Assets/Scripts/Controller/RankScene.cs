@@ -15,11 +15,13 @@ public class RankScene : MonoBehaviour
     private const string ContentObjectName = "Content";
     private const string RankItemPrefabEditorPath = "Assets/Prefabs/RankItem.prefab";
     private const string RankItemPrefabResourcesPath = "RankItem";
+    private const string RankBackgroundObjectName = "RankBg";
     private const string RankNumObjectName = "RankNum";
     private const string RankNumTextObjectName = "RankNumText";
     private const string RankNameObjectName = "RankName";
     private const string RankScoreObjectName = "RankScore";
     private const string RankBagNumObjectName = "RankBagNum";
+    private const string RankBackgroundSpritePathPrefix = "Assets/UI/RankScene/RankCellBg_";
     private const string RankNumSpritePathPrefix = "Assets/UI/RankScene/RankNum_";
     private const int MockRankCount = 10;
     private static bool sHookedSceneLoaded;
@@ -153,10 +155,31 @@ public class RankScene : MonoBehaviour
         var item = Instantiate(mRankItemPrefab, mContentRoot, false);
         item.name = $"RankItem{data.Rank:D2}";
 
+        SetRankBackground(item.transform, data.Rank);
         SetRankNumber(item.transform, data.Rank);
         SetText(item.transform, RankNameObjectName, data.PlayerName);
         SetText(item.transform, RankScoreObjectName, data.Score.ToString());
         SetText(item.transform, RankBagNumObjectName, data.CardBagCount.ToString());
+    }
+
+    private static void SetRankBackground(Transform itemRoot, int rank)
+    {
+        if (rank < 1 || rank > 3)
+        {
+            return;
+        }
+
+        var backgroundImage = FindChild(itemRoot, RankBackgroundObjectName)?.GetComponent<Image>();
+        if (backgroundImage == null)
+        {
+            return;
+        }
+
+        var sprite = LoadRankSprite(RankBackgroundSpritePathPrefix, rank);
+        if (sprite != null)
+        {
+            backgroundImage.sprite = sprite;
+        }
     }
 
     private static void SetRankNumber(Transform itemRoot, int rank)
@@ -173,7 +196,7 @@ public class RankScene : MonoBehaviour
             rankImage.enabled = rank <= 3;
             if (rank <= 3)
             {
-                var sprite = LoadRankSprite(rank);
+                var sprite = LoadRankSprite(RankNumSpritePathPrefix, rank);
                 if (sprite != null)
                 {
                     rankImage.sprite = sprite;
@@ -224,9 +247,9 @@ public class RankScene : MonoBehaviour
         }
     }
 
-    private static Sprite LoadRankSprite(int rank)
+    private static Sprite LoadRankSprite(string pathPrefix, int rank)
     {
-        var spritePath = $"{RankNumSpritePathPrefix}{rank}.png";
+        var spritePath = $"{pathPrefix}{rank}.png";
 #if UNITY_EDITOR
         var editorSprite = AssetDatabase.LoadAssetAtPath<Sprite>(spritePath);
         if (editorSprite != null)

@@ -29,7 +29,7 @@ Unity **2022.3** / URP 2D 项目。核心循环：打开卡包 -> 拖放拼图 -
 | LoadingScene | 初始化 JSON、SQLite、任务数据和卡包数据；加载结束后进入 MainScene |
 | MainScene | 根据 `CardPacks.csv` 与 SQLite 解锁状态刷新卡包列表；每页按 6 列 x 3 行显示 18 个带呼吸动画的轻量常驻卡包特效；点击后将闭合卡包移动并放大到屏幕中心，同时显示柔化首页和 `PanelBagSelect`；Play/重玩进入 `BgGame` 开包舞台，玩家轻点放大卡包或沿顶部封口横划后播放开包动画；Back 取消并复原；提供 Rank、Achieve 和 Menu 入口 |
 | GameScene | 根据选中 PackId 加载 `CardBagNNN` Prefab；按照 `PieceNN` 数字命名组织拼图分组；从正常开包流程进入时播放棋盘、托盘和当前组 Piece 入场；一组完成后切换分组并清理上一组碎片；全部完成后显示 RewardPanel |
-| RankScene | 仅占位；首个 Demo 不包含排行榜功能 |
+| RankScene | 仅占位；首个 Demo 不包含排行榜后端功能。当前模拟列表前三名的 `RankBg` 分别使用 `RankCellBg_1.png`、`RankCellBg_2.png`、`RankCellBg_3.png`，第四名以后使用 `RankCellBg.png` |
 | AchieveScene | 当前显示 20 条模拟成就，前 5 条已达成、后 15 条未达成；接入 Steam 后替换数据源 |
 | effect | 预览和调试 CardFx |
 

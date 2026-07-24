@@ -1,7 +1,7 @@
 # 当前任务
 
 - 任务：按参考视频实现首页卡包到游戏场景的连续流程
-- 状态：已修复开包舞台和 GameScene 首帧跳过入场，等待 Play Mode 复测
+- 状态：已修复开包流程与排行榜前三名背景，等待 Play Mode 复测
 - 更新时间：2026-07-24
 
 ## 用户意图
@@ -23,12 +23,14 @@
 - 根据 Play Mode 反馈，进入开包舞台时主动隐藏全部未选中卡包和尺寸图标，避免世界空间 Renderer 绕过首页 Canvas 淡出后继续残留。
 - 开包输入增加轻点判定；轻点放大卡包可直接触发，顶部有效向右横划继续保留。Renderer Bounds 不可用时按舞台中 `600 x 680` 卡包的世界尺寸回退计算输入区域，避免提示和交互一起失效。
 - GameScene 入场不再直接累计可能包含场景加载尖峰的完整 `unscaledDeltaTime`。棋盘、托盘、Piece 和按钮先保持起始姿态两个渲染帧，随后每帧最多推进 `1/30s`，避免偶发卡顿直接把 `0.46s` 棋盘动画跳到终点。
+- RankScene 创建模拟排行榜条目时，根据名次将 `RankBg` 映射为 `RankCellBg_1.png`、`RankCellBg_2.png`、`RankCellBg_3.png`；第四名以后继续使用 Prefab 默认的 `RankCellBg.png`。名次数字图仍使用 `RankNum_1.png` 到 `RankNum_3.png`。
 - 用于自动化排查的 `TemporaryCardPackFlowValidation` 已删除，不保留临时编辑器代码。
 
 ## 修改文件
 
 - `Assets/Scripts/Controller/MainScene.cs`
 - `Assets/Scripts/Controller/GameScene.cs`
+- `Assets/Scripts/Controller/RankScene.cs`
 - `Assets/Scripts/Model/GameAnimationUtility.cs`
 - `Assets/Scripts/Model/CardFxRuntimeUtility.cs`
 - `Assets/Scripts/Model/GameDefine.cs`
@@ -51,6 +53,7 @@
 - `dotnet build Puffies.sln --no-restore`：Assembly-CSharp-firstpass、Assembly-CSharp 和 Assembly-CSharp-Editor 均成功，`0` 警告、`0` 错误。
 - 修复残留卡包、点击输入和 Bounds 回退后再次执行完整编译，仍为 `0` 警告、`0` 错误。
 - 增加入场起始帧和单帧时间上限后再次执行 `dotnet build Puffies.sln --no-restore`，三个程序集均成功，`0` 警告、`0` 错误。
+- 增加 RankScene 前三名背景映射后再次执行完整编译，三个程序集均成功，`0` 警告、`0` 错误；静态核对确认 `RankBg` 默认引用 `RankCellBg.png`，前三名资源名和 GUID 均独立存在。
 - `git diff --check`：通过，仅有工作区既有 LF/CRLF 转换提示。
 - 自动验证器确认 MainScene 能进入选择流程；Unity Editor `-batchmode` 不产生 `WaitForEndOfFrame`，无法验证截屏柔化。普通 Editor 在当前隐藏会话未完成启动，因此未生成可靠的新流程截图。
 - 尚未完成可见 Unity Play Mode 下的视觉、粒子层级、手势手感和 GameScene 入场位置验收。
@@ -62,6 +65,7 @@
 2. 进入开包舞台，确认画面只保留一个放大的选中卡包，其他列表卡包和尺寸图标全部消失。
 3. 分别测试轻点卡包和顶部向右横划，两种操作都应只触发一次开包动画和粒子，并进入 GameScene。
 4. 连续多次从开包动画进入 GameScene，确认即使切场景时短暂卡顿，棋盘滑入和 Piece 飘落也不会被跳过；再按实际画面微调位置和节奏。
+5. 打开 RankScene，确认第一、第二、第三名背景依次对应资源名中的 `_1`、`_2`、`_3`，第四名以后保持普通背景。
 
 ## 恢复提示
 
