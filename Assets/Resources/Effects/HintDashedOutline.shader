@@ -5,7 +5,7 @@ Shader "Puffies/HintDashedOutline"
         [PerRendererData] _MainTex ("Sprite Texture", 2D) = "white" {}
         _Color ("Tint", Color) = (1, 1, 1, 1)
         _OutlineWidth ("Outline Width", Range(1, 6)) = 3
-        _DashCount ("Dash Count", Range(4, 64)) = 40
+        _DashCount ("Dash Count", Range(4, 160)) = 120
         _DashFill ("Dash Fill", Range(0.1, 0.9)) = 0.85
         _ScrollSpeed ("Scroll Speed", Range(-4, 4)) = 0.85
         [HideInInspector] _StencilComp ("Stencil Comparison", Float) = 8

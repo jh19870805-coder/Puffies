@@ -227,7 +227,7 @@ effect（调试）：CardFx 预览；菜单 Puffies -> Preview CardFx Effects
 - MainScene 空闲卡包使用六个开包层第零帧烘焙的一份共享 Mesh。每个可见卡包只使用一个带真实封面和生命周期颜色的轻量 Renderer，在 `2.4s` 内进行 `0.98` 到 `1.02` 呼吸缩放，跟随 `PackCover` 锚点，并裁剪到卡包 ScrollRect 视口。点击后只将被选中的卡包替换为可复用六层开包器，在 `0.3s` 内同时移动到屏幕中心并放大到原始 `600 x 680` 设计尺寸，静止等待 `PanelBagSelect` 操作；其他列表卡包继续显示并保持呼吸动效。选择页在打开前截取首页并以低分辨率双线性重采样形成柔化背景，面板遮罩 Alpha 为 `0.34`。`BtnBack` 反向复原到列表位置并恢复呼吸动效。
 - `BtnPlay`/重玩先让首页和选择操作退场，隐藏全部未选中卡包及尺寸图标，显示与 GameScene 同源的 `UI/BasicUI/BgGame.png`。放大卡包轻微定场后循环显示沿顶部封口从左向右移动的圆形提示；轻点放大卡包可直接开包，顶部横划则必须从左侧区域开始、向右移动至少卡包宽度的 `50%`，且垂直偏移不超过卡包高度的 `20%`。成功后同步播放六层开包动画和 `CardPackDismantle_001`；拆包粒子跨场景保留约 `2.8s`，覆盖 MainScene 到 GameScene 的交界。Renderer Bounds 暂时不可用时，输入区域按舞台中 `600 x 680` 卡包的实际世界尺寸回退计算。
 - 只有通过正常拆包进入 GameScene 时才播放一次入场：CardBag/棋盘从上方进入，PieceBoard 从下方进入，当前组 Piece 从棋盘附近错峰落入托盘，返回和提示按钮淡入；入场完成前屏蔽拖拽。对象在起始姿态保留两个渲染帧后才推进动画，单帧动画时间最多推进 `1/30s`，场景加载或首帧资源初始化卡顿不得吞掉入场过程。直接在编辑器启动 GameScene 保持即时初始化。
-- `GameScene/BtnTips` 从当前组选择 Piece 编号最小的未完成碎片。目标碎片在托盘原位置左右抖动约 `0.8s` 后停止，棋盘对应 `GrooveRect` 使用 `Resources/Effects/HintDashedOutline.shader` 从 Piece Sprite Alpha 实时生成短而密的绿色滚动虚线；成功放置、切组或结算时清理。只有找到有效目标后才记录本局已使用提示。
+- `GameScene/BtnTips` 从当前组选择 Piece 编号最小的未完成碎片。目标碎片在托盘原位置左右抖动约 `0.8s` 后停止，棋盘对应 `GrooveRect` 使用 `Resources/Effects/HintDashedOutline.shader` 从 Piece Sprite Alpha 实时生成短而密的绿色滚动虚线；再次点击按钮取消当前提示，成功放置、切组或结算时同样清理。一旦有效提示显示过，本局持续记为已使用提示。
 - `PanelBagSelect` 每次打开时按 `CardPackRecord.IsPlayed` 刷新操作：`Unlocked` 卡包的确认按钮显示 `Play` 且隐藏 `BtnCamera`；`InProgress` 和 `Completed` 卡包的确认按钮显示 `重玩` 且显示 `BtnCamera`。重玩继续复用 `BtnPlay` 的现有开包流程；相机按钮当前只控制显隐。
 
 ### 开发期持久化策略

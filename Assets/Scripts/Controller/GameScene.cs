@@ -39,7 +39,7 @@ public class GameScene : MonoBehaviour
     private const float HintShakeAngle = 6f;
     private const float HintShakeCyclesPerSecond = 4.5f;
     private const float HintShakeDuration = 0.8f;
-    private const float HintDashCount = 40f;
+    private const float HintDashCount = 120f;
     private const float HintDashFill = 0.85f;
     private const string BootstrapObjectName = "GameSceneBootstrap";
     private const string PieceBgFillObjectName = "PieceBgFill";
@@ -1622,6 +1622,12 @@ public class GameScene : MonoBehaviour
     {
         if (_isGameFinished || _isEntranceAnimating || _drag.DraggingPiece != null)
         {
+            return;
+        }
+
+        if (_hintedPiece != null)
+        {
+            ClearPieceHint();
             return;
         }
 
