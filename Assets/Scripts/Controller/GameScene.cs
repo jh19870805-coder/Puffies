@@ -38,6 +38,9 @@ public class GameScene : MonoBehaviour
     private const int PieceSortingOrder = 520;
     private const float HintShakeAngle = 6f;
     private const float HintShakeCyclesPerSecond = 4.5f;
+    private const float HintShakeDuration = 0.8f;
+    private const float HintDashCount = 40f;
+    private const float HintDashFill = 0.85f;
     private const string BootstrapObjectName = "GameSceneBootstrap";
     private const string PieceBgFillObjectName = "PieceBgFill";
     private const string PieceBgObjectName = "PieceBg";
@@ -93,6 +96,8 @@ public class GameScene : MonoBehaviour
     private bool _hasOriginalCardBagAnchoredPosition;
     private DraggablePieceState _hintedPiece;
     private Quaternion _hintedPieceBaseRotation = Quaternion.identity;
+    private float _hintShakeStartTime;
+    private bool _isHintPieceShaking;
     private GameObject _pieceHintOutlineRoot;
     private Material _pieceHintOutlineMaterial;
 
@@ -1673,6 +1678,8 @@ public class GameScene : MonoBehaviour
 
         _hintedPiece = state;
         _hintedPieceBaseRotation = state.PieceRenderer.transform.rotation;
+        _hintShakeStartTime = Time.unscaledTime;
+        _isHintPieceShaking = true;
         CreatePieceHintOutline(state);
     }
 
@@ -1696,8 +1703,21 @@ public class GameScene : MonoBehaviour
             return;
         }
 
+        if (!_isHintPieceShaking)
+        {
+            return;
+        }
+
+        var elapsed = Time.unscaledTime - _hintShakeStartTime;
+        if (elapsed >= HintShakeDuration)
+        {
+            renderer.transform.rotation = _hintedPieceBaseRotation;
+            _isHintPieceShaking = false;
+            return;
+        }
+
         var angle = Mathf.Sin(
-            Time.unscaledTime * HintShakeCyclesPerSecond * Mathf.PI * 2f) * HintShakeAngle;
+            elapsed * HintShakeCyclesPerSecond * Mathf.PI * 2f) * HintShakeAngle;
         renderer.transform.rotation = _hintedPieceBaseRotation * Quaternion.Euler(0f, 0f, angle);
     }
 
@@ -1717,6 +1737,8 @@ public class GameScene : MonoBehaviour
             {
                 name = "PieceHintOutlineMaterial"
             };
+            _pieceHintOutlineMaterial.SetFloat("_DashCount", HintDashCount);
+            _pieceHintOutlineMaterial.SetFloat("_DashFill", HintDashFill);
         }
 
         var grooveRect = state.GrooveRect;
@@ -1756,6 +1778,8 @@ public class GameScene : MonoBehaviour
 
         _hintedPiece = null;
         _hintedPieceBaseRotation = Quaternion.identity;
+        _hintShakeStartTime = 0f;
+        _isHintPieceShaking = false;
         if (_pieceHintOutlineRoot != null)
         {
             _pieceHintOutlineRoot.SetActive(false);
