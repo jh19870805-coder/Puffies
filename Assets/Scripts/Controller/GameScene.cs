@@ -10,6 +10,7 @@ public class GameScene : MonoBehaviour
 {
     private const float ReferenceHeight = GameDefine.DesignHeight;
     private const float PixelsPerUnit = GameDefine.PixelsPerUnit;
+    private const float DefaultBoardScale = 1f;
     private const float WorldGameplayDepth = -0.5f;
     private const float GamePageCameraPadding = 0.3f;
     private const float DraggableLeftPadding = 0.2f;
@@ -93,6 +94,9 @@ public class GameScene : MonoBehaviour
     private bool _isEntranceAnimating;
     private GameObject _loadedCardBagRoot;
     private RectTransform _loadedCardBagRect;
+    private float _configuredBoardScale = DefaultBoardScale;
+    private Vector3 _originalCardBagLocalScale = Vector3.one;
+    private bool _hasOriginalCardBagLocalScale;
     private Vector2 _originalCardBagAnchoredPosition;
     private bool _hasOriginalCardBagAnchoredPosition;
     private DraggablePieceState _hintedPiece;
@@ -172,6 +176,7 @@ public class GameScene : MonoBehaviour
     private void InitializeGameplay(int bagId)
     {
         GameManager.SetBagId(bagId);
+        LoadConfiguredBoardScale(bagId);
         EnsureCardBagLoaded(bagId);
         EnsureBoardAndGroovesInitialized();
         if (_board.GameBoardImage == null)
@@ -198,7 +203,20 @@ public class GameScene : MonoBehaviour
         CreateDraggableGroup(0);
         Debug.Log(
             $"GameScene ready. BagId={bagId}, Groups={_board.GrooveImagesByGroup.Count}, " +
-            $"Pieces={CountGrooveImages(_board.GrooveImagesByGroup)}");
+            $"Pieces={CountGrooveImages(_board.GrooveImagesByGroup)}, BoardScale={_configuredBoardScale:0.###}");
+    }
+
+    private void LoadConfiguredBoardScale(int bagId)
+    {
+        _configuredBoardScale = DefaultBoardScale;
+        if (!GameConfigRepository.TryGetCardPackConfig(bagId, out var config))
+        {
+            Debug.LogWarning(
+                $"GameScene: card pack config not found; BoardScale defaults to 1. bagId={bagId}");
+            return;
+        }
+
+        _configuredBoardScale = config.BoardScale;
     }
 
     private IEnumerator PlayGameEntranceAnimation()
@@ -215,9 +233,11 @@ public class GameScene : MonoBehaviour
             : Vector3.zero;
 
         var boardRect = _loadedCardBagRect;
-        var boardTarget = _hasOriginalCardBagAnchoredPosition
-            ? _originalCardBagAnchoredPosition
-            : boardRect != null ? boardRect.anchoredPosition : Vector2.zero;
+        var boardTarget = boardRect != null
+            ? boardRect.anchoredPosition
+            : _hasOriginalCardBagAnchoredPosition
+                ? _originalCardBagAnchoredPosition
+                : Vector2.zero;
         var boardStart = boardTarget + Vector2.up * ReferenceHeight;
         if (boardRect != null)
         {
@@ -434,6 +454,9 @@ public class GameScene : MonoBehaviour
         if (rectTransform != null)
         {
             _loadedCardBagRect = rectTransform;
+            _originalCardBagLocalScale = rectTransform.localScale;
+            _hasOriginalCardBagLocalScale = true;
+            ApplyConfiguredBoardScale();
             PlaceCardBagAfterBackground(rectTransform);
             _originalCardBagAnchoredPosition = rectTransform.anchoredPosition;
             _hasOriginalCardBagAnchoredPosition = true;
@@ -441,6 +464,17 @@ public class GameScene : MonoBehaviour
 
         _board.IsBoardAndGroovesInitialized = false;
         Debug.Log($"GameScene: loaded card bag prefab Resources/{resourcePath}.");
+    }
+
+    private void ApplyConfiguredBoardScale()
+    {
+        if (_loadedCardBagRect == null || !_hasOriginalCardBagLocalScale)
+        {
+            return;
+        }
+
+        _loadedCardBagRect.localScale = _originalCardBagLocalScale * _configuredBoardScale;
+        Canvas.ForceUpdateCanvases();
     }
 
     private static void PlaceCardBagAfterBackground(RectTransform cardBagRect)
@@ -755,14 +789,40 @@ public class GameScene : MonoBehaviour
         return Mathf.Min(factorX, factorY);
     }
 
-    private Vector3 CalculatePieceScaleOnBoard()
+    private Vector3 CalculatePieceScaleOnBoard(Image grooveImage)
     {
-        return Vector3.one * GetBoardToSpriteScaleFactor();
+        if (grooveImage == null || grooveImage.sprite == null || Camera.main == null)
+        {
+            return Vector3.one * GetBoardToSpriteScaleFactor();
+        }
+
+        var sprite = grooveImage.sprite;
+        var pixelsPerUnit = Mathf.Max(0.001f, sprite.pixelsPerUnit);
+        var spriteWorldSize = sprite.rect.size / pixelsPerUnit;
+        var grooveWorldSize = GameCommonUtility.GetRectTransformCameraWorldBounds(
+            grooveImage.rectTransform,
+            Camera.main,
+            WorldGameplayDepth).size;
+        if (spriteWorldSize.x <= 0.001f
+            || spriteWorldSize.y <= 0.001f
+            || grooveWorldSize.x <= 0.001f
+            || grooveWorldSize.y <= 0.001f)
+        {
+            return Vector3.one * GetBoardToSpriteScaleFactor();
+        }
+
+        return new Vector3(
+            grooveWorldSize.x / spriteWorldSize.x,
+            grooveWorldSize.y / spriteWorldSize.y,
+            1f);
     }
 
-    private Vector3 CalculateTrayScaleForPiece(SpriteRenderer pieceRenderer, Bounds hostBounds)
+    private Vector3 CalculateTrayScaleForPiece(
+        SpriteRenderer pieceRenderer,
+        Bounds hostBounds,
+        Vector3 dragScale)
     {
-        var boardScale = CalculatePieceScaleOnBoard();
+        var boardScale = dragScale / _configuredBoardScale;
         if (pieceRenderer == null || pieceRenderer.sprite == null)
         {
             return boardScale;
@@ -878,8 +938,10 @@ public class GameScene : MonoBehaviour
                 continue;
             }
 
-            var trayScale = CalculateTrayScaleForPiece(pieceRenderer, hostBounds);
-            var dragScale = CalculatePieceScaleOnBoard();
+            var dragScale = CalculatePieceScaleOnBoard(grooveImage);
+            var trayScale = Vector3.Min(
+                CalculateTrayScaleForPiece(pieceRenderer, hostBounds, dragScale),
+                dragScale);
             pieceRenderer.transform.localScale = trayScale;
             _drag.CurrentGroupDraggables.Add(new DraggablePieceState
             {
@@ -1087,7 +1149,6 @@ public class GameScene : MonoBehaviour
             {
                 state.PieceRenderer.transform.rotation = _hintedPieceBaseRotation;
             }
-            state.DragScale = CalculatePieceScaleOnBoard();
             state.PieceRenderer.transform.localScale = state.DragScale;
             state.PieceRenderer.sortingOrder = PieceSortingOrder + 100;
             if (CountUnplacedTrayPieces() == 1)
@@ -1138,6 +1199,7 @@ public class GameScene : MonoBehaviour
                 ClearPieceHint();
             }
             StartGameplayTimerIfNeeded();
+            CompactFollowingTrayPieces(state);
             TryAdvanceGroup();
             return;
         }
@@ -1224,6 +1286,40 @@ public class GameScene : MonoBehaviour
                 trayCenterY);
             state.StartPosition = position;
             nextCenterX = pieceCenterX + pieceHalfWidth + horizontalSpacing;
+        }
+    }
+
+    private void CompactFollowingTrayPieces(DraggablePieceState placedState)
+    {
+        if (placedState?.PieceRenderer == null)
+        {
+            return;
+        }
+
+        var placedPieceNumber = GetPieceNumberFromState(placedState);
+        if (placedPieceNumber == int.MaxValue)
+        {
+            return;
+        }
+
+        var shiftX = GameCommonUtility.GetPieceWidth(
+            placedState.PieceRenderer,
+            placedState.TrayScale) + DraggableHorizontalSpacingPixels / PixelsPerUnit;
+        for (var i = 0; i < _drag.CurrentGroupDraggables.Count; i++)
+        {
+            var state = _drag.CurrentGroupDraggables[i];
+            if (state == null
+                || state.IsPlaced
+                || state.PieceRenderer == null
+                || GetPieceNumberFromState(state) <= placedPieceNumber)
+            {
+                continue;
+            }
+
+            var position = state.PieceRenderer.transform.position;
+            position.x -= shiftX;
+            state.PieceRenderer.transform.position = position;
+            state.StartPosition = position;
         }
     }
 
@@ -1458,6 +1554,7 @@ public class GameScene : MonoBehaviour
                 continue;
             }
 
+            state.PieceRenderer.gameObject.SetActive(false);
             Destroy(state.PieceRenderer.gameObject);
             state.PieceRenderer = null;
         }
@@ -1474,6 +1571,7 @@ public class GameScene : MonoBehaviour
             var child = placedRoot.transform.GetChild(childIndex);
             if (child.name.StartsWith(pieceNamePrefix, StringComparison.Ordinal))
             {
+                child.gameObject.SetActive(false);
                 Destroy(child.gameObject);
             }
         }
@@ -1517,12 +1615,14 @@ public class GameScene : MonoBehaviour
         var draggableRoot = GameObject.Find(DraggableGroupRootObjectName);
         if (draggableRoot != null)
         {
+            draggableRoot.SetActive(false);
             Destroy(draggableRoot);
         }
 
         var placedRoot = GameObject.Find(PlacedPiecesRootObjectName);
         if (placedRoot != null)
         {
+            placedRoot.SetActive(false);
             Destroy(placedRoot);
         }
 

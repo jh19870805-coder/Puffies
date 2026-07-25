@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Text;
 using UnityEngine;
@@ -11,6 +12,7 @@ public struct CardPackConfigData
     public int PackId;
     public CardPackSize PackSize;
     public int ChapterId;
+    public float BoardScale;
 }
 
 public readonly struct GameConfigAssetDefinition
@@ -278,12 +280,18 @@ public static class GameConfigRepository
             chapterId = ((Math.Max(1, index) - 1) / 18) + 1;
         }
 
+        if (!row.TryGetFloat("BoardScale", out var boardScale) || boardScale <= 0f)
+        {
+            return false;
+        }
+
         config = new CardPackConfigData
         {
             Index = index,
             PackId = packId,
             PackSize = (CardPackSize)GetOptionalInt(row, "PackSize"),
-            ChapterId = chapterId
+            ChapterId = chapterId,
+            BoardScale = boardScale
         };
         return true;
     }
@@ -475,5 +483,16 @@ public sealed class CsvRow
     {
         value = 0;
         return TryGetString(header, out var text) && int.TryParse(text, out value);
+    }
+
+    public bool TryGetFloat(string header, out float value)
+    {
+        value = 0f;
+        return TryGetString(header, out var text)
+            && float.TryParse(
+                text,
+                NumberStyles.Float,
+                CultureInfo.InvariantCulture,
+                out value);
     }
 }

@@ -1,56 +1,73 @@
 # 当前任务
 
-- 任务：实现 MainScene 重玩确认弹窗
-- 状态：代码已实现，等待 Unity Play Mode 验证
+- 任务：按卡包配置缩放 GameScene 棋盘与拖拽碎片
+- 状态：代码已实现，等待 Unity Play Mode 视觉验证
 - 更新时间：2026-07-25
 
 ## 用户意图
 
-- 用户已在 `MainScene` 中新增 `PanelReplay`。
-- 首次游玩的卡包点击 `Play` 时继续直接进入现有开包流程。
-- 已玩过的卡包按钮显示“重玩”；点击时先显示 `PanelReplay`，不直接开包。
-- `BtnReplay` 确认重玩并继续原开包动画与进入 GameScene 流程。
-- `BtnReturn` 和 `BtnClose` 取消确认，关闭弹窗并返回卡包选择页。
+- `Resources/Configs/CardPacks.csv` 新增 `BoardScale` 列。
+- 进入 GameScene 后，根据当前 BagId 读取 `BoardScale`。
+- 棋盘、槽位和创建出来的贴图碎片使用该缩放比。
+- Piece 初始位于下方黑色托盘时，生成比例取“配置后的棋盘目标比例”和“修改前黑色托盘规则算出的比例”中的较小值。
+- 拿起 Piece 后使用配置后的棋盘目标比例，因此尺寸只能保持不变或放大，不能在按下时缩小；放置失败后恢复生成时的托盘比例。
 
 ## 工作记录
 
-- 运行时读取用户在场景中搭建的 `PanelReplay`、`BtnReplay`、`BtnReturn` 和 `BtnClose`，不改写场景布局。
-- 将 `PanelReplay` 迁入现有 `PanelBagSelectCanvas` 并保持全屏布局，使其作为卡包选择页的最上层子面板。
-- `OnBagSelectPlayClicked` 使用与按钮文案相同的 `CardPackDataUtility.IsPackPlayed` 判定：首次 Play 直接继续，重玩显示确认弹窗。
-- 弹窗显示期间锁定 Play、Back 和 Camera，并临时隐藏选中卡包及其他列表卡包的 Renderer/尺寸图标，避免任何卡包压住弹窗。
-- 确认时关闭弹窗、恢复选中卡包并启动原 `EnterCardPackOpeningStage` 协程。
-- 返回或关闭时关闭弹窗、恢复选中卡包和选择页按钮，不改变卡包状态。
-- 清理卡包选择状态时同步关闭弹窗并重置确认状态，避免残留输入。
-- 首次视觉验证发现未选中的列表卡包 Mesh Renderer 仍会绘制在弹窗上方；已补充弹窗期间统一隐藏、取消时统一恢复的处理。
+- `CardPackConfigData` 新增 `BoardScale` 浮点字段。
+- `CsvRow` 新增使用 `InvariantCulture` 的浮点读取，避免系统小数点区域设置影响 CSV。
+- `CardPacks.csv/BoardScale` 现在是必填正数；缺失、无法解析或小于等于零的行视为无效配置。
+- GameScene 初始化时按 BagId 读取配置，并将 `BoardScale` 乘到 CardBag Prefab 原始根节点缩放；`GameBoard`、Piece 槽位、描边坐标和吸附位置随层级统一缩放。
+- 棋盘上的 SpriteRenderer Piece 比例继续从棋盘实际显示尺寸计算，因此自动包含 `BoardScale`。
+- 托盘比例计算时除去 `BoardScale`，继续使用修改前的棋盘匹配比例和托盘最大高度限制。
+- 创建 Piece 时一次性保存包含 `BoardScale` 的 `DragScale`；拿起时直接使用保存值，不再根据可能已变化的 Canvas/棋盘状态二次计算。成功放置保持该比例，失败则恢复 `TrayScale`。
+- 每个 Piece 创建时直接执行 `TrayScale = Min(旧托盘规则比例, DragScale)`；不再使用整组宽高或是否超框作为分支条件。
+- 棋盘先应用 `BoardScale`，再按照当前组缩放后的实际屏幕范围居中；入场动画以该居中结果作为终点，不再恢复 Prefab 原始锚点。
+- 当前组使用的运行时 `SpriteRenderer` 不再按整张棋盘的单一比例推算尺寸；每个 Piece 分别读取对应槽位缩放后的实际世界宽高，计算 X/Y `DragScale`，确保吸附后与 Prefab 槽位显示尺寸一致，避免切组前缝隙偏大、切组后才恢复正常。
+- 成功吸附 Piece 后不再完整刷新托盘布局；仅将编号位于其后的未放置 Piece 沿 X 轴前移“被取走 Piece 的托盘宽度 + 间距”，并更新失败回退 X。所有剩余 Piece 的 Y 和缩放保持不变；先拼队尾 Piece 时其他 Piece 完全不刷新。
+- 最后一块吸附并切组时，上一组运行时 Piece 在调用延迟 `Destroy` 前先立即停用；下一组重新居中和恢复 Prefab 原始 Piece 时不再与旧 Renderer 重叠，避免已完成 Piece 在 Y 轴抖动一帧。结算清理使用同一规则。
 
 ## 修改文件
 
-- `Assets/Scripts/Controller/MainScene.cs`
+- `Assets/Resources/Configs/CardPacks.csv`（用户修改）
+- `Assets/Scripts/Model/GameConfigRepository.cs`
+- `Assets/Scripts/Controller/GameScene.cs`
 - `Documents/CURRENT_TASK.md`
 - `Documents/GAME_DESIGN_REQUIREMENTS.md`
 - `Documents/PROJECT_CONTEXT.md`
 
 ## 决策
 
-- `PanelReplay/BtnReplay` 是确认按钮；`BtnReturn` 与右上角 `BtnClose` 都是取消按钮。
-- 是否需要确认严格跟随当前按钮是否为“重玩”，不另建状态字段或持久化数据。
-- 确认后复用现有开包流程，不复制开包动画和场景切换逻辑。
-- 本次不涉及 JSON、SQLite 或 `PlayerPrefs`，无需删除本地数据。
+- `BoardScale` 是只读资源配置，不写入 SQLite、JSON 或 `PlayerPrefs`。
+- 缺少整个卡包配置时 GameScene 记录警告并回退 `1`；CSV 中存在的卡包行必须提供合法正数。
+- 缩放 CardBag 根节点而不是单独修改 GameBoard 图片，确保棋盘、Piece 槽位和描边保持同一坐标系。
+- 不修改托盘布局、`20px` 间距和 `90%` 最大高度规则；这些规则先算出旧托盘比例，再与配置后的棋盘目标比例取较小值。
 
 ## 验证
 
-- 场景序列化检查确认 `PanelReplay` 初始隐藏，三个目标按钮均存在并带有 `Button` 组件。
+- 当前 22 行 `CardPacks.csv` 均提供了正数 `BoardScale`。
 - `dotnet build Puffies.sln --no-restore`：三个程序集成功，`0` 警告、`0` 错误。
-- `git diff --check -- Assets/Scripts/Controller/MainScene.cs`：通过，仅有既有 LF/CRLF 转换提示。
-- 首次 Play Mode 验证发现列表卡包压住弹窗；对应修复已编译通过，等待复测视觉层级和按钮交互。
+- `git diff --check`：代码通过，仅有既有 LF/CRLF 转换提示。
+- 已确认代码调用顺序为应用 `BoardScale` -> 创建当前组并计算居中位置 -> 播放入场动画；动画现在保留计算后的当前位置。
+- `dotnet build Puffies.sln --no-restore`（逐 Piece 槽位尺寸修复后）：三个程序集成功，`0` 警告、`0` 错误。
+- `dotnet build Puffies.sln --no-restore`（托盘自动补位后）：三个程序集成功，`0` 警告、`0` 错误。
+- `dotnet build Puffies.sln --no-restore`（切组旧 Piece 帧内隐藏后）：三个程序集成功，`0` 警告、`0` 错误。
+- `dotnet build Puffies.sln --no-restore`（托盘增量 X 补位后）：三个程序集成功，`0` 警告、`0` 错误。
+- 尚未完成 BoardScale 大于 1、小于 1 和等于 1 三种卡包的 Play Mode 视觉验证。
+- 不涉及持久化结构变化，无需删除 `LocalData.db` 或 `LocalData.json`。
 
 ## 下一步
 
-1. 选择首次未玩的 `Unlocked` 卡包，确认点击 `Play` 不显示弹窗并继续开包。
-2. 选择 `InProgress` 或 `Completed` 卡包，确认点击“重玩”显示 `PanelReplay`。
-3. 验证 `BtnReturn` 和 `BtnClose` 关闭弹窗并恢复卡包与选择按钮。
-4. 验证 `BtnReplay` 关闭弹窗并正常进入原开包舞台和 GameScene。
+1. 测试 CardBag001（`BoardScale=1.48`），确认棋盘放大且入场结束后仍在可用棋盘区域居中，托盘 Piece 初始尺寸不变、拿起后放大并能准确吸附。
+2. 测试 CardBag002（`BoardScale=0.72`），确认棋盘缩小且入场结束后仍在可用棋盘区域居中，拿起 Piece 同比例缩小且吸附准确。
+3. 测试 `BoardScale=1` 的卡包，确认行为与修改前一致。
+4. 完成第一组并创建第二组，确认棋盘居中、描边、已放置 Piece 和新组托盘布局没有偏移。
+5. 验证每个 Piece 按下拿起时只会保持尺寸或放大，不会缩小。
+6. 在当前组尚未完成时检查已吸附 Piece 的接缝，确认其与切换下一组后 Prefab 原始 Piece 的接缝宽度一致。
+7. 从托盘中间取一块并成功吸附，确认后续 Piece 向前补位、前序 Piece 不跳动，且补位后的 Piece 放置失败会返回新位置。
+8. 放置当前组最后一块，确认切换下一组时已完成 Piece 不再发生 Y 轴抖动或短暂重影。
+9. 第一片先选择托盘队尾 Piece，确认吸附后前序 Piece 的 X、Y 均完全不刷新；再选择中间 Piece，确认只有后序 Piece 沿 X 前移且 Y 不抖动。
 
 ## 恢复提示
 
-继续 Puffies 当前任务。先阅读 `AGENTS.md`、`Documents/WORKFLOW.md` 和 `Documents/CURRENT_TASK.md`；重玩确认逻辑已实现，下一步是在 Unity Play Mode 验证 `PanelReplay` 三个按钮和视觉层级。
+继续 Puffies 当前任务。先阅读 `AGENTS.md`、`Documents/WORKFLOW.md` 和 `Documents/CURRENT_TASK.md`；`BoardScale` 解析和运行时缩放已实现，下一步是在 Unity Play Mode 验证大于 1、小于 1 和等于 1 的卡包。

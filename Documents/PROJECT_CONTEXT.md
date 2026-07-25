@@ -28,7 +28,7 @@ Unity **2022.3** / URP 2D 项目。核心循环：打开卡包 -> 拖放拼图 -
 |------|------|
 | LoadingScene | 初始化 JSON、SQLite、任务数据和卡包数据；加载结束后进入 MainScene |
 | MainScene | 根据 `CardPacks.csv` 与 SQLite 解锁状态刷新卡包列表；每页按 6 列 x 3 行显示 18 个带呼吸动画的轻量常驻卡包特效；点击后将闭合卡包移动并放大到屏幕中心，同时显示柔化首页和 `PanelBagSelect`；Play/重玩进入 `BgGame` 开包舞台，玩家轻点放大卡包或沿顶部封口横划后播放开包动画；Back 取消并复原；提供 Rank、Achieve 和 Menu 入口 |
-| GameScene | 根据选中 PackId 加载 `CardBagNNN` Prefab；按照 `PieceNN` 数字命名组织拼图分组；从正常开包流程进入时播放棋盘、托盘和当前组 Piece 入场；一组完成后切换分组并清理上一组碎片；全部完成后显示 RewardPanel |
+| GameScene | 根据选中 PackId 加载 `CardBagNNN` Prefab，并读取 `CardPacks.csv/BoardScale` 缩放棋盘；按照 `PieceNN` 数字命名组织拼图分组；从正常开包流程进入时播放棋盘、托盘和当前组 Piece 入场；一组完成后切换分组并清理上一组碎片；全部完成后显示 RewardPanel |
 | RankScene | 仅占位；首个 Demo 不包含排行榜后端功能。当前模拟列表前三名的 `RankBg` 分别使用 `RankCellBg_1.png`、`RankCellBg_2.png`、`RankCellBg_3.png`，第四名以后使用 `RankCellBg.png` |
 | AchieveScene | 当前显示 20 条模拟成就，前 5 条已达成、后 15 条未达成；接入 Steam 后替换数据源 |
 | effect | 预览和调试 CardFx |
@@ -196,12 +196,13 @@ effect（调试）：CardFx 预览；菜单 Puffies -> Preview CardFx Effects
 |------|------|-------------|
 | 任务配置 | `GameConfigRepository` 读取 `Resources/Configs/TaskConfig.csv` | 只读 |
 | 任务进度 | `GameTaskUtility` | `persistentDataPath/LocalData.json` 根对象 `TaskProgressData` |
-| 卡包配置（`PackId`、`PackSize`、`ChapterId`） | `GameConfigRepository` 读取 `Resources/Configs/CardPacks.csv` | 只读 |
+| 卡包配置（`PackId`、`PackSize`、`ChapterId`、`BoardScale`） | `GameConfigRepository` 读取 `Resources/Configs/CardPacks.csv` | 只读 |
 | 卡包生命周期 | `CardPackDataUtility` | `LocalData.db` 的 `CardPacks` 表 |
 | 通用集合与键值存储 | `SqliteLocalStore` API | `LocalData.db` 的 `AppRecords` 表 |
 
 - `GameConfigRepository` 加载并缓存任务和卡包配置。当前数据源为 `ResourcesGameConfigTextSource`，优先使用 `Resources.Load<TextAsset>`，失败时回退到编辑器磁盘路径。
 - `CsvTable` 是统一 CSV 解析器，支持表头访问、引号字段和空行过滤；业务代码不得直接 `Split(',')`。
+- `CardPacks.csv/BoardScale` 使用 invariant-culture 浮点数且必须大于零。GameScene 将其乘到当前 CardBag 根节点，使棋盘、槽位、描边和吸附坐标统一缩放。每个 Piece 的托盘生成比例为 `Min(配置后的棋盘目标比例, 原黑色托盘规则比例)`，不按整组宽高分支；拿起与放置使用棋盘目标比例，所以按下时只会保持尺寸或放大，失败回托盘后恢复生成比例。
 - `JsonLocalStore` 读写整个文件的单一根对象，目前用于任务进度。
 - `SqliteLocalStore` 在 `AppRecords` 中使用集合/键记录；卡包业务状态使用专用 `CardPacks` 表。
 - `CardPackLifecycleState` 为 `Locked=0`、`Unlocked=1`、`InProgress=2`、`Completed=3`。完成多组卡包第一组后标记为 `InProgress`，完成最后一组后标记为 `Completed`。
@@ -250,7 +251,7 @@ effect（调试）：CardFx 预览；菜单 Puffies -> Preview CardFx Effects
 `PackItem/PackShadow` 是渲染在 `PackCover` 后方的同级 Image。MainScene 读取运行时可读封面贴图，将 Alpha 缩小到 `240 x 272` 显示尺寸，并执行三次可分离 Box Blur，水平半径 2、垂直半径 5。缓存阴影 Sprite 尺寸为 `256 x 344`、偏移为 `(0,-20)`，使投影只向下而不是向右。水平/垂直内边距为 `8/36` 像素，阴影颜色 `#1f292d`，最大 Alpha `0.52`。MainScene 销毁时释放生成的阴影 Sprite 和 Texture。`PackSize` 保持在两张图片上方。
 
 1. 场景中只保留一个模板对象：`Package001`。
-2. 在 `CardPacks.csv` 增加一行（`PackId`、`PackSize`、`ChapterId`）。
+2. 在 `CardPacks.csv` 增加一行（`PackId`、`PackSize`、`ChapterId`、正数 `BoardScale`）。
 3. 在 `UI/PackImages/` 下按 `PackIconNNN.png` 命名增加对应封面。`GameDefine.FormatPackImagePath` 将 PackId `1` 映射到 `UI/PackImages/PackIcon001.png`。
 4. 通过 `CardPackDataUtility` 将生命周期写入 SQLite `CardPacks` 表。
 5. 不创建每个卡包专属的 3D 资源。运行时复用共享动画、Controller、材质和全部六个 `CardPackOpening` 蒙皮层；选中的 `PackIconNNN.png` 成为每个动画层的封面。共享资源缺失时，MainScene 使用 2D 回退。
@@ -266,7 +267,7 @@ effect（调试）：CardFx 预览；菜单 Puffies -> Preview CardFx Effects
 7. 新增或修改 CardBag 后，执行 **Puffies -> Puzzles -> Bake Outline Masks**。烘焙器优先使用 `GameBoard.png` 的透明挖空 Alpha 作为最终拼图外边界，并使用已完成 Piece 的 Alpha 作为后续组接触边；GameBoard 没有有效挖空时回退到全部 Piece Alpha 并集。结果写入 `Resources/Generated/PuzzleOutlines/CardBagNNN/GroupNN.png`。第 1 组只包含自身最终拼图外边界；后续每张图只包含当前组最终外边界及其与低编号已完成组的接触边。
 8. `GameScene` 将烘焙的 `#3f423e` 当前组 Sprite 作为不可交互的 `GameBoard` 子 Image 显示。蒙版排除已完成组的无关边界、当前组与未来组的边界以及同组各 Piece 之间的接缝。不要在 Prefab 中手工制作描边对象。
 9. 缺少生成 Sprite 时，运行时记录制作警告，并在无描边情况下继续游戏。交付前重新运行烘焙器。
-- 创建一组碎片时只定位一次。成功放置 Piece 后，托盘中其他 Piece 保持既定 X、Y 位置；空位直到下一组创建时才重新布局。
+- 创建一组碎片时按编号从左向右排列。成功放置后只允许编号靠后的 Piece 沿 X 前移并更新失败回退 X，不得刷新前序 Piece 或任何剩余 Piece 的 Y/缩放；先放队尾时其余 Piece 不移动。最后一块仍执行托盘退出并进入切组或结算。
 
 #### 无 JSON Prefab 批量生成
 
