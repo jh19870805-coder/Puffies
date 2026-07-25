@@ -33,6 +33,8 @@ Unity **2022.3** / URP 2D 项目。核心循环：打开卡包 -> 拖放拼图 -
 | AchieveScene | 当前显示 20 条模拟成就，前 5 条已达成、后 15 条未达成；接入 Steam 后替换数据源 |
 | effect | 预览和调试 CardFx |
 
+所有场景常规鼠标图标为 `UI/BasicUI/ImgHand_1.png`。GameScene 悬停当前可拖 Piece 时切换 `ImgHand_2.png`，按住左键拖拽 Piece 时切换 `ImgHand_3.png`；松开、结算或离开 GameScene 后恢复常规图标。三张资源随 `BasicUI` 同步到 Player 的 `StreamingAssets/UI/BasicUI`。
+
 ### 数据与奖励需求
 
 - 任务配置来自 `Resources/Configs/TaskConfig.csv`。

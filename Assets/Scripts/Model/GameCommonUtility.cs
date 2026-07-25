@@ -933,6 +933,144 @@ public static class GameCommonUtility
 }
 
 /// <summary>
+/// 用途：加载并切换项目的全局自定义鼠标图标。返回：按方法说明。
+/// </summary>
+public static class GameCursorUtility
+{
+    private const string DefaultCursorPath = GameDefine.UiRoot + "/BasicUI/ImgHand_1.png";
+    private const string PieceHoverCursorPath = GameDefine.UiRoot + "/BasicUI/ImgHand_2.png";
+    private const string PieceDragCursorPath = GameDefine.UiRoot + "/BasicUI/ImgHand_3.png";
+
+    private static readonly Vector2 DefaultHotspot = new Vector2(4f, 2f);
+    private static readonly Vector2 PieceHoverHotspot = new Vector2(4f, 24f);
+    private static readonly Vector2 PieceDragHotspot = new Vector2(4f, 24f);
+
+    private static Texture2D sDefaultCursor;
+    private static Texture2D sPieceHoverCursor;
+    private static Texture2D sPieceDragCursor;
+    private static CursorVisual sCurrentVisual = CursorVisual.Unset;
+    private static bool sInitialized;
+
+    private enum CursorVisual
+    {
+        Unset = -1,
+        Default = 0,
+        PieceHover = 1,
+        PieceDrag = 2
+    }
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetState()
+    {
+        sDefaultCursor = null;
+        sPieceHoverCursor = null;
+        sPieceDragCursor = null;
+        sCurrentVisual = CursorVisual.Unset;
+        sInitialized = false;
+    }
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+    private static void Bootstrap()
+    {
+        EnsureInitialized();
+        SetDefault();
+    }
+
+    public static void SetDefault()
+    {
+        Apply(CursorVisual.Default);
+    }
+
+    public static void SetPieceHover()
+    {
+        Apply(CursorVisual.PieceHover);
+    }
+
+    public static void SetPieceDrag()
+    {
+        Apply(CursorVisual.PieceDrag);
+    }
+
+    private static void EnsureInitialized()
+    {
+        if (sInitialized)
+        {
+            return;
+        }
+
+        sDefaultCursor = LoadCursorTexture(DefaultCursorPath);
+        sPieceHoverCursor = LoadCursorTexture(PieceHoverCursorPath);
+        sPieceDragCursor = LoadCursorTexture(PieceDragCursorPath);
+        sInitialized = true;
+    }
+
+    private static void Apply(CursorVisual visual)
+    {
+        EnsureInitialized();
+        if (sCurrentVisual == visual)
+        {
+            return;
+        }
+
+        Texture2D texture;
+        Vector2 hotspot;
+        switch (visual)
+        {
+            case CursorVisual.PieceHover:
+                texture = sPieceHoverCursor != null ? sPieceHoverCursor : sDefaultCursor;
+                hotspot = sPieceHoverCursor != null ? PieceHoverHotspot : DefaultHotspot;
+                break;
+            case CursorVisual.PieceDrag:
+                texture = sPieceDragCursor != null ? sPieceDragCursor : sDefaultCursor;
+                hotspot = sPieceDragCursor != null ? PieceDragHotspot : DefaultHotspot;
+                break;
+            default:
+                texture = sDefaultCursor;
+                hotspot = DefaultHotspot;
+                break;
+        }
+
+        Cursor.visible = true;
+        Cursor.SetCursor(texture, texture != null ? hotspot : Vector2.zero, CursorMode.Auto);
+        sCurrentVisual = visual;
+    }
+
+    private static Texture2D LoadCursorTexture(string relativePath)
+    {
+        var filePath = GameCommonUtility.ToDiskPath(relativePath);
+        if (!File.Exists(filePath))
+        {
+            Debug.LogWarning($"Cursor texture not found: {filePath}");
+            return null;
+        }
+
+        try
+        {
+            var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false)
+            {
+                name = Path.GetFileNameWithoutExtension(filePath),
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp
+            };
+            if (texture.LoadImage(File.ReadAllBytes(filePath), false))
+            {
+                return texture;
+            }
+
+            UnityEngine.Object.Destroy(texture);
+        }
+        catch (Exception exception)
+        {
+            Debug.LogWarning($"Failed to load cursor texture: {filePath}. error={exception.Message}");
+            return null;
+        }
+
+        Debug.LogWarning($"Failed to decode cursor texture: {filePath}");
+        return null;
+    }
+}
+
+/// <summary>
 /// 用途：加载项目默认中文字体（Noto Sans SC）。返回：按方法说明。
 /// </summary>
 public static class GameFontUtility

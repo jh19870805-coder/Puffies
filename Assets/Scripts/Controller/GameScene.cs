@@ -155,6 +155,7 @@ public class GameScene : MonoBehaviour
 
     private void OnDestroy()
     {
+        GameCursorUtility.SetDefault();
         ClearPieceHint();
         HintDashedOutlineGraphic.ClearPathCache();
     }
@@ -164,6 +165,7 @@ public class GameScene : MonoBehaviour
         UpdatePieceHintAnimation();
         if (_isEntranceAnimating)
         {
+            GameCursorUtility.SetDefault();
             return;
         }
 
@@ -171,6 +173,7 @@ public class GameScene : MonoBehaviour
             TryBeginDrag,
             UpdateDragging,
             OnPointerEnd);
+        RefreshCursorForPointer(Input.mousePosition);
     }
 
     private void InitializeGameplay(int bagId)
@@ -1129,35 +1132,60 @@ public class GameScene : MonoBehaviour
             return;
         }
 
+        var state = FindDraggablePieceAt(screenPosition);
+        if (state == null)
+        {
+            return;
+        }
+
+        var world = ToGameplayWorld(screenPosition);
+        _drag.DraggingPiece = state;
+        _drag.DragOffset = state.PieceRenderer.transform.position - world;
+        if (state == _hintedPiece)
+        {
+            state.PieceRenderer.transform.rotation = _hintedPieceBaseRotation;
+        }
+        state.PieceRenderer.transform.localScale = state.DragScale;
+        state.PieceRenderer.sortingOrder = PieceSortingOrder + 100;
+        if (CountUnplacedTrayPieces() == 1)
+        {
+            SlidePieceTrayOutOfScreen();
+        }
+    }
+
+    private void RefreshCursorForPointer(Vector2 screenPosition)
+    {
+        if (_drag.DraggingPiece != null)
+        {
+            GameCursorUtility.SetPieceDrag();
+            return;
+        }
+
+        if (!_isGameFinished && FindDraggablePieceAt(screenPosition) != null)
+        {
+            GameCursorUtility.SetPieceHover();
+            return;
+        }
+
+        GameCursorUtility.SetDefault();
+    }
+
+    private DraggablePieceState FindDraggablePieceAt(Vector2 screenPosition)
+    {
         var world = ToGameplayWorld(screenPosition);
         for (var i = _drag.CurrentGroupDraggables.Count - 1; i >= 0; i--)
         {
             var state = _drag.CurrentGroupDraggables[i];
-            if (state == null || state.IsPlaced || state.PieceRenderer == null)
+            if (state != null
+                && !state.IsPlaced
+                && state.PieceRenderer != null
+                && ContainsWorldXY(state.PieceRenderer.bounds, world))
             {
-                continue;
+                return state;
             }
-
-            if (!ContainsWorldXY(state.PieceRenderer.bounds, world))
-            {
-                continue;
-            }
-
-            _drag.DraggingPiece = state;
-            _drag.DragOffset = state.PieceRenderer.transform.position - world;
-            if (state == _hintedPiece)
-            {
-                state.PieceRenderer.transform.rotation = _hintedPieceBaseRotation;
-            }
-            state.PieceRenderer.transform.localScale = state.DragScale;
-            state.PieceRenderer.sortingOrder = PieceSortingOrder + 100;
-            if (CountUnplacedTrayPieces() == 1)
-            {
-                SlidePieceTrayOutOfScreen();
-            }
-
-            break;
         }
+
+        return null;
     }
 
     private void UpdateDragging(Vector2 screenPosition)
