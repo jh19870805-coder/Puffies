@@ -113,6 +113,10 @@ public class MainScene : MonoBehaviour
     private const string BagSelectPlayButtonObjectName = "BtnPlay";
     private const string BagSelectBackButtonObjectName = "BtnBack";
     private const string BagSelectCameraButtonObjectName = "BtnCamera";
+    private const string ReplayPanelObjectName = "PanelReplay";
+    private const string ReplayConfirmButtonObjectName = "BtnReplay";
+    private const string ReplayReturnButtonObjectName = "BtnReturn";
+    private const string ReplayCloseButtonObjectName = "BtnClose";
     private const string PhotoPanelObjectName = "PanelPhoto";
     private const string PhotoPanelCanvasObjectName = "PanelPhotoCanvas";
     private const string PhotoImageObjectName = "Photo";
@@ -167,6 +171,10 @@ public class MainScene : MonoBehaviour
     private GameObject mBagSelectCameraButtonRoot;
     private Button mBagSelectCameraButton;
     private TMP_Text mBagSelectPlayLabel;
+    private GameObject mReplayPanelRoot;
+    private Button mReplayConfirmButton;
+    private Button mReplayReturnButton;
+    private Button mReplayCloseButton;
     private GameObject mPhotoPanelRoot;
     private Canvas mPhotoPanelCanvas;
     private Image mPhotoImage;
@@ -179,6 +187,7 @@ public class MainScene : MonoBehaviour
     private Texture2D mGeneratedPhotoTexture;
     private Sprite mGeneratedPhotoSprite;
     private bool mIsCapturingPhoto;
+    private bool mIsReplayConfirmationVisible;
     private int mSelectedBagId;
     private float mSelectedPackageStartScale;
     private float mSelectedPackageOpenScale;
@@ -299,6 +308,7 @@ public class MainScene : MonoBehaviour
         mIsTrackingTearSwipe = false;
         mIsTrackingTearTap = false;
         mIsCapturingPhoto = false;
+        mIsReplayConfirmationVisible = false;
 
         GameManager.Initialize();
         if (!GameSettingsUtility.Initialize())
@@ -325,6 +335,7 @@ public class MainScene : MonoBehaviour
         ConfigureRankButton();
         ConfigureAchieveButton();
         ConfigureBagSelectPanel();
+        ConfigureReplayPanel();
         ConfigurePhotoPanel();
         ConfigureMenuPanel();
         ConfigureSettingsPanel();
@@ -502,6 +513,54 @@ public class MainScene : MonoBehaviour
         }
 
         SetBagSelectPanelVisible(false);
+    }
+
+    private void ConfigureReplayPanel()
+    {
+        mReplayPanelRoot = GameCommonUtility.FindSceneObject(ReplayPanelObjectName);
+        if (mReplayPanelRoot == null)
+        {
+            Debug.LogWarning($"MainScene: replay panel not found. Expected {ReplayPanelObjectName}.");
+            return;
+        }
+
+        if (mBagSelectOverlayCanvas != null)
+        {
+            StretchToParent(
+                mReplayPanelRoot.GetComponent<RectTransform>(),
+                mBagSelectOverlayCanvas.transform);
+        }
+        else
+        {
+            Debug.LogWarning("MainScene: replay panel could not be moved to the bag selection canvas.");
+        }
+
+        mReplayConfirmButton = FindChild(
+            mReplayPanelRoot.transform,
+            ReplayConfirmButtonObjectName)?.GetComponent<Button>();
+        mReplayReturnButton = FindChild(
+            mReplayPanelRoot.transform,
+            ReplayReturnButtonObjectName)?.GetComponent<Button>();
+        mReplayCloseButton = FindChild(
+            mReplayPanelRoot.transform,
+            ReplayCloseButtonObjectName)?.GetComponent<Button>();
+
+        BindReplayButton(mReplayConfirmButton, OnReplayConfirmed, ReplayConfirmButtonObjectName);
+        BindReplayButton(mReplayReturnButton, OnReplayCancelled, ReplayReturnButtonObjectName);
+        BindReplayButton(mReplayCloseButton, OnReplayCancelled, ReplayCloseButtonObjectName);
+        SetPanelVisible(mReplayPanelRoot, false);
+    }
+
+    private static void BindReplayButton(Button button, UnityEngine.Events.UnityAction action, string objectName)
+    {
+        if (button == null)
+        {
+            Debug.LogWarning($"MainScene: replay panel button not found. Expected {objectName}.");
+            return;
+        }
+
+        button.onClick.RemoveListener(action);
+        button.onClick.AddListener(action);
     }
 
     private void ConfigurePhotoPanel()
@@ -821,12 +880,60 @@ public class MainScene : MonoBehaviour
 
     private void OnBagSelectPlayClicked()
     {
-        if (mIsPlayingAnimation || mSelectedPackageEntry == null || mSelectedBagId <= 0)
+        if (mIsPlayingAnimation
+            || mIsReplayConfirmationVisible
+            || mSelectedPackageEntry == null
+            || mSelectedBagId <= 0)
         {
             return;
         }
 
+        if (CardPackDataUtility.IsPackPlayed(mSelectedBagId) && mReplayPanelRoot != null)
+        {
+            ShowReplayConfirmation();
+            return;
+        }
+
         mPlayAnimationCoroutine = StartCoroutine(EnterCardPackOpeningStage());
+    }
+
+    private void ShowReplayConfirmation()
+    {
+        mIsReplayConfirmationVisible = true;
+        SetBagSelectButtonsInteractable(false);
+        SetUnselectedPackageVisualsVisible(false);
+        GameAnimationUtility.SetPreparedCardPackVisible(false);
+        SetPanelVisible(mReplayPanelRoot, true);
+    }
+
+    private void OnReplayConfirmed()
+    {
+        if (!mIsReplayConfirmationVisible
+            || mIsPlayingAnimation
+            || mSelectedPackageEntry == null
+            || mSelectedBagId <= 0)
+        {
+            return;
+        }
+
+        SetPanelVisible(mReplayPanelRoot, false);
+        mIsReplayConfirmationVisible = false;
+        GameAnimationUtility.SetPreparedCardPackVisible(true);
+        mPlayAnimationCoroutine = StartCoroutine(EnterCardPackOpeningStage());
+    }
+
+    private void OnReplayCancelled()
+    {
+        if (!mIsReplayConfirmationVisible || mIsPlayingAnimation)
+        {
+            return;
+        }
+
+        SetPanelVisible(mReplayPanelRoot, false);
+        mIsReplayConfirmationVisible = false;
+        GameAnimationUtility.SetPreparedCardPackVisible(true);
+        SetUnselectedPackageVisualsVisible(true);
+        SetBagSelectButtonsInteractable(true);
     }
 
     private void OnBagSelectBackClicked()
@@ -3613,6 +3720,12 @@ public class MainScene : MonoBehaviour
 
     private void ClearPackageSelection()
     {
+        if (mReplayPanelRoot != null)
+        {
+            SetPanelVisible(mReplayPanelRoot, false);
+        }
+
+        mIsReplayConfirmationVisible = false;
         mSelectedPackageEntry = null;
         mSelectedBagId = 0;
         mSelectedPackageStartScale = 0f;
