@@ -204,7 +204,7 @@ effect（调试）：CardFx 预览；菜单 Puffies -> Preview CardFx Effects
 
 - `GameConfigRepository` 加载并缓存任务和卡包配置。当前数据源为 `ResourcesGameConfigTextSource`，优先使用 `Resources.Load<TextAsset>`，失败时回退到编辑器磁盘路径。
 - `CsvTable` 是统一 CSV 解析器，支持表头访问、引号字段和空行过滤；业务代码不得直接 `Split(',')`。
-- `CardPacks.csv/BoardScale` 使用 invariant-culture 浮点数且必须大于零。GameScene 将其乘到当前 CardBag 根节点，使棋盘、槽位、描边和吸附坐标统一缩放。每个 Piece 的托盘生成比例为 `Min(配置后的棋盘目标比例, 原黑色托盘规则比例)`，不按整组宽高分支；拿起与放置使用棋盘目标比例，所以按下时只会保持尺寸或放大，失败回托盘后恢复生成比例。
+- `CardPacks.csv/BoardScale` 使用 invariant-culture 浮点数且必须大于零。GameScene 将其乘到当前 CardBag 根节点，使棋盘、槽位、描边和吸附坐标统一缩放。每个 Piece 的托盘生成比例为 `Min(配置后的棋盘目标比例, 原黑色托盘规则比例)`，不按整组宽高分支；拿起使用棋盘目标比例，所以按下时只会保持尺寸或放大，失败回托盘后恢复生成比例。成功吸附后立即用 Prefab 对应原始 `Image` 替代拖拽 `SpriteRenderer`，确保已放置 Piece 与棋盘在同一 Canvas 层级共同缩放，接缝不随 `BoardScale` 放大。
 - `JsonLocalStore` 读写整个文件的单一根对象，目前用于任务进度。
 - `SqliteLocalStore` 在 `AppRecords` 中使用集合/键记录；卡包业务状态使用专用 `CardPacks` 表。
 - `CardPackLifecycleState` 为 `Locked=0`、`Unlocked=1`、`InProgress=2`、`Completed=3`。完成多组卡包第一组后标记为 `InProgress`，完成最后一组后标记为 `Completed`。
@@ -266,7 +266,7 @@ effect（调试）：CardFx 预览；菜单 Puffies -> Preview CardFx Effects
 4. 源贴图放在 `Assets/UI/CardBags/CardBagNNN/`，按分组命名，例如 `Pieces11`...`Pieces14` 和 `Pieces21`...`Pieces25`。
 5. 不使用 `PieceGroup` 父节点；分组只读取 `Piece` 后面的数字。
 6. 不创建 Package JSON；运行时数据来自已加载 Prefab 的 Image。
-7. 新增或修改 CardBag 后，执行 **Puffies -> Puzzles -> Bake Outline Masks**。烘焙器优先使用 `GameBoard.png` 的透明挖空 Alpha 作为最终拼图外边界，并使用已完成 Piece 的 Alpha 作为后续组接触边；GameBoard 没有有效挖空时回退到全部 Piece Alpha 并集。结果写入 `Resources/Generated/PuzzleOutlines/CardBagNNN/GroupNN.png`。第 1 组只包含自身最终拼图外边界；后续每张图只包含当前组最终外边界及其与低编号已完成组的接触边。
+7. 新增或修改 CardBag 后，执行 **Puffies -> Puzzles -> Bake Outline Masks**。烘焙器优先使用 `GameBoard.png` 的透明挖空 Alpha 作为最终拼图外边界，并使用已完成 Piece 的 Alpha 作为后续组接触边；GameBoard 没有有效挖空时回退到全部 Piece Alpha 并集。结果写入 `Resources/Generated/PuzzleOutlines/CardBagNNN/GroupNN.png`。第 1 组只包含自身最终拼图外边界；后续每张图只包含当前组最终外边界及其与低编号已完成组的接触边。同一描边像素按组顺序只由最早需要它的阶段认领，后续组不得重复绘制。接触边和最终外轮廓均使用圆形最近距离与局部边界法线判定归属，切线方向的邻近不得延长端点；两类线在交汇处分别于对方边界 `24px` 范围外结束。
 8. `GameScene` 将烘焙的 `#3f423e` 当前组 Sprite 作为不可交互的 `GameBoard` 子 Image 显示。蒙版排除已完成组的无关边界、当前组与未来组的边界以及同组各 Piece 之间的接缝。不要在 Prefab 中手工制作描边对象。
 9. 缺少生成 Sprite 时，运行时记录制作警告，并在无描边情况下继续游戏。交付前重新运行烘焙器。
 - 创建一组碎片时按编号从左向右排列。成功放置后只允许编号靠后的 Piece 沿 X 前移并更新失败回退 X，不得刷新前序 Piece 或任何剩余 Piece 的 Y/缩放；先放队尾时其余 Piece 不移动。最后一块仍执行托盘退出并进入切组或结算。
@@ -289,6 +289,9 @@ effect（调试）：CardFx 预览；菜单 Puffies -> Preview CardFx Effects
 ### 拼图描边渲染
 
 - 拼图描边由 `PuzzleOutlineBakerEditor` 离线生成，并通过 Unity UGUI `Image` 渲染。
+- 烘焙器在单个 CardBag 内累计已输出像素；后续组删除与前序组重叠的描边像素，防止接触边在阶段交界处沿旧外边界多画。
+- 边界归属除距离外还校验目标组位于边界的正确法线方向；最终外轮廓要求目标组位于轮廓内侧，已完成组接触边要求当前组位于旧组边界外侧。
+- 后续组外轮廓靠近已完成区域时提前截断，已完成组接触边靠近最终外轮廓时对称截断；交汇处允许保留小间隔，不能以连接线跨入贴纸空白区域。
 - 项目没有运行时描边 Shader、Renderer Feature 或第三方描边包。
 - 描边加载与拼图交互保持隔离；缺少描边不得阻止可拖拽碎片创建。
 

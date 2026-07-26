@@ -1,6 +1,6 @@
 # 当前任务
 
-- 任务：GameScene 棋盘交互与全局自定义鼠标
+- 任务：GameScene 棋盘交互、分阶段描边与全局自定义鼠标
 - 状态：代码已实现，等待 Unity Play Mode 视觉验证
 - 更新时间：2026-07-26
 
@@ -13,6 +13,7 @@
 - 拿起 Piece 后使用配置后的棋盘目标比例，因此尺寸只能保持不变或放大，不能在按下时缩小；放置失败后恢复生成时的托盘比例。
 - 所有游戏页面使用 `ImgHand_1.png` 作为常规鼠标图标。
 - GameScene 鼠标悬停在可拖贴纸上时切换为 `ImgHand_2.png`；按下左键并拿起贴纸后切换为 `ImgHand_3.png`。
+- 分阶段描边不得在当前组与已完成组交界处重复绘制已由前序阶段显示过的线段。
 
 ## 工作记录
 
@@ -20,16 +21,22 @@
 - `CsvRow` 新增使用 `InvariantCulture` 的浮点读取，避免系统小数点区域设置影响 CSV。
 - `CardPacks.csv/BoardScale` 现在是必填正数；缺失、无法解析或小于等于零的行视为无效配置。
 - GameScene 初始化时按 BagId 读取配置，并将 `BoardScale` 乘到 CardBag Prefab 原始根节点缩放；`GameBoard`、Piece 槽位、描边坐标和吸附位置随层级统一缩放。
-- 棋盘上的 SpriteRenderer Piece 比例继续从棋盘实际显示尺寸计算，因此自动包含 `BoardScale`。
+- 拖拽期间的 SpriteRenderer Piece 比例从对应棋盘槽位的实际显示尺寸计算，因此自动包含 `BoardScale`。
 - 托盘比例计算时除去 `BoardScale`，继续使用修改前的棋盘匹配比例和托盘最大高度限制。
-- 创建 Piece 时一次性保存包含 `BoardScale` 的 `DragScale`；拿起时直接使用保存值，不再根据可能已变化的 Canvas/棋盘状态二次计算。成功放置保持该比例，失败则恢复 `TrayScale`。
+- 创建 Piece 时一次性保存包含 `BoardScale` 的 `DragScale`；拿起时直接使用保存值，不再根据可能已变化的 Canvas/棋盘状态二次计算。放置失败恢复 `TrayScale`，成功则切换为 Prefab 原始 Image 显示。
 - 每个 Piece 创建时直接执行 `TrayScale = Min(旧托盘规则比例, DragScale)`；不再使用整组宽高或是否超框作为分支条件。
 - 棋盘先应用 `BoardScale`，再按照当前组缩放后的实际屏幕范围居中；入场动画以该居中结果作为终点，不再恢复 Prefab 原始锚点。
-- 当前组使用的运行时 `SpriteRenderer` 不再按整张棋盘的单一比例推算尺寸；每个 Piece 分别读取对应槽位缩放后的实际世界宽高，计算 X/Y `DragScale`，确保吸附后与 Prefab 槽位显示尺寸一致，避免切组前缝隙偏大、切组后才恢复正常。
+- 当前组拖拽使用的运行时 `SpriteRenderer` 不再按整张棋盘的单一比例推算尺寸；每个 Piece 分别读取对应槽位缩放后的实际世界宽高计算 X/Y `DragScale`。
+- Piece 成功吸附后，同一帧立即显示对应 Prefab 原始 `Image`，并停用、销毁拖拽 `SpriteRenderer`。已放置 Piece 与棋盘处于同一 Canvas 层级并共同继承 `BoardScale`，避免世界空间 Renderer 与 UI Image 的采样、缩放误差产生放大后的接缝。
 - 成功吸附 Piece 后不再完整刷新托盘布局；仅将编号位于其后的未放置 Piece 沿 X 轴前移“被取走 Piece 的托盘宽度 + 间距”，并更新失败回退 X。所有剩余 Piece 的 Y 和缩放保持不变；先拼队尾 Piece 时其他 Piece 完全不刷新。
 - 最后一块吸附并切组时，上一组运行时 Piece 在调用延迟 `Destroy` 前先立即停用；下一组重新居中和恢复 Prefab 原始 Piece 时不再与旧 Renderer 重叠，避免已完成 Piece 在 Y 轴抖动一帧。结算清理使用同一规则。
 - `GameCursorUtility` 在场景加载前从 `UI/BasicUI` 加载三张运行时可读 PNG 并设置系统光标；常规、贴纸悬停和贴纸抓取分别使用 `ImgHand_1/2/3.png`。GameScene 的悬停与按下复用同一个命中方法，离开 GameScene 时恢复常规图标。
 - 自定义光标使用 `CursorMode.ForceSoftware` 绘制，切换时分别保留 `52x58`、`68x48`、`64x50` 的真实纹理宽高，避免 Windows 硬件光标固定画布把较宽的 `ImgHand_2/3` 横向压扁。
+- `PuzzleOutlineBakerEditor` 在同一卡包内按组顺序记录已认领的描边像素；后续组生成后删除前序组已经认领的像素，只保留当前阶段真正新增的最终外边界和已完成组接触边。
+- 组间接触边与最终外轮廓都改用圆形最近距离和局部边界法线判定归属；当前组位于边界切线方向时不再认领该线段，避免拐角端点沿已完成区域多画。
+- 已重新烘焙 `CardBag017` 五组蒙版。最终 `Group02` 相对原蒙版删除 209 个像素且没有新增像素，其中左上 `400px` 范围删除 83 个，覆盖截图红框对应的外轮廓端点。
+- 后续 Unity 日志确认用户最新截图实际测试的是 `CardBag009`（`BagId=9`），不是 `CardBag017`；已使用最终算法重新烘焙 `CardBag009` 五组蒙版。
+- 分组交汇处增加双向端点截断：后续组最终外轮廓进入已完成区域 `24px` 范围时停止，已完成组接触边进入最终外轮廓 `24px` 范围时同样停止，避免两类线段在交汇拐角伸入贴纸空白区域。
 
 ## 修改文件
 
@@ -37,6 +44,8 @@
 - `Assets/Scripts/Model/GameConfigRepository.cs`
 - `Assets/Scripts/Controller/GameScene.cs`
 - `Assets/Scripts/Model/GameCommonUtility.cs`
+- `Assets/Scripts/Editor/PuzzleOutlineBakerEditor.cs`
+- `Assets/Resources/Generated/PuzzleOutlines/CardBag017/Group02.png` 至 `Group05.png`
 - `Assets/UI/BasicUI/ImgHand_1.png`、`ImgHand_2.png`、`ImgHand_3.png`（用户新增）
 - `Documents/CURRENT_TASK.md`
 - `Documents/GAME_DESIGN_REQUIREMENTS.md`
@@ -50,6 +59,9 @@
 - 不修改托盘布局、`20px` 间距和 `90%` 最大高度规则；这些规则先算出旧托盘比例，再与配置后的棋盘目标比例取较小值。
 - 光标资源沿用 `BasicUI` 的 Editor/Player 磁盘加载和构建同步规则，不额外复制到 `Resources`；资源缺失时回退常规或系统光标并记录警告。
 - 三张光标宽高比不同，固定使用软件光标模式，不使用可能受平台固定光标尺寸约束的 `CursorMode.Auto`。
+- 同一描边像素只由最早需要它的分组认领；后续分组不得再次显示该像素，避免组交界处沿已完成区域多画一段。
+- 接触边和最终外轮廓不能只按搜索半径判断归属；目标组还必须位于该边界的正确法线方向，切线方向的邻近不能生成描边。
+- 最终外轮廓与已完成组接触边在交汇处分别保留 `24px` 截止范围，不要求两类烘焙线段直接相连。
 
 ## 验证
 
@@ -63,6 +75,11 @@
 - `dotnet build Puffies.sln --no-restore`（托盘增量 X 补位后）：三个程序集成功，`0` 警告、`0` 错误。
 - `dotnet build Puffies.sln --no-restore`（全局自定义鼠标接入后）：三个程序集成功，`0` 警告、`0` 错误。
 - `dotnet build Puffies.sln --no-restore`（光标真实纹理尺寸修复后）：三个程序集成功，`0` 警告、`0` 错误。
+- `dotnet build Puffies.sln --no-restore`（已放置 Piece 切换为 Prefab Image 后）：三个程序集成功，`0` 警告、`0` 错误。
+- `CardBag017` 五张最终描边蒙版逐像素交叉统计：任意两组之间的非透明像素重叠均为 `0`。
+- 最终 `Group02` 与仓库原蒙版逐像素对比：删除 209 个像素、新增 `0` 个；删除范围为 `(17,32)` 至 `(665,717)`，其中上方 `400px` 范围删除 83 个。
+- `CardBag009` 五张最终描边蒙版逐像素交叉统计：任意两组之间的非透明像素最大重叠为 `0`。
+- `dotnet build Puffies.sln --no-restore`（分阶段描边去重后）：三个程序集成功，`0` 警告、`0` 错误。
 - 尚未完成 BoardScale 大于 1、小于 1 和等于 1 三种卡包的 Play Mode 视觉验证。
 - 不涉及持久化结构变化，无需删除 `LocalData.db` 或 `LocalData.json`。
 
@@ -78,6 +95,7 @@
 8. 放置当前组最后一块，确认切换下一组时已完成 Piece 不再发生 Y 轴抖动或短暂重影。
 9. 第一片先选择托盘队尾 Piece，确认吸附后前序 Piece 的 X、Y 均完全不刷新；再选择中间 Piece，确认只有后序 Piece 沿 X 前移且 Y 不抖动。
 10. 依次打开 LoadingScene、MainScene、GameScene、AchieveScene 和 RankScene，确认常规图标均为 `ImgHand_1`；在 GameScene 验证悬停 `ImgHand_2`、按住拖拽 `ImgHand_3`、松开和离场恢复 `ImgHand_1`。
+11. 重新进入 `CardBag009` 第二组，确认戴帽子贴纸顶部原截图位置不再多画，并检查左侧外轮廓与下方接触边在交汇处自然结束。
 
 ## 恢复提示
 

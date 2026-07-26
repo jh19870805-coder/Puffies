@@ -1219,8 +1219,6 @@ public class GameScene : MonoBehaviour
         {
             state.PieceRenderer.transform.position = groovePosition;
             state.PieceRenderer.transform.localScale = state.DragScale;
-            var placedRoot = GetOrCreatePlacedPiecesRoot();
-            state.PieceRenderer.transform.SetParent(placedRoot.transform, worldPositionStays: true);
             state.IsPlaced = true;
             if (state == _hintedPiece)
             {
@@ -1228,6 +1226,7 @@ public class GameScene : MonoBehaviour
             }
             StartGameplayTimerIfNeeded();
             CompactFollowingTrayPieces(state);
+            CommitPlacedPieceToBoardImage(state);
             TryAdvanceGroup();
             return;
         }
@@ -1235,6 +1234,20 @@ public class GameScene : MonoBehaviour
         state.PieceRenderer.transform.position = state.StartPosition;
         state.PieceRenderer.transform.localScale = state.TrayScale;
         SlidePieceTrayToOriginalPosition();
+    }
+
+    private void CommitPlacedPieceToBoardImage(DraggablePieceState state)
+    {
+        if (state?.GrooveImage == null || state.PieceRenderer == null)
+        {
+            return;
+        }
+
+        state.GrooveImage.gameObject.SetActive(true);
+        SetImageAlpha(state.GrooveImage, 1f);
+        state.PieceRenderer.gameObject.SetActive(false);
+        Destroy(state.PieceRenderer.gameObject);
+        state.PieceRenderer = null;
     }
 
     private int CountUnplacedTrayPieces()
