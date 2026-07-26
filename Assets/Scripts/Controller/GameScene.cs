@@ -954,6 +954,7 @@ public class GameScene : MonoBehaviour
                 StartPosition = pieceRenderer.transform.position,
                 TrayScale = trayScale,
                 DragScale = dragScale,
+                IsOnTray = true,
                 IsPlaced = false
             });
         }
@@ -1141,13 +1142,17 @@ public class GameScene : MonoBehaviour
         var world = ToGameplayWorld(screenPosition);
         _drag.DraggingPiece = state;
         _drag.DragOffset = state.PieceRenderer.transform.position - world;
+        if (!state.IsOnTray)
+        {
+            ResetPieceTrayPosition(instant: true);
+        }
         if (state == _hintedPiece)
         {
             state.PieceRenderer.transform.rotation = _hintedPieceBaseRotation;
         }
         state.PieceRenderer.transform.localScale = state.DragScale;
         state.PieceRenderer.sortingOrder = PieceSortingOrder + 100;
-        if (CountUnplacedTrayPieces() == 1)
+        if (state.IsOnTray && CountUnplacedTrayPieces() == 1)
         {
             SlidePieceTrayOutOfScreen();
         }
@@ -1212,6 +1217,7 @@ public class GameScene : MonoBehaviour
         var state = _drag.DraggingPiece;
         _drag.DraggingPiece = null;
         state.PieceRenderer.sortingOrder = PieceSortingOrder;
+        var wasOnTray = state.IsOnTray;
 
         var groovePosition = GetGrooveSnapPosition(state.GrooveRect, Camera.main);
         if (state.GrooveRect != null
@@ -1219,21 +1225,130 @@ public class GameScene : MonoBehaviour
         {
             state.PieceRenderer.transform.position = groovePosition;
             state.PieceRenderer.transform.localScale = state.DragScale;
+            state.IsOnTray = false;
             state.IsPlaced = true;
             if (state == _hintedPiece)
             {
                 ClearPieceHint();
             }
             StartGameplayTimerIfNeeded();
-            CompactFollowingTrayPieces(state);
+            if (wasOnTray)
+            {
+                CompactFollowingTrayPieces(state);
+            }
             CommitPlacedPieceToBoardImage(state);
             TryAdvanceGroup();
             return;
         }
 
-        state.PieceRenderer.transform.position = state.StartPosition;
-        state.PieceRenderer.transform.localScale = state.TrayScale;
-        SlidePieceTrayToOriginalPosition();
+        ResetPieceTrayPosition(instant: true);
+        if (ShouldReturnPieceToTray(state.PieceRenderer))
+        {
+            state.IsOnTray = true;
+            state.PieceRenderer.transform.localScale = state.TrayScale;
+            LayoutTrayPieces();
+            return;
+        }
+
+        state.PieceRenderer.transform.localScale = state.DragScale;
+        state.PieceRenderer.transform.position = ClampPieceToTableBounds(state.PieceRenderer);
+        state.IsOnTray = false;
+        if (wasOnTray)
+        {
+            CompactFollowingTrayPieces(state);
+        }
+    }
+
+    private bool ShouldReturnPieceToTray(SpriteRenderer renderer)
+    {
+        if (renderer == null)
+        {
+            return false;
+        }
+
+        var pieceBounds = renderer.bounds;
+        var trayBounds = GetPieceTrayBounds();
+        if (pieceBounds.size.y <= 0f || trayBounds.size.sqrMagnitude <= 0f)
+        {
+            return false;
+        }
+
+        var horizontalOverlap = Mathf.Min(pieceBounds.max.x, trayBounds.max.x)
+                                - Mathf.Max(pieceBounds.min.x, trayBounds.min.x);
+        var verticalOverlap = Mathf.Min(pieceBounds.max.y, trayBounds.max.y)
+                              - Mathf.Max(pieceBounds.min.y, trayBounds.min.y);
+        return horizontalOverlap > 0f && verticalOverlap >= pieceBounds.size.y * 0.5f;
+    }
+
+    private Vector3 ClampPieceToTableBounds(SpriteRenderer renderer)
+    {
+        if (renderer == null)
+        {
+            return Vector3.zero;
+        }
+
+        var camera = Camera.main;
+        Bounds tableBounds;
+        if (_board.BackgroundRect != null && camera != null)
+        {
+            tableBounds = GameCommonUtility.GetRectTransformCameraWorldBounds(
+                _board.BackgroundRect,
+                camera,
+                WorldGameplayDepth);
+        }
+        else
+        {
+            var bottomLeft = ToGameplayWorld(Vector2.zero);
+            var topRight = ToGameplayWorld(new Vector2(Screen.width, Screen.height));
+            tableBounds = new Bounds(
+                (bottomLeft + topRight) * 0.5f,
+                new Vector3(
+                    Mathf.Abs(topRight.x - bottomLeft.x),
+                    Mathf.Abs(topRight.y - bottomLeft.y),
+                    0f));
+        }
+
+        var pieceBounds = renderer.bounds;
+        var offsetX = CalculateBoundsClampOffset(
+            pieceBounds.min.x,
+            pieceBounds.max.x,
+            tableBounds.min.x,
+            tableBounds.max.x,
+            pieceBounds.center.x,
+            tableBounds.center.x);
+        var offsetY = CalculateBoundsClampOffset(
+            pieceBounds.min.y,
+            pieceBounds.max.y,
+            tableBounds.min.y,
+            tableBounds.max.y,
+            pieceBounds.center.y,
+            tableBounds.center.y);
+        var position = renderer.transform.position;
+        position.x += offsetX;
+        position.y += offsetY;
+        position.z = WorldGameplayDepth;
+        return position;
+    }
+
+    private static float CalculateBoundsClampOffset(
+        float itemMin,
+        float itemMax,
+        float containerMin,
+        float containerMax,
+        float itemCenter,
+        float containerCenter)
+    {
+        if (itemMax - itemMin >= containerMax - containerMin)
+        {
+            return containerCenter - itemCenter;
+        }
+
+        if (itemMin < containerMin)
+        {
+            return containerMin - itemMin;
+        }
+
+        return itemMax > containerMax ? containerMax - itemMax : 0f;
     }
 
     private void CommitPlacedPieceToBoardImage(DraggablePieceState state)
@@ -1256,7 +1371,7 @@ public class GameScene : MonoBehaviour
         for (var i = 0; i < _drag.CurrentGroupDraggables.Count; i++)
         {
             var state = _drag.CurrentGroupDraggables[i];
-            if (state != null && !state.IsPlaced)
+            if (state != null && !state.IsPlaced && state.IsOnTray)
             {
                 count++;
             }
@@ -1304,7 +1419,11 @@ public class GameScene : MonoBehaviour
         for (var i = 0; i < _drag.CurrentGroupDraggables.Count; i++)
         {
             var state = _drag.CurrentGroupDraggables[i];
-            if (state == null || state.IsPlaced || state.PieceRenderer == null || state == _drag.DraggingPiece)
+            if (state == null
+                || state.IsPlaced
+                || !state.IsOnTray
+                || state.PieceRenderer == null
+                || state == _drag.DraggingPiece)
             {
                 continue;
             }
@@ -1351,6 +1470,7 @@ public class GameScene : MonoBehaviour
             var state = _drag.CurrentGroupDraggables[i];
             if (state == null
                 || state.IsPlaced
+                || !state.IsOnTray
                 || state.PieceRenderer == null
                 || GetPieceNumberFromState(state) <= placedPieceNumber)
             {

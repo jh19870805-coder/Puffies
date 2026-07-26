@@ -14,6 +14,7 @@
 - 所有游戏页面使用 `ImgHand_1.png` 作为常规鼠标图标。
 - GameScene 鼠标悬停在可拖贴纸上时切换为 `ImgHand_2.png`；按下左键并拿起贴纸后切换为 `ImgHand_3.png`。
 - 分阶段描边不得在当前组与已完成组交界处重复绘制已由前序阶段显示过的线段。
+- 拼图 Piece 从托盘拿起后可以放在桌面；未命中正确槽位时停在松手位置，不再返回托盘。
 
 ## 工作记录
 
@@ -37,6 +38,9 @@
 - 已重新烘焙 `CardBag017` 五组蒙版。最终 `Group02` 相对原蒙版删除 209 个像素且没有新增像素，其中左上 `400px` 范围删除 83 个，覆盖截图红框对应的外轮廓端点。
 - 后续 Unity 日志确认用户最新截图实际测试的是 `CardBag009`（`BagId=9`），不是 `CardBag017`；已使用最终算法重新烘焙 `CardBag009` 五组蒙版。
 - 分组交汇处增加双向端点截断：后续组最终外轮廓进入已完成区域 `24px` 范围时停止，已完成组接触边进入最终外轮廓 `24px` 范围时同样停止，避免两类线段在交汇拐角伸入贴纸空白区域。
+- `DraggablePieceState` 增加 `IsOnTray`。Piece 首次离开托盘后保持棋盘目标缩放，未吸附时停在桌面并限制在背景可见范围内，后续可以从该位置再次拿起。
+- Piece 首次离开托盘时继续触发现有后序 X 补位；桌面 Piece 不再参与托盘计数、布局或后续补位。未吸附松手时空托盘恢复为桌面 Piece 的回收目标。
+- Piece 与托盘水平方向有交集且垂直重叠达到 Piece 当前高度的 `50%` 时，松手后切回 `TrayScale` 并与其他托盘 Piece 按编号自动重排。
 
 ## 修改文件
 
@@ -44,6 +48,7 @@
 - `Assets/Scripts/Model/GameConfigRepository.cs`
 - `Assets/Scripts/Controller/GameScene.cs`
 - `Assets/Scripts/Model/GameCommonUtility.cs`
+- `Assets/Scripts/Model/GameDefine.cs`
 - `Assets/Scripts/Editor/PuzzleOutlineBakerEditor.cs`
 - `Assets/Resources/Generated/PuzzleOutlines/CardBag017/Group02.png` 至 `Group05.png`
 - `Assets/UI/BasicUI/ImgHand_1.png`、`ImgHand_2.png`、`ImgHand_3.png`（用户新增）
@@ -62,6 +67,9 @@
 - 同一描边像素只由最早需要它的分组认领；后续分组不得再次显示该像素，避免组交界处沿已完成区域多画一段。
 - 接触边和最终外轮廓不能只按搜索半径判断归属；目标组还必须位于该边界的正确法线方向，切线方向的邻近不能生成描边。
 - 最终外轮廓与已完成组接触边在交汇处分别保留 `24px` 截止范围，不要求两类烘焙线段直接相连。
+- 未正确吸附不再属于“失败回托盘”；Piece 一旦离开托盘就成为桌面 Piece，保持 `DragScale` 和松手位置。桌面位置只约束在背景可见范围内。
+- 托盘自动补位只移动 `IsOnTray=true` 的后序 Piece；已经放在桌面的 Piece 必须保持位置不变。
+- 回收托盘判定使用运行时 Renderer Bounds：垂直重叠至少 `50%` 且水平重叠大于 `0`；正确槽位吸附优先于托盘回收。
 
 ## 验证
 
@@ -80,6 +88,8 @@
 - 最终 `Group02` 与仓库原蒙版逐像素对比：删除 209 个像素、新增 `0` 个；删除范围为 `(17,32)` 至 `(665,717)`，其中上方 `400px` 范围删除 83 个。
 - `CardBag009` 五张最终描边蒙版逐像素交叉统计：任意两组之间的非透明像素最大重叠为 `0`。
 - `dotnet build Puffies.sln --no-restore`（分阶段描边去重后）：三个程序集成功，`0` 警告、`0` 错误。
+- `dotnet build Puffies.sln --no-restore`（Piece 桌面放置后）：三个程序集成功，`0` 警告、`0` 错误。
+- `dotnet build Puffies.sln --no-restore`（桌面 Piece 50% 托盘回收后）：三个程序集成功，`0` 警告、`0` 错误。
 - 尚未完成 BoardScale 大于 1、小于 1 和等于 1 三种卡包的 Play Mode 视觉验证。
 - 不涉及持久化结构变化，无需删除 `LocalData.db` 或 `LocalData.json`。
 
@@ -96,6 +106,9 @@
 9. 第一片先选择托盘队尾 Piece，确认吸附后前序 Piece 的 X、Y 均完全不刷新；再选择中间 Piece，确认只有后序 Piece 沿 X 前移且 Y 不抖动。
 10. 依次打开 LoadingScene、MainScene、GameScene、AchieveScene 和 RankScene，确认常规图标均为 `ImgHand_1`；在 GameScene 验证悬停 `ImgHand_2`、按住拖拽 `ImgHand_3`、松开和离场恢复 `ImgHand_1`。
 11. 重新进入 `CardBag009` 第二组，确认戴帽子贴纸顶部原截图位置不再多画，并检查左侧外轮廓与下方接触边在交汇处自然结束。
+12. 从托盘拿起 Piece 并在桌面松手，确认其保持棋盘目标尺寸和松手位置、不会越出背景；再次拿起可以继续移动或正确吸附。
+13. 依次将中间、最后一个托盘 Piece 放到桌面，确认只补位仍在托盘的后序 Piece，桌面 Piece 不移动，未吸附松手后空托盘恢复为回收目标。
+14. 将桌面 Piece 拖回黑色底板，分别以低于和达到自身高度 `50%` 的重叠量松手；确认前者仍停在桌面，后者缩回托盘尺寸并按编号自动重排。
 
 ## 恢复提示
 
