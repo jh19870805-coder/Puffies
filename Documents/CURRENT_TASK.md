@@ -1,11 +1,15 @@
 # 当前任务
 
-- 任务：GameScene 棋盘交互、分阶段描边与全局自定义鼠标
-- 状态：代码已实现，等待 Unity Play Mode 视觉验证
+- 任务：卡包拼图进度持久化与玩/重玩状态
+- 状态：代码已实现，等待 Unity Play Mode 流程验证
 - 更新时间：2026-07-26
 
 ## 用户意图
 
+- 卡包拆开或确认重玩后，只拼一部分退出，下次选择时显示“玩”而不是“重玩”。
+- 正确拼到棋盘上的 Piece 要持久化，下次进入仍显示在棋盘上并继续剩余拼图。
+- MainScene 卡包选择按钮的 `Play` 改为“玩”。
+- 新拆开但一次都没有完整完成的卡包不能显示相机按钮。
 - `Resources/Configs/CardPacks.csv` 新增 `BoardScale` 列。
 - 进入 GameScene 后，根据当前 BagId 读取 `BoardScale`。
 - 棋盘、槽位和创建出来的贴图碎片使用该缩放比。
@@ -18,6 +22,12 @@
 
 ## 工作记录
 
+- SQLite 新增 `CardPackPuzzleProgress` 表，按 `PackId` 保存去重、排序后的 Piece 数字编号 JSON 和更新时间；记录存在即表示有当前可继续的拼图会话。
+- GameScene 进入时确保会话存在并加载已放置 Piece；已完成 Piece 直接恢复为 Prefab 原始 `Image`，从首个未完成分组创建剩余可拖 Piece。
+- 每次正确吸附先即时保存 Piece 编号，再更新棋盘显示和切组；整包完成且 `Completed` 保存成功后清除会话。
+- `Completed` 生命周期在重玩期间保持不变，避免破坏完成数量、置灰、排序、首次完成时间和首次完成发包判定。
+- MainScene 仅在 `Completed` 且没有活动会话时显示“重玩”并弹确认；其余可玩状态统一显示“玩”。确认重玩时清除旧会话。
+- 相机按钮改为只按历史完成状态显示：`Completed` 显示，首次拼图中的 `Unlocked` / `InProgress` 隐藏。
 - `CardPackConfigData` 新增 `BoardScale` 浮点字段。
 - `CsvRow` 新增使用 `InvariantCulture` 的浮点读取，避免系统小数点区域设置影响 CSV。
 - `CardPacks.csv/BoardScale` 现在是必填正数；缺失、无法解析或小于等于零的行视为无效配置。
@@ -44,6 +54,9 @@
 
 ## 修改文件
 
+- `Assets/Scripts/Model/LocalDataStore.cs`
+- `Assets/Scripts/Model/CardPackDataUtility.cs`
+- `Assets/Scripts/Controller/MainScene.cs`
 - `Assets/Resources/Configs/CardPacks.csv`（用户修改）
 - `Assets/Scripts/Model/GameConfigRepository.cs`
 - `Assets/Scripts/Controller/GameScene.cs`
@@ -58,6 +71,10 @@
 
 ## 决策
 
+- 当前拼图会话与 `CardPackLifecycleState` 分开：生命周期表达历史权益和完成状态，会话表达本局是否可继续及已放置 Piece。
+- 空会话同样持久化，确保进入游戏后尚未放置 Piece 就退出时仍按继续状态处理。
+- 只保存正确吸附 Piece 的编号；托盘和桌面 Piece 的位置不保存，下次进入按现有托盘规则重新生成。
+- 拍照资格取决于是否历史完成，不取决于是否进入过游戏或是否存在当前拼图会话。
 - `BoardScale` 是只读资源配置，不写入 SQLite、JSON 或 `PlayerPrefs`。
 - 缺少整个卡包配置时 GameScene 记录警告并回退 `1`；CSV 中存在的卡包行必须提供合法正数。
 - 缩放 CardBag 根节点而不是单独修改 GameBoard 图片，确保棋盘、Piece 槽位和描边保持同一坐标系。
@@ -73,6 +90,10 @@
 
 ## 验证
 
+- `dotnet build Puffies.sln --no-restore`（未历史完成卡包隐藏相机按钮）：三个程序集成功，`0` 警告、`0` 错误。
+- `dotnet build Puffies.sln --no-restore`（拼图进度持久化与玩/重玩判断）：三个程序集成功，`0` 警告、`0` 错误。
+- `git diff --check`：通过，仅有既有 LF/CRLF 转换提示。
+- 本次新增 SQLite 表。测试前需关闭 Unity 并删除 `%USERPROFILE%/AppData/LocalLow/MainTown/Puffies/LocalData.db`；不影响任务 JSON，无需删除 `LocalData.json`。
 - 当前 22 行 `CardPacks.csv` 均提供了正数 `BoardScale`。
 - `dotnet build Puffies.sln --no-restore`：三个程序集成功，`0` 警告、`0` 错误。
 - `git diff --check`：代码通过，仅有既有 LF/CRLF 转换提示。
@@ -91,9 +112,17 @@
 - `dotnet build Puffies.sln --no-restore`（Piece 桌面放置后）：三个程序集成功，`0` 警告、`0` 错误。
 - `dotnet build Puffies.sln --no-restore`（桌面 Piece 50% 托盘回收后）：三个程序集成功，`0` 警告、`0` 错误。
 - 尚未完成 BoardScale 大于 1、小于 1 和等于 1 三种卡包的 Play Mode 视觉验证。
-- 不涉及持久化结构变化，无需删除 `LocalData.db` 或 `LocalData.json`。
 
 ## 下一步
+
+### 本次优先
+
+1. 删除旧 `LocalData.db` 后进入一个未完成卡包，正确放置数个 Piece 并返回 MainScene，确认按钮显示“玩”。
+2. 再次进入同一卡包，确认已放置 Piece 保持在棋盘，当前分组只生成剩余 Piece；完成一组后进入正确的下一组。
+3. 完成卡包后返回 MainScene，确认按钮显示“重玩”；确认重玩、放置数个 Piece 后退出，确认再次显示“玩”且恢复本次重玩的棋盘进度。
+4. 进入 GameScene 后不放置任何 Piece 就退出，确认空会话仍使按钮显示“玩”。
+
+### 既有回归
 
 1. 测试 CardBag001（`BoardScale=1.48`），确认棋盘放大且入场结束后仍在可用棋盘区域居中，托盘 Piece 初始尺寸不变、拿起后放大并能准确吸附。
 2. 测试 CardBag002（`BoardScale=0.72`），确认棋盘缩小且入场结束后仍在可用棋盘区域居中，拿起 Piece 同比例缩小且吸附准确。
@@ -112,4 +141,4 @@
 
 ## 恢复提示
 
-继续 Puffies 当前任务。先阅读 `AGENTS.md`、`Documents/WORKFLOW.md` 和 `Documents/CURRENT_TASK.md`；`BoardScale` 解析和运行时缩放已实现，下一步是在 Unity Play Mode 验证大于 1、小于 1 和等于 1 的卡包。
+继续 Puffies 当前任务。先阅读 `AGENTS.md`、`Documents/WORKFLOW.md` 和 `Documents/CURRENT_TASK.md`；拼图 Piece 即时保存和恢复已实现，下一步是删除旧 `LocalData.db` 后在 Unity Play Mode 验证半局退出、继续、完成与重玩流程。

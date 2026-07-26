@@ -123,7 +123,7 @@ public class MainScene : MonoBehaviour
     private const string PhotoGameIconObjectName = "GameIcon";
     private const string PhotoOkButtonObjectName = "BtnOK";
     private const string PhotoFlashCanvasObjectName = "PhotoFlashCanvas";
-    private const string BagSelectNewPackActionText = "Play";
+    private const string BagSelectNewPackActionText = "玩";
     private const string BagSelectReplayActionText = "重玩";
     private const string TaskItemObjectName = "TaskItem";
     private static readonly Color CompletedPackageTint = new Color(0.78f, 0.78f, 0.78f, 1f);
@@ -888,7 +888,7 @@ public class MainScene : MonoBehaviour
             return;
         }
 
-        if (CardPackDataUtility.IsPackPlayed(mSelectedBagId) && mReplayPanelRoot != null)
+        if (ShouldConfirmReplay(mSelectedBagId) && mReplayPanelRoot != null)
         {
             ShowReplayConfirmation();
             return;
@@ -918,6 +918,12 @@ public class MainScene : MonoBehaviour
 
         SetPanelVisible(mReplayPanelRoot, false);
         mIsReplayConfirmationVisible = false;
+        if (!CardPackDataUtility.TryClearPuzzleSession(mSelectedBagId))
+        {
+            Debug.LogWarning(
+                $"MainScene: failed to reset puzzle session before replay. packId={mSelectedBagId}");
+        }
+
         GameAnimationUtility.SetPreparedCardPackVisible(true);
         mPlayAnimationCoroutine = StartCoroutine(EnterCardPackOpeningStage());
     }
@@ -3415,18 +3421,25 @@ public class MainScene : MonoBehaviour
 
     private void RefreshBagSelectPackState(int bagId)
     {
-        var isPlayed = CardPackDataUtility.IsPackPlayed(bagId);
+        var isCompleted = CardPackDataUtility.IsPackCompleted(bagId);
+        var shouldConfirmReplay = ShouldConfirmReplay(bagId);
         if (mBagSelectPlayLabel != null)
         {
-            mBagSelectPlayLabel.text = isPlayed
+            mBagSelectPlayLabel.text = shouldConfirmReplay
                 ? BagSelectReplayActionText
                 : BagSelectNewPackActionText;
         }
 
         if (mBagSelectCameraButtonRoot != null)
         {
-            mBagSelectCameraButtonRoot.SetActive(isPlayed);
+            mBagSelectCameraButtonRoot.SetActive(isCompleted);
         }
+    }
+
+    private static bool ShouldConfirmReplay(int bagId)
+    {
+        return CardPackDataUtility.IsPackCompleted(bagId)
+            && !CardPackDataUtility.HasActivePuzzleSession(bagId);
     }
 
     private void SetBagSelectPanelVisible(bool visible)

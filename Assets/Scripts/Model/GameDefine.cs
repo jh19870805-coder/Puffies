@@ -137,6 +137,7 @@ public static class GameDefine
     public const string LocalSqliteFileName = LocalDataBaseName + ".db";
     public const string LocalSqliteCollectionTable = "AppRecords";
     public const string LocalSqliteCardPackTable = "CardPacks";
+    public const string LocalSqliteCardPackPuzzleProgressTable = "CardPackPuzzleProgress";
     public const string LocalSqliteAppRecordsCollectionIndex = "IdxAppRecordsCollection";
 
     public const string CardPackConfigFileName = "CardPacks.csv";

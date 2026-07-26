@@ -407,6 +407,12 @@ public static class SqliteLocalStore
                 UnlockTime TEXT NOT NULL DEFAULT '',
                 CompletionTime TEXT NOT NULL DEFAULT ''
             );");
+        sConnection.Execute(
+            $@"CREATE TABLE IF NOT EXISTS {GameDefine.LocalSqliteCardPackPuzzleProgressTable} (
+                PackId INTEGER PRIMARY KEY,
+                PlacedPieceNumbersJson TEXT NOT NULL DEFAULT '',
+                UpdatedTime TEXT NOT NULL DEFAULT ''
+            );");
 
         sIsInitialized = true;
         Debug.Log($"SqliteLocalStore initialized: {sDatabasePath}");

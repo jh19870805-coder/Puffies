@@ -62,6 +62,7 @@ public class GameScene : MonoBehaviour
     private readonly BoardState _board = new BoardState();
     private readonly DragState _drag = new DragState();
     private readonly List<int> _settlementPackRewardIds = new List<int>();
+    private readonly HashSet<int> _placedPieceNumbers = new HashSet<int>();
     private Vector3 _pieceBgOriginalPosition;
     private bool _hasPieceBgOriginalPosition;
     private bool _isPieceBgHidden;
@@ -104,6 +105,7 @@ public class GameScene : MonoBehaviour
     private float _hintShakeStartTime;
     private bool _isHintPieceShaking;
     private GameObject _pieceHintOutlineRoot;
+    private bool _shouldCompleteRestoredPuzzle;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Bootstrap()
@@ -145,7 +147,12 @@ public class GameScene : MonoBehaviour
         ConfigureReturnButton();
         ConfigureHintButton();
         ConfigureRewardPanel();
-        if (playEntranceAnimation)
+        if (_shouldCompleteRestoredPuzzle)
+        {
+            ShowRewardPanel();
+        }
+
+        if (playEntranceAnimation && !_isGameFinished)
         {
             StartCoroutine(PlayGameEntranceAnimation());
         }
@@ -203,10 +210,68 @@ public class GameScene : MonoBehaviour
             _board.PieceBgRenderer = CreatePieceBackground();
         }
 
-        CreateDraggableGroup(0);
+        var activeGroupIndex = RestorePuzzleSession(bagId);
+        if (activeGroupIndex >= 0)
+        {
+            CreateDraggableGroup(activeGroupIndex);
+        }
+
         Debug.Log(
             $"GameScene ready. BagId={bagId}, Groups={_board.GrooveImagesByGroup.Count}, " +
-            $"Pieces={CountGrooveImages(_board.GrooveImagesByGroup)}, BoardScale={_configuredBoardScale:0.###}");
+            $"Pieces={CountGrooveImages(_board.GrooveImagesByGroup)}, " +
+            $"RestoredPieces={_placedPieceNumbers.Count}, BoardScale={_configuredBoardScale:0.###}");
+    }
+
+    private int RestorePuzzleSession(int bagId)
+    {
+        _placedPieceNumbers.Clear();
+        _shouldCompleteRestoredPuzzle = false;
+        if (!CardPackDataUtility.TryEnsurePuzzleSession(bagId))
+        {
+            Debug.LogWarning($"GameScene: failed to create puzzle session. packId={bagId}");
+        }
+        else if (CardPackDataUtility.TryGetPlacedPieceNumbers(bagId, out var savedPieceNumbers))
+        {
+            _placedPieceNumbers.UnionWith(savedPieceNumbers);
+        }
+
+        MarkCurrentPackInProgress();
+        for (var groupIndex = 0; groupIndex < _board.GrooveImagesByGroup.Count; groupIndex++)
+        {
+            var group = _board.GrooveImagesByGroup[groupIndex];
+            if (!IsGrooveGroupPersistedAsComplete(group))
+            {
+                return groupIndex;
+            }
+        }
+
+        RevealAllGroovesOnBoard();
+        _shouldCompleteRestoredPuzzle = true;
+        return -1;
+    }
+
+    private bool IsGrooveGroupPersistedAsComplete(List<Image> group)
+    {
+        if (group == null || group.Count == 0)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < group.Count; i++)
+        {
+            if (!IsGroovePersistedAsPlaced(group[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private bool IsGroovePersistedAsPlaced(Image grooveImage)
+    {
+        var pieceNumber = GetPieceNumberFromImage(grooveImage);
+        return pieceNumber != int.MaxValue && _placedPieceNumbers.Contains(pieceNumber);
     }
 
     private void LoadConfiguredBoardScale(int bagId)
@@ -932,6 +997,13 @@ public class GameScene : MonoBehaviour
                 continue;
             }
 
+            if (IsGroovePersistedAsPlaced(grooveImage))
+            {
+                grooveImage.gameObject.SetActive(true);
+                SetImageAlpha(grooveImage, 1f);
+                continue;
+            }
+
             var pieceRenderer = CreateDraggablePieceFromGroove(
                 grooveImage,
                 $"DraggablePiece_{groupIndex}_{i}",
@@ -1007,7 +1079,7 @@ public class GameScene : MonoBehaviour
                 else if (isActiveGroup)
                 {
                     grooveImage.gameObject.SetActive(true);
-                    SetImageAlpha(grooveImage, 0f);
+                    SetImageAlpha(grooveImage, IsGroovePersistedAsPlaced(grooveImage) ? 1f : 0f);
                 }
                 else
                 {
@@ -1236,6 +1308,7 @@ public class GameScene : MonoBehaviour
             {
                 CompactFollowingTrayPieces(state);
             }
+            RecordPlacedPiece(state);
             CommitPlacedPieceToBoardImage(state);
             TryAdvanceGroup();
             return;
@@ -1256,6 +1329,24 @@ public class GameScene : MonoBehaviour
         if (wasOnTray)
         {
             CompactFollowingTrayPieces(state);
+        }
+    }
+
+    private void RecordPlacedPiece(DraggablePieceState state)
+    {
+        var pieceNumber = GetPieceNumberFromState(state);
+        if (pieceNumber == int.MaxValue)
+        {
+            Debug.LogWarning("GameScene: placed Piece has an invalid numbered name; progress was not saved.");
+            return;
+        }
+
+        _placedPieceNumbers.Add(pieceNumber);
+        var packId = GameManager.GetBagId();
+        if (!CardPackDataUtility.TryRecordPlacedPiece(packId, pieceNumber))
+        {
+            Debug.LogWarning(
+                $"GameScene: failed to persist placed Piece. packId={packId}, pieceNumber={pieceNumber}");
         }
     }
 
@@ -2083,6 +2174,11 @@ public class GameScene : MonoBehaviour
         {
             Debug.LogWarning($"GameScene: failed to save card pack data after puzzle complete. packId={packId}");
             return false;
+        }
+
+        if (!CardPackDataUtility.TryClearPuzzleSession(packId))
+        {
+            Debug.LogWarning($"GameScene: failed to clear completed puzzle session. packId={packId}");
         }
 
         Debug.Log($"GameScene: card pack data saved after puzzle complete. packId={packId}");

@@ -443,6 +443,131 @@ public static class CardPackDataUtility
         return TryGetPack(packId, out var record) && record.IsCompleted;
     }
 
+    public static bool TryEnsurePuzzleSession(int packId)
+    {
+        EnsureInitialized();
+        if (packId <= 0)
+        {
+            return false;
+        }
+
+        var payload = new PuzzleProgressPayload();
+        SqliteLocalStore.ExecuteNonQuery(
+            $@"INSERT OR IGNORE INTO {GameDefine.LocalSqliteCardPackPuzzleProgressTable}
+               (PackId, PlacedPieceNumbersJson, UpdatedTime)
+               VALUES (?, ?, ?)",
+            packId,
+            JsonUtility.ToJson(payload),
+            FormatUnlockTime(DateTime.Now));
+        return HasActivePuzzleSession(packId);
+    }
+
+    public static bool HasActivePuzzleSession(int packId)
+    {
+        EnsureInitialized();
+        if (packId <= 0)
+        {
+            return false;
+        }
+
+        var count = SqliteLocalStore.ExecuteScalar<int>(
+            $@"SELECT COUNT(1)
+               FROM {GameDefine.LocalSqliteCardPackPuzzleProgressTable}
+               WHERE PackId = ?",
+            packId);
+        return count > 0;
+    }
+
+    public static bool TryGetPlacedPieceNumbers(int packId, out HashSet<int> pieceNumbers)
+    {
+        EnsureInitialized();
+        pieceNumbers = new HashSet<int>();
+        if (packId <= 0)
+        {
+            return false;
+        }
+
+        var rows = SqliteLocalStore.Query<PuzzleProgressTableRow>(
+            $@"SELECT PackId, PlacedPieceNumbersJson, UpdatedTime
+               FROM {GameDefine.LocalSqliteCardPackPuzzleProgressTable}
+               WHERE PackId = ?
+               LIMIT 1",
+            packId);
+        if (rows == null || rows.Count == 0)
+        {
+            return false;
+        }
+
+        try
+        {
+            var json = rows[0].PlacedPieceNumbersJson;
+            var payload = string.IsNullOrWhiteSpace(json)
+                ? new PuzzleProgressPayload()
+                : JsonUtility.FromJson<PuzzleProgressPayload>(json);
+            if (payload?.PieceNumbers == null)
+            {
+                return true;
+            }
+
+            for (var i = 0; i < payload.PieceNumbers.Count; i++)
+            {
+                if (payload.PieceNumbers[i] > 0)
+                {
+                    pieceNumbers.Add(payload.PieceNumbers[i]);
+                }
+            }
+
+            return true;
+        }
+        catch (Exception exception)
+        {
+            Debug.LogWarning(
+                $"CardPackDataUtility: invalid puzzle progress ignored. packId={packId}, error={exception.Message}");
+            pieceNumbers.Clear();
+            return false;
+        }
+    }
+
+    public static bool TryRecordPlacedPiece(int packId, int pieceNumber)
+    {
+        if (packId <= 0 || pieceNumber <= 0 || !TryEnsurePuzzleSession(packId))
+        {
+            return false;
+        }
+
+        TryGetPlacedPieceNumbers(packId, out var pieceNumbers);
+        pieceNumbers.Add(pieceNumber);
+        var sortedPieceNumbers = new List<int>(pieceNumbers);
+        sortedPieceNumbers.Sort();
+        var payload = new PuzzleProgressPayload
+        {
+            PieceNumbers = sortedPieceNumbers
+        };
+        var affected = SqliteLocalStore.ExecuteNonQuery(
+            $@"UPDATE {GameDefine.LocalSqliteCardPackPuzzleProgressTable}
+               SET PlacedPieceNumbersJson = ?, UpdatedTime = ?
+               WHERE PackId = ?",
+            JsonUtility.ToJson(payload),
+            FormatUnlockTime(DateTime.Now),
+            packId);
+        return affected > 0;
+    }
+
+    public static bool TryClearPuzzleSession(int packId)
+    {
+        EnsureInitialized();
+        if (packId <= 0)
+        {
+            return false;
+        }
+
+        SqliteLocalStore.ExecuteNonQuery(
+            $@"DELETE FROM {GameDefine.LocalSqliteCardPackPuzzleProgressTable}
+               WHERE PackId = ?",
+            packId);
+        return !HasActivePuzzleSession(packId);
+    }
+
     /// <summary>
     /// 用途：将 DateTime 格式化为解锁时间字符串（YYYY-MM-DD HH:MM:SS）。返回：格式化结果。
     /// </summary>
@@ -665,6 +790,19 @@ public static class CardPackDataUtility
     private sealed class CardPackIdRow
     {
         public int PackId { get; set; }
+    }
+
+    [Serializable]
+    private sealed class PuzzleProgressPayload
+    {
+        public List<int> PieceNumbers = new List<int>();
+    }
+
+    private sealed class PuzzleProgressTableRow
+    {
+        public int PackId { get; set; }
+        public string PlacedPieceNumbersJson { get; set; }
+        public string UpdatedTime { get; set; }
     }
 }
 
