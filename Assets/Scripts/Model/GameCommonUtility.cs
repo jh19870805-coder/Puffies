@@ -1031,7 +1031,10 @@ public static class GameCursorUtility
         }
 
         Cursor.visible = true;
-        Cursor.SetCursor(texture, texture != null ? hotspot : Vector2.zero, CursorMode.Auto);
+        Cursor.SetCursor(
+            texture,
+            texture != null ? hotspot : Vector2.zero,
+            CursorMode.ForceSoftware);
         sCurrentVisual = visual;
     }
 

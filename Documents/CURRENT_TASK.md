@@ -2,7 +2,7 @@
 
 - 任务：GameScene 棋盘交互与全局自定义鼠标
 - 状态：代码已实现，等待 Unity Play Mode 视觉验证
-- 更新时间：2026-07-25
+- 更新时间：2026-07-26
 
 ## 用户意图
 
@@ -29,6 +29,7 @@
 - 成功吸附 Piece 后不再完整刷新托盘布局；仅将编号位于其后的未放置 Piece 沿 X 轴前移“被取走 Piece 的托盘宽度 + 间距”，并更新失败回退 X。所有剩余 Piece 的 Y 和缩放保持不变；先拼队尾 Piece 时其他 Piece 完全不刷新。
 - 最后一块吸附并切组时，上一组运行时 Piece 在调用延迟 `Destroy` 前先立即停用；下一组重新居中和恢复 Prefab 原始 Piece 时不再与旧 Renderer 重叠，避免已完成 Piece 在 Y 轴抖动一帧。结算清理使用同一规则。
 - `GameCursorUtility` 在场景加载前从 `UI/BasicUI` 加载三张运行时可读 PNG 并设置系统光标；常规、贴纸悬停和贴纸抓取分别使用 `ImgHand_1/2/3.png`。GameScene 的悬停与按下复用同一个命中方法，离开 GameScene 时恢复常规图标。
+- 自定义光标使用 `CursorMode.ForceSoftware` 绘制，切换时分别保留 `52x58`、`68x48`、`64x50` 的真实纹理宽高，避免 Windows 硬件光标固定画布把较宽的 `ImgHand_2/3` 横向压扁。
 
 ## 修改文件
 
@@ -48,6 +49,7 @@
 - 缩放 CardBag 根节点而不是单独修改 GameBoard 图片，确保棋盘、Piece 槽位和描边保持同一坐标系。
 - 不修改托盘布局、`20px` 间距和 `90%` 最大高度规则；这些规则先算出旧托盘比例，再与配置后的棋盘目标比例取较小值。
 - 光标资源沿用 `BasicUI` 的 Editor/Player 磁盘加载和构建同步规则，不额外复制到 `Resources`；资源缺失时回退常规或系统光标并记录警告。
+- 三张光标宽高比不同，固定使用软件光标模式，不使用可能受平台固定光标尺寸约束的 `CursorMode.Auto`。
 
 ## 验证
 
@@ -60,6 +62,7 @@
 - `dotnet build Puffies.sln --no-restore`（切组旧 Piece 帧内隐藏后）：三个程序集成功，`0` 警告、`0` 错误。
 - `dotnet build Puffies.sln --no-restore`（托盘增量 X 补位后）：三个程序集成功，`0` 警告、`0` 错误。
 - `dotnet build Puffies.sln --no-restore`（全局自定义鼠标接入后）：三个程序集成功，`0` 警告、`0` 错误。
+- `dotnet build Puffies.sln --no-restore`（光标真实纹理尺寸修复后）：三个程序集成功，`0` 警告、`0` 错误。
 - 尚未完成 BoardScale 大于 1、小于 1 和等于 1 三种卡包的 Play Mode 视觉验证。
 - 不涉及持久化结构变化，无需删除 `LocalData.db` 或 `LocalData.json`。
 
