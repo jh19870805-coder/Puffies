@@ -1,11 +1,15 @@
 # 当前任务
 
-- 任务：CardBag 自动生成定位与拼图进度持久化
-- 状态：代码已实现，等待 Unity Editor 和 Play Mode 验证
+- 任务：GameScene 首次 Piece 放置新手引导
+- 状态：代码已实现，等待 Unity Editor Play Mode 视觉验证
 - 更新时间：2026-07-28
 
 ## 用户意图
 
+- 参考 `9696192e8e16c9aca4ab142437f24bb3.mp4` 实现首次拼图引导的路径、节奏和交互。
+- 引导箭头使用 `Assets/UI/GameScene/GameImgArrow.png`，旋转朝向槽位，移动过程中保持宽高比等比放大到原生尺寸。
+- 棋盘目标位置复用提示按钮的绿色滚动虚线；引导期间不显示烘焙的当前组描边。
+- 托盘区域变暗，只突出指定 Piece；指定 Piece 放错后恢复引导，正确放置后继续提示下一个，整包完成后结束并持久化。
 - CardBag 自动生成时，Piece 坐标按完整的 `Previews/CardBagXXX.png` 匹配，不使用已挖洞的 `GameBoard.png` 匹配。
 - 卡包拆开或确认重玩后，只拼一部分退出，下次选择时显示“玩”而不是“重玩”。
 - 正确拼到棋盘上的 Piece 要持久化，下次进入仍显示在棋盘上并继续剩余拼图。
@@ -23,6 +27,16 @@
 
 ## 工作记录
 
+- 新手引导限定为从未完成过引导且历史未完成的 `CardBag001`；已有部分进度时从当前未完成 Piece 继续。正常拆包时等待 GameScene 入场动画结束，直接打开场景时立即启动。
+- 目标固定为当前组编号最小的未完成 Piece。引导期间其他 Piece 不响应悬停和拖拽，提示按钮暂时禁用。
+- 运行时创建顶层引导 Canvas：托盘半透明遮罩、目标 Piece 副本、中文操作文案和箭头都不修改场景 Prefab。
+- 箭头使用 `TutorialArrowScale`：原生 `122 x 271` 直箭头从目标 Piece 上方开始，底部 Pivot 沿指向槽位的直线同步前移，整图保持宽高比从 `0` 等比放大到 `1`；终点按原生箭头长度反算，保证完整尺寸时箭头尖落在槽位中心，不做非等比拉伸或弯曲。
+- 槽位继续使用 `HintDashedOutlineGraphic` 的绿色滚动虚线。错误松手后按新位置恢复完整引导视觉；正确吸附后切换到下一 Piece。
+- 拿起目标 Piece 时只隐藏箭头、托盘遮罩、文案和 Piece 副本，目标槽位绿色虚线持续显示，直到正确放置或切换目标。
+- 箭头节奏为 `0.9s` 平滑移动并等比放大、`0.12s` 在目标位置以原生尺寸停留、`0.2s` 整体隐藏后重新开始。
+- 引导覆盖 `CardBag001` 的每一个 Piece；当前 Piece 正确吸附后立即提示下一个，跨分组持续到整包完成。
+- 引导完成状态写入 SQLite `AppRecords` 的 `Tutorial/CardBag001AllPiecesCompleted` 记录，不新增数据表。
+- `BuildSync` 新增同步 `Assets/UI/GameScene` 到 `StreamingAssets/UI/GameScene`，确保 Player 可加载箭头资源。
 - CardBag 生成器改为加载 Preview 作为 Piece 像素匹配参考图；GameBoard 只提供 Prefab 的运行时棋盘 Sprite 和画布尺寸。
 - Preview 与 GameBoard 仍强制要求相同尺寸；GameBoard 透明洞区不再需要保留完成图 RGB。
 - SQLite 新增 `CardPackPuzzleProgress` 表，按 `PackId` 保存去重、排序后的 Piece 数字编号 JSON 和更新时间；记录存在即表示有当前可继续的拼图会话。
@@ -67,6 +81,8 @@
 - `Assets/Scripts/Model/GameCommonUtility.cs`
 - `Assets/Scripts/Model/GameDefine.cs`
 - `Assets/Scripts/Editor/PuzzleOutlineBakerEditor.cs`
+- `Assets/Scripts/Editor/BuildSync.cs`
+- `Assets/UI/GameScene/GameImgArrow.png`（用户提供）
 - `Assets/Resources/Generated/PuzzleOutlines/CardBag017/Group02.png` 至 `Group05.png`
 - `Assets/UI/BasicUI/ImgHand_1.png`、`ImgHand_2.png`、`ImgHand_3.png`（用户新增）
 - `Documents/CURRENT_TASK.md`
@@ -75,6 +91,10 @@
 
 ## 决策
 
+- 新手引导不是提示按钮使用，不设置 `_wasHintUsed`，不会取消本局“未使用提示”积分加成。
+- 引导期间只隐藏当前组烘焙描边；正确放置引导 Piece 后立即按玩家设置恢复。
+- 已经放置过 Piece、历史已完成 `CardBag001` 或其他 BagId 均不补播该引导，避免打断已有进度。
+- 引导完成记录复用 `AppRecords`，不新增表、不需要删除现有 `LocalData.db`。
 - 当前拼图会话与 `CardPackLifecycleState` 分开：生命周期表达历史权益和完成状态，会话表达本局是否可继续及已放置 Piece。
 - 空会话同样持久化，确保进入游戏后尚未放置 Piece 就退出时仍按继续状态处理。
 - 只保存正确吸附 Piece 的编号；托盘和桌面 Piece 的位置不保存，下次进入按现有托盘规则重新生成。
@@ -94,6 +114,10 @@
 
 ## 验证
 
+- `dotnet build Puffies.sln --no-restore`（首次 Piece 放置新手引导）：三个程序集成功，`0` 警告、`0` 错误。
+- `git diff --check`：通过，仅有既有 LF/CRLF 转换提示。
+- 已确认箭头源图为 `122 x 271`，有效像素范围基本覆盖整张图片，方向为向上。
+- 尚未完成 Unity Play Mode 中箭头弯曲形态、目标副本层级、托盘遮罩和错误放置恢复的视觉验证。
 - `dotnet build Puffies.sln --no-restore`（CardBag 改用 Preview 匹配 Piece）：三个程序集成功，`0` 警告、`0` 错误。
 - 已确认 `CardBag001` 的 Preview 与 GameBoard 均为 `1300 x 1518`；Preview 是完整图，GameBoard 包含透明挖洞，符合新的定位与运行时职责划分。
 - `dotnet build Puffies.sln --no-restore`（未历史完成卡包隐藏相机按钮）：三个程序集成功，`0` 警告、`0` 错误。
@@ -123,10 +147,11 @@
 
 ### 本次优先
 
-1. 删除旧 `LocalData.db` 后进入一个未完成卡包，正确放置数个 Piece 并返回 MainScene，确认按钮显示“玩”。
-2. 再次进入同一卡包，确认已放置 Piece 保持在棋盘，当前分组只生成剩余 Piece；完成一组后进入正确的下一组。
-3. 完成卡包后返回 MainScene，确认按钮显示“重玩”；确认重玩、放置数个 Piece 后退出，确认再次显示“玩”且恢复本次重玩的棋盘进度。
-4. 进入 GameScene 后不放置任何 Piece 就退出，确认空会话仍使按钮显示“玩”。
+1. 在 Unity 执行 `Assets -> Refresh`，进入一个从未开始的 `CardBag001`，确认入场完成后才显示引导。
+2. 确认托盘整体变暗、指定 Piece 保持正常亮度、棋盘槽位显示绿色跑马灯，箭头从 Piece 顶部沿弯曲路径逐步画向槽位。
+3. 尝试点击其他 Piece，确认不能拿起；将目标 Piece 放错到托盘或桌面，确认引导按当前位置恢复。
+4. 将目标 Piece 正确吸附，确认立即切换到下一 Piece；完成分组后继续提示下一组，整包完成时引导结束并恢复描边。
+5. 整包完成后重新进入，确认不再显示引导；已有部分进度的 `CardBag001` 从当前未完成 Piece 继续，其他 BagId 和历史完成的 `CardBag001` 不触发。
 
 ### 既有回归
 
@@ -147,4 +172,4 @@
 
 ## 恢复提示
 
-继续 Puffies 当前任务。先阅读 `AGENTS.md`、`Documents/WORKFLOW.md` 和 `Documents/CURRENT_TASK.md`；拼图 Piece 即时保存和恢复已实现，下一步是删除旧 `LocalData.db` 后在 Unity Play Mode 验证半局退出、继续、完成与重玩流程。
+继续 Puffies 当前任务。先阅读 `AGENTS.md`、`Documents/WORKFLOW.md` 和 `Documents/CURRENT_TASK.md`；首次 Piece 放置新手引导代码已实现，下一步是在 Unity Play Mode 验证遮罩、目标层级、箭头路径节奏、错误放置恢复和完成后不再播放。

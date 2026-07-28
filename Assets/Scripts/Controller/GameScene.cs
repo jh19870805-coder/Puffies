@@ -44,6 +44,17 @@ public class GameScene : MonoBehaviour
     private const float HintDashGap = 15f;
     private const float HintOutlineWidth = 3f;
     private const float HintOutlineScrollSpeed = 60f;
+    private const int TutorialCanvasSortingOrder = 30000;
+    private const float TutorialTrayDimAlpha = 0.58f;
+    private const string TutorialCollection = "Tutorial";
+    private const string PiecePlacementTutorialKey = "CardBag001AllPiecesCompleted";
+    private const string TutorialCanvasObjectName = "PiecePlacementTutorialCanvas";
+    private const string TutorialTrayDimObjectName = "TutorialTrayDim";
+    private const string TutorialPieceObjectName = "TutorialPiece";
+    private const string TutorialArrowObjectName = "TutorialArrow";
+    private const string TutorialTextObjectName = "TutorialText";
+    private const string TutorialArrowPath = GameDefine.UiRoot + "/GameScene/GameImgArrow.png";
+    private const string TutorialInstruction = "从托盘中选出匹配的贴纸，贴在板子的正确位置上。";
     private const string BootstrapObjectName = "GameSceneBootstrap";
     private const string PieceBgFillObjectName = "PieceBgFill";
     private const string PieceBgObjectName = "PieceBg";
@@ -106,6 +117,12 @@ public class GameScene : MonoBehaviour
     private bool _isHintPieceShaking;
     private GameObject _pieceHintOutlineRoot;
     private bool _shouldCompleteRestoredPuzzle;
+    private Button _hintButton;
+    private bool _isTutorialPending;
+    private bool _isTutorialActive;
+    private DraggablePieceState _tutorialPiece;
+    private GameObject _tutorialCanvasRoot;
+    private Sprite _tutorialArrowSprite;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Bootstrap()
@@ -136,6 +153,7 @@ public class GameScene : MonoBehaviour
         var playEntranceAnimation = GameManager.ConsumeGameEntranceAnimation();
         CardPackDataUtility.Initialize();
         _wasSelectedPackCompletedOnEntry = CardPackDataUtility.IsPackCompleted(selectedBagId);
+        _isTutorialPending = ShouldOfferPiecePlacementTutorial(selectedBagId);
         _didAdvanceTaskDuringSettlement = false;
         _didFailTaskAdvanceDuringSettlement = false;
         _didSavePackCompletion = false;
@@ -156,6 +174,10 @@ public class GameScene : MonoBehaviour
         {
             StartCoroutine(PlayGameEntranceAnimation());
         }
+        else
+        {
+            TryStartPiecePlacementTutorial();
+        }
 
         Debug.Log("GameScene bootstrap completed.");
     }
@@ -163,6 +185,8 @@ public class GameScene : MonoBehaviour
     private void OnDestroy()
     {
         GameCursorUtility.SetDefault();
+        StopPiecePlacementTutorial(persistCompletion: false, restoreLevelOutline: false);
+        DestroyTutorialArrowSprite();
         ClearPieceHint();
         HintDashedOutlineGraphic.ClearPathCache();
     }
@@ -211,6 +235,7 @@ public class GameScene : MonoBehaviour
         }
 
         var activeGroupIndex = RestorePuzzleSession(bagId);
+        _isTutorialPending = _isTutorialPending && activeGroupIndex >= 0;
         if (activeGroupIndex >= 0)
         {
             CreateDraggableGroup(activeGroupIndex);
@@ -472,6 +497,7 @@ public class GameScene : MonoBehaviour
         }
 
         _isEntranceAnimating = false;
+        TryStartPiecePlacementTutorial();
     }
 
     private static CanvasGroup GetOrAddCanvasGroup(GameObject target)
@@ -1105,6 +1131,12 @@ public class GameScene : MonoBehaviour
 
     private void TryRefreshActiveGroupOutline(int groupIndex)
     {
+        if (_isTutorialPending || _isTutorialActive)
+        {
+            ClearActiveGroupOutline();
+            return;
+        }
+
         if (!_isLevelOutlineEnabled)
         {
             ClearActiveGroupOutline();
@@ -1211,6 +1243,11 @@ public class GameScene : MonoBehaviour
             return;
         }
 
+        if (_isTutorialActive && state == _tutorialPiece)
+        {
+            HidePiecePlacementTutorialPresentation(clearHintOutline: false);
+        }
+
         var world = ToGameplayWorld(screenPosition);
         _drag.DraggingPiece = state;
         _drag.DragOffset = state.PieceRenderer.transform.position - world;
@@ -1253,6 +1290,11 @@ public class GameScene : MonoBehaviour
         for (var i = _drag.CurrentGroupDraggables.Count - 1; i >= 0; i--)
         {
             var state = _drag.CurrentGroupDraggables[i];
+            if (_isTutorialActive && state != _tutorialPiece)
+            {
+                continue;
+            }
+
             if (state != null
                 && !state.IsPlaced
                 && state.PieceRenderer != null
@@ -1308,9 +1350,14 @@ public class GameScene : MonoBehaviour
             {
                 CompactFollowingTrayPieces(state);
             }
+            var shouldAdvanceTutorial = _isTutorialActive && state == _tutorialPiece;
             RecordPlacedPiece(state);
             CommitPlacedPieceToBoardImage(state);
             TryAdvanceGroup();
+            if (shouldAdvanceTutorial)
+            {
+                AdvancePiecePlacementTutorial();
+            }
             return;
         }
 
@@ -1320,6 +1367,7 @@ public class GameScene : MonoBehaviour
             state.IsOnTray = true;
             state.PieceRenderer.transform.localScale = state.TrayScale;
             LayoutTrayPieces();
+            RestorePiecePlacementTutorialPresentation(state);
             return;
         }
 
@@ -1330,6 +1378,8 @@ public class GameScene : MonoBehaviour
         {
             CompactFollowingTrayPieces(state);
         }
+
+        RestorePiecePlacementTutorialPresentation(state);
     }
 
     private void RecordPlacedPiece(DraggablePieceState state)
@@ -1946,6 +1996,454 @@ public class GameScene : MonoBehaviour
             $"stickerOutline={_isStickerOutlineEnabled}");
     }
 
+    private bool ShouldOfferPiecePlacementTutorial(int bagId)
+    {
+        if (bagId != GameDefine.DefaultBagId || _wasSelectedPackCompletedOnEntry)
+        {
+            return false;
+        }
+
+        return SqliteLocalStore.Initialize()
+            && !SqliteLocalStore.Exists(TutorialCollection, PiecePlacementTutorialKey);
+    }
+
+    private void TryStartPiecePlacementTutorial()
+    {
+        if (!_isTutorialPending || _isGameFinished || _isEntranceAnimating)
+        {
+            return;
+        }
+
+        var target = FindHintTarget();
+        if (target == null)
+        {
+            _isTutorialPending = false;
+            TryRefreshActiveGroupOutline(_drag.CurrentGroupIndex);
+            return;
+        }
+
+        if (_tutorialArrowSprite == null)
+        {
+            _tutorialArrowSprite = GameCommonUtility.LoadSpriteByPath(
+                TutorialArrowPath,
+                PixelsPerUnit);
+        }
+
+        if (_tutorialArrowSprite == null)
+        {
+            Debug.LogWarning(
+                $"GameScene: tutorial arrow is missing at {TutorialArrowPath}; tutorial skipped.");
+            _isTutorialPending = false;
+            TryRefreshActiveGroupOutline(_drag.CurrentGroupIndex);
+            return;
+        }
+
+        _tutorialPiece = target;
+        _isTutorialPending = false;
+        _isTutorialActive = true;
+        ClearActiveGroupOutline();
+        if (_hintButton != null)
+        {
+            _hintButton.interactable = false;
+        }
+
+        if (!ShowPiecePlacementTutorialPresentation())
+        {
+            Debug.LogWarning("GameScene: tutorial presentation could not be created; tutorial skipped.");
+            StopPiecePlacementTutorial(persistCompletion: false, restoreLevelOutline: true);
+            return;
+        }
+
+        Debug.Log(
+            $"GameScene: Piece placement tutorial started. piece={GetPieceNumberFromState(target)}");
+    }
+
+    private bool ShowPiecePlacementTutorialPresentation()
+    {
+        HidePiecePlacementTutorialPresentation();
+        if (!_isTutorialActive
+            || _tutorialPiece?.PieceRenderer == null
+            || _tutorialPiece.GrooveRect == null
+            || _tutorialArrowSprite == null)
+        {
+            return false;
+        }
+
+        var camera = Camera.main;
+        if (camera == null
+            || !TryGetPieceTrayScreenRect(camera, out var trayScreenRect)
+            || !TryGetRendererScreenRect(_tutorialPiece.PieceRenderer, camera, out var pieceScreenRect)
+            || !TryGetRectTransformScreenCenter(_tutorialPiece.GrooveRect, out var grooveScreenCenter))
+        {
+            return false;
+        }
+
+        _tutorialCanvasRoot = new GameObject(
+            TutorialCanvasObjectName,
+            typeof(RectTransform),
+            typeof(Canvas),
+            typeof(CanvasScaler));
+        var tutorialCanvas = _tutorialCanvasRoot.GetComponent<Canvas>();
+        tutorialCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        tutorialCanvas.overrideSorting = true;
+        tutorialCanvas.sortingOrder = TutorialCanvasSortingOrder;
+
+        var scaler = _tutorialCanvasRoot.GetComponent<CanvasScaler>();
+        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        scaler.referenceResolution = new Vector2(ReferenceHeight * (16f / 9f), ReferenceHeight);
+        scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+        scaler.matchWidthOrHeight = 0.5f;
+        scaler.referencePixelsPerUnit = PixelsPerUnit;
+        Canvas.ForceUpdateCanvases();
+
+        var canvasRect = _tutorialCanvasRoot.GetComponent<RectTransform>();
+        if (!TryScreenRectToCanvasRect(canvasRect, trayScreenRect, out var trayCanvasRect)
+            || !TryScreenRectToCanvasRect(canvasRect, pieceScreenRect, out var pieceCanvasRect)
+            || !RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                canvasRect,
+                grooveScreenCenter,
+                null,
+                out var grooveCanvasCenter))
+        {
+            HidePiecePlacementTutorialPresentation();
+            return false;
+        }
+
+        CreateTutorialTrayDim(canvasRect, trayCanvasRect);
+        CreateTutorialPieceCopy(canvasRect, pieceCanvasRect);
+        CreateTutorialInstruction(canvasRect, trayCanvasRect);
+        CreateTutorialArrow(canvasRect, pieceCanvasRect, grooveCanvasCenter);
+        CreatePieceHintOutline(_tutorialPiece);
+        return true;
+    }
+
+    private static void CreateTutorialTrayDim(RectTransform parent, Rect trayRect)
+    {
+        var dimObject = new GameObject(
+            TutorialTrayDimObjectName,
+            typeof(RectTransform),
+            typeof(CanvasRenderer),
+            typeof(Image));
+        var dimRect = dimObject.GetComponent<RectTransform>();
+        dimRect.SetParent(parent, false);
+        dimRect.anchorMin = new Vector2(0.5f, 0.5f);
+        dimRect.anchorMax = new Vector2(0.5f, 0.5f);
+        dimRect.pivot = new Vector2(0.5f, 0.5f);
+        dimRect.anchoredPosition = trayRect.center;
+        dimRect.sizeDelta = trayRect.size;
+
+        var image = dimObject.GetComponent<Image>();
+        image.color = new Color(0f, 0f, 0f, TutorialTrayDimAlpha);
+        image.raycastTarget = false;
+    }
+
+    private void CreateTutorialPieceCopy(RectTransform parent, Rect pieceRect)
+    {
+        var pieceObject = new GameObject(
+            TutorialPieceObjectName,
+            typeof(RectTransform),
+            typeof(CanvasRenderer),
+            typeof(Image));
+        var pieceImage = pieceObject.GetComponent<Image>();
+        pieceImage.rectTransform.SetParent(parent, false);
+        pieceImage.rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
+        pieceImage.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+        pieceImage.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+        pieceImage.rectTransform.anchoredPosition = pieceRect.center;
+        pieceImage.rectTransform.sizeDelta = pieceRect.size;
+        pieceImage.rectTransform.localRotation = _tutorialPiece.PieceRenderer.transform.rotation;
+        pieceImage.sprite = _tutorialPiece.PieceRenderer.sprite;
+        pieceImage.color = _tutorialPiece.PieceRenderer.color;
+        pieceImage.preserveAspect = false;
+        pieceImage.raycastTarget = false;
+    }
+
+    private static void CreateTutorialInstruction(RectTransform parent, Rect trayRect)
+    {
+        var textObject = new GameObject(
+            TutorialTextObjectName,
+            typeof(RectTransform),
+            typeof(CanvasRenderer),
+            typeof(TextMeshProUGUI),
+            typeof(Shadow));
+        var text = textObject.GetComponent<TextMeshProUGUI>();
+        text.rectTransform.SetParent(parent, false);
+        text.rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
+        text.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+        text.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+        text.rectTransform.anchoredPosition = new Vector2(
+            trayRect.center.x,
+            trayRect.yMin + 42f);
+        text.rectTransform.sizeDelta = new Vector2(Mathf.Max(320f, trayRect.width - 80f), 58f);
+        text.text = TutorialInstruction;
+        text.fontSize = 32f;
+        text.color = Color.white;
+        text.alignment = TextAlignmentOptions.Center;
+        text.enableWordWrapping = false;
+        text.raycastTarget = false;
+        GameFontUtility.ApplyDefaultFont(text);
+
+        var shadow = textObject.GetComponent<Shadow>();
+        shadow.effectColor = new Color(0f, 0f, 0f, 0.72f);
+        shadow.effectDistance = new Vector2(2f, -2f);
+    }
+
+    private void CreateTutorialArrow(
+        RectTransform parent,
+        Rect pieceRect,
+        Vector2 grooveCenter)
+    {
+        var arrowObject = new GameObject(
+            TutorialArrowObjectName,
+            typeof(RectTransform),
+            typeof(CanvasRenderer),
+            typeof(Image),
+            typeof(TutorialArrowScale));
+        var arrowRect = arrowObject.GetComponent<RectTransform>();
+        arrowRect.SetParent(parent, false);
+        arrowRect.anchorMin = new Vector2(0.5f, 0.5f);
+        arrowRect.anchorMax = new Vector2(0.5f, 0.5f);
+        arrowRect.pivot = new Vector2(0.5f, 0f);
+        arrowRect.sizeDelta = _tutorialArrowSprite.rect.size;
+
+        var arrowImage = arrowObject.GetComponent<Image>();
+        arrowImage.sprite = _tutorialArrowSprite;
+        arrowImage.color = Color.white;
+        arrowImage.preserveAspect = true;
+        arrowImage.raycastTarget = false;
+
+        var tailStart = new Vector2(pieceRect.center.x, pieceRect.yMax + 8f);
+        var direction = grooveCenter - tailStart;
+        if (direction.sqrMagnitude <= 0.001f)
+        {
+            direction = Vector2.up;
+        }
+
+        arrowRect.anchoredPosition = tailStart;
+        arrowRect.localRotation = Quaternion.Euler(
+            0f,
+            0f,
+            Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg - 90f);
+
+        var arrow = arrowObject.GetComponent<TutorialArrowScale>();
+        arrow.Configure(
+            arrowRect,
+            arrowImage,
+            tailStart,
+            grooveCenter - direction.normalized * arrowRect.sizeDelta.y);
+    }
+
+    private void HidePiecePlacementTutorialPresentation(bool clearHintOutline = true)
+    {
+        if (clearHintOutline)
+        {
+            ClearPieceHint();
+        }
+
+        if (_tutorialCanvasRoot != null)
+        {
+            _tutorialCanvasRoot.SetActive(false);
+            Destroy(_tutorialCanvasRoot);
+            _tutorialCanvasRoot = null;
+        }
+    }
+
+    private void RestorePiecePlacementTutorialPresentation(DraggablePieceState state)
+    {
+        if (!_isTutorialActive || state != _tutorialPiece || state.IsPlaced)
+        {
+            return;
+        }
+
+        if (!ShowPiecePlacementTutorialPresentation())
+        {
+            StopPiecePlacementTutorial(persistCompletion: false, restoreLevelOutline: true);
+        }
+    }
+
+    private void AdvancePiecePlacementTutorial()
+    {
+        if (!_isTutorialActive)
+        {
+            return;
+        }
+
+        HidePiecePlacementTutorialPresentation();
+        _tutorialPiece = FindHintTarget();
+        if (_tutorialPiece != null && !_isGameFinished)
+        {
+            if (!ShowPiecePlacementTutorialPresentation())
+            {
+                StopPiecePlacementTutorial(persistCompletion: false, restoreLevelOutline: true);
+            }
+
+            return;
+        }
+
+        StopPiecePlacementTutorial(
+            persistCompletion: _isGameFinished,
+            restoreLevelOutline: !_isGameFinished);
+    }
+
+    private void StopPiecePlacementTutorial(bool persistCompletion, bool restoreLevelOutline)
+    {
+        var wasActive = _isTutorialActive || _isTutorialPending;
+        _isTutorialPending = false;
+        _isTutorialActive = false;
+        HidePiecePlacementTutorialPresentation();
+        _tutorialPiece = null;
+        if (_hintButton != null)
+        {
+            _hintButton.interactable = true;
+        }
+
+        if (persistCompletion
+            && (!SqliteLocalStore.Initialize()
+                || !SqliteLocalStore.Upsert(
+                    TutorialCollection,
+                    PiecePlacementTutorialKey,
+                    "true")))
+        {
+            Debug.LogWarning("GameScene: failed to persist Piece placement tutorial completion.");
+        }
+
+        if (restoreLevelOutline && wasActive && !_isGameFinished)
+        {
+            TryRefreshActiveGroupOutline(_drag.CurrentGroupIndex);
+        }
+    }
+
+    private void DestroyTutorialArrowSprite()
+    {
+        if (_tutorialArrowSprite == null)
+        {
+            return;
+        }
+
+        var texture = _tutorialArrowSprite.texture;
+        Destroy(_tutorialArrowSprite);
+        _tutorialArrowSprite = null;
+        if (texture != null)
+        {
+            Destroy(texture);
+        }
+    }
+
+    private bool TryGetPieceTrayScreenRect(Camera camera, out Rect screenRect)
+    {
+        screenRect = default;
+        if (_board.PieceBoardRect != null
+            && TryGetRectTransformScreenRect(_board.PieceBoardRect, out screenRect))
+        {
+            return true;
+        }
+
+        return _board.PieceBgRenderer != null
+            && TryGetWorldBoundsScreenRect(_board.PieceBgRenderer.bounds, camera, out screenRect);
+    }
+
+    private static bool TryGetRendererScreenRect(
+        SpriteRenderer renderer,
+        Camera camera,
+        out Rect screenRect)
+    {
+        screenRect = default;
+        return renderer != null
+            && TryGetWorldBoundsScreenRect(renderer.bounds, camera, out screenRect);
+    }
+
+    private static bool TryGetWorldBoundsScreenRect(Bounds bounds, Camera camera, out Rect screenRect)
+    {
+        screenRect = default;
+        if (camera == null || bounds.size.sqrMagnitude <= 0f)
+        {
+            return false;
+        }
+
+        var min = camera.WorldToScreenPoint(bounds.min);
+        var max = camera.WorldToScreenPoint(bounds.max);
+        screenRect = Rect.MinMaxRect(
+            Mathf.Min(min.x, max.x),
+            Mathf.Min(min.y, max.y),
+            Mathf.Max(min.x, max.x),
+            Mathf.Max(min.y, max.y));
+        return screenRect.width > 0f && screenRect.height > 0f;
+    }
+
+    private static bool TryGetRectTransformScreenRect(RectTransform rect, out Rect screenRect)
+    {
+        screenRect = default;
+        if (rect == null)
+        {
+            return false;
+        }
+
+        var canvas = rect.GetComponentInParent<Canvas>();
+        var eventCamera = canvas != null && canvas.renderMode == RenderMode.ScreenSpaceOverlay
+            ? null
+            : canvas != null ? canvas.worldCamera : Camera.main;
+        var corners = new Vector3[4];
+        rect.GetWorldCorners(corners);
+        var min = new Vector2(float.MaxValue, float.MaxValue);
+        var max = new Vector2(float.MinValue, float.MinValue);
+        for (var i = 0; i < corners.Length; i++)
+        {
+            var point = RectTransformUtility.WorldToScreenPoint(eventCamera, corners[i]);
+            min = Vector2.Min(min, point);
+            max = Vector2.Max(max, point);
+        }
+
+        screenRect = Rect.MinMaxRect(min.x, min.y, max.x, max.y);
+        return screenRect.width > 0f && screenRect.height > 0f;
+    }
+
+    private static bool TryGetRectTransformScreenCenter(RectTransform rect, out Vector2 screenCenter)
+    {
+        screenCenter = Vector2.zero;
+        if (rect == null)
+        {
+            return false;
+        }
+
+        var canvas = rect.GetComponentInParent<Canvas>();
+        var eventCamera = canvas != null && canvas.renderMode == RenderMode.ScreenSpaceOverlay
+            ? null
+            : canvas != null ? canvas.worldCamera : Camera.main;
+        screenCenter = RectTransformUtility.WorldToScreenPoint(
+            eventCamera,
+            rect.TransformPoint(rect.rect.center));
+        return true;
+    }
+
+    private static bool TryScreenRectToCanvasRect(
+        RectTransform canvasRect,
+        Rect screenRect,
+        out Rect localRect)
+    {
+        localRect = default;
+        if (canvasRect == null
+            || !RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                canvasRect,
+                screenRect.min,
+                null,
+                out var min)
+            || !RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                canvasRect,
+                screenRect.max,
+                null,
+                out var max))
+        {
+            return false;
+        }
+
+        localRect = Rect.MinMaxRect(
+            Mathf.Min(min.x, max.x),
+            Mathf.Min(min.y, max.y),
+            Mathf.Max(min.x, max.x),
+            Mathf.Max(min.y, max.y));
+        return localRect.width > 0f && localRect.height > 0f;
+    }
+
     private void ConfigureHintButton()
     {
         var hintButtonObject = GameCommonUtility.FindSceneObject(HintButtonObjectName);
@@ -1955,20 +2453,24 @@ public class GameScene : MonoBehaviour
             return;
         }
 
-        var hintButton = hintButtonObject.GetComponent<Button>();
-        if (hintButton == null)
+        _hintButton = hintButtonObject.GetComponent<Button>();
+        if (_hintButton == null)
         {
             Debug.LogWarning($"GameScene: {HintButtonObjectName} is missing Button component.");
             return;
         }
 
-        hintButton.onClick.RemoveListener(OnHintButtonClicked);
-        hintButton.onClick.AddListener(OnHintButtonClicked);
+        _hintButton.onClick.RemoveListener(OnHintButtonClicked);
+        _hintButton.onClick.AddListener(OnHintButtonClicked);
     }
 
     private void OnHintButtonClicked()
     {
-        if (_isGameFinished || _isEntranceAnimating || _drag.DraggingPiece != null)
+        if (_isGameFinished
+            || _isEntranceAnimating
+            || _isTutorialPending
+            || _isTutorialActive
+            || _drag.DraggingPiece != null)
         {
             return;
         }
@@ -3223,6 +3725,70 @@ public class GameScene : MonoBehaviour
     private void OnReturnButtonClicked()
     {
         GameManager.EnterMainScene();
+    }
+}
+
+internal sealed class TutorialArrowScale : MonoBehaviour
+{
+    private const float ScaleDuration = 0.9f;
+    private const float HoldDuration = 0.12f;
+    private const float GapDuration = 0.2f;
+    private RectTransform _rectTransform;
+    private Image _image;
+    private Vector2 _startPosition;
+    private Vector2 _endPosition;
+    private float _animationStartTime;
+
+    public void Configure(
+        RectTransform rectTransform,
+        Image image,
+        Vector2 startPosition,
+        Vector2 endPosition)
+    {
+        _rectTransform = rectTransform;
+        _image = image;
+        _startPosition = startPosition;
+        _endPosition = endPosition;
+        _animationStartTime = Time.unscaledTime;
+        ApplyScale(0f);
+    }
+
+    private void Update()
+    {
+        if (_rectTransform == null || _image == null)
+        {
+            return;
+        }
+
+        var cycleDuration = ScaleDuration + HoldDuration + GapDuration;
+        var phase = Mathf.Repeat(Time.unscaledTime - _animationStartTime, cycleDuration);
+        if (phase >= ScaleDuration + HoldDuration)
+        {
+            _image.enabled = false;
+            return;
+        }
+
+        _image.enabled = true;
+        var progress = phase < ScaleDuration
+            ? SmootherStep(phase / ScaleDuration)
+            : 1f;
+        ApplyScale(progress);
+    }
+
+    private static float SmootherStep(float value)
+    {
+        var t = Mathf.Clamp01(value);
+        return t * t * t * (t * (t * 6f - 15f) + 10f);
+    }
+
+    private void ApplyScale(float progress)
+    {
+        var normalized = Mathf.Clamp01(progress);
+        _rectTransform.anchoredPosition = Vector2.LerpUnclamped(
+            _startPosition,
+            _endPosition,
+            normalized);
+        _rectTransform.localScale = Vector3.one * normalized;
     }
 }
 
