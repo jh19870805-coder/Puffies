@@ -1,11 +1,12 @@
 # 当前任务
 
-- 任务：卡包拼图进度持久化与玩/重玩状态
-- 状态：代码已实现，等待 Unity Play Mode 流程验证
-- 更新时间：2026-07-26
+- 任务：CardBag 自动生成定位与拼图进度持久化
+- 状态：代码已实现，等待 Unity Editor 和 Play Mode 验证
+- 更新时间：2026-07-28
 
 ## 用户意图
 
+- CardBag 自动生成时，Piece 坐标按完整的 `Previews/CardBagXXX.png` 匹配，不使用已挖洞的 `GameBoard.png` 匹配。
 - 卡包拆开或确认重玩后，只拼一部分退出，下次选择时显示“玩”而不是“重玩”。
 - 正确拼到棋盘上的 Piece 要持久化，下次进入仍显示在棋盘上并继续剩余拼图。
 - MainScene 卡包选择按钮的 `Play` 改为“玩”。
@@ -22,6 +23,8 @@
 
 ## 工作记录
 
+- CardBag 生成器改为加载 Preview 作为 Piece 像素匹配参考图；GameBoard 只提供 Prefab 的运行时棋盘 Sprite 和画布尺寸。
+- Preview 与 GameBoard 仍强制要求相同尺寸；GameBoard 透明洞区不再需要保留完成图 RGB。
 - SQLite 新增 `CardPackPuzzleProgress` 表，按 `PackId` 保存去重、排序后的 Piece 数字编号 JSON 和更新时间；记录存在即表示有当前可继续的拼图会话。
 - GameScene 进入时确保会话存在并加载已放置 Piece；已完成 Piece 直接恢复为 Prefab 原始 `Image`，从首个未完成分组创建剩余可拖 Piece。
 - 每次正确吸附先即时保存 Piece 编号，再更新棋盘显示和切组；整包完成且 `Completed` 保存成功后清除会话。
@@ -54,6 +57,7 @@
 
 ## 修改文件
 
+- `Assets/Scripts/Editor/CardBagPrefabGeneratorEditor.cs`
 - `Assets/Scripts/Model/LocalDataStore.cs`
 - `Assets/Scripts/Model/CardPackDataUtility.cs`
 - `Assets/Scripts/Controller/MainScene.cs`
@@ -90,6 +94,8 @@
 
 ## 验证
 
+- `dotnet build Puffies.sln --no-restore`（CardBag 改用 Preview 匹配 Piece）：三个程序集成功，`0` 警告、`0` 错误。
+- 已确认 `CardBag001` 的 Preview 与 GameBoard 均为 `1300 x 1518`；Preview 是完整图，GameBoard 包含透明挖洞，符合新的定位与运行时职责划分。
 - `dotnet build Puffies.sln --no-restore`（未历史完成卡包隐藏相机按钮）：三个程序集成功，`0` 警告、`0` 错误。
 - `dotnet build Puffies.sln --no-restore`（拼图进度持久化与玩/重玩判断）：三个程序集成功，`0` 警告、`0` 错误。
 - `git diff --check`：通过，仅有既有 LF/CRLF 转换提示。

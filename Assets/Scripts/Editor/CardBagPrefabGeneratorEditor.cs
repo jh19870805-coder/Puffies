@@ -250,15 +250,16 @@ public static class CardBagPrefabGeneratorEditor
 
         AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
         using (var board = RawTexture.Load(boardPath))
+        using (var preview = RawTexture.Load(previewPath))
         {
-            ValidatePreviewSize(previewPath, board.Width, board.Height);
-            var colorCounts = BuildColorCounts(board.Pixels);
+            ValidatePreviewSize(preview, board.Width, board.Height);
+            var colorCounts = BuildColorCounts(preview.Pixels);
             var placements = new List<PiecePlacement>(piecePaths.Count);
             for (var i = 0; i < piecePaths.Count; i++)
             {
                 using (var piece = RawTexture.Load(piecePaths[i]))
                 {
-                    var placement = FindPlacement(board, piece, colorCounts, piecePaths[i]);
+                    var placement = FindPlacement(preview, piece, colorCounts, piecePaths[i]);
                     placement.AssetPath = piecePaths[i];
                     placement.ObjectName = ResolvePieceObjectName(piecePaths[i], i);
                     placements.Add(placement);
@@ -714,16 +715,13 @@ public static class CardBagPrefabGeneratorEditor
         rect.localScale = Vector3.one;
     }
 
-    private static void ValidatePreviewSize(string previewPath, int boardWidth, int boardHeight)
+    private static void ValidatePreviewSize(RawTexture preview, int boardWidth, int boardHeight)
     {
-        using (var preview = RawTexture.Load(previewPath))
+        if (preview.Width != boardWidth || preview.Height != boardHeight)
         {
-            if (preview.Width != boardWidth || preview.Height != boardHeight)
-            {
-                throw new InvalidOperationException(
-                    $"CardBag generator: preview is {preview.Width}x{preview.Height}, " +
-                    $"but background is {boardWidth}x{boardHeight}.");
-            }
+            throw new InvalidOperationException(
+                $"CardBag generator: preview is {preview.Width}x{preview.Height}, " +
+                $"but background is {boardWidth}x{boardHeight}.");
         }
     }
 

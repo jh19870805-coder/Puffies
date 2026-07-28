@@ -59,7 +59,7 @@ Unity **2022.3** / URP 2D 项目。核心循环：打开卡包 -> 拖放拼图 -
 
 - 新卡包沿用唯一 `Package001` 模板；`MainScene` 在运行时动态创建列表项。
 - 新拼图通过在 `Resources/CardBagPrefabs/` 下新增 `CardBagNNN` Prefab 实现；每个 Prefab 包含 `GameBoard` 和 `Piece01`...`PieceNN`，不创建 Package JSON。
-- 编辑器批量生成器可扫描 `CardBagNNN` 资源目录，从 `GameBoard.png` 和透明 Piece PNG 进行像素匹配，批量创建 Prefab，不依赖 Package JSON 或 `unity_layout.json`。
+- 编辑器批量生成器可扫描 `CardBagNNN` 资源目录，使用完整的 `Previews/CardBagNNN.png` 与透明 Piece PNG 进行像素匹配，并以 `GameBoard.png` 作为运行时棋盘底图批量创建 Prefab，不依赖 Package JSON 或 `unity_layout.json`。
 - 通用 3D 开包模型和 CardFx 资源放在 `Resources/Effects/` 下，通过 `Resources.Load` 加载。
 - 构建前执行 `Puffies -> Sync Build Resources`，将运行时磁盘加载的 UI 目录同步到 `StreamingAssets/UI`。
 
@@ -280,8 +280,8 @@ effect（调试）：CardFx 预览；菜单 Puffies -> Preview CardFx Effects
 - 每个卡包硬性需要 `CardBagNNN/GameBoard.png`、`Previews/CardBagNNN.png` 和至少一张合法 Piece PNG；缺失项会显示在列表中并禁止选择。
 - 旧 `background_base.png` 仅用于兼容迁移：当 `GameBoard.png` 不存在时，扫描器通过 `AssetDatabase.MoveAsset` 自动改名并保留 Meta/GUID；两者同时存在时不覆盖目标文件。
 - `BoardTitle.png` 是标准资源但采用软校验。缺失时列表显示警告，仍允许生成不含 `BoardTitle` 节点的 Prefab。
-- `UI/CardBags/Previews/CardBagNNN.png` 只用于验证画布尺寸和效果图，不作为运行时 Prefab Sprite。
-- 生成器利用 Piece PNG 保留的原始裁切 RGB 在完整背景中做像素匹配，Piece Alpha 继续作为运行时形状。
+- `UI/CardBags/Previews/CardBagNNN.png` 是完整拼图和 Piece 定位参考图，不作为运行时 Prefab Sprite；它必须与 `GameBoard.png` 画布尺寸一致。
+- 生成器利用 Piece PNG 保留的原始裁切 RGB 在 Preview 完整图中做像素匹配，Piece Alpha 继续作为运行时形状。`GameBoard.png` 的透明洞区无需保留完成图 RGB。
 - `PieceNN.png` 或 `PiecesNN.png` 中的 `NN` 直接成为对象编号；未改名的 `piece_###.png` 依次生成 `Piece001`、`Piece002` 等未分组对象，不自动推断游戏分组。
 - 生成结构为 `CardBagNNN/GameBoard/BoardTitle` 和 `CardBagNNN/GameBoard/PieceNN`；棋盘标题与全部碎片统一归属 `GameBoard`。
 - 窗口默认只选择资源完整且尚无 Prefab 的卡包。选择已有 Prefab 时显示 `Overwrite`，执行前必须确认；覆盖会替换已有层级和手工 Piece 分组。
