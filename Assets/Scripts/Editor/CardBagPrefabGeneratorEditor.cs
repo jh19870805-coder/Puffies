@@ -45,6 +45,26 @@ public static class CardBagPrefabGeneratorEditor
         Generate(17, true, false);
     }
 
+    public static void GenerateCardBagFromCommandLine()
+    {
+        var arguments = Environment.GetCommandLineArgs();
+        var optionIndex = Array.IndexOf(arguments, "-cardBagId");
+        if (optionIndex < 0
+            || optionIndex + 1 >= arguments.Length
+            || !int.TryParse(
+                arguments[optionIndex + 1],
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out var packId)
+            || packId <= 0)
+        {
+            throw new ArgumentException(
+                "CardBag generator: pass a positive pack ID with -cardBagId <number>.");
+        }
+
+        Generate(packId, false, false);
+    }
+
     internal static List<SourcePackInfo> ScanSourcePacks()
     {
         AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
@@ -280,19 +300,77 @@ public static class CardBagPrefabGeneratorEditor
         using (var preview = RawTexture.Load(previewPath))
         {
             ValidatePreviewSize(preview, board.Width, board.Height);
-            var colorCounts = BuildColorCounts(preview.Pixels);
+            var previewColorIndex = BuildColorIndex(preview.Pixels);
+            Dictionary<int, ColorOccurrence> gameBoardColorIndex = null;
+            var useGameBoardReference = false;
             var placements = new List<PiecePlacement>(piecePaths.Count);
             for (var i = 0; i < piecePaths.Count; i++)
             {
                 using (var piece = RawTexture.Load(piecePaths[i]))
                 {
-                    var placement = FindPlacement(preview, piece, colorCounts, piecePaths[i]);
+                    PiecePlacement placement;
+                    string referenceName;
+                    if (useGameBoardReference)
+                    {
+                        placement = FindPlacement(
+                            board,
+                            piece,
+                            gameBoardColorIndex,
+                            piecePaths[i],
+                            "GameBoard fallback");
+                        referenceName = "GameBoard fallback";
+                    }
+                    else
+                    {
+                        try
+                        {
+                            placement = FindPlacement(
+                                preview,
+                                piece,
+                                previewColorIndex,
+                                piecePaths[i],
+                                "Preview");
+                            referenceName = "Preview";
+                        }
+                        catch (InvalidOperationException previewError)
+                        {
+                            if (gameBoardColorIndex == null)
+                            {
+                                gameBoardColorIndex = BuildColorIndex(board.Pixels);
+                            }
+
+                            try
+                            {
+                                placement = FindPlacement(
+                                    board,
+                                    piece,
+                                    gameBoardColorIndex,
+                                    piecePaths[i],
+                                    "GameBoard fallback");
+                                referenceName = "GameBoard fallback";
+                                if (placement.Score >= 0.995f
+                                    && placement.EquivalentBestCount == 1)
+                                {
+                                    useGameBoardReference = true;
+                                }
+                            }
+                            catch (InvalidOperationException gameBoardError)
+                            {
+                                throw new InvalidOperationException(
+                                    $"CardBag generator: could not place {piecePaths[i]} with either " +
+                                    $"reference image. Preview: {previewError.Message} " +
+                                    $"GameBoard: {gameBoardError.Message}");
+                            }
+                        }
+                    }
+
                     placement.AssetPath = piecePaths[i];
                     placement.ObjectName = ResolvePieceObjectName(piecePaths[i], i);
                     placements.Add(placement);
                     Debug.Log(
                         $"CardBag generator: {Path.GetFileName(piecePaths[i])} -> {placement.ObjectName}, " +
-                        $"pixel origin=({placement.OriginX},{placement.OriginY}), match={placement.Score:P2}.");
+                        $"reference={referenceName}, pixel origin=({placement.OriginX},{placement.OriginY}), " +
+                        $"match={placement.Score:P2}.");
                 }
             }
 
@@ -443,16 +521,17 @@ public static class CardBagPrefabGeneratorEditor
     private static PiecePlacement FindPlacement(
         RawTexture board,
         RawTexture piece,
-        Dictionary<int, int> boardColorCounts,
-        string piecePath)
+        Dictionary<int, ColorOccurrence> boardColorIndex,
+        string piecePath,
+        string referenceName)
     {
-        var placement = FindPlacementPass(board, piece, boardColorCounts, true);
+        var placement = FindPlacementPass(board, piece, boardColorIndex, true);
         if (placement.Score >= 0.995f && placement.EquivalentBestCount == 1)
         {
             return placement;
         }
 
-        placement = FindPlacementPass(board, piece, boardColorCounts, false);
+        placement = FindPlacementPass(board, piece, boardColorIndex, false);
         if (placement.EquivalentBestCount > 1)
         {
             throw new InvalidOperationException(
@@ -472,7 +551,7 @@ public static class CardBagPrefabGeneratorEditor
         {
             Debug.LogWarning(
                 $"CardBag generator: accepted {piecePath} at {placement.Score:P2} because its exact RGB anchor " +
-                "occurs only once in the preview. Check the source images if this warning becomes frequent.");
+                $"occurs only once in the {referenceName}. Check the source images if this warning becomes frequent.");
         }
 
         return placement;
@@ -481,7 +560,7 @@ public static class CardBagPrefabGeneratorEditor
     private static PiecePlacement FindPlacementPass(
         RawTexture board,
         RawTexture piece,
-        Dictionary<int, int> boardColorCounts,
+        Dictionary<int, ColorOccurrence> boardColorIndex,
         bool includeTransparent)
     {
         if (piece.Width > board.Width || piece.Height > board.Height)
@@ -495,7 +574,7 @@ public static class CardBagPrefabGeneratorEditor
             return PiecePlacement.Invalid;
         }
 
-        var anchor = SelectAnchor(samples, boardColorCounts);
+        var anchor = SelectAnchor(samples, boardColorIndex);
         if (anchor.BoardOccurrenceCount <= 0)
         {
             return PiecePlacement.Invalid;
@@ -503,7 +582,11 @@ public static class CardBagPrefabGeneratorEditor
 
         var best = PiecePlacement.Invalid;
         var anchorKey = ColorKey(anchor.Color);
-        for (var boardIndex = 0; boardIndex < board.Pixels.Length; boardIndex++)
+        var firstBoardIndex = anchor.BoardOccurrenceCount == 1 ? anchor.BoardFirstIndex : 0;
+        var lastBoardIndex = anchor.BoardOccurrenceCount == 1
+            ? anchor.BoardFirstIndex + 1
+            : board.Pixels.Length;
+        for (var boardIndex = firstBoardIndex; boardIndex < lastBoardIndex; boardIndex++)
         {
             if (ColorKey(board.Pixels[boardIndex]) != anchorKey)
             {
@@ -631,23 +714,26 @@ public static class CardBagPrefabGeneratorEditor
 
     private static PixelSample SelectAnchor(
         List<PixelSample> samples,
-        Dictionary<int, int> boardColorCounts)
+        Dictionary<int, ColorOccurrence> boardColorIndex)
     {
         var best = samples[0];
         var bestCount = int.MaxValue;
+        var bestFirstIndex = -1;
         for (var i = 0; i < samples.Count; i++)
         {
             var sample = samples[i];
-            if (!boardColorCounts.TryGetValue(ColorKey(sample.Color), out var count) || count <= 0)
+            if (!boardColorIndex.TryGetValue(ColorKey(sample.Color), out var occurrence)
+                || occurrence.Count <= 0)
             {
                 continue;
             }
 
-            if (count < bestCount)
+            if (occurrence.Count < bestCount)
             {
                 best = sample;
-                bestCount = count;
-                if (count == 1)
+                bestCount = occurrence.Count;
+                bestFirstIndex = occurrence.FirstIndex;
+                if (occurrence.Count == 1)
                 {
                     break;
                 }
@@ -655,6 +741,7 @@ public static class CardBagPrefabGeneratorEditor
         }
 
         best.BoardOccurrenceCount = bestCount == int.MaxValue ? 0 : bestCount;
+        best.BoardFirstIndex = bestFirstIndex;
         return best;
     }
 
@@ -685,14 +772,25 @@ public static class CardBagPrefabGeneratorEditor
                && Mathf.Abs(left.b - right.b) <= 1;
     }
 
-    private static Dictionary<int, int> BuildColorCounts(Color32[] pixels)
+    private static Dictionary<int, ColorOccurrence> BuildColorIndex(Color32[] pixels)
     {
-        var result = new Dictionary<int, int>();
+        var result = new Dictionary<int, ColorOccurrence>();
         for (var i = 0; i < pixels.Length; i++)
         {
             var key = ColorKey(pixels[i]);
-            result.TryGetValue(key, out var count);
-            result[key] = count + 1;
+            if (result.TryGetValue(key, out var occurrence))
+            {
+                occurrence.Count++;
+                result[key] = occurrence;
+            }
+            else
+            {
+                result.Add(key, new ColorOccurrence
+                {
+                    Count = 1,
+                    FirstIndex = i
+                });
+            }
         }
 
         return result;
@@ -961,6 +1059,7 @@ public static class CardBagPrefabGeneratorEditor
         public readonly int Y;
         public readonly Color32 Color;
         public int BoardOccurrenceCount;
+        public int BoardFirstIndex;
 
         public PixelSample(int x, int y, Color32 color)
         {
@@ -968,7 +1067,14 @@ public static class CardBagPrefabGeneratorEditor
             Y = y;
             Color = color;
             BoardOccurrenceCount = 0;
+            BoardFirstIndex = -1;
         }
+    }
+
+    private struct ColorOccurrence
+    {
+        public int Count;
+        public int FirstIndex;
     }
 
     private sealed class PiecePlacement

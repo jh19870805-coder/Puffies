@@ -1,7 +1,7 @@
 # 当前任务
 
-- 任务：剩余关卡美术切图标准化
-- 状态：已完成下载目录整理和结构验证；尚未导入 Unity
+- 任务：剩余关卡美术切图标准化与 Prefab 生成
+- 状态：CardBag022 生成故障已修复；下载目录中的六个卡包尚未导入 Unity
 - 更新时间：2026-07-29
 
 ## 用户意图
@@ -12,7 +12,7 @@
 - 引导箭头使用 `Assets/UI/GameScene/GameImgArrow.png`，旋转朝向槽位，移动过程中保持宽高比等比放大到原生尺寸。
 - 棋盘目标位置复用提示按钮的绿色滚动虚线；引导期间不显示烘焙的当前组描边。
 - 托盘区域变暗，只突出指定 Piece；指定 Piece 放错后恢复引导，正确放置后继续提示下一个，整包完成后结束并持久化。
-- CardBag 自动生成时，Piece 坐标按完整的 `Previews/CardBagXXX.png` 匹配，不使用已挖洞的 `GameBoard.png` 匹配。
+- CardBag 自动生成时，Piece 坐标优先按完整的 `Previews/CardBagXXX.png` 匹配；Preview 因量化或分割线无法可靠定位时，允许使用保留完整 RGB 的 `GameBoard.png` 受控回退。
 - 新导入 CardBag 的 Preview 分割线或相邻碎片覆盖不得导致正确 Piece 因少量边缘像素不一致而生成失败；低分位置仍须具备唯一性证据。
 - 卡包拆开或确认重玩后，只拼一部分退出，下次选择时显示“玩”而不是“重玩”。
 - 正确拼到棋盘上的 Piece 要持久化，下次进入仍显示在棋盘上并继续剩余拼图。
@@ -45,7 +45,7 @@
 - 引导覆盖 `CardBag001` 的每一个 Piece；当前 Piece 正确吸附后立即提示下一个，跨分组持续到整包完成。
 - 引导完成状态写入 SQLite `AppRecords` 的 `Tutorial/CardBag001AllPiecesCompleted` 记录，不新增数据表。
 - `BuildSync` 新增同步 `Assets/UI/GameScene` 到 `StreamingAssets/UI/GameScene`，确保 Player 可加载箭头资源。
-- CardBag 生成器改为加载 Preview 作为 Piece 像素匹配参考图；GameBoard 只提供 Prefab 的运行时棋盘 Sprite 和画布尺寸。
+- CardBag 生成器默认加载 Preview 作为 Piece 像素匹配参考图；GameBoard 通常只提供运行时棋盘 Sprite 和画布尺寸，Preview 无法通过置信度校验时才作为定位回退。
 - Preview 与 GameBoard 仍强制要求相同尺寸；GameBoard 透明洞区不再需要保留完成图 RGB。
 - Piece 第二轮像素匹配忽略 Alpha 形状边缘内侧 `1px`，排除 Preview 分割线和相邻碎片覆盖造成的边缘干扰。低于 `98%` 时仅允许“分数至少 `90%` 且精确 RGB 锚点在 Preview 中只出现一次”的位置，并记录警告；其余情况继续拒绝生成。
 - Unity 已自动批量生成 `CardBag002`、`003`、`004`、`005`、`006`、`008`、`010`、`011`、`012`、`013`、`014` Prefab；生成结果为 `11` 成功、`0` 失败。
@@ -81,6 +81,9 @@
 - CardBag Prefab 生成器的默认外层背景路径从已删除的 `BgCardBoard.png` 更新为 `BgCardBoard1.png`；现有 Prefab 因资源改名保留原 Meta/GUID，无需重新生成。
 - GameScene 实例化 CardBag 后读取 `GameSettings/Runtime` 的 `UsableOption3`：关闭时从 `UI/BasicUI/BgCardBoard1.png` 加载背景，打开时加载 `BgCardBoard2.png`。运行时创建的 Sprite 和 Texture 在离场时释放。
 - `GameSettingsData.IsHighContrastEnabled` 明确表达 `UsableOption3` 的含义；新建设置显式将高对比设为 `false`。现有 `Toggle3` 绑定与 SQLite 保存链路保持不变。
+- `CardBag022` 的 Preview 是加入青色分割线并经过调色板量化的图片，Piece 原始 RGB 在 Preview 中不存在，首片最佳匹配仅 `23.24%`；生成器现会改用保留完整 RGB 的 GameBoard 定位。
+- GameBoard 回退首片达到至少 `99.5%` 且位置唯一后，同一卡包后续 Piece 统一使用 GameBoard；日志逐片标明 `Preview` 或 `GameBoard fallback`。颜色索引同时记录唯一颜色的像素下标，唯一锚点直接定位而不再扫描整张参考图。
+- 新增通用 Unity 批处理入口 `GenerateCardBagFromCommandLine`，通过 `-cardBagId <number>` 生成指定卡包。
 
 ## 修改文件
 
@@ -98,6 +101,7 @@
 - `Assets/UI/GameScene/GameImgArrow.png`（用户提供）
 - `Assets/Resources/Generated/PuzzleOutlines/CardBag017/Group02.png` 至 `Group05.png`
 - `Assets/Resources/CardBagPrefabs/CardBag002.prefab`、`003`、`004`、`005`、`006`、`008`、`010`、`011`、`012`、`013`、`014`
+- `Assets/Resources/CardBagPrefabs/CardBag022.prefab`
 - `Assets/UI/BasicUI/ImgHand_1.png`、`ImgHand_2.png`、`ImgHand_3.png`（用户新增）
 - `Assets/UI/BasicUI/BgCardBoard1.png`、`BgCardBoard2.png`（用户提供）
 - `specs/spec-driven-development.md`
@@ -128,7 +132,7 @@
 - 未正确吸附不再属于“失败回托盘”；Piece 一旦离开托盘就成为桌面 Piece，保持 `DragScale` 和松手位置。桌面位置只约束在背景可见范围内。
 - 托盘自动补位只移动 `IsOnTray=true` 的后序 Piece；已经放在桌面的 Piece 必须保持位置不变。
 - 回收托盘判定使用运行时 Renderer Bounds：垂直重叠至少 `50%` 且水平重叠大于 `0`；正确槽位吸附优先于托盘回收。
-- 自动生成器不全局降低匹配要求。边缘内缩后仍低于 `98%` 的 Piece 只有在 Preview 中存在唯一精确 RGB 锚点时才允许最低 `90%` 的受控回退，避免重复纹理被误放。
+- 自动生成器不全局降低匹配要求。每张参考图仍执行现有 `98%` 常规阈值与“至少 `90%` 且精确 RGB 锚点唯一”的受控低分规则；Preview 校验失败后才尝试 GameBoard，两边都失败时同时报告原因。
 - 高对比背景在 CardBag 实例化后替换根节点 `Image.sprite`，不制作两套 Prefab、不改变棋盘和 Piece 坐标。设置字段已存在，因此不修改 SQLite 表结构，也不要求删除本地数据。
 
 ## 验证
@@ -168,6 +172,9 @@
 - `dotnet build Puffies.sln --no-restore`（桌面 Piece 50% 托盘回收后）：三个程序集成功，`0` 警告、`0` 错误。
 - `dotnet build Puffies.sln --no-restore`（CardBag 唯一锚点匹配修复后）：三个程序集成功，`0` 警告、`0` 错误。
 - Unity Editor 实际批量生成日志：`generated=11, failed=0`；原失败的 11 个卡包全部创建 Prefab。仅 `CardBag002/piece_013.png` 使用唯一锚点回退，边缘内缩后匹配率由 `95.25%` 提升到 `97.22%`。
+- Unity `2022.3.62f2c1` 批处理实际生成 `CardBag022` 成功：115 张 Piece 均使用 `GameBoard fallback` 达到 `100.00%` 唯一匹配，输出 `created Assets/Resources/CardBagPrefabs/CardBag022.prefab with 115 pieces`，进程返回码为 `0`。
+- `CardBag022/piece_001.png` 定位为纹理底部原点 `(5,3612)`；按 `2600 x 3920` 棋盘和 `395 x 303` Piece 换算后，设计图左上原点仍为 `(5,5)`。重新生成保留了原有 115 个 Piece 布局，并按当前源资源新增 `BoardTitle` 节点。
+- `dotnet build Puffies.sln --no-restore`（CardBag022 Preview/GameBoard 回退与唯一锚点索引后）：三个程序集成功，`0` 警告、`0` 错误。
 - `git diff --check`：通过，仅有既有 LF/CRLF 转换提示。
 - 尚未完成 BoardScale 大于 1、小于 1 和等于 1 三种卡包的 Play Mode 视觉验证。
 
