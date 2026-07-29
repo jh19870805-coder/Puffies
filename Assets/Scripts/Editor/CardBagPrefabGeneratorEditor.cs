@@ -15,7 +15,7 @@ public static class CardBagPrefabGeneratorEditor
     private const string CardBagSourceRoot = "Assets/UI/CardBags";
     private const string PreviewRoot = CardBagSourceRoot + "/Previews";
     private const string PrefabRoot = "Assets/Resources/CardBagPrefabs";
-    private const string RootBackgroundPath = "Assets/UI/BasicUI/BgCardBoard.png";
+    private const string RootBackgroundPath = "Assets/UI/BasicUI/BgCardBoard1.png";
     private const string GameBoardFileName = "GameBoard.png";
     private const string LegacyGameBoardFileName = "background_base.png";
     private const string BoardTitleFileName = "BoardTitle.png";
@@ -93,7 +93,7 @@ public static class CardBagPrefabGeneratorEditor
 
             if (!File.Exists(ToAbsolutePath(RootBackgroundPath)))
             {
-                missing.Add("BgCardBoard.png");
+                missing.Add(Path.GetFileName(RootBackgroundPath));
             }
 
             var pieceCount = CountPieceFiles(directories[i]);

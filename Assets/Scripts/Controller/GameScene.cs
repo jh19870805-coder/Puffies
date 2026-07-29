@@ -59,6 +59,10 @@ public class GameScene : MonoBehaviour
     private const string PieceBgFillObjectName = "PieceBgFill";
     private const string PieceBgObjectName = "PieceBg";
     private const string PieceBgPath = GameDefine.UiRoot + "/BasicUI/ImgMaskBlack.png";
+    private const string StandardCardBoardBackgroundPath =
+        GameDefine.UiRoot + "/BasicUI/BgCardBoard1.png";
+    private const string HighContrastCardBoardBackgroundPath =
+        GameDefine.UiRoot + "/BasicUI/BgCardBoard2.png";
     private const string DraggableGroupRootObjectName = "DraggableGroupPieces";
     private const string ActiveGroupOutlineRootObjectName = "ActiveGroupOutline";
     private const string PlacedPiecesRootObjectName = "PlacedPieces";
@@ -106,6 +110,7 @@ public class GameScene : MonoBehaviour
     private bool _isEntranceAnimating;
     private GameObject _loadedCardBagRoot;
     private RectTransform _loadedCardBagRect;
+    private Sprite _runtimeCardBoardBackgroundSprite;
     private float _configuredBoardScale = DefaultBoardScale;
     private Vector3 _originalCardBagLocalScale = Vector3.one;
     private bool _hasOriginalCardBagLocalScale;
@@ -187,6 +192,7 @@ public class GameScene : MonoBehaviour
         GameCursorUtility.SetDefault();
         StopPiecePlacementTutorial(persistCompletion: false, restoreLevelOutline: false);
         DestroyTutorialArrowSprite();
+        DestroyRuntimeCardBoardBackgroundSprite();
         ClearPieceHint();
         HintDashedOutlineGraphic.ClearPathCache();
     }
@@ -543,6 +549,7 @@ public class GameScene : MonoBehaviour
         var parent = canvas != null ? canvas.transform : null;
         _loadedCardBagRoot = Instantiate(prefab, parent, false);
         _loadedCardBagRoot.name = prefab.name;
+        ApplyCardBoardBackground();
 
         var rectTransform = _loadedCardBagRoot.GetComponent<RectTransform>();
         if (rectTransform != null)
@@ -558,6 +565,51 @@ public class GameScene : MonoBehaviour
 
         _board.IsBoardAndGroovesInitialized = false;
         Debug.Log($"GameScene: loaded card bag prefab Resources/{resourcePath}.");
+    }
+
+    private void ApplyCardBoardBackground()
+    {
+        var backgroundImage = _loadedCardBagRoot != null
+            ? _loadedCardBagRoot.GetComponent<Image>()
+            : null;
+        if (backgroundImage == null)
+        {
+            Debug.LogWarning("GameScene: loaded CardBag root has no background Image.");
+            return;
+        }
+
+        var settings = GameSettingsUtility.GetSettings();
+        var useHighContrast = settings != null && settings.IsHighContrastEnabled;
+        var backgroundPath = useHighContrast
+            ? HighContrastCardBoardBackgroundPath
+            : StandardCardBoardBackgroundPath;
+        var sprite = GameCommonUtility.LoadSpriteByPath(backgroundPath, PixelsPerUnit);
+        if (sprite == null)
+        {
+            Debug.LogWarning(
+                $"GameScene: failed to load CardBag background {backgroundPath}; keeping prefab background.");
+            return;
+        }
+
+        DestroyRuntimeCardBoardBackgroundSprite();
+        _runtimeCardBoardBackgroundSprite = sprite;
+        backgroundImage.sprite = sprite;
+    }
+
+    private void DestroyRuntimeCardBoardBackgroundSprite()
+    {
+        if (_runtimeCardBoardBackgroundSprite == null)
+        {
+            return;
+        }
+
+        var texture = _runtimeCardBoardBackgroundSprite.texture;
+        Destroy(_runtimeCardBoardBackgroundSprite);
+        _runtimeCardBoardBackgroundSprite = null;
+        if (texture != null)
+        {
+            Destroy(texture);
+        }
     }
 
     private void ApplyConfiguredBoardScale()

@@ -590,6 +590,7 @@ public sealed class GameSettingsData
 
     public bool IsLevelOutlineEnabled => UsableOption1;
     public bool IsStickerOutlineEnabled => UsableOption2;
+    public bool IsHighContrastEnabled => UsableOption3;
 }
 
 public static class GameSettingsUtility
@@ -771,7 +772,9 @@ public static class GameSettingsUtility
             MusicVolume = 1f,
             EffectVolume = 1f,
             IsWindowed = !Screen.fullScreen,
-            UsableOption1 = true
+            UsableOption1 = true,
+            UsableOption2 = false,
+            UsableOption3 = false
         };
     }
 

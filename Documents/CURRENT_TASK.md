@@ -1,7 +1,7 @@
 # 当前任务
 
-- 任务：CardBag 自动生成修复；GameScene 首次 Piece 放置新手引导
-- 状态：11 个新 CardBag 已生成成功；新手引导等待 Unity Editor Play Mode 视觉验证
+- 任务：GameScene 高对比棋盘背景；CardBag 自动生成与首次 Piece 放置新手引导
+- 状态：高对比背景代码已实现并编译通过；等待 Unity Editor Play Mode 视觉验证
 - 更新时间：2026-07-29
 
 ## 用户意图
@@ -25,6 +25,7 @@
 - GameScene 鼠标悬停在可拖贴纸上时切换为 `ImgHand_2.png`；按下左键并拿起贴纸后切换为 `ImgHand_3.png`。
 - 分阶段描边不得在当前组与已完成组交界处重复绘制已由前序阶段显示过的线段。
 - 拼图 Piece 从托盘拿起后可以放在桌面；未命中正确槽位时停在松手位置，不再返回托盘。
+- CardBag 棋盘外层背景默认使用 `BgCardBoard1.png`；设置页高对比开关打开时使用 `BgCardBoard2.png`，关闭时恢复 `BgCardBoard1.png`，初始化默认关闭并持久化选择。
 
 ## 工作记录
 
@@ -71,6 +72,9 @@
 - `DraggablePieceState` 增加 `IsOnTray`。Piece 首次离开托盘后保持棋盘目标缩放，未吸附时停在桌面并限制在背景可见范围内，后续可以从该位置再次拿起。
 - Piece 首次离开托盘时继续触发现有后序 X 补位；桌面 Piece 不再参与托盘计数、布局或后续补位。未吸附松手时空托盘恢复为桌面 Piece 的回收目标。
 - Piece 与托盘水平方向有交集且垂直重叠达到 Piece 当前高度的 `50%` 时，松手后切回 `TrayScale` 并与其他托盘 Piece 按编号自动重排。
+- CardBag Prefab 生成器的默认外层背景路径从已删除的 `BgCardBoard.png` 更新为 `BgCardBoard1.png`；现有 Prefab 因资源改名保留原 Meta/GUID，无需重新生成。
+- GameScene 实例化 CardBag 后读取 `GameSettings/Runtime` 的 `UsableOption3`：关闭时从 `UI/BasicUI/BgCardBoard1.png` 加载背景，打开时加载 `BgCardBoard2.png`。运行时创建的 Sprite 和 Texture 在离场时释放。
+- `GameSettingsData.IsHighContrastEnabled` 明确表达 `UsableOption3` 的含义；新建设置显式将高对比设为 `false`。现有 `Toggle3` 绑定与 SQLite 保存链路保持不变。
 
 ## 修改文件
 
@@ -89,6 +93,7 @@
 - `Assets/Resources/Generated/PuzzleOutlines/CardBag017/Group02.png` 至 `Group05.png`
 - `Assets/Resources/CardBagPrefabs/CardBag002.prefab`、`003`、`004`、`005`、`006`、`008`、`010`、`011`、`012`、`013`、`014`
 - `Assets/UI/BasicUI/ImgHand_1.png`、`ImgHand_2.png`、`ImgHand_3.png`（用户新增）
+- `Assets/UI/BasicUI/BgCardBoard1.png`、`BgCardBoard2.png`（用户提供）
 - `Documents/CURRENT_TASK.md`
 - `Documents/GAME_DESIGN_REQUIREMENTS.md`
 - `Documents/PROJECT_CONTEXT.md`
@@ -116,11 +121,15 @@
 - 托盘自动补位只移动 `IsOnTray=true` 的后序 Piece；已经放在桌面的 Piece 必须保持位置不变。
 - 回收托盘判定使用运行时 Renderer Bounds：垂直重叠至少 `50%` 且水平重叠大于 `0`；正确槽位吸附优先于托盘回收。
 - 自动生成器不全局降低匹配要求。边缘内缩后仍低于 `98%` 的 Piece 只有在 Preview 中存在唯一精确 RGB 锚点时才允许最低 `90%` 的受控回退，避免重复纹理被误放。
+- 高对比背景在 CardBag 实例化后替换根节点 `Image.sprite`，不制作两套 Prefab、不改变棋盘和 Piece 坐标。设置字段已存在，因此不修改 SQLite 表结构，也不要求删除本地数据。
 
 ## 验证
 
 - `dotnet build Puffies.sln --no-restore`（首次 Piece 放置新手引导）：三个程序集成功，`0` 警告、`0` 错误。
 - `git diff --check`：通过，仅有既有 LF/CRLF 转换提示。
+- `BgCardBoard1.png` 与 `BgCardBoard2.png` 均为 `512 x 512`，可在同一 CardBag 根节点 RectTransform 上直接替换。
+- `dotnet build Puffies.sln --no-restore`（高对比棋盘背景接入后）：三个程序集成功，`0` 警告、`0` 错误。
+- `git diff --check`（高对比棋盘背景接入后）：通过，仅有既有 LF/CRLF 转换提示。
 - 已确认箭头源图为 `122 x 271`，有效像素范围基本覆盖整张图片，方向为向上。
 - 尚未完成 Unity Play Mode 中箭头弯曲形态、目标副本层级、托盘遮罩和错误放置恢复的视觉验证。
 - `dotnet build Puffies.sln --no-restore`（CardBag 改用 Preview 匹配 Piece）：三个程序集成功，`0` 警告、`0` 错误。
@@ -155,12 +164,13 @@
 
 ### 本次优先
 
-1. 在 Prefab Mode 抽查 `CardBag002` 和最小碎片较多的 `CardBag006`，确认 Piece 槽位与 Preview 位置一致；随后按实际玩法对顺序节点完成分组命名并烘焙描边。
-2. 在 Unity 执行 `Assets -> Refresh`，进入一个从未开始的 `CardBag001`，确认入场完成后才显示引导。
-3. 确认托盘整体变暗、指定 Piece 保持正常亮度、棋盘槽位显示绿色跑马灯，箭头从 Piece 顶部沿弯曲路径逐步画向槽位。
-4. 尝试点击其他 Piece，确认不能拿起；将目标 Piece 放错到托盘或桌面，确认引导按当前位置恢复。
-5. 将目标 Piece 正确吸附，确认立即切换到下一 Piece；完成分组后继续提示下一组，整包完成时引导结束并恢复描边。
-6. 整包完成后重新进入，确认不再显示引导；已有部分进度的 `CardBag001` 从当前未完成 Piece 继续，其他 BagId 和历史完成的 `CardBag001` 不触发。
+1. 在 MainScene 设置页确认 `Toggle3` 首次为关闭；关闭时进入任意 CardBag 验证外层背景为较浅的 `BgCardBoard1.png`，返回后打开高对比再进入，确认切换为较深的 `BgCardBoard2.png`；重启后确认选择保持。
+2. 在 Prefab Mode 抽查 `CardBag002` 和最小碎片较多的 `CardBag006`，确认 Piece 槽位与 Preview 位置一致；随后按实际玩法对顺序节点完成分组命名并烘焙描边。
+3. 在 Unity 执行 `Assets -> Refresh`，进入一个从未开始的 `CardBag001`，确认入场完成后才显示引导。
+4. 确认托盘整体变暗、指定 Piece 保持正常亮度、棋盘槽位显示绿色跑马灯，箭头从 Piece 顶部沿弯曲路径逐步画向槽位。
+5. 尝试点击其他 Piece，确认不能拿起；将目标 Piece 放错到托盘或桌面，确认引导按当前位置恢复。
+6. 将目标 Piece 正确吸附，确认立即切换到下一 Piece；完成分组后继续提示下一组，整包完成时引导结束并恢复描边。
+7. 整包完成后重新进入，确认不再显示引导；已有部分进度的 `CardBag001` 从当前未完成 Piece 继续，其他 BagId 和历史完成的 `CardBag001` 不触发。
 
 ### 既有回归
 
@@ -181,4 +191,4 @@
 
 ## 恢复提示
 
-继续 Puffies 当前任务。先阅读 `AGENTS.md`、`Documents/WORKFLOW.md` 和 `Documents/CURRENT_TASK.md`；11 个新 CardBag 已生成成功，先抽查 `CardBag002/006` 的 Piece 槽位，再在 Unity Play Mode 验证首次 Piece 放置新手引导。
+继续 Puffies 当前任务。先阅读 `AGENTS.md`、`Documents/WORKFLOW.md` 和 `Documents/CURRENT_TASK.md`；先验证设置页 `Toggle3` 对 `BgCardBoard1/2` 的切换与持久化，再抽查新 CardBag 槽位和首次 Piece 放置新手引导。
