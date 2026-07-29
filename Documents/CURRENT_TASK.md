@@ -1,11 +1,13 @@
 # 当前任务
 
-- 任务：GameScene 高对比棋盘背景；CardBag 自动生成与首次 Piece 放置新手引导
-- 状态：高对比背景代码已实现并编译通过；等待 Unity Editor Play Mode 视觉验证
+- 任务：剩余关卡美术切图标准化
+- 状态：已完成下载目录整理和结构验证；尚未导入 Unity
 - 更新时间：2026-07-29
 
 ## 用户意图
 
+- 将 `D:\360极速浏览器X下载\剩下关卡的切图` 中的数字目录统一为三位编号的 `CardBagXXX`。
+- 将预览图统一放在下载根目录，将 GameBoard、BoardTitle 和 smooth Piece 整理成对应 CardBag 的扁平目录结构。
 - 参考 `9696192e8e16c9aca4ab142437f24bb3.mp4` 实现首次拼图引导的路径、节奏和交互。
 - 引导箭头使用 `Assets/UI/GameScene/GameImgArrow.png`，旋转朝向槽位，移动过程中保持宽高比等比放大到原生尺寸。
 - 棋盘目标位置复用提示按钮的绿色滚动虚线；引导期间不显示烘焙的当前组描边。
@@ -29,6 +31,10 @@
 
 ## 工作记录
 
+- 已整理 `015、016、018、019、020、021` 六个关卡：一级目录分别为 `CardBag015`、`CardBag016`、`CardBag018`、`CardBag019`、`CardBag020`、`CardBag021`。
+- 每包 `preview.png` 已重命名为 `CardBagXXX.png`，随后移到下载根目录；`smooth/background_base.png` 已移动并重命名为 `GameBoard.png`；其余 `piece_###.png` 已从 `smooth` 移到 CardBag 一级目录；空 `smooth` 已删除。
+- 根目录 `PackTitleXXX.png` 已移动到对应 CardBag 并重命名为 `BoardTitle.png`。
+- 本次没有复制资源到 Unity 工程，没有生成或覆盖 CardBag Prefab。
 - 新手引导限定为从未完成过引导且历史未完成的 `CardBag001`；已有部分进度时从当前未完成 Piece 继续。正常拆包时等待 GameScene 入场动画结束，直接打开场景时立即启动。
 - 目标固定为当前组编号最小的未完成 Piece。引导期间其他 Piece 不响应悬停和拖拽，提示按钮暂时禁用。
 - 运行时创建顶层引导 Canvas：托盘半透明遮罩、目标 Piece 副本、中文操作文案和箭头都不修改场景 Prefab。
@@ -94,6 +100,8 @@
 - `Assets/Resources/CardBagPrefabs/CardBag002.prefab`、`003`、`004`、`005`、`006`、`008`、`010`、`011`、`012`、`013`、`014`
 - `Assets/UI/BasicUI/ImgHand_1.png`、`ImgHand_2.png`、`ImgHand_3.png`（用户新增）
 - `Assets/UI/BasicUI/BgCardBoard1.png`、`BgCardBoard2.png`（用户提供）
+- `specs/spec-driven-development.md`
+- `D:\360极速浏览器X下载\剩下关卡的切图\CardBag015`、`016`、`018`、`019`、`020`、`021`（外部美术资源整理）
 - `Documents/CURRENT_TASK.md`
 - `Documents/GAME_DESIGN_REQUIREMENTS.md`
 - `Documents/PROJECT_CONTEXT.md`
@@ -125,6 +133,9 @@
 
 ## 验证
 
+- 剩余关卡切图迁移前无覆盖预检通过：六个目录共 `201` 张 smooth 图片和 `6` 张标题图，源文件完整且目标均不存在。
+- 迁移后结构验证通过：六包均包含 `CardBagXXX.png`、`GameBoard.png`、`BoardTitle.png`；Piece 数量分别为 `41、28、35、26、31、34`，合计 `195`。
+- 根目录没有残留数字目录、`PackTitleXXX.png` 或其他文件；六包没有残留 `smooth`、`preview.png`、`background_base.png` 或非预期文件。
 - `dotnet build Puffies.sln --no-restore`（首次 Piece 放置新手引导）：三个程序集成功，`0` 警告、`0` 错误。
 - `git diff --check`：通过，仅有既有 LF/CRLF 转换提示。
 - `BgCardBoard1.png` 与 `BgCardBoard2.png` 均为 `512 x 512`，可在同一 CardBag 根节点 RectTransform 上直接替换。
@@ -164,13 +175,15 @@
 
 ### 本次优先
 
-1. 在 MainScene 设置页确认 `Toggle3` 首次为关闭；关闭时进入任意 CardBag 验证外层背景为较浅的 `BgCardBoard1.png`，返回后打开高对比再进入，确认切换为较深的 `BgCardBoard2.png`；重启后确认选择保持。
-2. 在 Prefab Mode 抽查 `CardBag002` 和最小碎片较多的 `CardBag006`，确认 Piece 槽位与 Preview 位置一致；随后按实际玩法对顺序节点完成分组命名并烘焙描边。
-3. 在 Unity 执行 `Assets -> Refresh`，进入一个从未开始的 `CardBag001`，确认入场完成后才显示引导。
-4. 确认托盘整体变暗、指定 Piece 保持正常亮度、棋盘槽位显示绿色跑马灯，箭头从 Piece 顶部沿弯曲路径逐步画向槽位。
-5. 尝试点击其他 Piece，确认不能拿起；将目标 Piece 放错到托盘或桌面，确认引导按当前位置恢复。
-6. 将目标 Piece 正确吸附，确认立即切换到下一 Piece；完成分组后继续提示下一组，整包完成时引导结束并恢复描边。
-7. 整包完成后重新进入，确认不再显示引导；已有部分进度的 `CardBag001` 从当前未完成 Piece 继续，其他 BagId 和历史完成的 `CardBag001` 不触发。
+1. 用户确认后，将六个已标准化 CardBag 从下载目录导入 `Assets/UI/CardBags/`；导入前检查工程中同名目录，避免覆盖现有资源。
+2. 导入完成后使用现有批量生成器创建 Prefab，再按实际玩法完成 Piece 分组命名和描边烘焙。
+3. 在 MainScene 设置页确认 `Toggle3` 首次为关闭；关闭时进入任意 CardBag 验证外层背景为较浅的 `BgCardBoard1.png`，返回后打开高对比再进入，确认切换为较深的 `BgCardBoard2.png`；重启后确认选择保持。
+4. 在 Prefab Mode 抽查 `CardBag002` 和最小碎片较多的 `CardBag006`，确认 Piece 槽位与 Preview 位置一致；随后按实际玩法对顺序节点完成分组命名并烘焙描边。
+5. 在 Unity 执行 `Assets -> Refresh`，进入一个从未开始的 `CardBag001`，确认入场完成后才显示引导。
+6. 确认托盘整体变暗、指定 Piece 保持正常亮度、棋盘槽位显示绿色跑马灯，箭头从 Piece 顶部沿弯曲路径逐步画向槽位。
+7. 尝试点击其他 Piece，确认不能拿起；将目标 Piece 放错到托盘或桌面，确认引导按当前位置恢复。
+8. 将目标 Piece 正确吸附，确认立即切换到下一 Piece；完成分组后继续提示下一组，整包完成时引导结束并恢复描边。
+9. 整包完成后重新进入，确认不再显示引导；已有部分进度的 `CardBag001` 从当前未完成 Piece 继续，其他 BagId 和历史完成的 `CardBag001` 不触发。
 
 ### 既有回归
 
@@ -191,4 +204,4 @@
 
 ## 恢复提示
 
-继续 Puffies 当前任务。先阅读 `AGENTS.md`、`Documents/WORKFLOW.md` 和 `Documents/CURRENT_TASK.md`；先验证设置页 `Toggle3` 对 `BgCardBoard1/2` 的切换与持久化，再抽查新 CardBag 槽位和首次 Piece 放置新手引导。
+继续 Puffies 当前任务。先阅读 `AGENTS.md`、`Documents/WORKFLOW.md` 和 `Documents/CURRENT_TASK.md`；下载目录中的六个剩余 CardBag 已完成标准化但尚未导入 Unity，下一步需先确认是否复制到 `Assets/UI/CardBags/`，再运行批量 Prefab 生成流程。
