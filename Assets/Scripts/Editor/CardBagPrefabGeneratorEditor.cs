@@ -22,6 +22,8 @@ public static class CardBagPrefabGeneratorEditor
     private const string PendingRequestRelativePath = "Temp/PuffiesCardBagGenerator.request";
     private const byte OpaqueThreshold = 128;
     private const int MaxVerificationSamples = 512;
+    private const float MinimumPixelMatch = 0.98f;
+    private const float MinimumUniqueAnchorMatch = 0.90f;
     private static readonly Regex NumberedPieceRegex = new Regex(
         @"^piece_(\d+)$",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
@@ -184,7 +186,25 @@ public static class CardBagPrefabGeneratorEditor
 
         var request = File.ReadAllText(requestPath).Trim();
         File.Delete(requestPath);
-        if (!int.TryParse(request, NumberStyles.Integer, CultureInfo.InvariantCulture, out var packId))
+        var packIds = new List<int>();
+        var requestParts = request.Split(',');
+        for (var i = 0; i < requestParts.Length; i++)
+        {
+            if (!int.TryParse(
+                    requestParts[i].Trim(),
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out var packId)
+                || packId <= 0)
+            {
+                Debug.LogError($"CardBag generator: invalid request '{request}'.");
+                return;
+            }
+
+            packIds.Add(packId);
+        }
+
+        if (packIds.Count == 0)
         {
             Debug.LogError($"CardBag generator: invalid request '{request}'.");
             return;
@@ -192,7 +212,14 @@ public static class CardBagPrefabGeneratorEditor
 
         try
         {
-            Generate(packId, true, true);
+            if (packIds.Count == 1)
+            {
+                Generate(packIds[0], true, true);
+            }
+            else
+            {
+                GenerateBatch(packIds);
+            }
         }
         catch (Exception exception)
         {
@@ -420,23 +447,32 @@ public static class CardBagPrefabGeneratorEditor
         string piecePath)
     {
         var placement = FindPlacementPass(board, piece, boardColorCounts, true);
-        if (placement.Score >= 0.995f)
+        if (placement.Score >= 0.995f && placement.EquivalentBestCount == 1)
         {
             return placement;
         }
 
         placement = FindPlacementPass(board, piece, boardColorCounts, false);
-        if (placement.Score < 0.98f)
-        {
-            throw new InvalidOperationException(
-                $"CardBag generator: could not place {piecePath}. Best pixel match was {placement.Score:P2}.");
-        }
-
         if (placement.EquivalentBestCount > 1)
         {
             throw new InvalidOperationException(
                 $"CardBag generator: {piecePath} has {placement.EquivalentBestCount} equally good positions. " +
                 "Keep transparent crop RGB data, provide layout data, or rename/adjust the source image.");
+        }
+
+        if (placement.Score < MinimumPixelMatch
+            && (placement.Score < MinimumUniqueAnchorMatch || placement.AnchorBoardOccurrenceCount != 1))
+        {
+            throw new InvalidOperationException(
+                $"CardBag generator: could not place {piecePath}. Best pixel match was {placement.Score:P2}, " +
+                $"anchor occurrences={placement.AnchorBoardOccurrenceCount}.");
+        }
+
+        if (placement.Score < MinimumPixelMatch)
+        {
+            Debug.LogWarning(
+                $"CardBag generator: accepted {piecePath} at {placement.Score:P2} because its exact RGB anchor " +
+                "occurs only once in the preview. Check the source images if this warning becomes frequent.");
         }
 
         return placement;
@@ -495,7 +531,8 @@ public static class CardBagPrefabGeneratorEditor
                     Width = piece.Width,
                     Height = piece.Height,
                     Score = score,
-                    EquivalentBestCount = 1
+                    EquivalentBestCount = 1,
+                    AnchorBoardOccurrenceCount = anchor.BoardOccurrenceCount
                 };
             }
             else if (Mathf.Abs(score - best.Score) <= 0.00001f)
@@ -517,7 +554,8 @@ public static class CardBagPrefabGeneratorEditor
             for (var x = 0; x < piece.Width; x += step)
             {
                 var color = piece.Pixels[y * piece.Width + x];
-                if (includeTransparent || color.a >= OpaqueThreshold)
+                if (includeTransparent
+                    || color.a >= OpaqueThreshold && IsOpaqueInterior(piece, x, y))
                 {
                     samples.Add(new PixelSample(x, y, color));
                 }
@@ -532,9 +570,24 @@ public static class CardBagPrefabGeneratorEditor
                 for (var x = 0; x < piece.Width; x++)
                 {
                     var color = piece.Pixels[y * piece.Width + x];
-                    if (color.a >= OpaqueThreshold)
+                    if (color.a >= OpaqueThreshold && IsOpaqueInterior(piece, x, y))
                     {
                         samples.Add(new PixelSample(x, y, color));
+                    }
+                }
+            }
+
+            if (samples.Count == 0)
+            {
+                for (var y = 0; y < piece.Height; y++)
+                {
+                    for (var x = 0; x < piece.Width; x++)
+                    {
+                        var color = piece.Pixels[y * piece.Width + x];
+                        if (color.a >= OpaqueThreshold)
+                        {
+                            samples.Add(new PixelSample(x, y, color));
+                        }
                     }
                 }
             }
@@ -553,6 +606,27 @@ public static class CardBagPrefabGeneratorEditor
         }
 
         return samples;
+    }
+
+    private static bool IsOpaqueInterior(RawTexture piece, int x, int y)
+    {
+        if (x <= 0 || y <= 0 || x >= piece.Width - 1 || y >= piece.Height - 1)
+        {
+            return false;
+        }
+
+        for (var offsetY = -1; offsetY <= 1; offsetY++)
+        {
+            for (var offsetX = -1; offsetX <= 1; offsetX++)
+            {
+                if (piece.Pixels[(y + offsetY) * piece.Width + x + offsetX].a < OpaqueThreshold)
+                {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 
     private static PixelSample SelectAnchor(
@@ -909,6 +983,7 @@ public static class CardBagPrefabGeneratorEditor
         public int Height;
         public float Score;
         public int EquivalentBestCount;
+        public int AnchorBoardOccurrenceCount;
     }
 }
 

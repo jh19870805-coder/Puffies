@@ -283,6 +283,7 @@ effect（调试）：CardFx 预览；菜单 Puffies -> Preview CardFx Effects
 - `BoardTitle.png` 是标准资源但采用软校验。缺失时列表显示警告，仍允许生成不含 `BoardTitle` 节点的 Prefab。
 - `UI/CardBags/Previews/CardBagNNN.png` 是完整拼图和 Piece 定位参考图，不作为运行时 Prefab Sprite；它必须与 `GameBoard.png` 画布尺寸一致。
 - 生成器利用 Piece PNG 保留的原始裁切 RGB 在 Preview 完整图中做像素匹配，Piece Alpha 继续作为运行时形状。`GameBoard.png` 的透明洞区无需保留完成图 RGB。
+- 第二轮不透明像素匹配排除 Alpha 轮廓内侧 `1px`，避免 Preview 分割线或相邻 Piece 覆盖导致正确位置被边缘像素否决。常规最低匹配率为 `98%`；低于该值时，只有匹配率至少 `90%` 且所选精确 RGB 锚点在 Preview 中唯一才允许生成并记录警告，重复锚点或低于 `90%` 继续报错。
 - `PieceNN.png` 或 `PiecesNN.png` 中的 `NN` 直接成为对象编号；未改名的 `piece_###.png` 依次生成 `Piece001`、`Piece002` 等未分组对象，不自动推断游戏分组。
 - 生成结构为 `CardBagNNN/GameBoard/BoardTitle` 和 `CardBagNNN/GameBoard/PieceNN`；棋盘标题与全部碎片统一归属 `GameBoard`。
 - 窗口默认只选择资源完整且尚无 Prefab 的卡包。选择已有 Prefab 时显示 `Overwrite`，执行前必须确认；覆盖会替换已有层级和手工 Piece 分组。

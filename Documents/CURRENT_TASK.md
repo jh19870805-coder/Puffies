@@ -1,8 +1,8 @@
 # 当前任务
 
-- 任务：GameScene 首次 Piece 放置新手引导
-- 状态：代码已实现，等待 Unity Editor Play Mode 视觉验证
-- 更新时间：2026-07-28
+- 任务：CardBag 自动生成修复；GameScene 首次 Piece 放置新手引导
+- 状态：11 个新 CardBag 已生成成功；新手引导等待 Unity Editor Play Mode 视觉验证
+- 更新时间：2026-07-29
 
 ## 用户意图
 
@@ -11,6 +11,7 @@
 - 棋盘目标位置复用提示按钮的绿色滚动虚线；引导期间不显示烘焙的当前组描边。
 - 托盘区域变暗，只突出指定 Piece；指定 Piece 放错后恢复引导，正确放置后继续提示下一个，整包完成后结束并持久化。
 - CardBag 自动生成时，Piece 坐标按完整的 `Previews/CardBagXXX.png` 匹配，不使用已挖洞的 `GameBoard.png` 匹配。
+- 新导入 CardBag 的 Preview 分割线或相邻碎片覆盖不得导致正确 Piece 因少量边缘像素不一致而生成失败；低分位置仍须具备唯一性证据。
 - 卡包拆开或确认重玩后，只拼一部分退出，下次选择时显示“玩”而不是“重玩”。
 - 正确拼到棋盘上的 Piece 要持久化，下次进入仍显示在棋盘上并继续剩余拼图。
 - MainScene 卡包选择按钮的 `Play` 改为“玩”。
@@ -39,6 +40,8 @@
 - `BuildSync` 新增同步 `Assets/UI/GameScene` 到 `StreamingAssets/UI/GameScene`，确保 Player 可加载箭头资源。
 - CardBag 生成器改为加载 Preview 作为 Piece 像素匹配参考图；GameBoard 只提供 Prefab 的运行时棋盘 Sprite 和画布尺寸。
 - Preview 与 GameBoard 仍强制要求相同尺寸；GameBoard 透明洞区不再需要保留完成图 RGB。
+- Piece 第二轮像素匹配忽略 Alpha 形状边缘内侧 `1px`，排除 Preview 分割线和相邻碎片覆盖造成的边缘干扰。低于 `98%` 时仅允许“分数至少 `90%` 且精确 RGB 锚点在 Preview 中只出现一次”的位置，并记录警告；其余情况继续拒绝生成。
+- Unity 已自动批量生成 `CardBag002`、`003`、`004`、`005`、`006`、`008`、`010`、`011`、`012`、`013`、`014` Prefab；生成结果为 `11` 成功、`0` 失败。
 - SQLite 新增 `CardPackPuzzleProgress` 表，按 `PackId` 保存去重、排序后的 Piece 数字编号 JSON 和更新时间；记录存在即表示有当前可继续的拼图会话。
 - GameScene 进入时确保会话存在并加载已放置 Piece；已完成 Piece 直接恢复为 Prefab 原始 `Image`，从首个未完成分组创建剩余可拖 Piece。
 - 每次正确吸附先即时保存 Piece 编号，再更新棋盘显示和切组；整包完成且 `Completed` 保存成功后清除会话。
@@ -84,6 +87,7 @@
 - `Assets/Scripts/Editor/BuildSync.cs`
 - `Assets/UI/GameScene/GameImgArrow.png`（用户提供）
 - `Assets/Resources/Generated/PuzzleOutlines/CardBag017/Group02.png` 至 `Group05.png`
+- `Assets/Resources/CardBagPrefabs/CardBag002.prefab`、`003`、`004`、`005`、`006`、`008`、`010`、`011`、`012`、`013`、`014`
 - `Assets/UI/BasicUI/ImgHand_1.png`、`ImgHand_2.png`、`ImgHand_3.png`（用户新增）
 - `Documents/CURRENT_TASK.md`
 - `Documents/GAME_DESIGN_REQUIREMENTS.md`
@@ -111,6 +115,7 @@
 - 未正确吸附不再属于“失败回托盘”；Piece 一旦离开托盘就成为桌面 Piece，保持 `DragScale` 和松手位置。桌面位置只约束在背景可见范围内。
 - 托盘自动补位只移动 `IsOnTray=true` 的后序 Piece；已经放在桌面的 Piece 必须保持位置不变。
 - 回收托盘判定使用运行时 Renderer Bounds：垂直重叠至少 `50%` 且水平重叠大于 `0`；正确槽位吸附优先于托盘回收。
+- 自动生成器不全局降低匹配要求。边缘内缩后仍低于 `98%` 的 Piece 只有在 Preview 中存在唯一精确 RGB 锚点时才允许最低 `90%` 的受控回退，避免重复纹理被误放。
 
 ## 验证
 
@@ -141,17 +146,21 @@
 - `dotnet build Puffies.sln --no-restore`（分阶段描边去重后）：三个程序集成功，`0` 警告、`0` 错误。
 - `dotnet build Puffies.sln --no-restore`（Piece 桌面放置后）：三个程序集成功，`0` 警告、`0` 错误。
 - `dotnet build Puffies.sln --no-restore`（桌面 Piece 50% 托盘回收后）：三个程序集成功，`0` 警告、`0` 错误。
+- `dotnet build Puffies.sln --no-restore`（CardBag 唯一锚点匹配修复后）：三个程序集成功，`0` 警告、`0` 错误。
+- Unity Editor 实际批量生成日志：`generated=11, failed=0`；原失败的 11 个卡包全部创建 Prefab。仅 `CardBag002/piece_013.png` 使用唯一锚点回退，边缘内缩后匹配率由 `95.25%` 提升到 `97.22%`。
+- `git diff --check`：通过，仅有既有 LF/CRLF 转换提示。
 - 尚未完成 BoardScale 大于 1、小于 1 和等于 1 三种卡包的 Play Mode 视觉验证。
 
 ## 下一步
 
 ### 本次优先
 
-1. 在 Unity 执行 `Assets -> Refresh`，进入一个从未开始的 `CardBag001`，确认入场完成后才显示引导。
-2. 确认托盘整体变暗、指定 Piece 保持正常亮度、棋盘槽位显示绿色跑马灯，箭头从 Piece 顶部沿弯曲路径逐步画向槽位。
-3. 尝试点击其他 Piece，确认不能拿起；将目标 Piece 放错到托盘或桌面，确认引导按当前位置恢复。
-4. 将目标 Piece 正确吸附，确认立即切换到下一 Piece；完成分组后继续提示下一组，整包完成时引导结束并恢复描边。
-5. 整包完成后重新进入，确认不再显示引导；已有部分进度的 `CardBag001` 从当前未完成 Piece 继续，其他 BagId 和历史完成的 `CardBag001` 不触发。
+1. 在 Prefab Mode 抽查 `CardBag002` 和最小碎片较多的 `CardBag006`，确认 Piece 槽位与 Preview 位置一致；随后按实际玩法对顺序节点完成分组命名并烘焙描边。
+2. 在 Unity 执行 `Assets -> Refresh`，进入一个从未开始的 `CardBag001`，确认入场完成后才显示引导。
+3. 确认托盘整体变暗、指定 Piece 保持正常亮度、棋盘槽位显示绿色跑马灯，箭头从 Piece 顶部沿弯曲路径逐步画向槽位。
+4. 尝试点击其他 Piece，确认不能拿起；将目标 Piece 放错到托盘或桌面，确认引导按当前位置恢复。
+5. 将目标 Piece 正确吸附，确认立即切换到下一 Piece；完成分组后继续提示下一组，整包完成时引导结束并恢复描边。
+6. 整包完成后重新进入，确认不再显示引导；已有部分进度的 `CardBag001` 从当前未完成 Piece 继续，其他 BagId 和历史完成的 `CardBag001` 不触发。
 
 ### 既有回归
 
@@ -172,4 +181,4 @@
 
 ## 恢复提示
 
-继续 Puffies 当前任务。先阅读 `AGENTS.md`、`Documents/WORKFLOW.md` 和 `Documents/CURRENT_TASK.md`；首次 Piece 放置新手引导代码已实现，下一步是在 Unity Play Mode 验证遮罩、目标层级、箭头路径节奏、错误放置恢复和完成后不再播放。
+继续 Puffies 当前任务。先阅读 `AGENTS.md`、`Documents/WORKFLOW.md` 和 `Documents/CURRENT_TASK.md`；11 个新 CardBag 已生成成功，先抽查 `CardBag002/006` 的 Piece 槽位，再在 Unity Play Mode 验证首次 Piece 放置新手引导。
