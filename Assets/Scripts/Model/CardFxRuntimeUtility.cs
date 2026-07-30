@@ -221,7 +221,7 @@ public static class CardFxRuntimeUtility
         EnsureWorldFxShader();
         var shader = sWorldFxShader
             ?? Shader.Find("URP/Effect/URP_UI_FX_Common")
-            ?? Shader.Find("Universal Render Pipeline/Particles/Unlit");
+            ?? Shader.Find("Particles/Standard Unlit");
         if (shader == null)
         {
             return null;

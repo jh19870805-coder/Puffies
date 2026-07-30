@@ -1293,7 +1293,7 @@ public static class GameAnimationUtility
         }
 #endif
 
-        var shader = Shader.Find("Universal Render Pipeline/Unlit");
+        var shader = Shader.Find("Unlit/Texture");
         if (shader == null)
         {
             return null;

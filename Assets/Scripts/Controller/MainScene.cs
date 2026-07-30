@@ -7,8 +7,6 @@ using TMPro;
 using UnityEditor;
 #endif
 using UnityEngine;
-using UnityEngine.Rendering;
-using UnityEngine.Rendering.Universal;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
@@ -3062,11 +3060,9 @@ public class MainScene : MonoBehaviour
             }
 
             Canvas.ForceUpdateCanvases();
-            var renderRequest = new UniversalRenderPipeline.SingleCameraRequest
-            {
-                destination = renderTexture
-            };
-            RenderPipeline.SubmitRenderRequest(photoCamera, renderRequest);
+            photoCamera.targetTexture = renderTexture;
+            photoCamera.Render();
+            photoCamera.targetTexture = null;
             RenderTexture.active = renderTexture;
             photoTexture = new Texture2D(
                 PhotoOutputSize,

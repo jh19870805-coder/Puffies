@@ -1,6 +1,8 @@
 ﻿# 项目上下文
 
-Unity **2022.3** / URP 2D 项目。核心循环：打开卡包 -> 拖放拼图 -> 任务奖励。本文档是需求、场景、数据、资源、构建规则和命名的稳定项目参考。
+Unity **2022.3** / Built-in Render Pipeline 项目，使用 Linear 色彩空间和 Built-in Forward 渲染。核心循环：打开卡包 -> 拖放拼图 -> 任务奖励。本文档是需求、场景、数据、资源、构建规则和命名的稳定项目参考。
+
+`GraphicsSettings.m_CustomRenderPipeline` 必须为空，各 Quality 档位不指定 SRP Asset。URP `14.0.12` Package 与 `Assets/Settings` 中的旧 URP Asset 暂时保留为迁移回退资源，但不是当前激活管线；新增运行时代码和 Shader 不得依赖 URP API。
 
 当前工作状态记录在 [CURRENT_TASK.md](CURRENT_TASK.md)，工作流规则记录在 [WORKFLOW.md](WORKFLOW.md)，已确认的长期游戏设计规则记录在 [GAME_DESIGN_REQUIREMENTS.md](GAME_DESIGN_REQUIREMENTS.md)。
 
@@ -31,7 +33,6 @@ Unity **2022.3** / URP 2D 项目。核心循环：打开卡包 -> 拖放拼图 -
 | GameScene | 根据选中 PackId 加载 `CardBagNNN` Prefab，并读取 `CardPacks.csv/BoardScale` 缩放棋盘；按照 `PieceNN` 数字命名组织拼图分组；从正常开包流程进入时播放棋盘、托盘和当前组 Piece 入场；每次正确放置 Piece 后立即持久化，重新进入时恢复已放置 Piece 并从首个未完成分组继续；全部完成后显示 RewardPanel |
 | RankScene | 仅占位；首个 Demo 不包含排行榜后端功能。当前模拟列表前三名的 `RankBg` 分别使用 `RankCellBg_1.png`、`RankCellBg_2.png`、`RankCellBg_3.png`，第四名以后使用 `RankCellBg.png` |
 | AchieveScene | 当前显示 20 条模拟成就，前 5 条已达成、后 15 条未达成；接入 Steam 后替换数据源 |
-| effect | 预览和调试 CardFx |
 
 所有场景常规鼠标图标为 `UI/BasicUI/ImgHand_1.png`。GameScene 悬停当前可拖 Piece 时切换 `ImgHand_2.png`，按住左键拖拽 Piece 时切换 `ImgHand_3.png`；松开、结算或离开 GameScene 后恢复常规图标。三张资源随 `BasicUI` 同步到 Player 的 `StreamingAssets/UI/BasicUI`。由于三张纹理宽高比不同，运行时固定使用 `CursorMode.ForceSoftware` 保留各自真实尺寸，不使用硬件光标固定画布缩放。
 
@@ -60,7 +61,7 @@ Unity **2022.3** / URP 2D 项目。核心循环：打开卡包 -> 拖放拼图 -
 - 新卡包沿用唯一 `Package001` 模板；`MainScene` 在运行时动态创建列表项。
 - 新拼图通过在 `Resources/CardBagPrefabs/` 下新增 `CardBagNNN` Prefab 实现；每个 Prefab 包含 `GameBoard` 和 `Piece01`...`PieceNN`，不创建 Package JSON。
 - 编辑器批量生成器可扫描 `CardBagNNN` 资源目录，使用完整的 `Previews/CardBagNNN.png` 与透明 Piece PNG 进行像素匹配，并以 `GameBoard.png` 作为运行时棋盘底图批量创建 Prefab，不依赖 Package JSON 或 `unity_layout.json`。
-- 通用 3D 开包模型和 CardFx 资源放在 `Resources/Effects/` 下，通过 `Resources.Load` 加载。
+- 新特效重新导入后统一放在 `Resources/Effects/` 下，通过 `Resources.Load` 加载；旧特效的目录结构和资源名不得作为新包约束。
 - 构建前执行 `Puffies -> Sync Build Resources`，将运行时磁盘加载的 UI 目录同步到 `StreamingAssets/UI`。
 
 ### 待完成需求
@@ -79,20 +80,16 @@ Unity **2022.3** / URP 2D 项目。核心循环：打开卡包 -> 拖放拼图 -
 
 ```text
 Assets/
-  Scenes/           LoadingScene（启动）、MainScene、GameScene、RankScene、AchieveScene、effect
+  Scenes/           LoadingScene（启动）、MainScene、GameScene、RankScene、AchieveScene
   UI/               2D 源贴图（PackImages、CardBags/CardBagNNN、BasicUI...）
   Scripts/          MVC
     Model/          有意保持扁平：核心、配置、持久化、任务/卡包数据和运行时工具
     View/           PackageInteractionHandler
     Controller/     场景脚本
-    Editor/         构建同步、Canvas 分辨率、中文字体、CardFx 预览
+    Editor/         构建同步、Canvas 分辨率、中文字体
   Resources/
     Configs/        TaskConfig.csv、CardPacks.csv
-    Effects/
-      CardPack/     3D 卡包
-      CardPackDismantle/ 美术制作的五层卡包拆包粒子特效
-      PlaneGroup/
-      CardFx/       卡包获得/轨迹 Prefab 及 Materials/Textures/Meshes/Shaders
+    Effects/        当前为空；新特效导入时重新建立
     CardBagPrefabs/ GameScene 加载的 CardBagNNN 游戏 Prefab
   Prefabs/          共享 UI Prefab
   StreamingAssets/  UI 构建同步输出
@@ -101,14 +98,14 @@ Assets/
 
 | 阶段 | 2D UI | 3D / FX |
 |------|-------|---------|
-| Editor | `Assets/UI`，场景 Image 直接引用 | `Assets/Resources/Effects` |
-| Build | `StreamingAssets/UI` 中运行时磁盘加载的目录（`ToDiskPath`） | `Resources.Load("Effects/...")` |
+| Editor | `Assets/UI`，场景 Image 直接引用 | 新包导入后使用 `Assets/Resources/Effects` |
+| Build | `StreamingAssets/UI` 中运行时磁盘加载的目录（`ToDiskPath`） | 新包接入后使用 `Resources.Load("Effects/...")` |
 
 - 不要重命名 `Resources`；代码中存在硬编码资源路径。
 - GameScene 根据选中 PackId 动态加载 `Resources/CardBagPrefabs/CardBagNNN.prefab`。源贴图位于 `UI/CardBags/CardBagNNN/`，通过 Prefab 的 Sprite 引用进入构建，不放入 StreamingAssets。
-- 3D 特效保留在 `Resources/Effects/`，不要复制到 StreamingAssets。
-- 导入的卡包拆包特效为 `Resources/Effects/CardPackDismantle/CardPackDismantle_001.prefab`，包含五个原始 ParticleSystem 层；MainScene 在玩家点击放大卡包或完成顶部向右横划后，与六层开包 Animator 同步播放。两个旧 Shader Forge Pass 为 Renderer2D 使用 `SRPDefaultUnlit`，不可用的自定义材质 Inspector 已移除，原始粒子层级未改变。
-- 编辑器组合预览为 `Resources/Effects/CardPackDismantle/CardPackDismantlePreview.prefab`，将六个嵌套 `CardPackOpening` 动画层与嵌套 `CardPackDismantle_001` 粒子组合，并通过 Renderer PropertyBlock 应用 `PackIcon001`。使用 **Puffies -> Effects -> Preview Card Pack Dismantle**（`Ctrl+Shift+D`）打开；专用 SceneView 会同步循环六个 Animator 和五层粒子结构。
+- 2026-07-30 已删除此前导入的全部特效资源、`Assets/Resources` 下三个原始 `.unitypackage`、仓库根目录 `特效资源/` 的全部历史包与参考文件、`effect.unity` 预览场景和旧预览工具。`Assets/Resources/Effects` 当前不存在，等待新包重新导入。
+- 新 3D/粒子特效仍应保留在 `Resources/Effects/`，不要复制到 StreamingAssets。导入后先盘点 Prefab、Shader、材质、纹理、动画和依赖，再重新定义稳定命名与运行时映射。
+- 旧运行时特效接入代码暂时保留；资源缺失期间 MainScene 使用现有 2D 回退。新包导入后必须按新资源实际结构重新绑定，不得假定旧 `CardPackOpening`、`CardFx`、`CardPackDismantle` 或 `PlaneGroup` 资源存在。
 
 ---
 
@@ -129,7 +126,6 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
                                       -> BtnBack -> 卡包返回列表并关闭面板
           -> BtnReturn -> Main
           -> RewardPanel / BtnFinish -> Main
-effect（调试）：CardFx 预览；菜单 Puffies -> Preview CardFx Effects
 ```
 
 | 场景 | 脚本 | 说明 |
@@ -138,7 +134,6 @@ effect（调试）：CardFx 预览；菜单 Puffies -> Preview CardFx Effects
 | MainScene | `MainScene.cs` | 卡包 UI；按解锁状态刷新；3D 开包或 2D 回退 |
 | GameScene | `GameScene.cs` | 拼图分组和 RewardPanel；保存卡包、累计结算积分任务进度并结算任务奖励 |
 | RankScene / AchieveScene | 场景脚本 | 返回 Main |
-| effect | `CardFxPreviewScene.cs` | CardObtain / CardTrail 预览 |
 
 **Build Settings**：`LoadingScene` 必须为 Index **0**。
 
@@ -229,9 +224,7 @@ effect（调试）：CardFx 预览；菜单 Puffies -> Preview CardFx Effects
 - `LoadingScene.Start` 初始化 `JsonLocalStore`、`SqliteLocalStore`、`GameTaskUtility` 和 `CardPackDataUtility`。
 - `Assets/Scripts/Model` 有意保持单层扁平目录。相关纯 C# 类型按以下方式合并：`GameManager` 位于 `GameDefine.cs`，CSV 解析类型位于 `GameConfigRepository.cs`，`JsonLocalStore`、`SqliteLocalStore`、`GameSettingsData` 和 `GameSettingsUtility` 位于 `LocalDataStore.cs`，积分类型和 `GameScoreUtility` 位于 `GameTaskUtility.cs`，`GameFontUtility` 位于 `GameCommonUtility.cs`。公开类型名和调用点保持不变。
 - Model 当前保留8个脚本。`GameAnimationUtility`、`CardPackDataUtility`、`GameTaskUtility`、`GameConfigRepository`、`CardFxRuntimeUtility` 和 `GameDefine` 属于大型或独立模块，不为减少文件数量继续互相合并。
-- MainScene 开包时创建运行时根节点 `CardPackOpeningFull`，并实例化全部六个原始蒙皮层：`CardPackOpening.prefab` 及 `CardPackOpening_002` 到 `006`。六个 Animator 同时启动共享 `CardPackOpening` 状态。`GameAnimationUtility` 通过 `MaterialPropertyBlock` 将选中列表项的完整 `PackIconNNN` Sprite 贴图矩形应用到每一层，测量组合动画第零帧蒙皮边界，在启用 Renderer 前将完整特效等比适配到点击的 UI 边界。共享材质不被修改。URP Shader 在正面渲染选中封面、背面渲染原始卡背，并使用 `CardPackClipMask.png` 保留波浪形边缘；同时应用美术提供的正反面法线、HDR 环境反射、光照渐变、金属度/光滑度和 AO。选中封面颜色保持为未改变的基础色，渐变和反射贡献已中和，不会为整张卡包染色。项目使用 URP `Renderer2D`，因此 Mesh Shader Pass 必须使用 `LightMode=SRPDefaultUnlit` 或 `Universal2D`；交付的 Built-in/Amplify Surface Shader 必须移植，不能直接导入。资源包中的静态 `CardPackStatic_001`...`006`、`CardPackPlane` 和 `PlaneGroup_001` 是支持或参考资源，不是运行时开包层；Plane 资源没有动画且使用固定示例图，会遮挡动态卡包。
-- MainScene 空闲卡包使用六个开包层第零帧烘焙的一份共享 Mesh。每个可见卡包只使用一个带真实封面和生命周期颜色的轻量 Renderer，在 `2.4s` 内进行 `0.98` 到 `1.02` 呼吸缩放，跟随 `PackCover` 锚点，并裁剪到卡包 ScrollRect 视口。点击后只将被选中的卡包替换为可复用六层开包器，在 `0.3s` 内同时移动到屏幕中心并放大到原始 `600 x 680` 设计尺寸，静止等待 `PanelBagSelect` 操作；其他列表卡包继续显示并保持呼吸动效。选择页在打开前截取首页并以低分辨率双线性重采样形成柔化背景，面板遮罩 Alpha 为 `0.34`。`BtnBack` 反向复原到列表位置并恢复呼吸动效。
-- `BtnPlay`/重玩先让首页和选择操作退场，隐藏全部未选中卡包及尺寸图标，显示与 GameScene 同源的 `UI/BasicUI/BgGame.png`。放大卡包轻微定场后循环显示沿顶部封口从左向右移动的圆形提示；轻点放大卡包可直接开包，顶部横划则必须从左侧区域开始、向右移动至少卡包宽度的 `50%`，且垂直偏移不超过卡包高度的 `20%`。成功后同步播放六层开包动画和 `CardPackDismantle_001`；拆包粒子跨场景保留约 `2.8s`，覆盖 MainScene 到 GameScene 的交界。Renderer Bounds 暂时不可用时，输入区域按舞台中 `600 x 680` 卡包的实际世界尺寸回退计算。
+- 旧特效资源已全部删除，但 MainScene 的卡包选择、居中放大、柔化背景、`PanelBagSelect`、开包输入和 2D 缺失资源回退逻辑暂时保留。新特效导入后，应保持卡包封面动态替换、`600 x 680` 设计尺寸、列表呼吸、选中复原和进入 GameScene 的现有交互节奏，并按新 Prefab/Animator/材质结构重写特效绑定。
 - 只有通过正常拆包进入 GameScene 时才播放一次入场：CardBag/棋盘从上方进入，PieceBoard 从下方进入，当前组 Piece 从棋盘附近错峰落入托盘，返回和提示按钮淡入；入场完成前屏蔽拖拽。对象在起始姿态保留两个渲染帧后才推进动画，单帧动画时间最多推进 `1/30s`，场景加载或首帧资源初始化卡顿不得吞掉入场过程。直接在编辑器启动 GameScene 保持即时初始化。
 - `GameScene/BtnTips` 从当前组选择 Piece 编号最小的未完成碎片。目标碎片在托盘原位置左右抖动约 `0.8s` 后停止，棋盘对应 `GrooveRect` 使用 `HintDashedOutlineGraphic` 从 GPU 读取 Piece Sprite 的实际 Alpha 像素边界，沿真实累计轮廓长度生成固定 `20` 像素实线、基础间隔 `15` 像素、滚动速度 `60` 像素/秒的绿色滚动虚线；轮廓在当前 GameScene 内按 Sprite 缓存并在离场时清空，Physics Shape 只作为读取失败回退。再次点击按钮取消当前提示，成功放置、切组或结算时同样清理。一旦有效提示显示过，本局持续记为已使用提示。
 - 首次 Piece 放置引导面向历史未完成且尚未完成引导的 `CardBag001`；已有部分拼图进度时从当前未完成 Piece 继续。入场动画结束后，托盘变暗并突出当前组编号最小 Piece。`GameImgArrow.png` 从 Piece 上方开始并整体旋转朝向槽位，底部 Pivot 沿该直线同步前移，同时保持原生 `122 x 271` 宽高比从 `0` 等比放大到原生尺寸；终点按箭头原生长度反算，使完整尺寸时箭头尖落在槽位中心。移动放大持续 `0.9s`，完整停留 `0.12s`、隐藏 `0.2s` 后循环，不做非等比拉伸或弯曲。槽位复用 `HintDashedOutlineGraphic`。拿起目标 Piece 后隐藏箭头和托盘引导层，但虚线持续显示；放错恢复全部视觉，放对后继续提示下一个，跨分组覆盖整包，最后一片完成后将 `Tutorial/CardBag001AllPiecesCompleted` 写入 SQLite `AppRecords`。引导期间不显示当前组烘焙描边且只允许拖动目标 Piece；该流程不算使用 `BtnTips`。
@@ -301,35 +294,15 @@ effect（调试）：CardFx 预览；菜单 Puffies -> Preview CardFx Effects
 - 项目没有运行时描边 Shader、Renderer Feature 或第三方描边包。
 - 描边加载与拼图交互保持隔离；缺少描边不得阻止可拖拽碎片创建。
 
-### CardFx
+### 特效资源
 
-Prefab 和依赖放在 `Resources/Effects/CardFx/`，例如 `CardObtain_001` 和 `CardTrail_001`。
+当前没有已导入特效。新包导入前不得恢复旧资源名或从历史 `.unitypackage` 拷贝文件；导入后统一盘点并记录新的 Prefab、Shader、材质、纹理、动画、灯光和运行时入口。
 
 ---
 
 ## 7. 命名
 
-| 类型 | 名称 | 路径 |
-|------|------|------|
-| 卡包动画层 | `CardPackOpening`、`CardPackOpening_002`...`006` | `Resources/Effects/CardPack/` |
-| 通用卡包 Controller | `CardPackOpening.controller` | 同上 |
-| 通用卡包动画 | `CardPackOpeningAnimation.FBX` | 同上 |
-| 卡包动画模型 | `CardPackOpeningModel.FBX`、`CardPackOpeningModel_002`...`006` | 同上 |
-| 静态卡包参考 | `CardPackStaticModel.FBX`、`CardPackStatic_001`...`006` | 同上 |
-| 静态卡包示例 | `CardPackPlane` | 同上 |
-| 默认卡包封面 | `CardPackDefaultCover.png` | 同上 |
-| 材质 | `CardPackOpeningMaterial` | 同上 |
-| URP Shader | `CardPackOpening.shader` | 同上 |
-| 正面法线 | `CardPackFrontNormal.png` | 同上 |
-| HDR 反射 | `CardPackReflection.hdr` | 同上 |
-| 光照渐变 | `CardPackLightingRamp.png` | 同上 |
-| AO 贴图 | `CardPackOcclusion.png` | 同上 |
-| 背面贴图 | `CardPackBack.png` | 同上 |
-| 波浪裁切蒙版 | `CardPackClipMask.png` | 同上 |
-| Plane 组 | `PlaneGroup_001` | `Resources/Effects/PlaneGroup/` |
-| 新卡包获得 | `CardObtain_001` | `Resources/Effects/CardFx/` |
-| 卡包轨迹 | `CardTrail_001` | 同上 |
-| 卡包拆包特效 | `CardPackDismantle_001` | `Resources/Effects/CardPackDismantle/` |
+新特效命名待资源包重新导入并完成依赖审计后定义。旧 `CardPackOpening`、`CardFx`、`CardPackDismantle` 和 `PlaneGroup` 命名已经废止，不得直接沿用为新标准。
 
 ---
 
@@ -337,7 +310,7 @@ Prefab 和依赖放在 `Resources/Effects/CardFx/`，例如 `CardObtain_001` 和
 
 构建前执行 **Puffies -> Sync Build Resources**。该命令将 `PackImages`、`BasicUI`、`GameScene`、`AchieveScene` 和 `RankScene` 复制到 `StreamingAssets/UI`；CardBag 源贴图通过游戏 Prefab 的 Sprite 引用进入构建，因此不复制。
 
-建议 Build Settings 顺序：LoadingScene -> MainScene -> GameScene -> effect -> RankScene -> AchieveScene。
+建议 Build Settings 顺序：LoadingScene -> MainScene -> GameScene -> RankScene -> AchieveScene。
 
 ### 开发工作站
 
@@ -356,7 +329,6 @@ Prefab 和依赖放在 `Resources/Effects/CardFx/`，例如 `CardObtain_001` 和
 | Puffies -> Sync Build Resources | 将运行时磁盘加载的 UI 目录复制到 StreamingAssets |
 | Puffies -> Canvas -> Apply Design Resolution | 应用 Canvas 设计分辨率 |
 | Puffies -> Fonts -> Setup Default Chinese Font | 设置中文字体 |
-| Puffies -> Preview CardFx Effects | 打开特效场景 |
 | Puffies -> Puzzles -> Bake Outline Masks | 为每个 CardBag Prefab 重建各分组外边界描边 |
 | Puffies -> Puzzles -> Generate CardBag Prefabs From Images | 扫描完整背景和透明碎图，选择并批量生成 CardBag Prefab |
 

@@ -696,11 +696,7 @@ public static class GameCommonUtility
             return sSpriteUnlitMaterial;
         }
 
-        var shader = Shader.Find("Universal Render Pipeline/2D/Sprite-Unlit-Default");
-        if (shader == null)
-        {
-            shader = Shader.Find("Sprites/Default");
-        }
+        var shader = Shader.Find("Sprites/Default");
 
         if (shader == null)
         {
