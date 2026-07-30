@@ -72,6 +72,10 @@ public class GameScene : MonoBehaviour
     private const string TaskRewardImgBagPath = "ImgBagBg/ImgBag";
     private const string HintButtonObjectName = "BtnTips";
     private const string PieceHintOutlineObjectName = "PieceHintOutline";
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    private const string TestCompleteButtonObjectName = "BtnCompleteAllTest";
+    private const string TestCompleteButtonText = "一键完成";
+#endif
     private static readonly Color PieceHintOutlineColor = new Color32(112, 151, 75, 255);
     private static bool sHookedSceneLoaded;
     private readonly BoardState _board = new BoardState();
@@ -123,6 +127,9 @@ public class GameScene : MonoBehaviour
     private GameObject _pieceHintOutlineRoot;
     private bool _shouldCompleteRestoredPuzzle;
     private Button _hintButton;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    private Button _testCompleteButton;
+#endif
     private bool _isTutorialPending;
     private bool _isTutorialActive;
     private DraggablePieceState _tutorialPiece;
@@ -169,6 +176,9 @@ public class GameScene : MonoBehaviour
         InitializeTaskTracking();
         ConfigureReturnButton();
         ConfigureHintButton();
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        ConfigureTestCompleteButton();
+#endif
         ConfigureRewardPanel();
         if (_shouldCompleteRestoredPuzzle)
         {
@@ -321,6 +331,12 @@ public class GameScene : MonoBehaviour
     private IEnumerator PlayGameEntranceAnimation()
     {
         _isEntranceAnimating = true;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        if (_testCompleteButton != null)
+        {
+            _testCompleteButton.interactable = false;
+        }
+#endif
         Canvas.ForceUpdateCanvases();
 
         var camera = Camera.main;
@@ -503,6 +519,12 @@ public class GameScene : MonoBehaviour
         }
 
         _isEntranceAnimating = false;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        if (_testCompleteButton != null)
+        {
+            _testCompleteButton.interactable = !_isGameFinished;
+        }
+#endif
         TryStartPiecePlacementTutorial();
     }
 
@@ -1858,6 +1880,13 @@ public class GameScene : MonoBehaviour
         }
 
         _isGameFinished = true;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        if (_testCompleteButton != null)
+        {
+            _testCompleteButton.interactable = false;
+            _testCompleteButton.gameObject.SetActive(false);
+        }
+#endif
         StopGameplayTimer();
         EndDragging();
 
@@ -2515,6 +2544,177 @@ public class GameScene : MonoBehaviour
         _hintButton.onClick.RemoveListener(OnHintButtonClicked);
         _hintButton.onClick.AddListener(OnHintButtonClicked);
     }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    private void ConfigureTestCompleteButton()
+    {
+        var buttonObject = GameCommonUtility.FindSceneObject(TestCompleteButtonObjectName);
+        if (buttonObject == null)
+        {
+            buttonObject = CreateTestCompleteButton();
+        }
+
+        if (buttonObject == null)
+        {
+            Debug.LogWarning("GameScene: failed to create the test complete button.");
+            return;
+        }
+
+        _testCompleteButton = buttonObject.GetComponent<Button>();
+        if (_testCompleteButton == null)
+        {
+            Debug.LogWarning($"GameScene: {TestCompleteButtonObjectName} is missing Button component.");
+            return;
+        }
+
+        _testCompleteButton.interactable = !_isGameFinished && !_isEntranceAnimating;
+        _testCompleteButton.onClick.RemoveListener(OnTestCompleteAllClicked);
+        _testCompleteButton.onClick.AddListener(OnTestCompleteAllClicked);
+    }
+
+    private static GameObject CreateTestCompleteButton()
+    {
+        var hintObject = GameCommonUtility.FindSceneObject(HintButtonObjectName);
+        var hintRect = hintObject != null ? hintObject.GetComponent<RectTransform>() : null;
+        var parent = hintRect != null
+            ? hintRect.parent as RectTransform
+            : GameCommonUtility.FindSceneObject("Canvas")?.GetComponent<RectTransform>();
+        if (parent == null)
+        {
+            return null;
+        }
+
+        var buttonObject = new GameObject(
+            TestCompleteButtonObjectName,
+            typeof(RectTransform),
+            typeof(CanvasRenderer),
+            typeof(Image),
+            typeof(Button));
+        buttonObject.layer = parent.gameObject.layer;
+        var rect = buttonObject.GetComponent<RectTransform>();
+        rect.SetParent(parent, false);
+        rect.pivot = new Vector2(0.5f, 0.5f);
+        rect.sizeDelta = new Vector2(210f, 68f);
+        if (hintRect != null)
+        {
+            rect.anchorMin = hintRect.anchorMin;
+            rect.anchorMax = hintRect.anchorMax;
+            rect.anchoredPosition = hintRect.anchoredPosition + new Vector2(-170f, 0f);
+        }
+        else
+        {
+            rect.anchorMin = Vector2.one;
+            rect.anchorMax = Vector2.one;
+            rect.anchoredPosition = new Vector2(-300f, -90f);
+        }
+        rect.SetAsLastSibling();
+
+        var image = buttonObject.GetComponent<Image>();
+        image.sprite = Resources.GetBuiltinResource<Sprite>("UI/Skin/UISprite.psd");
+        image.type = Image.Type.Sliced;
+        image.color = new Color32(63, 66, 62, 242);
+
+        var button = buttonObject.GetComponent<Button>();
+        button.targetGraphic = image;
+        var colors = button.colors;
+        colors.normalColor = Color.white;
+        colors.highlightedColor = new Color32(232, 238, 226, 255);
+        colors.pressedColor = new Color32(190, 202, 181, 255);
+        colors.selectedColor = colors.highlightedColor;
+        colors.disabledColor = new Color32(130, 130, 130, 128);
+        colors.fadeDuration = 0.08f;
+        button.colors = colors;
+
+        var textObject = new GameObject(
+            "Text",
+            typeof(RectTransform),
+            typeof(CanvasRenderer),
+            typeof(TextMeshProUGUI),
+            typeof(Shadow));
+        textObject.layer = buttonObject.layer;
+        var text = textObject.GetComponent<TextMeshProUGUI>();
+        text.rectTransform.SetParent(rect, false);
+        text.rectTransform.anchorMin = Vector2.zero;
+        text.rectTransform.anchorMax = Vector2.one;
+        text.rectTransform.offsetMin = new Vector2(10f, 4f);
+        text.rectTransform.offsetMax = new Vector2(-10f, -4f);
+        text.text = TestCompleteButtonText;
+        text.fontSize = 28f;
+        text.fontStyle = FontStyles.Bold;
+        text.color = Color.white;
+        text.alignment = TextAlignmentOptions.Center;
+        text.enableWordWrapping = false;
+        text.raycastTarget = false;
+        GameFontUtility.ApplyDefaultFont(text);
+
+        var shadow = textObject.GetComponent<Shadow>();
+        shadow.effectColor = new Color(0f, 0f, 0f, 0.6f);
+        shadow.effectDistance = new Vector2(1.5f, -1.5f);
+        return buttonObject;
+    }
+
+    private void OnTestCompleteAllClicked()
+    {
+        if (_isGameFinished
+            || _isEntranceAnimating
+            || _drag.DraggingPiece != null
+            || _board.GrooveImagesByGroup == null)
+        {
+            return;
+        }
+
+        var packId = GameManager.GetBagId();
+        var allPieceNumbers = new HashSet<int>(_placedPieceNumbers);
+        for (var groupIndex = 0; groupIndex < _board.GrooveImagesByGroup.Count; groupIndex++)
+        {
+            var group = _board.GrooveImagesByGroup[groupIndex];
+            if (group == null)
+            {
+                continue;
+            }
+
+            for (var pieceIndex = 0; pieceIndex < group.Count; pieceIndex++)
+            {
+                var grooveImage = group[pieceIndex];
+                var pieceNumber = GetPieceNumberFromImage(grooveImage);
+                if (pieceNumber != int.MaxValue)
+                {
+                    allPieceNumbers.Add(pieceNumber);
+                }
+            }
+        }
+
+        if (packId <= 0 || allPieceNumbers.Count == 0)
+        {
+            Debug.LogWarning(
+                $"GameScene: test completion skipped because no valid Pieces were found. packId={packId}");
+            return;
+        }
+
+        _testCompleteButton.interactable = false;
+        var shouldCompleteTutorial = packId == GameDefine.DefaultBagId
+            && (_isTutorialPending || _isTutorialActive);
+        StopPiecePlacementTutorial(
+            persistCompletion: shouldCompleteTutorial,
+            restoreLevelOutline: false);
+        ClearPieceHint();
+        StartGameplayTimerIfNeeded();
+
+        _placedPieceNumbers.Clear();
+        _placedPieceNumbers.UnionWith(allPieceNumbers);
+        if (!CardPackDataUtility.TryRecordPlacedPieces(packId, allPieceNumbers))
+        {
+            Debug.LogWarning(
+                $"GameScene: test completion could not persist every Piece before settlement. packId={packId}");
+        }
+
+        RevealAllGroovesOnBoard();
+        ShowRewardPanel();
+        Debug.Log(
+            $"GameScene: test completion placed all Pieces and started settlement. "
+            + $"packId={packId}, pieces={allPieceNumbers.Count}");
+    }
+#endif
 
     private void OnHintButtonClicked()
     {

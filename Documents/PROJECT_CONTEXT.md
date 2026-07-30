@@ -30,7 +30,7 @@ Unity **2022.3** / Built-in Render Pipeline 项目，使用 Linear 色彩空间�
 |------|------|
 | LoadingScene | 初始化 JSON、SQLite、任务数据和卡包数据；加载结束后进入 MainScene |
 | MainScene | 根据 `CardPacks.csv` 与 SQLite 解锁状态刷新卡包列表；每页按 6 列 x 3 行显示 18 个带呼吸动画的轻量常驻卡包特效；点击后将闭合卡包移动并放大到屏幕中心，背景按四分之一分辨率截图虚化并由 `PanelBagSelect` 半透明遮罩压暗，选中卡包保持清晰且不出现在原列表位置；玩/重玩进入 `BgGame` 开包舞台，玩家轻点放大卡包或沿顶部封口横划后播放开包动画；Back 取消并复原；提供 Rank、Achieve 和 Menu 入口 |
-| GameScene | 根据选中 PackId 加载 `CardBagNNN` Prefab，并读取 `CardPacks.csv/BoardScale` 缩放棋盘；按照 `PieceNN` 数字命名组织拼图分组；从正常开包流程进入时播放棋盘、托盘和当前组 Piece 入场；每次正确放置 Piece 后立即持久化，重新进入时恢复已放置 Piece 并从首个未完成分组继续；全部完成后显示 RewardPanel |
+| GameScene | 根据选中 PackId 加载 `CardBagNNN` Prefab，并读取 `CardPacks.csv/BoardScale` 缩放棋盘；按照 `PieceNN` 数字命名组织拼图分组；从正常开包流程进入时播放棋盘、托盘和当前组 Piece 入场；每次正确放置 Piece 后立即持久化，重新进入时恢复已放置 Piece 并从首个未完成分组继续；全部完成后显示 RewardPanel；Editor 和 Development Build 在 `BtnTips` 左侧提供“一键完成”测试按钮 |
 | RankScene | 仅占位；首个 Demo 不包含排行榜后端功能。当前模拟列表前三名的 `RankBg` 分别使用 `RankCellBg_1.png`、`RankCellBg_2.png`、`RankCellBg_3.png`，第四名以后使用 `RankCellBg.png` |
 | AchieveScene | 当前显示 20 条模拟成就，前 5 条已达成、后 15 条未达成；接入 Steam 后替换数据源 |
 | EffectScene001 | 新特效包随附的预览场景，不加入正式 Build Settings；用于检查卡包环境、材质、灯光和粒子表现 |
@@ -230,6 +230,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 - Model 当前保留8个脚本。`GameAnimationUtility`、`CardPackDataUtility`、`GameTaskUtility`、`GameConfigRepository`、`CardFxRuntimeUtility` 和 `GameDefine` 属于大型或独立模块，不为减少文件数量继续互相合并。
 - MainScene 的卡包选择、居中放大、`PanelBagSelect`、开包输入和 2D 缺失资源回退逻辑保持不变。选中态在隐藏选中槽位后生成四分之一分辨率背景截图并放大虚化，再叠加半透明 Panel 压暗；选中卡包使用更高排序层保持清晰。运行时保持动态封面、`600 x 680` 设计尺寸、选中复原和进入 GameScene 的现有交互节奏。
 - 只有通过正常拆包进入 GameScene 时才播放一次入场：CardBag/棋盘从上方进入，PieceBoard 从下方进入，当前组 Piece 从棋盘附近错峰落入托盘，返回和提示按钮淡入；入场完成前屏蔽拖拽。对象在起始姿态保留两个渲染帧后才推进动画，单帧动画时间最多推进 `1/30s`，场景加载或首帧资源初始化卡顿不得吞掉入场过程。直接在编辑器启动 GameScene 保持即时初始化。
+- GameScene 的 `BtnCompleteAllTest` 仅在 Unity Editor 和 Development Build 中运行时创建。点击后批量持久化当前 CardBag 全部 Piece 编号、显示完整棋盘并调用正式 `ShowRewardPanel()`；因此卡包生命周期、任务积分、奖励发放和完成数量都会产生真实本地测试数据。正式非 Development Build 不显示该按钮。
 - `GameScene/BtnTips` 从当前组选择 Piece 编号最小的未完成碎片。目标碎片在托盘原位置左右抖动约 `0.8s` 后停止，棋盘对应 `GrooveRect` 使用 `HintDashedOutlineGraphic` 从 GPU 读取 Piece Sprite 的实际 Alpha 像素边界，沿真实累计轮廓长度生成固定 `20` 像素实线、基础间隔 `15` 像素、滚动速度 `60` 像素/秒的绿色滚动虚线；轮廓在当前 GameScene 内按 Sprite 缓存并在离场时清空，Physics Shape 只作为读取失败回退。再次点击按钮取消当前提示，成功放置、切组或结算时同样清理。一旦有效提示显示过，本局持续记为已使用提示。
 - 首次 Piece 放置引导面向历史未完成且尚未完成引导的 `CardBag001`；已有部分拼图进度时从当前未完成 Piece 继续。入场动画结束后，托盘变暗并突出当前组编号最小 Piece。`GameImgArrow.png` 从 Piece 上方开始并整体旋转朝向槽位，底部 Pivot 沿该直线同步前移，同时保持原生 `122 x 271` 宽高比从 `0` 等比放大到原生尺寸；终点按箭头原生长度反算，使完整尺寸时箭头尖落在槽位中心。移动放大持续 `0.9s`，完整停留 `0.12s`、隐藏 `0.2s` 后循环，不做非等比拉伸或弯曲。槽位复用 `HintDashedOutlineGraphic`。拿起目标 Piece 后隐藏箭头和托盘引导层，但虚线持续显示；放错恢复全部视觉，放对后继续提示下一个，跨分组覆盖整包，最后一片完成后将 `Tutorial/CardBag001AllPiecesCompleted` 写入 SQLite `AppRecords`。引导期间不显示当前组烘焙描边且只允许拖动目标 Piece；该流程不算使用 `BtnTips`。
 - `PanelBagSelect` 每次打开时同时读取历史生命周期和当前拼图会话。只有 `Completed` 且没有活动会话的卡包显示 `重玩` 并弹出 `PanelReplay`；未完成卡包以及重玩中途退出、仍有活动会话的 `Completed` 卡包都显示 `玩` 并直接进入现有流程。`BtnReplay` 确认时清除旧会话，新会话在进入 GameScene 时创建；`BtnReturn` 和 `BtnClose` 取消。相机按钮只对历史上至少完整完成过一次、生命周期为 `Completed` 的卡包显示；首次拼图尚未完成的 `InProgress` 卡包不显示。弹窗显示期间隐藏选中卡包、其他列表卡包 Renderer 和尺寸图标，并锁定选择页按钮；取消时全部恢复，确认时保持隐藏并衔接开包舞台。

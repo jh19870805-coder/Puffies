@@ -530,13 +530,30 @@ public static class CardPackDataUtility
 
     public static bool TryRecordPlacedPiece(int packId, int pieceNumber)
     {
-        if (packId <= 0 || pieceNumber <= 0 || !TryEnsurePuzzleSession(packId))
+        return TryRecordPlacedPieces(packId, new[] { pieceNumber });
+    }
+
+    public static bool TryRecordPlacedPieces(int packId, IEnumerable<int> placedPieceNumbers)
+    {
+        if (packId <= 0 || placedPieceNumbers == null || !TryEnsurePuzzleSession(packId))
         {
             return false;
         }
 
         TryGetPlacedPieceNumbers(packId, out var pieceNumbers);
-        pieceNumbers.Add(pieceNumber);
+        foreach (var pieceNumber in placedPieceNumbers)
+        {
+            if (pieceNumber > 0)
+            {
+                pieceNumbers.Add(pieceNumber);
+            }
+        }
+
+        if (pieceNumbers.Count == 0)
+        {
+            return false;
+        }
+
         var sortedPieceNumbers = new List<int>(pieceNumbers);
         sortedPieceNumbers.Sort();
         var payload = new PuzzleProgressPayload
