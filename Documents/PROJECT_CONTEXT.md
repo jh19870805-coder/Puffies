@@ -33,6 +33,7 @@ Unity **2022.3** / Built-in Render Pipeline 项目，使用 Linear 色彩空间�
 | GameScene | 根据选中 PackId 加载 `CardBagNNN` Prefab，并读取 `CardPacks.csv/BoardScale` 缩放棋盘；按照 `PieceNN` 数字命名组织拼图分组；从正常开包流程进入时播放棋盘、托盘和当前组 Piece 入场；每次正确放置 Piece 后立即持久化，重新进入时恢复已放置 Piece 并从首个未完成分组继续；全部完成后显示 RewardPanel |
 | RankScene | 仅占位；首个 Demo 不包含排行榜后端功能。当前模拟列表前三名的 `RankBg` 分别使用 `RankCellBg_1.png`、`RankCellBg_2.png`、`RankCellBg_3.png`，第四名以后使用 `RankCellBg.png` |
 | AchieveScene | 当前显示 20 条模拟成就，前 5 条已达成、后 15 条未达成；接入 Steam 后替换数据源 |
+| EffectScene001 | 新特效包随附的预览场景，不加入正式 Build Settings；用于检查卡包环境、材质、灯光和粒子表现 |
 
 所有场景常规鼠标图标为 `UI/BasicUI/ImgHand_1.png`。GameScene 悬停当前可拖 Piece 时切换 `ImgHand_2.png`，按住左键拖拽 Piece 时切换 `ImgHand_3.png`；松开、结算或离开 GameScene 后恢复常规图标。三张资源随 `BasicUI` 同步到 Player 的 `StreamingAssets/UI/BasicUI`。由于三张纹理宽高比不同，运行时固定使用 `CursorMode.ForceSoftware` 保留各自真实尺寸，不使用硬件光标固定画布缩放。
 
@@ -61,7 +62,7 @@ Unity **2022.3** / Built-in Render Pipeline 项目，使用 Linear 色彩空间�
 - 新卡包沿用唯一 `Package001` 模板；`MainScene` 在运行时动态创建列表项。
 - 新拼图通过在 `Resources/CardBagPrefabs/` 下新增 `CardBagNNN` Prefab 实现；每个 Prefab 包含 `GameBoard` 和 `Piece01`...`PieceNN`，不创建 Package JSON。
 - 编辑器批量生成器可扫描 `CardBagNNN` 资源目录，使用完整的 `Previews/CardBagNNN.png` 与透明 Piece PNG 进行像素匹配，并以 `GameBoard.png` 作为运行时棋盘底图批量创建 Prefab，不依赖 Package JSON 或 `unity_layout.json`。
-- 新特效重新导入后统一放在 `Resources/Effects/` 下，通过 `Resources.Load` 加载；旧特效的目录结构和资源名不得作为新包约束。
+- 新特效已按包内原始结构导入 `Resources/Effects/`；运行时通过 `Resources.Load` 加载，不对原始资源执行重命名或目录重组。
 - 构建前执行 `Puffies -> Sync Build Resources`，将运行时磁盘加载的 UI 目录同步到 `StreamingAssets/UI`。
 
 ### 待完成需求
@@ -89,7 +90,7 @@ Assets/
     Editor/         构建同步、Canvas 分辨率、中文字体
   Resources/
     Configs/        TaskConfig.csv、CardPacks.csv
-    Effects/        当前为空；新特效导入时重新建立
+    Effects/        新特效原始资源：CardFx、CardPack、PlaneGroup
     CardBagPrefabs/ GameScene 加载的 CardBagNNN 游戏 Prefab
   Prefabs/          共享 UI Prefab
   StreamingAssets/  UI 构建同步输出
@@ -103,9 +104,9 @@ Assets/
 
 - 不要重命名 `Resources`；代码中存在硬编码资源路径。
 - GameScene 根据选中 PackId 动态加载 `Resources/CardBagPrefabs/CardBagNNN.prefab`。源贴图位于 `UI/CardBags/CardBagNNN/`，通过 Prefab 的 Sprite 引用进入构建，不放入 StreamingAssets。
-- 2026-07-30 已删除此前导入的全部特效资源、`Assets/Resources` 下三个原始 `.unitypackage`、仓库根目录 `特效资源/` 的全部历史包与参考文件、`effect.unity` 预览场景和旧预览工具。`Assets/Resources/Effects` 当前不存在，等待新包重新导入。
-- 新 3D/粒子特效仍应保留在 `Resources/Effects/`，不要复制到 StreamingAssets。导入后先盘点 Prefab、Shader、材质、纹理、动画和依赖，再重新定义稳定命名与运行时映射。
-- 旧运行时特效接入代码暂时保留；资源缺失期间 MainScene 使用现有 2D 回退。新包导入后必须按新资源实际结构重新绑定，不得假定旧 `CardPackOpening`、`CardFx`、`CardPackDismantle` 或 `PlaneGroup` 资源存在。
+- 2026-07-30 清理旧特效后，已从根目录 `特效资源/` 原样导入 `effect资源管理.unitypackage` 和 `桌面卡包环境搭建.unitypackage`。导入结果位于 `Assets/Resources/Effects/CardFx`、`CardPack`、`PlaneGroup`，并新增 `Assets/Scenes/EffectScene001.unity`。
+- 新 3D/粒子特效保留在 `Resources/Effects/`，不要复制到 StreamingAssets。两个包的重复路径、GUID 和内容一致；导入后 8 个 Shader、30 个材质、20 个 Prefab、预览场景及 134 条依赖均通过 Unity 加载校验。
+- 旧运行时特效接入代码仍保留，尚未按新包完整接线。共享开包 Prefab 为 `Effects/CardPack/CardPackOpening`；其余六层资源位于 `Effects/CardPack/CardBagPrefab/CardBag01/`；卡包材质位于 `Effects/CardPack/ModTextures/Materials/CardPackOpeningMaterial`；拆包 Prefab 位于 `Effects/CardFx/Profabs/fx_chai_w_001`。后续应调整代码加载路径，不移动原始资源。
 
 ---
 
@@ -224,7 +225,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 - `LoadingScene.Start` 初始化 `JsonLocalStore`、`SqliteLocalStore`、`GameTaskUtility` 和 `CardPackDataUtility`。
 - `Assets/Scripts/Model` 有意保持单层扁平目录。相关纯 C# 类型按以下方式合并：`GameManager` 位于 `GameDefine.cs`，CSV 解析类型位于 `GameConfigRepository.cs`，`JsonLocalStore`、`SqliteLocalStore`、`GameSettingsData` 和 `GameSettingsUtility` 位于 `LocalDataStore.cs`，积分类型和 `GameScoreUtility` 位于 `GameTaskUtility.cs`，`GameFontUtility` 位于 `GameCommonUtility.cs`。公开类型名和调用点保持不变。
 - Model 当前保留8个脚本。`GameAnimationUtility`、`CardPackDataUtility`、`GameTaskUtility`、`GameConfigRepository`、`CardFxRuntimeUtility` 和 `GameDefine` 属于大型或独立模块，不为减少文件数量继续互相合并。
-- 旧特效资源已全部删除，但 MainScene 的卡包选择、居中放大、柔化背景、`PanelBagSelect`、开包输入和 2D 缺失资源回退逻辑暂时保留。新特效导入后，应保持卡包封面动态替换、`600 x 680` 设计尺寸、列表呼吸、选中复原和进入 GameScene 的现有交互节奏，并按新 Prefab/Animator/材质结构重写特效绑定。
+- MainScene 的卡包选择、居中放大、柔化背景、`PanelBagSelect`、开包输入和 2D 缺失资源回退逻辑保持不变。新特效已经导入但尚未完成运行时映射；接入时应保持卡包封面动态替换、`600 x 680` 设计尺寸、列表呼吸、选中复原和进入 GameScene 的现有交互节奏，并按新 Prefab、Animator 和材质结构调整加载路径。
 - 只有通过正常拆包进入 GameScene 时才播放一次入场：CardBag/棋盘从上方进入，PieceBoard 从下方进入，当前组 Piece 从棋盘附近错峰落入托盘，返回和提示按钮淡入；入场完成前屏蔽拖拽。对象在起始姿态保留两个渲染帧后才推进动画，单帧动画时间最多推进 `1/30s`，场景加载或首帧资源初始化卡顿不得吞掉入场过程。直接在编辑器启动 GameScene 保持即时初始化。
 - `GameScene/BtnTips` 从当前组选择 Piece 编号最小的未完成碎片。目标碎片在托盘原位置左右抖动约 `0.8s` 后停止，棋盘对应 `GrooveRect` 使用 `HintDashedOutlineGraphic` 从 GPU 读取 Piece Sprite 的实际 Alpha 像素边界，沿真实累计轮廓长度生成固定 `20` 像素实线、基础间隔 `15` 像素、滚动速度 `60` 像素/秒的绿色滚动虚线；轮廓在当前 GameScene 内按 Sprite 缓存并在离场时清空，Physics Shape 只作为读取失败回退。再次点击按钮取消当前提示，成功放置、切组或结算时同样清理。一旦有效提示显示过，本局持续记为已使用提示。
 - 首次 Piece 放置引导面向历史未完成且尚未完成引导的 `CardBag001`；已有部分拼图进度时从当前未完成 Piece 继续。入场动画结束后，托盘变暗并突出当前组编号最小 Piece。`GameImgArrow.png` 从 Piece 上方开始并整体旋转朝向槽位，底部 Pivot 沿该直线同步前移，同时保持原生 `122 x 271` 宽高比从 `0` 等比放大到原生尺寸；终点按箭头原生长度反算，使完整尺寸时箭头尖落在槽位中心。移动放大持续 `0.9s`，完整停留 `0.12s`、隐藏 `0.2s` 后循环，不做非等比拉伸或弯曲。槽位复用 `HintDashedOutlineGraphic`。拿起目标 Piece 后隐藏箭头和托盘引导层，但虚线持续显示；放错恢复全部视觉，放对后继续提示下一个，跨分组覆盖整包，最后一片完成后将 `Tutorial/CardBag001AllPiecesCompleted` 写入 SQLite `AppRecords`。引导期间不显示当前组烘焙描边且只允许拖动目标 Piece；该流程不算使用 `BtnTips`。
@@ -296,13 +297,23 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 
 ### 特效资源
 
-当前没有已导入特效。新包导入前不得恢复旧资源名或从历史 `.unitypackage` 拷贝文件；导入后统一盘点并记录新的 Prefab、Shader、材质、纹理、动画、灯光和运行时入口。
+当前特效来自 `特效资源/effect资源管理.unitypackage` 和 `特效资源/桌面卡包环境搭建.unitypackage`，按 Unity 包内原始结构导入：
+
+- `Effects/CardPack/CardPackOpening.prefab`：共享开包主体。
+- `Effects/CardPack/CardBagPrefab/CardBag01/`：六个 `CardPackOpening_001...006` 和六个 `CardPackStatic_001...006`。
+- `Effects/CardPack/ModTextures/Materials/`：卡包主体与平面材质。
+- `Effects/CardFx/CardObtain_001.prefab`、`CardTrail_001.prefab`：获取和拖尾特效。
+- `Effects/CardFx/Profabs/fx_chai_w_001.prefab`：拆包特效；目录名 `Profabs` 为原包命名，保留不改。
+- `Effects/PlaneGroup/PlaneGroup_001.prefab`：桌面环境组。
+- `Assets/Scenes/EffectScene001.unity`：包内预览场景，不属于正式构建场景。
+
+资源已通过导入完整性检查，但 MainScene 仍有旧加载路径，不能据此认定新开包特效已在正式流程完整播放。
 
 ---
 
 ## 7. 命名
 
-新特效命名待资源包重新导入并完成依赖审计后定义。旧 `CardPackOpening`、`CardFx`、`CardPackDismantle` 和 `PlaneGroup` 命名已经废止，不得直接沿用为新标准。
+特效资源名和目录遵循新 `.unitypackage` 的原始定义，不额外重命名。运行时代码需要适配资源实际路径，不通过搬移资源维持旧路径。
 
 ---
 

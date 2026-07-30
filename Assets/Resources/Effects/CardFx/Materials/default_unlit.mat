@@ -1,0 +1,76 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!21 &2100000
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: default_unlit
+  m_Shader: {fileID: 4800000, guid: 1c16dbc48fbde524baf4749a591d8cec, type: 3}
+  m_ValidKeywords: []
+  m_InvalidKeywords:
+  - _ENABLE_LIGHT_OFF
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 0
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: -1
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs:
+    - _AlbedoTex:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _MetallicTex:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _NormalTex:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    m_Ints: []
+    m_Floats:
+    - _AlphaClip: 0
+    - _CullMode: 2
+    - _Cutoff: 0.5
+    - _DepthOffset: 0
+    - _DstBlend: 0
+    - _EmissionActive: 0
+    - _InstancePerColor: 0
+    - _Lightmap: 0
+    - _NormalScale: 1
+    - _Occlusion: 1
+    - _PanelShadowHeight: 0
+    - _Receive_Shadows: 1
+    - _SelfShadow: 1
+    - _SrcBlend: 1
+    - _StencilComp: 8
+    - _StencilOp: 0
+    - _StencilRefValue: 0
+    - _SurfaceType: 0
+    - _VertexAlpha: 0
+    - _ZTestMode: 4
+    - _ZWriteMode: 1
+    m_Colors:
+    - _EmissionColor: {r: 1, g: 1, b: 1, a: 1}
+    - _MainColor: {r: 1, g: 1, b: 1, a: 1}
+    - _PanelShadowColor: {r: 0, g: 0.035, b: 0.12999997, a: 0.58}
+  m_BuildTextureStacks: []
+--- !u!114 &4545007116537706558
+MonoBehaviour:
+  m_ObjectHideFlags: 11
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d0353a89b1f911e48b9e16bdc9f2e058, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  version: 4
