@@ -60,7 +60,7 @@ public class MainScene : MonoBehaviour
     private const float BagSelectBackdropAlpha = 0.34f;
     private const float BagSelectPanelWorldDepth = -0.1f;
     private const float SelectedPackageWorldDepth = -0.2f;
-    private const int BagSelectBlurDownsample = 10;
+    private const int BagSelectBlurDownsample = 4;
     private const float OpeningStageTransitionDuration = 0.28f;
     private const float OpeningStageSettleDuration = 0.22f;
     private const float OpeningStageScaleRatio = 0.92f;
@@ -319,6 +319,7 @@ public class MainScene : MonoBehaviour
         {
             GameCommonUtility.SetupOrthographicCamera(targetCamera, ReferenceHeight, PixelsPerUnit);
         }
+        GameAnimationUtility.ConfigureCardPackEnvironment(transform);
 
         if (!TryResolvePackageList())
         {
@@ -2829,10 +2830,11 @@ public class MainScene : MonoBehaviour
         mIsPlayingAnimation = true;
         mSelectedPackageEntry = entry;
         mSelectedBagId = bagId;
-        yield return CaptureBagSelectBackdrop();
         var anchor = entry.Image != null ? entry.Image.rectTransform : entry.RectTransform;
         var coverSprite = entry.Image != null ? entry.Image.sprite : null;
         var idleScale = GetPackageBreathScale(entry);
+        SetPackageVisualsVisible(entry, false);
+        yield return CaptureBagSelectBackdrop();
         var prepared = GameAnimationUtility.PrepareCardPackAnimation(
             bagId,
             coverSprite,
@@ -2852,7 +2854,6 @@ public class MainScene : MonoBehaviour
             GameAnimationUtility.SetPreparedCardPackPose(
                 mSelectedPackageStartScale,
                 mSelectedPackageStartCenter);
-            SetPackageVisualsVisible(entry, false);
             RefreshBagSelectPackState(bagId);
             SetBagSelectBackdropVisible(true);
             SetBagSelectPanelVisible(true);

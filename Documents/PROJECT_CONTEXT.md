@@ -29,7 +29,7 @@ Unity **2022.3** / Built-in Render Pipeline 项目，使用 Linear 色彩空间�
 | 场景 | 需求 |
 |------|------|
 | LoadingScene | 初始化 JSON、SQLite、任务数据和卡包数据；加载结束后进入 MainScene |
-| MainScene | 根据 `CardPacks.csv` 与 SQLite 解锁状态刷新卡包列表；每页按 6 列 x 3 行显示 18 个带呼吸动画的轻量常驻卡包特效；点击后将闭合卡包移动并放大到屏幕中心，同时显示柔化首页和 `PanelBagSelect`；玩/重玩进入 `BgGame` 开包舞台，玩家轻点放大卡包或沿顶部封口横划后播放开包动画；Back 取消并复原；提供 Rank、Achieve 和 Menu 入口 |
+| MainScene | 根据 `CardPacks.csv` 与 SQLite 解锁状态刷新卡包列表；每页按 6 列 x 3 行显示 18 个带呼吸动画的轻量常驻卡包特效；点击后将闭合卡包移动并放大到屏幕中心，背景按四分之一分辨率截图虚化并由 `PanelBagSelect` 半透明遮罩压暗，选中卡包保持清晰且不出现在原列表位置；玩/重玩进入 `BgGame` 开包舞台，玩家轻点放大卡包或沿顶部封口横划后播放开包动画；Back 取消并复原；提供 Rank、Achieve 和 Menu 入口 |
 | GameScene | 根据选中 PackId 加载 `CardBagNNN` Prefab，并读取 `CardPacks.csv/BoardScale` 缩放棋盘；按照 `PieceNN` 数字命名组织拼图分组；从正常开包流程进入时播放棋盘、托盘和当前组 Piece 入场；每次正确放置 Piece 后立即持久化，重新进入时恢复已放置 Piece 并从首个未完成分组继续；全部完成后显示 RewardPanel |
 | RankScene | 仅占位；首个 Demo 不包含排行榜后端功能。当前模拟列表前三名的 `RankBg` 分别使用 `RankCellBg_1.png`、`RankCellBg_2.png`、`RankCellBg_3.png`，第四名以后使用 `RankCellBg.png` |
 | AchieveScene | 当前显示 20 条模拟成就，前 5 条已达成、后 15 条未达成；接入 Steam 后替换数据源 |
@@ -106,7 +106,10 @@ Assets/
 - GameScene 根据选中 PackId 动态加载 `Resources/CardBagPrefabs/CardBagNNN.prefab`。源贴图位于 `UI/CardBags/CardBagNNN/`，通过 Prefab 的 Sprite 引用进入构建，不放入 StreamingAssets。
 - 2026-07-30 清理旧特效后，已从根目录 `特效资源/` 原样导入 `effect资源管理.unitypackage` 和 `桌面卡包环境搭建.unitypackage`。导入结果位于 `Assets/Resources/Effects/CardFx`、`CardPack`、`PlaneGroup`，并新增 `Assets/Scenes/EffectScene001.unity`。
 - 新 3D/粒子特效保留在 `Resources/Effects/`，不要复制到 StreamingAssets。两个包的重复路径、GUID 和内容一致；导入后 8 个 Shader、30 个材质、20 个 Prefab、预览场景及 134 条依赖均通过 Unity 加载校验。
-- 旧运行时特效接入代码仍保留，尚未按新包完整接线。共享开包 Prefab 为 `Effects/CardPack/CardPackOpening`；其余六层资源位于 `Effects/CardPack/CardBagPrefab/CardBag01/`；卡包材质位于 `Effects/CardPack/ModTextures/Materials/CardPackOpeningMaterial`；拆包 Prefab 位于 `Effects/CardFx/Profabs/fx_chai_w_001`。后续应调整代码加载路径，不移动原始资源。
+- MainScene 已按 `EffectScene001` 模板接入新开包流程。运行时使用完整卡包 `Effects/CardPack/CardBagPrefab/CardBag01/CardPackOpening_001`、闭合列表模型 `CardPackStatic_001`、材质 `Effects/CardPack/ModTextures/Materials/CardPackOpeningMaterial` 和拆包粒子 `Effects/CardFx/Profabs/fx_chai_w_001`；`_002...006` 是独立卡包变体，不是需要叠加播放的六层。
+- 首页列表从 `CardPackOpening_001` 动画 Prefab 的第 0 帧烘焙一份运行时可读共享 Mesh，使列表与选中开包使用同一模型、朝向和封面 UV；每个可见槽位只创建轻量 MeshRenderer，并执行 `2.4s`、`0.98...1.02` 的呼吸循环，尺寸图标跟随同一缩放。默认列表使用项目侧 `CardPackListUnlit.shader`，不受开包舞台方向光影响；选中和开包模型继续使用特效原始受光材质。`CardPackStatic_001` 的 FBX Mesh 未开启 Read/Write，且其 UV 与开包模型不同，不用于首页动态封面。
+- 开包环境使用模板的 Trilight 环境光和强度 `1.3` 的柔和阴影 Directional Light。运行时将选中的 `PackIconNNN.png` 写入卡包正面材质，保持背面纹理不变；开包动画时长由 `_001` 的 `1.833333s` 动画片段决定。
+- 新拆包粒子的四个材质在原包中引用了缺失 Shader。运行时只克隆材质并将 Trail 映射到 `BF/Effect/EffectPacket`，其余 Line/Object 映射到 `BF/Effect/A/AParticleFireClip10`；不修改导入的原始特效资源。
 
 ---
 
@@ -121,7 +124,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
                     -> BtnSet        -> PanelSet -> BtnClose / BtnReturn -> 关闭设置
                     -> BtnUsable     -> PanelUsable -> BtnClose / BtnReturn -> 关闭辅助选项
                     -> BtnData       -> PanelSave -> BtnClose / BtnReturn -> 关闭存档面板
-      -> 已解锁卡包运行时列表项 -> 居中放大 + 柔化背景 + PanelBagSelect
+      -> 已解锁卡包运行时列表项 -> 居中放大 + 半透明压暗背景 + PanelBagSelect
                                       -> BtnPlay/重玩 -> BgGame 开包舞台
                                                          -> 轻点卡包 / 顶部向右横划 -> 开包动画 + 拆包粒子 -> GameScene 入场
                                       -> BtnBack -> 卡包返回列表并关闭面板
@@ -225,7 +228,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 - `LoadingScene.Start` 初始化 `JsonLocalStore`、`SqliteLocalStore`、`GameTaskUtility` 和 `CardPackDataUtility`。
 - `Assets/Scripts/Model` 有意保持单层扁平目录。相关纯 C# 类型按以下方式合并：`GameManager` 位于 `GameDefine.cs`，CSV 解析类型位于 `GameConfigRepository.cs`，`JsonLocalStore`、`SqliteLocalStore`、`GameSettingsData` 和 `GameSettingsUtility` 位于 `LocalDataStore.cs`，积分类型和 `GameScoreUtility` 位于 `GameTaskUtility.cs`，`GameFontUtility` 位于 `GameCommonUtility.cs`。公开类型名和调用点保持不变。
 - Model 当前保留8个脚本。`GameAnimationUtility`、`CardPackDataUtility`、`GameTaskUtility`、`GameConfigRepository`、`CardFxRuntimeUtility` 和 `GameDefine` 属于大型或独立模块，不为减少文件数量继续互相合并。
-- MainScene 的卡包选择、居中放大、柔化背景、`PanelBagSelect`、开包输入和 2D 缺失资源回退逻辑保持不变。新特效已经导入但尚未完成运行时映射；接入时应保持卡包封面动态替换、`600 x 680` 设计尺寸、列表呼吸、选中复原和进入 GameScene 的现有交互节奏，并按新 Prefab、Animator 和材质结构调整加载路径。
+- MainScene 的卡包选择、居中放大、`PanelBagSelect`、开包输入和 2D 缺失资源回退逻辑保持不变。选中态在隐藏选中槽位后生成四分之一分辨率背景截图并放大虚化，再叠加半透明 Panel 压暗；选中卡包使用更高排序层保持清晰。运行时保持动态封面、`600 x 680` 设计尺寸、选中复原和进入 GameScene 的现有交互节奏。
 - 只有通过正常拆包进入 GameScene 时才播放一次入场：CardBag/棋盘从上方进入，PieceBoard 从下方进入，当前组 Piece 从棋盘附近错峰落入托盘，返回和提示按钮淡入；入场完成前屏蔽拖拽。对象在起始姿态保留两个渲染帧后才推进动画，单帧动画时间最多推进 `1/30s`，场景加载或首帧资源初始化卡顿不得吞掉入场过程。直接在编辑器启动 GameScene 保持即时初始化。
 - `GameScene/BtnTips` 从当前组选择 Piece 编号最小的未完成碎片。目标碎片在托盘原位置左右抖动约 `0.8s` 后停止，棋盘对应 `GrooveRect` 使用 `HintDashedOutlineGraphic` 从 GPU 读取 Piece Sprite 的实际 Alpha 像素边界，沿真实累计轮廓长度生成固定 `20` 像素实线、基础间隔 `15` 像素、滚动速度 `60` 像素/秒的绿色滚动虚线；轮廓在当前 GameScene 内按 Sprite 缓存并在离场时清空，Physics Shape 只作为读取失败回退。再次点击按钮取消当前提示，成功放置、切组或结算时同样清理。一旦有效提示显示过，本局持续记为已使用提示。
 - 首次 Piece 放置引导面向历史未完成且尚未完成引导的 `CardBag001`；已有部分拼图进度时从当前未完成 Piece 继续。入场动画结束后，托盘变暗并突出当前组编号最小 Piece。`GameImgArrow.png` 从 Piece 上方开始并整体旋转朝向槽位，底部 Pivot 沿该直线同步前移，同时保持原生 `122 x 271` 宽高比从 `0` 等比放大到原生尺寸；终点按箭头原生长度反算，使完整尺寸时箭头尖落在槽位中心。移动放大持续 `0.9s`，完整停留 `0.12s`、隐藏 `0.2s` 后循环，不做非等比拉伸或弯曲。槽位复用 `HintDashedOutlineGraphic`。拿起目标 Piece 后隐藏箭头和托盘引导层，但虚线持续显示；放错恢复全部视觉，放对后继续提示下一个，跨分组覆盖整包，最后一片完成后将 `Tutorial/CardBag001AllPiecesCompleted` 写入 SQLite `AppRecords`。引导期间不显示当前组烘焙描边且只允许拖动目标 Piece；该流程不算使用 `BtnTips`。
@@ -254,7 +257,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 2. 在 `CardPacks.csv` 增加一行（`PackId`、`PackSize`、`ChapterId`、正数 `BoardScale`）。
 3. 在 `UI/PackImages/` 下按 `PackIconNNN.png` 命名增加对应封面。`GameDefine.FormatPackImagePath` 将 PackId `1` 映射到 `UI/PackImages/PackIcon001.png`。
 4. 通过 `CardPackDataUtility` 将生命周期写入 SQLite `CardPacks` 表。
-5. 不创建每个卡包专属的 3D 资源。运行时复用共享动画、Controller、材质和全部六个 `CardPackOpening` 蒙皮层；选中的 `PackIconNNN.png` 成为每个动画层的封面。共享资源缺失时，MainScene 使用 2D 回退。
+5. 不创建每个卡包专属的 3D 资源。运行时复用完整的 `CardPackOpening_001` 动画 Prefab、`CardPackStatic_001` 闭合模型、Controller 和材质；选中的 `PackIconNNN.png` 成为卡包正面封面。共享资源缺失时，MainScene 使用 2D 回退。
 
 ### 拼图
 
@@ -307,7 +310,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 - `Effects/PlaneGroup/PlaneGroup_001.prefab`：桌面环境组。
 - `Assets/Scenes/EffectScene001.unity`：包内预览场景，不属于正式构建场景。
 
-资源已通过导入完整性检查，但 MainScene 仍有旧加载路径，不能据此认定新开包特效已在正式流程完整播放。
+MainScene 正式流程使用上述 `_001` 卡包、模板环境光和拆包粒子。选包居中、返回、重玩确认、轻点或横划触发以及动画结束进入 GameScene 的交互流程保持不变。
 
 ---
 

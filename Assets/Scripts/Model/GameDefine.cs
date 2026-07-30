@@ -42,7 +42,7 @@ public static class GameDefine
     public const string SceneGame = "GameScene";
     public const string SceneRank = "RankScene";
     public const string SceneAchieve = "AchieveScene";
-    public const string SceneEffect = "effect";
+    public const string SceneEffect = "EffectScene001";
 
     public const string EffectsRoot = "Assets/Resources/Effects";
     public const string CardPackFolder = "CardPack";
@@ -55,11 +55,17 @@ public static class GameDefine
     public const string PlaneGroupMaterialResourcesPath = "Effects/PlaneGroup/PlaneGroupLit";
     public const string PlaneGroupFbxEditorFolder = "Assets/Resources/Effects/PlaneGroup";
 
-    public const string CardPackPrefabResourcesFolder = "Effects/CardPack/";
-    public const string CardPackOpeningPrefabName = "CardPackOpening";
-    public const string CardPackMaterialResourcesPath = "Effects/CardPack/CardPackOpeningMaterial";
-    public const string CardPackPrefabEditorFolder = "Assets/Resources/Effects/CardPack";
-    public const string CardPackMaterialEditorPath = "Assets/Resources/Effects/CardPack/CardPackOpeningMaterial.mat";
+    public const string CardPackPrefabResourcesFolder =
+        "Effects/CardPack/CardBagPrefab/CardBag01/";
+    public const string CardPackOpeningPrefabName = "CardPackOpening_001";
+    public const string CardPackMaterialResourcesPath =
+        "Effects/CardPack/ModTextures/Materials/CardPackOpeningMaterial";
+    public const string CardPackPrefabEditorFolder =
+        "Assets/Resources/Effects/CardPack/CardBagPrefab/CardBag01";
+    public const string CardPackMaterialEditorPath =
+        "Assets/Resources/Effects/CardPack/ModTextures/Materials/CardPackOpeningMaterial.mat";
+    public const string CardPackDismantleResourcesPath =
+        "Effects/CardFx/Profabs/fx_chai_w_001";
     public const string CardObtainPrefabName = "CardObtain_001";
     public const string CardTrailPrefabName = "CardTrail_001";
 

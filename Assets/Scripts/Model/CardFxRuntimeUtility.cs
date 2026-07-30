@@ -9,8 +9,13 @@ public static class CardFxRuntimeUtility
     private const float PreviewMaxParticleSize = 9000f;
     private const string UiFxShaderToken = "UI_FX";
     private const string WorldFxShaderName = "URP/Effect/UPR_FX_Common";
+    private const string BuiltInPacketShaderName = "BF/Effect/EffectPacket";
+    private const string BuiltInClipShaderName = "BF/Effect/A/AParticleFireClip10";
+    private const string InternalErrorShaderName = "Hidden/InternalErrorShader";
 
     private static Shader sWorldFxShader;
+    private static Shader sBuiltInPacketShader;
+    private static Shader sBuiltInClipShader;
     private static Material sFallbackMaterial;
 
     /// <summary>
@@ -161,7 +166,24 @@ public static class CardFxRuntimeUtility
 
         var shaderName = source.shader != null ? source.shader.name : string.Empty;
         Material previewMaterial;
-        if (!string.IsNullOrEmpty(shaderName) && shaderName.Contains(UiFxShaderToken))
+        if (source.shader == null
+            || !source.shader.isSupported
+            || shaderName == InternalErrorShaderName)
+        {
+            var replacementShader = GetBuiltInReplacementShader(source.name);
+            previewMaterial = new Material(source)
+            {
+                name = source.name + "_BuiltInPreview"
+            };
+            if (replacementShader != null)
+            {
+                previewMaterial.shader = replacementShader;
+                previewMaterial.renderQueue = source.renderQueue > 0
+                    ? source.renderQueue
+                    : 3000;
+            }
+        }
+        else if (!string.IsNullOrEmpty(shaderName) && shaderName.Contains(UiFxShaderToken))
         {
             EnsureWorldFxShader();
             if (sWorldFxShader == null)
@@ -186,6 +208,25 @@ public static class CardFxRuntimeUtility
 
         ApplyDepthPreviewFix(previewMaterial);
         return previewMaterial;
+    }
+
+    private static Shader GetBuiltInReplacementShader(string materialName)
+    {
+        if (!string.IsNullOrEmpty(materialName)
+            && materialName.Contains("Trail"))
+        {
+            if (sBuiltInPacketShader == null)
+            {
+                sBuiltInPacketShader = Shader.Find(BuiltInPacketShaderName);
+            }
+            return sBuiltInPacketShader;
+        }
+
+        if (sBuiltInClipShader == null)
+        {
+            sBuiltInClipShader = Shader.Find(BuiltInClipShaderName);
+        }
+        return sBuiltInClipShader;
     }
 
     private static void ApplyDepthPreviewFix(Material material)
