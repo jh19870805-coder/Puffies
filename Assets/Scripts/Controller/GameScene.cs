@@ -45,6 +45,7 @@ public class GameScene : MonoBehaviour
     private const float GroupTransitionPromptDelay = 0.22f;
     private const float GroupTransitionStrongHoldDuration = 0.3f;
     private const float GroupTransitionDefaultHoldDuration = 0.1f;
+    private const float PieceSnapDuration = 0.18f;
     private const float PiecePlacementFlashDuration = 0.3f;
     private const int PieceSortingOrder = 520;
     private const float HintShakeAngle = 6f;
@@ -144,6 +145,7 @@ public class GameScene : MonoBehaviour
     private bool _isFinishTransitionStarted;
     private bool _isEntranceAnimating;
     private bool _isGroupTransitionAnimating;
+    private bool _isPiecePlacementAnimating;
     private GameObject _loadedCardBagRoot;
     private RectTransform _loadedCardBagRect;
     private Sprite _runtimeCardBoardBackgroundSprite;
@@ -173,9 +175,12 @@ public class GameScene : MonoBehaviour
 
     private bool IsTutorialActive => _tutorialStage != TutorialStage.None;
 
-    private bool IsTutorialBlockingOutline =>
+    private bool IsTutorialFocusStage =>
         _tutorialStage == TutorialStage.StrongPlacement
         || _tutorialStage == TutorialStage.TwoPiecePractice;
+
+    private bool IsTutorialBlockingOutline =>
+        _tutorialStage == TutorialStage.StrongPlacement;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Bootstrap()
@@ -1344,7 +1349,7 @@ public class GameScene : MonoBehaviour
 
     private void TryBeginDrag(Vector2 screenPosition)
     {
-        if (_isGameFinished)
+        if (_isGameFinished || _isPiecePlacementAnimating)
         {
             return;
         }
@@ -1394,7 +1399,9 @@ public class GameScene : MonoBehaviour
             return;
         }
 
-        if (!_isGameFinished && FindDraggablePieceAt(screenPosition) != null)
+        if (!_isGameFinished
+            && !_isPiecePlacementAnimating
+            && FindDraggablePieceAt(screenPosition) != null)
         {
             GameCursorUtility.SetPieceHover();
             return;
@@ -1456,8 +1463,6 @@ public class GameScene : MonoBehaviour
         if (state.GrooveRect != null
             && Vector3.Distance(state.PieceRenderer.transform.position, groovePosition) <= CalculateSnapDistance(state))
         {
-            state.PieceRenderer.transform.position = groovePosition;
-            state.PieceRenderer.transform.localScale = state.DragScale;
             state.IsOnTray = false;
             state.IsPlaced = true;
             if (state == _hintedPiece)
@@ -1470,13 +1475,7 @@ public class GameScene : MonoBehaviour
                 CompactFollowingTrayPieces(state);
             }
             RecordPlacedPiece(state);
-            CommitPlacedPieceToBoardImage(state);
-            StartCoroutine(PlayPiecePlacementSuccessFlash(state.GrooveImage));
-            var didAdvanceGroup = TryAdvanceGroup();
-            if (!didAdvanceGroup && _tutorialStage == TutorialStage.TwoPiecePractice)
-            {
-                RefreshPiecePlacementTutorialPresentation();
-            }
+            StartCoroutine(PlayPieceSnapAnimation(state, groovePosition));
             return;
         }
 
@@ -1681,6 +1680,56 @@ public class GameScene : MonoBehaviour
         state.PieceRenderer.gameObject.SetActive(false);
         Destroy(state.PieceRenderer.gameObject);
         state.PieceRenderer = null;
+    }
+
+    private IEnumerator PlayPieceSnapAnimation(
+        DraggablePieceState state,
+        Vector3 groovePosition)
+    {
+        var renderer = state?.PieceRenderer;
+        if (renderer == null)
+        {
+            yield break;
+        }
+
+        _isPiecePlacementAnimating = true;
+        var startPosition = renderer.transform.position;
+        var startScale = renderer.transform.localScale;
+        renderer.sortingOrder = PieceSortingOrder + 100;
+
+        var elapsed = 0f;
+        while (elapsed < PieceSnapDuration && renderer != null)
+        {
+            elapsed += Mathf.Min(Time.unscaledDeltaTime, GameEntranceMaxFrameDelta);
+            var progress = Mathf.Clamp01(elapsed / PieceSnapDuration);
+            var eased = 1f - Mathf.Pow(1f - progress, 3f);
+            renderer.transform.position = Vector3.LerpUnclamped(
+                startPosition,
+                groovePosition,
+                eased);
+            renderer.transform.localScale = Vector3.LerpUnclamped(
+                startScale,
+                state.DragScale,
+                eased);
+            yield return null;
+        }
+
+        if (renderer != null)
+        {
+            renderer.transform.position = groovePosition;
+            renderer.transform.localScale = state.DragScale;
+            renderer.sortingOrder = PieceSortingOrder;
+        }
+
+        CommitPlacedPieceToBoardImage(state);
+        StartCoroutine(PlayPiecePlacementSuccessFlash(state.GrooveImage));
+        _isPiecePlacementAnimating = false;
+
+        var didAdvanceGroup = TryAdvanceGroup();
+        if (!didAdvanceGroup && _tutorialStage == TutorialStage.TwoPiecePractice)
+        {
+            RefreshPiecePlacementTutorialPresentation();
+        }
     }
 
     private IEnumerator PlayPiecePlacementSuccessFlash(Image grooveImage)
@@ -2623,7 +2672,7 @@ public class GameScene : MonoBehaviour
     {
         HideTutorialFocusPresentation();
         ClearPieceHint();
-        if (!IsTutorialBlockingOutline || _tutorialCanvasRoot == null)
+        if (!IsTutorialFocusStage || _tutorialCanvasRoot == null)
         {
             return false;
         }
@@ -3378,6 +3427,7 @@ public class GameScene : MonoBehaviour
         if (_isGameFinished
             || _isEntranceAnimating
             || _isGroupTransitionAnimating
+            || _isPiecePlacementAnimating
             || _drag.DraggingPiece != null
             || _board.GrooveImagesByGroup == null)
         {
@@ -3442,6 +3492,7 @@ public class GameScene : MonoBehaviour
         if (_isGameFinished
             || _isEntranceAnimating
             || _isGroupTransitionAnimating
+            || _isPiecePlacementAnimating
             || _isTutorialPending
             || IsTutorialBlockingOutline
             || _drag.DraggingPiece != null)
