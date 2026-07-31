@@ -8,7 +8,7 @@ Material:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: TableTexture
-  m_Shader: {fileID: 4800000, guid: 04cf13a7d10dbf649b5c36bfac1e3994, type: 3}
+  m_Shader: {fileID: 4800000, guid: 39ba5fc922a19bc42b39cef8498693f6, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []
@@ -72,6 +72,7 @@ Material:
     - _Mode: 0
     - _OcclusionStrength: 1
     - _Parallax: 0.02
+    - _ShadowIntensity: 0.695
     - _SmoothnessTextureChannel: 0
     - _SpecularHighlights: 1
     - _SrcBlend: 1

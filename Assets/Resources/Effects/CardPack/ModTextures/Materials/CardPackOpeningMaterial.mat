@@ -34,7 +34,7 @@ Material:
     - _ClipTex:
         m_Texture: {fileID: 2800000, guid: 6af09fac80524fa4b8249aa88d84fc2e, type: 3}
         m_Scale: {x: 1, y: 1}
-        m_Offset: {x: 0, y: 0}
+        m_Offset: {x: -0.006, y: 0}
     - _CubeMap:
         m_Texture: {fileID: 8900000, guid: 5d83cf49ac003d54686219ce46968ceb, type: 3}
         m_Scale: {x: 1, y: 1}
@@ -75,7 +75,7 @@ Material:
     - _LightParametersPower: 0.5
     - _MaskClipValue: 0.5
     - _MetallicParameters: 0.36
-    - _OcclutionValue: 1.43
+    - _OcclutionValue: 1.41
     - _RampTexValue: 0.193
     - _RampUVScale: -0.75
     - _SmoothnessParameters: 0.8
