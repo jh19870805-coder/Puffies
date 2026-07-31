@@ -936,16 +936,22 @@ public static class GameCursorUtility
     private const string DefaultCursorPath = GameDefine.UiRoot + "/BasicUI/ImgHand_1.png";
     private const string PieceHoverCursorPath = GameDefine.UiRoot + "/BasicUI/ImgHand_2.png";
     private const string PieceDragCursorPath = GameDefine.UiRoot + "/BasicUI/ImgHand_3.png";
+    private const float CanvasScaleMatch = 0.5f;
 
     private static readonly Vector2 DefaultHotspot = new Vector2(4f, 2f);
     private static readonly Vector2 PieceHoverHotspot = new Vector2(4f, 24f);
     private static readonly Vector2 PieceDragHotspot = new Vector2(4f, 24f);
 
+    private static Texture2D sDefaultCursorSource;
+    private static Texture2D sPieceHoverCursorSource;
+    private static Texture2D sPieceDragCursorSource;
     private static Texture2D sDefaultCursor;
     private static Texture2D sPieceHoverCursor;
     private static Texture2D sPieceDragCursor;
     private static CursorVisual sCurrentVisual = CursorVisual.Unset;
     private static bool sInitialized;
+    private static int sAppliedScreenWidth;
+    private static int sAppliedScreenHeight;
 
     private enum CursorVisual
     {
@@ -958,17 +964,26 @@ public static class GameCursorUtility
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetState()
     {
+        Application.onBeforeRender -= RefreshForScreenSize;
+        ReleaseScaledCursorTextures();
+        DestroyTexture(ref sDefaultCursorSource);
+        DestroyTexture(ref sPieceHoverCursorSource);
+        DestroyTexture(ref sPieceDragCursorSource);
         sDefaultCursor = null;
         sPieceHoverCursor = null;
         sPieceDragCursor = null;
         sCurrentVisual = CursorVisual.Unset;
         sInitialized = false;
+        sAppliedScreenWidth = 0;
+        sAppliedScreenHeight = 0;
     }
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     private static void Bootstrap()
     {
         EnsureInitialized();
+        Application.onBeforeRender -= RefreshForScreenSize;
+        Application.onBeforeRender += RefreshForScreenSize;
         SetDefault();
     }
 
@@ -994,34 +1009,44 @@ public static class GameCursorUtility
             return;
         }
 
-        sDefaultCursor = LoadCursorTexture(DefaultCursorPath);
-        sPieceHoverCursor = LoadCursorTexture(PieceHoverCursorPath);
-        sPieceDragCursor = LoadCursorTexture(PieceDragCursorPath);
+        sDefaultCursorSource = LoadCursorTexture(DefaultCursorPath);
+        sPieceHoverCursorSource = LoadCursorTexture(PieceHoverCursorPath);
+        sPieceDragCursorSource = LoadCursorTexture(PieceDragCursorPath);
         sInitialized = true;
+        RebuildScaledCursorTextures();
     }
 
     private static void Apply(CursorVisual visual)
     {
         EnsureInitialized();
-        if (sCurrentVisual == visual)
+        var didScaleChange = EnsureCursorScaleMatchesScreen();
+        if (sCurrentVisual == visual && !didScaleChange)
         {
             return;
         }
 
         Texture2D texture;
+        Texture2D sourceTexture;
         Vector2 hotspot;
         switch (visual)
         {
             case CursorVisual.PieceHover:
                 texture = sPieceHoverCursor != null ? sPieceHoverCursor : sDefaultCursor;
+                sourceTexture = sPieceHoverCursor != null
+                    ? sPieceHoverCursorSource
+                    : sDefaultCursorSource;
                 hotspot = sPieceHoverCursor != null ? PieceHoverHotspot : DefaultHotspot;
                 break;
             case CursorVisual.PieceDrag:
                 texture = sPieceDragCursor != null ? sPieceDragCursor : sDefaultCursor;
+                sourceTexture = sPieceDragCursor != null
+                    ? sPieceDragCursorSource
+                    : sDefaultCursorSource;
                 hotspot = sPieceDragCursor != null ? PieceDragHotspot : DefaultHotspot;
                 break;
             default:
                 texture = sDefaultCursor;
+                sourceTexture = sDefaultCursorSource;
                 hotspot = DefaultHotspot;
                 break;
         }
@@ -1029,9 +1054,130 @@ public static class GameCursorUtility
         Cursor.visible = true;
         Cursor.SetCursor(
             texture,
-            texture != null ? hotspot : Vector2.zero,
+            texture != null ? ScaleHotspot(hotspot, sourceTexture, texture) : Vector2.zero,
             CursorMode.ForceSoftware);
         sCurrentVisual = visual;
+    }
+
+    private static void RefreshForScreenSize()
+    {
+        if (Screen.width == sAppliedScreenWidth && Screen.height == sAppliedScreenHeight)
+        {
+            return;
+        }
+
+        Apply(sCurrentVisual == CursorVisual.Unset ? CursorVisual.Default : sCurrentVisual);
+    }
+
+    private static bool EnsureCursorScaleMatchesScreen()
+    {
+        if (Screen.width == sAppliedScreenWidth
+            && Screen.height == sAppliedScreenHeight
+            && sDefaultCursor != null)
+        {
+            return false;
+        }
+
+        RebuildScaledCursorTextures();
+        return true;
+    }
+
+    private static void RebuildScaledCursorTextures()
+    {
+        ReleaseScaledCursorTextures();
+        var scale = CalculateScreenScale();
+        sDefaultCursor = CreateScaledCursorTexture(sDefaultCursorSource, scale);
+        sPieceHoverCursor = CreateScaledCursorTexture(sPieceHoverCursorSource, scale);
+        sPieceDragCursor = CreateScaledCursorTexture(sPieceDragCursorSource, scale);
+        sAppliedScreenWidth = Screen.width;
+        sAppliedScreenHeight = Screen.height;
+    }
+
+    private static float CalculateScreenScale()
+    {
+        var widthScale = Mathf.Max(1f, Screen.width) / GameDefine.DesignWidth;
+        var heightScale = Mathf.Max(1f, Screen.height) / GameDefine.DesignHeight;
+        var logWidth = Mathf.Log(widthScale, 2f);
+        var logHeight = Mathf.Log(heightScale, 2f);
+        return Mathf.Pow(2f, Mathf.Lerp(logWidth, logHeight, CanvasScaleMatch));
+    }
+
+    private static Texture2D CreateScaledCursorTexture(Texture2D source, float scale)
+    {
+        if (source == null)
+        {
+            return null;
+        }
+
+        var width = Mathf.Max(1, Mathf.RoundToInt(source.width * scale));
+        var height = Mathf.Max(1, Mathf.RoundToInt(source.height * scale));
+        if (width == source.width && height == source.height)
+        {
+            return source;
+        }
+
+        var texture = new Texture2D(width, height, TextureFormat.RGBA32, false)
+        {
+            name = $"{source.name}_Cursor_{width}x{height}",
+            filterMode = FilterMode.Bilinear,
+            wrapMode = TextureWrapMode.Clamp
+        };
+        var pixels = new Color[width * height];
+        for (var y = 0; y < height; y++)
+        {
+            var v = (y + 0.5f) / height;
+            for (var x = 0; x < width; x++)
+            {
+                var u = (x + 0.5f) / width;
+                pixels[y * width + x] = source.GetPixelBilinear(u, v);
+            }
+        }
+
+        texture.SetPixels(pixels);
+        texture.Apply(false, false);
+        return texture;
+    }
+
+    private static Vector2 ScaleHotspot(
+        Vector2 hotspot,
+        Texture2D source,
+        Texture2D scaled)
+    {
+        if (source == null || scaled == null || source.width <= 0 || source.height <= 0)
+        {
+            return hotspot;
+        }
+
+        return new Vector2(
+            hotspot.x * scaled.width / source.width,
+            hotspot.y * scaled.height / source.height);
+    }
+
+    private static void ReleaseScaledCursorTextures()
+    {
+        DestroyScaledTexture(ref sDefaultCursor, sDefaultCursorSource);
+        DestroyScaledTexture(ref sPieceHoverCursor, sPieceHoverCursorSource);
+        DestroyScaledTexture(ref sPieceDragCursor, sPieceDragCursorSource);
+    }
+
+    private static void DestroyScaledTexture(ref Texture2D texture, Texture2D source)
+    {
+        if (texture != null && texture != source)
+        {
+            UnityEngine.Object.Destroy(texture);
+        }
+
+        texture = null;
+    }
+
+    private static void DestroyTexture(ref Texture2D texture)
+    {
+        if (texture != null)
+        {
+            UnityEngine.Object.Destroy(texture);
+        }
+
+        texture = null;
     }
 
     private static Texture2D LoadCursorTexture(string relativePath)
