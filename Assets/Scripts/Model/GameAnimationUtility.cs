@@ -17,13 +17,19 @@ public static class GameAnimationUtility
     private const string FullCardPackObjectName = "CardPackOpeningFull";
     private const string CardPackDismantleResourcesPath =
         GameDefine.CardPackDismantleResourcesPath;
+    private const string CardPackTearTrailResourcesPath =
+        GameDefine.CardPackTearTrailResourcesPath;
     private const string RuntimeDismantleObjectName = "CardPackDismantleRuntime";
+    private const string RuntimeTearTrailObjectName = "CardPackTearTrailRuntime";
     private const string CardPackEnvironmentLightObjectName = "CardPackEnvironmentLight";
     private const string CardPackListUnlitShaderResourcesPath = "CardPackListUnlit";
     private const string CardPackListUnlitShaderName = "Puffies/CardPack List Unlit";
     private const float DismantleReferenceCardWidth = 0.96f;
     private const float DismantleWorldDepthOffset = -0.1f;
     private const float DismantleLifetime = 2.8f;
+    private const float TearTrailHorizontalInsetRatio = 0.04f;
+    private const float TearTrailVerticalPositionRatio = 0.82f;
+    private const float TearTrailFadeLifetime = 1.2f;
     private const float CardPackAuthoredYaw = 178.718f;
     private static readonly string[] CardPackAnimatedPrefabNames =
     {
@@ -580,6 +586,81 @@ public static class GameAnimationUtility
         CardFxRuntimeUtility.ReplayParticleSystems(root);
         CardPackDismantleLifetime.Attach(root, DismantleLifetime);
         return true;
+    }
+
+    public static IEnumerator PlayPreparedCardPackTearTrailEffect(
+        int sortingOrder,
+        float travelDuration)
+    {
+        if (!TryGetSpawnedCardPackEffect(out var effect)
+            || !effect.HasPreparedPose
+            || !TryGetCurrentPoseBounds(effect.CardRenderers, out var cardBounds)
+            || cardBounds.size.x <= 0.001f)
+        {
+            yield break;
+        }
+
+        var prefab = Resources.Load<GameObject>(CardPackTearTrailResourcesPath);
+        if (prefab == null)
+        {
+            Debug.LogWarning(
+                $"Card-pack tear trail effect missing: Resources/{CardPackTearTrailResourcesPath}.");
+            yield break;
+        }
+
+        var root = UnityEngine.Object.Instantiate(prefab);
+        root.name = RuntimeTearTrailObjectName;
+        root.transform.rotation = Quaternion.identity;
+
+        var seamY = Mathf.Lerp(
+            cardBounds.min.y,
+            cardBounds.max.y,
+            TearTrailVerticalPositionRatio);
+        var startPosition = new Vector3(
+            Mathf.Lerp(cardBounds.min.x, cardBounds.max.x, TearTrailHorizontalInsetRatio),
+            seamY,
+            cardBounds.center.z + DismantleWorldDepthOffset);
+        var endPosition = new Vector3(
+            Mathf.Lerp(cardBounds.min.x, cardBounds.max.x, 1f - TearTrailHorizontalInsetRatio),
+            seamY,
+            startPosition.z);
+        root.transform.position = startPosition;
+
+        var worldScale = cardBounds.size.x / DismantleReferenceCardWidth;
+        var sortingLayerId = effect.CardRenderers != null
+            && effect.CardRenderers.Length > 0
+            && effect.CardRenderers[0] != null
+            ? effect.CardRenderers[0].sortingLayerID
+            : 0;
+        CardFxRuntimeUtility.PrepareRuntimeWorldEffect(
+            root,
+            worldScale,
+            sortingLayerId,
+            sortingOrder);
+        CardFxRuntimeUtility.ReplayParticleSystems(root);
+
+        yield return null;
+        var duration = Mathf.Max(0.05f, travelDuration);
+        var elapsed = 0f;
+        while (elapsed < duration && root != null)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            var normalized = Mathf.Clamp01(elapsed / duration);
+            root.transform.position = Vector3.LerpUnclamped(
+                startPosition,
+                endPosition,
+                Mathf.SmoothStep(0f, 1f, normalized));
+            yield return null;
+        }
+
+        if (root == null)
+        {
+            yield break;
+        }
+
+        root.transform.position = endPosition;
+        CardFxRuntimeUtility.StopEmittingParticleSystems(root);
+        CardPackDismantleLifetime.Attach(root, TearTrailFadeLifetime);
     }
 
     /// <summary>

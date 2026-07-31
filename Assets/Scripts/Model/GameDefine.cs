@@ -66,6 +66,8 @@ public static class GameDefine
         "Assets/Resources/Effects/CardPack/ModTextures/Materials/CardPackOpeningMaterial.mat";
     public const string CardPackDismantleResourcesPath =
         "Effects/CardFx/Profabs/fx_chai_w_001";
+    public const string CardPackTearTrailResourcesPath =
+        "Effects/CardFx/Profabs/FX_ui_tuowei_w_001";
     public const string CardObtainPrefabName = "CardObtain_001";
     public const string CardTrailPrefabName = "CardTrail_001";
 

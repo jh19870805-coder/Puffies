@@ -104,9 +104,9 @@ Assets/
 - GameScene 根据选中 PackId 动态加载 `Resources/CardBagPrefabs/CardBagNNN.prefab`。源贴图位于 `UI/CardBags/CardBagNNN/`，通过 Prefab 的 Sprite 引用进入构建，不放入 StreamingAssets。
 - 当前特效按顺序来自 `effect资源管理`、`桌面卡包环境搭建`、`卡包微调`、`拆`、`拖尾`、`解锁` 六个资源包。导入结果位于 `Assets/Resources/Effects/CardFx`、`CardPack`、`PlaneGroup`，预览场景为 `Assets/Scenes/EffectScene001.unity`。
 - 新 3D/粒子特效保留在 `Resources/Effects/`，不要复制到 StreamingAssets。包内重复资源按后续微调包覆盖，但必须保留原始 Meta/GUID；不要导入资源包中重复携带的项目 UI、字体或 `TaskItem`。
-- MainScene 已按 `EffectScene001` 模板接入新开包流程。运行时使用完整卡包 `Effects/CardPack/CardBagPrefab/CardBag01/CardPackOpening_001`、闭合列表模型 `CardPackStatic_001`、材质 `Effects/CardPack/ModTextures/Materials/CardPackOpeningMaterial` 和拆包粒子 `Effects/CardFx/Profabs/fx_chai_w_001`；`_002...006` 是独立卡包变体，不是需要叠加播放的六层。
+- MainScene 已按 `EffectScene001` 模板接入新开包流程。运行时使用完整卡包 `Effects/CardPack/CardBagPrefab/CardBag01/CardPackOpening_001`、闭合列表模型 `CardPackStatic_001`、材质 `Effects/CardPack/ModTextures/Materials/CardPackOpeningMaterial`、最新封口拖尾 `Effects/CardFx/Profabs/FX_ui_tuowei_w_001` 和拆包粒子 `Effects/CardFx/Profabs/fx_chai_w_001`；`_002...006` 是独立卡包变体，不是需要叠加播放的六层。
 - 首页列表从 `CardPackOpening_001` 动画 Prefab 的第 0 帧烘焙一份运行时可读共享 Mesh，使列表与选中开包使用同一模型、朝向和封面 UV；每个可见槽位只创建轻量 MeshRenderer，并执行 `2.4s`、`0.98...1.02` 的呼吸循环，尺寸图标跟随同一缩放。默认列表使用项目侧 `CardPackListUnlit.shader`，不受开包舞台方向光影响；选中和开包模型继续使用特效原始受光材质。`CardPackStatic_001` 的 FBX Mesh 未开启 Read/Write，且其 UV 与开包模型不同，不用于首页动态封面。
-- 开包环境使用模板的 Trilight 环境光和强度 `1.3` 的柔和阴影 Directional Light。运行时将选中的 `PackIconNNN.png` 写入卡包正面材质，保持背面纹理不变；开包动画时长由 `_001` 的 `1.833333s` 动画片段决定。
+- 开包环境使用模板的 Trilight 环境光和强度 `1.3` 的柔和阴影 Directional Light。运行时将选中的 `PackIconNNN.png` 写入卡包正面材质，保持背面纹理不变；轻点或完成顶部横划后，先沿卡包顶部 `82%` 高度用 `0.42s` 播放从左到右的白色拖尾，再播放 `_001` 的 `1.833333s` 开包动画和拆包粒子。拖尾按当前卡包世界边界定位与缩放，停止发射后自然消散。
 - `CardFx/Shaders` 只保留 `2_Sided`、`AParticleFireClip10`、`AParticleFireClipAdd10` 和 `ReceiveShadow`。拆包、拖尾、解锁材质使用后两个粒子 Shader；运行时无效 Trail 材质回退到 `AParticleFireClipAdd10`，其他无效粒子材质回退到 `AParticleFireClip10`，不得重新依赖旧 URP/BF Packet Shader。
 
 ---

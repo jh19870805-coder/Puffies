@@ -67,6 +67,7 @@ public class MainScene : MonoBehaviour
     private const float OpeningStagePunchScaleRatio = 1.04f;
     private const float TearGuideTravelDuration = 0.85f;
     private const float TearGuidePauseDuration = 0.25f;
+    private const float TearTrailTravelDuration = 0.42f;
     private const float TearGuideBandHeightRatio = 0.24f;
     private const float TearGuideVerticalPositionRatio = 0.82f;
     private const float TearSwipeStartMaxRatio = 0.38f;
@@ -3357,6 +3358,10 @@ public class MainScene : MonoBehaviour
         var anchor = selectedEntry != null && selectedEntry.Image != null
             ? selectedEntry.Image.rectTransform
             : selectedEntry?.RectTransform;
+
+        yield return GameAnimationUtility.PlayPreparedCardPackTearTrailEffect(
+            TearGuideSortingOrder + 20,
+            TearTrailTravelDuration);
 
         if (GameAnimationUtility.PlayPreparedCardPackAnimation())
         {

@@ -71,6 +71,24 @@ public static class CardFxRuntimeUtility
         }
     }
 
+    public static void StopEmittingParticleSystems(GameObject root)
+    {
+        if (root == null)
+        {
+            return;
+        }
+
+        var particleSystems = root.GetComponentsInChildren<ParticleSystem>(true);
+        for (var i = 0; i < particleSystems.Length; i++)
+        {
+            var particleSystem = particleSystems[i];
+            if (particleSystem != null)
+            {
+                particleSystem.Stop(true, ParticleSystemStopBehavior.StopEmitting);
+            }
+        }
+    }
+
     private static void PrepareParticleSystems(GameObject root)
     {
         var particleSystems = root.GetComponentsInChildren<ParticleSystem>(true);
