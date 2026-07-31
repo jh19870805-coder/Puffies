@@ -179,6 +179,7 @@ public class RankScene : MonoBehaviour
         if (sprite != null)
         {
             backgroundImage.sprite = sprite;
+            backgroundImage.SetNativeSize();
         }
     }
 
