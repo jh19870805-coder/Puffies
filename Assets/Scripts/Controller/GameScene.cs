@@ -167,6 +167,7 @@ public class GameScene : MonoBehaviour
     private GameObject _tutorialFocusRoot;
     private Sprite _tutorialArrowSprite;
     private Sprite _tutorialTipBackgroundSprite;
+    private Vector3 _dragStartPosition;
 
     private bool IsTutorialActive => _tutorialStage != TutorialStage.None;
 
@@ -1364,6 +1365,7 @@ public class GameScene : MonoBehaviour
 
         var world = ToGameplayWorld(screenPosition);
         _drag.DraggingPiece = state;
+        _dragStartPosition = state.PieceRenderer.transform.position;
         _drag.DragOffset = state.PieceRenderer.transform.position - world;
         if (!state.IsOnTray)
         {
@@ -1475,6 +1477,13 @@ public class GameScene : MonoBehaviour
             return;
         }
 
+        if (IsPieceOverGameBoard(state.PieceRenderer))
+        {
+            ReturnPieceAfterInvalidBoardDrop(state, wasOnTray);
+            RestorePiecePlacementTutorialPresentation(state);
+            return;
+        }
+
         ResetPieceTrayPosition(instant: true);
         if (ShouldReturnPieceToTray(state.PieceRenderer))
         {
@@ -1494,6 +1503,57 @@ public class GameScene : MonoBehaviour
         }
 
         RestorePiecePlacementTutorialPresentation(state);
+    }
+
+    private bool IsPieceOverGameBoard(SpriteRenderer renderer)
+    {
+        if (renderer == null)
+        {
+            return false;
+        }
+
+        var boardRect = _loadedCardBagRect != null
+            ? _loadedCardBagRect
+            : _board.GameBoardImage != null
+                ? _board.GameBoardImage.rectTransform
+                : null;
+        var camera = Camera.main;
+        if (boardRect == null || camera == null)
+        {
+            return false;
+        }
+
+        var pieceBounds = renderer.bounds;
+        var boardBounds = GameCommonUtility.GetRectTransformCameraWorldBounds(
+            boardRect,
+            camera,
+            WorldGameplayDepth);
+        return pieceBounds.max.x > boardBounds.min.x
+            && pieceBounds.min.x < boardBounds.max.x
+            && pieceBounds.max.y > boardBounds.min.y
+            && pieceBounds.min.y < boardBounds.max.y;
+    }
+
+    private void ReturnPieceAfterInvalidBoardDrop(
+        DraggablePieceState state,
+        bool wasOnTray)
+    {
+        if (state?.PieceRenderer == null)
+        {
+            return;
+        }
+
+        state.PieceRenderer.transform.position = _dragStartPosition;
+        state.IsOnTray = wasOnTray;
+        if (wasOnTray)
+        {
+            state.PieceRenderer.transform.localScale = state.TrayScale;
+            ResetPieceTrayPosition(instant: true);
+            return;
+        }
+
+        state.PieceRenderer.transform.localScale = state.DragScale;
+        ResetPieceTrayPosition(instant: true);
     }
 
     private void RecordPlacedPiece(DraggablePieceState state)
