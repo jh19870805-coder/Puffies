@@ -67,6 +67,7 @@ public class GameScene : MonoBehaviour
     private const string TutorialArrowObjectName = "TutorialArrow";
     private const string TutorialTextObjectName = "TutorialText";
     private const string TutorialTipTemplateObjectName = "GuideTip";
+    private const string TutorialTipTextObjectName = "TextTips";
     private const string TutorialHintArrowObjectName = "Arrow";
     private const string TutorialArrowPath = GameDefine.UiRoot + "/GameScene/GuideArrow1.png";
     private const string TutorialTipBackgroundPath = GameDefine.UiRoot + "/GameScene/GuideTipBg.png";
@@ -2828,32 +2829,7 @@ public class GameScene : MonoBehaviour
         promptImage.preserveAspect = true;
         promptImage.raycastTarget = false;
 
-        var textObject = new GameObject(
-            "Content",
-            typeof(RectTransform),
-            typeof(CanvasRenderer),
-            typeof(TextMeshProUGUI),
-            typeof(Shadow));
-        var text = textObject.GetComponent<TextMeshProUGUI>();
-        text.rectTransform.SetParent(promptRect, false);
-        text.rectTransform.anchorMin = Vector2.zero;
-        text.rectTransform.anchorMax = Vector2.one;
-        text.rectTransform.offsetMin = new Vector2(42f, 28f);
-        text.rectTransform.offsetMax = new Vector2(-42f, -52f);
-        text.text = GetTutorialInstruction(stage);
-        text.fontSize = 29f;
-        text.fontSizeMin = 21f;
-        text.fontSizeMax = 29f;
-        text.enableAutoSizing = true;
-        text.color = Color.white;
-        text.alignment = TextAlignmentOptions.Center;
-        text.enableWordWrapping = true;
-        text.raycastTarget = false;
-        GameFontUtility.ApplyDefaultFont(text);
-
-        var shadow = textObject.GetComponent<Shadow>();
-        shadow.effectColor = new Color(0f, 0f, 0f, 0.72f);
-        shadow.effectDistance = new Vector2(2f, -2f);
+        CreateTutorialTextFromTemplate(promptRect, stage);
 
         if (stage == TutorialStage.HintIntroduction)
         {
@@ -2870,6 +2846,29 @@ public class GameScene : MonoBehaviour
             promptObject.GetComponent<CanvasGroup>(),
             targetPosition,
             entranceOffset);
+    }
+
+    private static void CreateTutorialTextFromTemplate(
+        RectTransform parent,
+        TutorialStage stage)
+    {
+        var template = GameCommonUtility.FindSceneObject(TutorialTipTemplateObjectName);
+        var templateText = template != null
+            ? template.transform.Find(TutorialTipTextObjectName)?.GetComponent<TMP_Text>()
+            : null;
+        if (templateText == null)
+        {
+            Debug.LogWarning(
+                $"GameScene: tutorial text template is missing. "
+                + $"Expected {TutorialTipTemplateObjectName}/{TutorialTipTextObjectName}.");
+            return;
+        }
+
+        var text = Instantiate(templateText, parent, false);
+        text.name = TutorialTipTextObjectName;
+        text.text = GetTutorialInstruction(stage);
+        text.raycastTarget = false;
+        text.gameObject.SetActive(true);
     }
 
     private static Vector2 GetTutorialHintPromptSize()
