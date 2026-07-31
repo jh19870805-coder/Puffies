@@ -65,7 +65,9 @@ public class GameScene : MonoBehaviour
     private const string TutorialPieceObjectName = "TutorialPiece";
     private const string TutorialArrowObjectName = "TutorialArrow";
     private const string TutorialTextObjectName = "TutorialText";
-    private const string TutorialArrowPath = GameDefine.UiRoot + "/GameScene/GameImgArrow.png";
+    private const string TutorialTipTemplateObjectName = "GuideTip";
+    private const string TutorialHintArrowObjectName = "Arrow";
+    private const string TutorialArrowPath = GameDefine.UiRoot + "/GameScene/GuideArrow1.png";
     private const string TutorialTipBackgroundPath = GameDefine.UiRoot + "/GameScene/GuideTipBg.png";
     private const string TutorialStrongInstruction = "从托盘中选出匹配的贴纸，贴在板子的正确位置上。";
     private const string TutorialPracticeInstruction = "将两个贴纸贴在板子的合适位置上，完成关卡。";
@@ -202,9 +204,10 @@ public class GameScene : MonoBehaviour
         InitializeScoringSession();
         var selectedBagId = GameManager.GetBagId();
         var playEntranceAnimation = GameManager.ConsumeGameEntranceAnimation();
+        var isReplaySession = GameManager.ConsumeGameReplaySession();
         CardPackDataUtility.Initialize();
         _wasSelectedPackCompletedOnEntry = CardPackDataUtility.IsPackCompleted(selectedBagId);
-        _isTutorialPending = ShouldOfferPiecePlacementTutorial(selectedBagId);
+        _isTutorialPending = ShouldOfferPiecePlacementTutorial(selectedBagId, isReplaySession);
         _didAdvanceTaskDuringSettlement = false;
         _didFailTaskAdvanceDuringSettlement = false;
         _didSavePackCompletion = false;
@@ -2470,9 +2473,19 @@ public class GameScene : MonoBehaviour
             $"stickerOutline={_isStickerOutlineEnabled}");
     }
 
-    private bool ShouldOfferPiecePlacementTutorial(int bagId)
+    private bool ShouldOfferPiecePlacementTutorial(int bagId, bool isReplaySession)
     {
-        if (bagId != GameDefine.DefaultBagId || _wasSelectedPackCompletedOnEntry)
+        if (bagId != GameDefine.DefaultBagId)
+        {
+            return false;
+        }
+
+        if (isReplaySession)
+        {
+            return true;
+        }
+
+        if (_wasSelectedPackCompletedOnEntry)
         {
             return false;
         }
@@ -2751,7 +2764,9 @@ public class GameScene : MonoBehaviour
         promptRect.pivot = new Vector2(0.5f, 0.5f);
         var promptSize = stage == TutorialStage.TwoPiecePractice
             ? new Vector2(580f, 232f)
-            : new Vector2(540f, 224f);
+            : stage == TutorialStage.HintIntroduction
+                ? GetTutorialHintPromptSize()
+                : new Vector2(540f, 224f);
         var targetPosition = GetTutorialPromptPosition(parent, stage, promptSize);
         promptRect.anchoredPosition = targetPosition;
         promptRect.sizeDelta = promptSize;
@@ -2791,6 +2806,11 @@ public class GameScene : MonoBehaviour
         shadow.effectColor = new Color(0f, 0f, 0f, 0.72f);
         shadow.effectDistance = new Vector2(2f, -2f);
 
+        if (stage == TutorialStage.HintIntroduction)
+        {
+            CreateTutorialHintArrow(promptRect);
+        }
+
         var entranceOffset = stage == TutorialStage.StrongPlacement
             ? new Vector2(-72f, 0f)
             : stage == TutorialStage.TwoPiecePractice
@@ -2801,6 +2821,58 @@ public class GameScene : MonoBehaviour
             promptObject.GetComponent<CanvasGroup>(),
             targetPosition,
             entranceOffset);
+    }
+
+    private static Vector2 GetTutorialHintPromptSize()
+    {
+        var template = GameCommonUtility.FindSceneObject(TutorialTipTemplateObjectName);
+        var templateRect = template != null ? template.GetComponent<RectTransform>() : null;
+        return templateRect != null && templateRect.sizeDelta.sqrMagnitude > 0f
+            ? templateRect.sizeDelta
+            : new Vector2(540f, 224f);
+    }
+
+    private static void CreateTutorialHintArrow(RectTransform parent)
+    {
+        var template = GameCommonUtility.FindSceneObject(TutorialTipTemplateObjectName);
+        var templateArrowRect = template != null
+            ? template.transform.Find(TutorialHintArrowObjectName) as RectTransform
+            : null;
+        var templateArrowImage = templateArrowRect != null
+            ? templateArrowRect.GetComponent<Image>()
+            : null;
+        if (templateArrowRect == null || templateArrowImage?.sprite == null)
+        {
+            Debug.LogWarning(
+                $"GameScene: tutorial hint arrow template is missing. "
+                + $"Expected {TutorialTipTemplateObjectName}/{TutorialHintArrowObjectName}.");
+            return;
+        }
+
+        var arrowObject = new GameObject(
+            TutorialHintArrowObjectName,
+            typeof(RectTransform),
+            typeof(CanvasRenderer),
+            typeof(Image),
+            typeof(TutorialHintArrowMotion));
+        arrowObject.layer = parent.gameObject.layer;
+        var arrowRect = arrowObject.GetComponent<RectTransform>();
+        arrowRect.SetParent(parent, false);
+        arrowRect.anchorMin = templateArrowRect.anchorMin;
+        arrowRect.anchorMax = templateArrowRect.anchorMax;
+        arrowRect.pivot = templateArrowRect.pivot;
+        arrowRect.anchoredPosition = templateArrowRect.anchoredPosition;
+        arrowRect.sizeDelta = templateArrowRect.sizeDelta;
+        arrowRect.localRotation = templateArrowRect.localRotation;
+        arrowRect.localScale = templateArrowRect.localScale;
+
+        var arrowImage = arrowObject.GetComponent<Image>();
+        arrowImage.sprite = templateArrowImage.sprite;
+        arrowImage.color = templateArrowImage.color;
+        arrowImage.type = templateArrowImage.type;
+        arrowImage.preserveAspect = templateArrowImage.preserveAspect;
+        arrowImage.raycastTarget = false;
+        arrowObject.GetComponent<TutorialHintArrowMotion>().Configure(arrowRect, arrowImage);
     }
 
     private Vector2 GetTutorialPromptPosition(
@@ -4789,6 +4861,75 @@ public class GameScene : MonoBehaviour
     private void OnReturnButtonClicked()
     {
         GameManager.EnterMainScene();
+    }
+}
+
+internal sealed class TutorialHintArrowMotion : MonoBehaviour
+{
+    private const float RevealDelay = 0.34f;
+    private const float RevealDuration = 0.22f;
+    private const float PulseDuration = 0.72f;
+    private static readonly Vector2 PulseOffset = new Vector2(14f, 8f);
+    private RectTransform _rectTransform;
+    private Image _image;
+    private Vector2 _basePosition;
+    private Vector3 _baseScale;
+    private Color _baseColor;
+    private float _startTime;
+
+    public void Configure(RectTransform rectTransform, Image image)
+    {
+        _rectTransform = rectTransform;
+        _image = image;
+        _basePosition = rectTransform.anchoredPosition;
+        _baseScale = rectTransform.localScale;
+        _baseColor = image.color;
+        _startTime = Time.unscaledTime;
+        Apply(0f, 0f);
+    }
+
+    private void Update()
+    {
+        if (_rectTransform == null || _image == null)
+        {
+            return;
+        }
+
+        var elapsed = Time.unscaledTime - _startTime;
+        if (elapsed < RevealDelay)
+        {
+            Apply(0f, 0f);
+            return;
+        }
+
+        var revealProgress = Mathf.Clamp01((elapsed - RevealDelay) / RevealDuration);
+        var revealEased = SmootherStep01(revealProgress);
+        if (revealProgress < 1f)
+        {
+            Apply(revealEased, 0f);
+            return;
+        }
+
+        var phase = Mathf.Repeat(elapsed - RevealDelay - RevealDuration, PulseDuration)
+            / PulseDuration;
+        var pulse = Mathf.Sin(phase * Mathf.PI);
+        Apply(1f, pulse * pulse);
+    }
+
+    private void Apply(float visibility, float pulse)
+    {
+        _rectTransform.anchoredPosition = _basePosition + PulseOffset * pulse;
+        _rectTransform.localScale = _baseScale
+            * Mathf.Lerp(0.82f, 1f + pulse * 0.06f, visibility);
+        var color = _baseColor;
+        color.a *= visibility;
+        _image.color = color;
+    }
+
+    private static float SmootherStep01(float value)
+    {
+        var t = Mathf.Clamp01(value);
+        return t * t * t * (t * (t * 6f - 15f) + 10f);
     }
 }
 

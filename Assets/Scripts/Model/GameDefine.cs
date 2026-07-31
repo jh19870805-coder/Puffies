@@ -167,6 +167,7 @@ public static class GameManager
     private static int sBagId = GameDefine.DefaultBagId;
     private static bool sIsInitialized;
     private static bool sPlayGameEntranceAnimation;
+    private static bool sIsReplaySession;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     private static void Bootstrap()
@@ -183,6 +184,7 @@ public static class GameManager
 
         sBagId = GameDefine.DefaultBagId;
         sPlayGameEntranceAnimation = false;
+        sIsReplaySession = false;
         sIsInitialized = true;
         Debug.Log("GameManager initialized.");
     }
@@ -197,10 +199,14 @@ public static class GameManager
         sBagId = bagId;
     }
 
-    public static void EnterGameScene(int bagId, bool playEntranceAnimation = false)
+    public static void EnterGameScene(
+        int bagId,
+        bool playEntranceAnimation = false,
+        bool isReplaySession = false)
     {
         SetBagId(bagId);
         sPlayGameEntranceAnimation = playEntranceAnimation;
+        sIsReplaySession = isReplaySession;
         SceneManager.LoadScene(GameDefine.SceneGame);
     }
 
@@ -209,6 +215,13 @@ public static class GameManager
         var shouldPlay = sPlayGameEntranceAnimation;
         sPlayGameEntranceAnimation = false;
         return shouldPlay;
+    }
+
+    public static bool ConsumeGameReplaySession()
+    {
+        var isReplaySession = sIsReplaySession;
+        sIsReplaySession = false;
+        return isReplaySession;
     }
 
     public static void EnterRankScene()

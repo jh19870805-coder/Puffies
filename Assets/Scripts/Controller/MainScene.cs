@@ -186,6 +186,7 @@ public class MainScene : MonoBehaviour
     private Sprite mGeneratedPhotoSprite;
     private bool mIsCapturingPhoto;
     private bool mIsReplayConfirmationVisible;
+    private bool mIsSelectedPackageReplay;
     private int mSelectedBagId;
     private float mSelectedPackageStartScale;
     private float mSelectedPackageOpenScale;
@@ -893,6 +894,7 @@ public class MainScene : MonoBehaviour
             return;
         }
 
+        mIsSelectedPackageReplay = false;
         mPlayAnimationCoroutine = StartCoroutine(EnterCardPackOpeningStage());
     }
 
@@ -917,6 +919,7 @@ public class MainScene : MonoBehaviour
 
         SetPanelVisible(mReplayPanelRoot, false);
         mIsReplayConfirmationVisible = false;
+        mIsSelectedPackageReplay = true;
         if (!CardPackDataUtility.TryClearPuzzleSession(mSelectedBagId))
         {
             Debug.LogWarning(
@@ -3350,6 +3353,7 @@ public class MainScene : MonoBehaviour
         SetBagSelectButtonsInteractable(false);
         var selectedEntry = mSelectedPackageEntry;
         var selectedBagId = mSelectedBagId;
+        var isReplaySession = mIsSelectedPackageReplay;
         var anchor = selectedEntry != null && selectedEntry.Image != null
             ? selectedEntry.Image.rectTransform
             : selectedEntry?.RectTransform;
@@ -3374,7 +3378,10 @@ public class MainScene : MonoBehaviour
 
         mPlayAnimationCoroutine = null;
         mHasSwitchedToGameScene = true;
-        GameManager.EnterGameScene(selectedBagId, playEntranceAnimation: true);
+        GameManager.EnterGameScene(
+            selectedBagId,
+            playEntranceAnimation: true,
+            isReplaySession: isReplaySession);
     }
 
     private IEnumerator HidePackageSelection()
@@ -3736,6 +3743,7 @@ public class MainScene : MonoBehaviour
         }
 
         mIsReplayConfirmationVisible = false;
+        mIsSelectedPackageReplay = false;
         mSelectedPackageEntry = null;
         mSelectedBagId = 0;
         mSelectedPackageStartScale = 0f;
