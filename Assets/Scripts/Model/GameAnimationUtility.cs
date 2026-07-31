@@ -11,9 +11,7 @@ public static class GameAnimationUtility
 {
     private const string DefaultCardPackStateName = "CardPackOpening";
     private const string CardPackPrefabEditorFolder = GameDefine.CardPackPrefabEditorFolder;
-    private const string CardPackMaterialEditorPath = GameDefine.CardPackMaterialEditorPath;
     private const string CardPackPrefabResourcesPath = GameDefine.CardPackPrefabResourcesFolder;
-    private const string CardPackMaterialResourcesPath = GameDefine.CardPackMaterialResourcesPath;
     private const string FullCardPackObjectName = "CardPackOpeningFull";
     private const string CardPackDismantleResourcesPath =
         GameDefine.CardPackDismantleResourcesPath;
@@ -21,26 +19,17 @@ public static class GameAnimationUtility
         GameDefine.CardPackTearTrailResourcesPath;
     private const string RuntimeDismantleObjectName = "CardPackDismantleRuntime";
     private const string RuntimeTearTrailObjectName = "CardPackTearTrailRuntime";
-    private const string CardPackEnvironmentLightObjectName = "CardPackEnvironmentLight";
-    private const string CardPackListUnlitShaderResourcesPath = "CardPackListUnlit";
-    private const string CardPackListUnlitShaderName = "Puffies/CardPack List Unlit";
     private const float DismantleReferenceCardWidth = 0.96f;
     private const float DismantleWorldDepthOffset = -0.1f;
     private const float DismantleLifetime = 2.8f;
     private const float TearTrailHorizontalInsetRatio = 0.04f;
     private const float TearTrailVerticalPositionRatio = 0.82f;
     private const float TearTrailFadeLifetime = 1.2f;
-    private const float CardPackAuthoredYaw = 178.718f;
+    private const float CardPackAuthoredYaw = 180f;
     private static readonly string[] CardPackAnimatedPrefabNames =
     {
         GameDefine.CardPackOpeningPrefabName
     };
-    private static readonly Color CardPackAmbientSkyColor =
-        new Color(0.8603468f, 0.9871554f, 1.2407722f, 1f);
-    private static readonly Color CardPackAmbientEquatorColor =
-        new Color(0.6750623f, 0.73417586f, 0.7735849f, 1f);
-    private static readonly Color CardPackAmbientGroundColor =
-        new Color(0.2735849f, 0.25594813f, 0.22067462f, 1f);
     private static readonly int BaseMapPropertyId = Shader.PropertyToID("_BaseMap");
     private static readonly int BaseMapTransformPropertyId = Shader.PropertyToID("_BaseMap_ST");
     private static readonly int MainTexturePropertyId = Shader.PropertyToID("_MainTex");
@@ -48,25 +37,12 @@ public static class GameAnimationUtility
     private static readonly int FrontFacesAlbedoPropertyId = Shader.PropertyToID("_FrontFacesAlbedo");
     private static readonly int FrontFacesAlbedoTransformPropertyId = Shader.PropertyToID("_FrontFacesAlbedo_ST");
     private static readonly int FrontFacesColorPropertyId = Shader.PropertyToID("_FrontFacesColor");
-    private static readonly int BackFacesAlbedoPropertyId = Shader.PropertyToID("_BackFacesAlbedo");
-    private static readonly int BackFacesAlbedoTransformPropertyId = Shader.PropertyToID("_BackFacesAlbedo_ST");
-    private static readonly int BackFacesColorPropertyId = Shader.PropertyToID("_BackFacesColor");
-    private static readonly int ClipTexturePropertyId = Shader.PropertyToID("_ClipTex");
-    private static readonly int ClipTextureTransformPropertyId = Shader.PropertyToID("_ClipTex_ST");
-    private static readonly int UnlitOverlayPropertyId = Shader.PropertyToID("_UnlitOverlay");
-    private static readonly int DepthTestPropertyId = Shader.PropertyToID("_DepthTest");
     private static readonly int UiClipRectPropertyId = Shader.PropertyToID("_UiClipRect");
     private static readonly int UseUiClipRectPropertyId = Shader.PropertyToID("_UseUiClipRect");
     private static readonly Dictionary<string, CardPackEffectInstance> sSpawnedEffects =
         new Dictionary<string, CardPackEffectInstance>();
-    private static Material sCardPackMaterial;
-    private static Material sCardPackIdleMaterial;
-    private static Material sCardPackOverlayMaterial;
-    private static Mesh sCardPackIdleMesh;
-    private static Mesh sCardPackOverlayMesh;
-    private static int sCardPackIdleDisplayCount;
 
-    private sealed class CardPackEffectInstance
+    internal sealed class CardPackEffectInstance
     {
         public GameObject Root;
         public Animator[] Animators;
@@ -79,12 +55,13 @@ public static class GameAnimationUtility
 
     public sealed class CardPackIdleDisplay
     {
-        internal GameObject Root;
-        internal MeshRenderer Renderer;
-        internal GameObject SizeRoot;
-        internal MeshRenderer SizeRenderer;
-
-        public bool IsValid => Root != null && Renderer != null;
+        internal CardPackEffectInstance Effect;
+        internal Bounds ReferenceBounds;
+        internal int SortingOrder;
+        public bool IsValid => Effect != null
+            && Effect.Root != null
+            && Effect.CardRenderers != null
+            && Effect.CardRenderers.Length > 0;
     }
 
     public enum EaseType
@@ -93,48 +70,6 @@ public static class GameAnimationUtility
         EaseIn,
         EaseOut,
         EaseInOut
-    }
-
-    public static void ConfigureCardPackEnvironment(Transform owner)
-    {
-        RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
-        RenderSettings.ambientSkyColor = CardPackAmbientSkyColor;
-        RenderSettings.ambientEquatorColor = CardPackAmbientEquatorColor;
-        RenderSettings.ambientGroundColor = CardPackAmbientGroundColor;
-        RenderSettings.ambientIntensity = 1f;
-        RenderSettings.defaultReflectionMode = UnityEngine.Rendering.DefaultReflectionMode.Skybox;
-        RenderSettings.reflectionIntensity = 1f;
-        RenderSettings.reflectionBounces = 1;
-
-        if (owner == null)
-        {
-            return;
-        }
-
-        var lightTransform = owner.Find(CardPackEnvironmentLightObjectName);
-        var lightObject = lightTransform != null
-            ? lightTransform.gameObject
-            : new GameObject(CardPackEnvironmentLightObjectName);
-        lightTransform = lightObject.transform;
-        lightTransform.SetParent(owner, false);
-        lightTransform.position = new Vector3(-0.72f, 1.141f, -0.101667695f);
-        lightTransform.rotation = Quaternion.Euler(16.908f, 27.23f, 141.124f);
-
-        var environmentLight = lightObject.GetComponent<Light>();
-        if (environmentLight == null)
-        {
-            environmentLight = lightObject.AddComponent<Light>();
-        }
-
-        environmentLight.type = LightType.Directional;
-        environmentLight.color = Color.white;
-        environmentLight.intensity = 1.3f;
-        environmentLight.shadows = LightShadows.Soft;
-        environmentLight.shadowStrength = 1f;
-        environmentLight.shadowBias = 0.05f;
-        environmentLight.shadowNormalBias = 0.4f;
-        environmentLight.cullingMask = ~0;
-        environmentLight.renderMode = LightRenderMode.Auto;
     }
 
     /// <summary>
@@ -237,62 +172,65 @@ public static class GameAnimationUtility
             onComplete));
     }
 
-    public static bool TryCreateCardPackIdleDisplay(
+    public static bool TryBindCardPackIdleDisplay(
+        GameObject authoredRoot,
         int packId,
         Sprite coverSprite,
-        Sprite sizeSprite,
-        Color tint,
         int sortingOrder,
         out CardPackIdleDisplay display)
     {
         display = null;
-        if (packId <= 0 || !TryGetCardPackIdleMesh(out var idleMesh))
+        if (packId <= 0)
         {
             return false;
         }
 
-        var material = GetCardPackIdleMaterial();
-        if (material == null)
+        var effect = BindCardPackEffect(authoredRoot, $"CardPackIdle_{packId:D3}");
+        if (effect == null)
         {
             return false;
         }
 
-        var root = new GameObject($"CardPackIdle_{packId:D3}");
-        var meshFilter = root.AddComponent<MeshFilter>();
-        var meshRenderer = root.AddComponent<MeshRenderer>();
-        meshFilter.sharedMesh = idleMesh;
-        meshRenderer.sharedMaterial = material;
-        meshRenderer.sortingOrder = sortingOrder;
-        ApplyCardPackAppearance(meshRenderer, coverSprite, tint, default, false);
-
-        GameObject sizeRoot = null;
-        MeshRenderer sizeRenderer = null;
-        if (sizeSprite != null)
+        effect.Root.SetActive(true);
+        ResetCardPackAnimators(effect, pause: true);
+        effect.Root.transform.position = Vector3.zero;
+        effect.Root.transform.rotation = Quaternion.identity;
+        effect.Root.transform.localScale = Vector3.one;
+        for (var i = 0; i < effect.CardRenderers.Length; i++)
         {
-            sizeRoot = new GameObject($"CardPackSize_{packId:D3}");
-            var sizeMeshFilter = sizeRoot.AddComponent<MeshFilter>();
-            sizeRenderer = sizeRoot.AddComponent<MeshRenderer>();
-            sizeMeshFilter.sharedMesh = GetCardPackOverlayMesh();
-            sizeRenderer.sharedMaterial = GetCardPackOverlayMaterial(material);
-            sizeRenderer.sortingOrder = sortingOrder + 1;
-            ApplyCardPackOverlayAppearance(sizeRenderer, sizeSprite, tint);
+            var renderer = effect.CardRenderers[i];
+            if (renderer == null)
+            {
+                continue;
+            }
+
+            renderer.sortingOrder = sortingOrder;
+            ApplyCardPackAppearance(
+                renderer,
+                coverSprite,
+                null,
+                default,
+                false);
+        }
+
+        if (!TryGetCurrentPoseBounds(effect.CardRenderers, out var referenceBounds))
+        {
+            UnityEngine.Object.Destroy(effect.Root);
+            return false;
         }
 
         display = new CardPackIdleDisplay
         {
-            Root = root,
-            Renderer = meshRenderer,
-            SizeRoot = sizeRoot,
-            SizeRenderer = sizeRenderer
+            Effect = effect,
+            ReferenceBounds = referenceBounds,
+            SortingOrder = sortingOrder
         };
-        sCardPackIdleDisplayCount++;
         return true;
     }
 
     public static void UpdateCardPackIdleDisplay(
         CardPackIdleDisplay display,
         RectTransform anchor,
-        RectTransform sizeAnchor,
         Rect screenClipRect,
         float scaleMultiplier,
         bool visible)
@@ -303,97 +241,48 @@ public static class GameAnimationUtility
         }
 
         var camera = Camera.main;
-        if (!visible || anchor == null || camera == null || sCardPackIdleMesh == null)
+        if (!visible || anchor == null || camera == null)
         {
-            display.Renderer.enabled = false;
-            if (display.SizeRenderer != null)
-            {
-                display.SizeRenderer.enabled = false;
-            }
+            SetRenderersEnabled(display.Effect.CardRenderers, false);
             return;
         }
 
         var anchorBounds = GameCommonUtility.GetRectTransformCameraWorldBounds(anchor, camera);
-        var meshBounds = sCardPackIdleMesh.bounds;
+        var meshBounds = display.ReferenceBounds;
         if (anchorBounds.size.x <= 0.001f
             || anchorBounds.size.y <= 0.001f
             || meshBounds.size.x <= 0.001f
             || meshBounds.size.y <= 0.001f)
         {
-            display.Renderer.enabled = false;
+            SetRenderersEnabled(display.Effect.CardRenderers, false);
             return;
         }
 
         var baseScale = Mathf.Min(
             anchorBounds.size.x / meshBounds.size.x,
             anchorBounds.size.y / meshBounds.size.y);
-        var rootTransform = display.Root.transform;
-        rootTransform.position = anchorBounds.center;
+        var finalScale = Mathf.Max(0.001f, baseScale * Mathf.Max(0.001f, scaleMultiplier));
+        var rootTransform = display.Effect.Root.transform;
+        display.Effect.Root.SetActive(true);
         rootTransform.rotation = Quaternion.identity;
-        rootTransform.localScale = Vector3.one
-            * Mathf.Max(0.001f, baseScale * Mathf.Max(0.001f, scaleMultiplier));
-        ApplyCardPackClip(display.Renderer, screenClipRect, true);
-        display.Renderer.enabled = true;
-        UpdateCardPackOverlay(
-            display,
-            sizeAnchor,
-            camera,
-            screenClipRect,
-            anchorBounds.center,
-            scaleMultiplier,
-            visible);
-    }
-
-    private static void UpdateCardPackOverlay(
-        CardPackIdleDisplay display,
-        RectTransform sizeAnchor,
-        Camera camera,
-        Rect screenClipRect,
-        Vector3 cardCenter,
-        float scaleMultiplier,
-        bool visible)
-    {
-        if (display?.SizeRoot == null || display.SizeRenderer == null)
-        {
-            return;
-        }
-
-        if (!visible || sizeAnchor == null || !sizeAnchor.gameObject.activeInHierarchy)
-        {
-            display.SizeRenderer.enabled = false;
-            return;
-        }
-
-        var overlayBounds = GameCommonUtility.GetRectTransformCameraWorldBounds(sizeAnchor, camera);
-        if (overlayBounds.size.x <= 0.001f || overlayBounds.size.y <= 0.001f)
-        {
-            display.SizeRenderer.enabled = false;
-            return;
-        }
-
-        var multiplier = Mathf.Max(0.001f, scaleMultiplier);
-        var overlayTransform = display.SizeRoot.transform;
-        overlayTransform.position = cardCenter
-            + (overlayBounds.center - cardCenter) * multiplier
-            - camera.transform.forward * 0.01f;
-        overlayTransform.rotation = Quaternion.identity;
-        overlayTransform.localScale = new Vector3(
-            overlayBounds.size.x * multiplier,
-            overlayBounds.size.y * multiplier,
-            1f);
-        ApplyCardPackClip(display.SizeRenderer, screenClipRect, true);
-        display.SizeRenderer.enabled = true;
+        rootTransform.localScale = Vector3.one * finalScale;
+        rootTransform.position = anchorBounds.center - meshBounds.center * finalScale;
+        SetRendererSortingOrder(display.Effect.CardRenderers, display.SortingOrder);
+        ApplyCardPackClip(display.Effect.CardRenderers, screenClipRect, true);
+        SetRenderersEnabled(display.Effect.CardRenderers, true);
     }
 
     public static void SetCardPackIdleDisplayVisible(CardPackIdleDisplay display, bool visible)
     {
         if (display != null && display.IsValid)
         {
-            display.Renderer.enabled = visible;
-            if (display.SizeRenderer != null)
+            display.Effect.Root.SetActive(visible);
+            if (visible)
             {
-                display.SizeRenderer.enabled = visible;
+                ResetCardPackAnimators(display.Effect, pause: true);
+                SetRendererSortingOrder(display.Effect.CardRenderers, display.SortingOrder);
             }
+            SetRenderersEnabled(display.Effect.CardRenderers, visible);
         }
     }
 
@@ -404,46 +293,36 @@ public static class GameAnimationUtility
             return;
         }
 
-        if (display.Root != null)
+        if (display.Effect != null && display.Effect.Root != null)
         {
-            UnityEngine.Object.Destroy(display.Root);
-        }
-
-        if (display.SizeRoot != null)
-        {
-            UnityEngine.Object.Destroy(display.SizeRoot);
-        }
-
-        display.Root = null;
-        display.Renderer = null;
-        display.SizeRoot = null;
-        display.SizeRenderer = null;
-        sCardPackIdleDisplayCount = Mathf.Max(0, sCardPackIdleDisplayCount - 1);
-        if (sCardPackIdleDisplayCount == 0 && sCardPackIdleMesh != null)
-        {
-            UnityEngine.Object.Destroy(sCardPackIdleMesh);
-            sCardPackIdleMesh = null;
-            if (sCardPackOverlayMesh != null)
+            if (sSpawnedEffects.TryGetValue(FullCardPackObjectName, out var preparedEffect)
+                && ReferenceEquals(preparedEffect, display.Effect))
             {
-                UnityEngine.Object.Destroy(sCardPackOverlayMesh);
-                sCardPackOverlayMesh = null;
+                sSpawnedEffects.Remove(FullCardPackObjectName);
             }
 
-            if (sCardPackOverlayMaterial != null)
-            {
-                UnityEngine.Object.Destroy(sCardPackOverlayMaterial);
-                sCardPackOverlayMaterial = null;
-            }
-
-            if (sCardPackIdleMaterial != null)
-            {
-                UnityEngine.Object.Destroy(sCardPackIdleMaterial);
-                sCardPackIdleMaterial = null;
-            }
+            UnityEngine.Object.Destroy(display.Effect.Root);
         }
+
+        display.Effect = null;
     }
 
     public static bool PrepareCardPackAnimation(
+        int packId,
+        Sprite coverSprite,
+        Transform anchor,
+        float scaleMultiplier = 1f)
+    {
+        return PrepareCardPackAnimation(
+            null,
+            packId,
+            coverSprite,
+            anchor,
+            scaleMultiplier);
+    }
+
+    public static bool PrepareCardPackAnimation(
+        CardPackIdleDisplay display,
         int packId,
         Sprite coverSprite,
         Transform anchor,
@@ -454,14 +333,19 @@ public static class GameAnimationUtility
             return false;
         }
 
-        var effect = GetOrSpawnCardPackEffect(anchor);
+        var usesIdleDisplay = display != null && display.IsValid;
+        var effect = usesIdleDisplay
+            ? display.Effect
+            : GetOrSpawnCardPackEffect(anchor);
         if (effect == null || effect.Animators == null || effect.Animators.Length == 0)
         {
             return false;
         }
 
+        sSpawnedEffects[FullCardPackObjectName] = effect;
+        effect.Root.SetActive(true);
         ResetCardPackAnimators(effect, pause: true);
-        ApplyPreviewPose(effect, anchor, coverSprite);
+        ApplyPreviewPose(effect, anchor, coverSprite, !usesIdleDisplay);
         ApplyCardPackClip(effect.CardRenderers, default, false);
         SetPreparedCardPackScale(scaleMultiplier);
         return true;
@@ -810,190 +694,6 @@ public static class GameAnimationUtility
         }
     }
 
-    private static bool TryGetCardPackIdleMesh(out Mesh mesh)
-    {
-        if (sCardPackIdleMesh == null)
-        {
-            sCardPackIdleMesh = BuildCardPackIdleMesh();
-        }
-
-        mesh = sCardPackIdleMesh;
-        return mesh != null;
-    }
-
-    private static Mesh GetCardPackOverlayMesh()
-    {
-        if (sCardPackOverlayMesh != null)
-        {
-            return sCardPackOverlayMesh;
-        }
-
-        sCardPackOverlayMesh = new Mesh
-        {
-            name = "CardPackOverlayQuad",
-            vertices = new[]
-            {
-                new Vector3(-0.5f, -0.5f, 0f),
-                new Vector3(-0.5f, 0.5f, 0f),
-                new Vector3(0.5f, 0.5f, 0f),
-                new Vector3(0.5f, -0.5f, 0f)
-            },
-            uv = new[]
-            {
-                new Vector2(0f, 0f),
-                new Vector2(0f, 1f),
-                new Vector2(1f, 1f),
-                new Vector2(1f, 0f)
-            },
-            triangles = new[] { 0, 1, 2, 0, 2, 3 },
-            normals = new[]
-            {
-                Vector3.back,
-                Vector3.back,
-                Vector3.back,
-                Vector3.back
-            },
-            tangents = new[]
-            {
-                new Vector4(1f, 0f, 0f, 1f),
-                new Vector4(1f, 0f, 0f, 1f),
-                new Vector4(1f, 0f, 0f, 1f),
-                new Vector4(1f, 0f, 0f, 1f)
-            }
-        };
-        sCardPackOverlayMesh.RecalculateBounds();
-        return sCardPackOverlayMesh;
-    }
-
-    private static Material GetCardPackOverlayMaterial(Material sourceMaterial)
-    {
-        if (sCardPackOverlayMaterial != null)
-        {
-            return sCardPackOverlayMaterial;
-        }
-
-        if (sourceMaterial == null)
-        {
-            return null;
-        }
-
-        sCardPackOverlayMaterial = new Material(sourceMaterial)
-        {
-            name = "CardPackOverlayMaterial",
-            renderQueue = sourceMaterial.renderQueue
-        };
-        sCardPackOverlayMaterial.SetFloat(
-            DepthTestPropertyId,
-            (float)UnityEngine.Rendering.CompareFunction.Always);
-        return sCardPackOverlayMaterial;
-    }
-
-    private static Mesh BuildCardPackIdleMesh()
-    {
-        var sourceRoot = new GameObject("CardPackIdleMeshSource")
-        {
-            hideFlags = HideFlags.HideAndDontSave
-        };
-        var bakedMeshes = new List<Mesh>();
-        var combineInstances = new List<CombineInstance>();
-        try
-        {
-            for (var prefabIndex = 0; prefabIndex < CardPackAnimatedPrefabNames.Length; prefabIndex++)
-            {
-                var prefab = LoadCardPackPrefab(CardPackAnimatedPrefabNames[prefabIndex]);
-                if (prefab == null)
-                {
-                    return null;
-                }
-
-                var layer = UnityEngine.Object.Instantiate(prefab, sourceRoot.transform, false);
-                layer.transform.localRotation = Quaternion.Euler(0f, CardPackAuthoredYaw, 0f);
-                var animator = layer.GetComponentInChildren<Animator>(true);
-                if (animator != null)
-                {
-                    animator.Rebind();
-                    animator.Update(0f);
-                    animator.Play(DefaultCardPackStateName, 0, 0f);
-                    animator.Update(0f);
-                }
-
-                var skinnedRenderers = layer.GetComponentsInChildren<SkinnedMeshRenderer>(true);
-                for (var rendererIndex = 0; rendererIndex < skinnedRenderers.Length; rendererIndex++)
-                {
-                    var renderer = skinnedRenderers[rendererIndex];
-                    var bakedMesh = new Mesh { name = $"CardPackIdleLayer_{prefabIndex}_{rendererIndex}" };
-                    renderer.BakeMesh(bakedMesh, false);
-                    renderer.enabled = false;
-                    bakedMeshes.Add(bakedMesh);
-
-                    for (var subMesh = 0; subMesh < bakedMesh.subMeshCount; subMesh++)
-                    {
-                        combineInstances.Add(new CombineInstance
-                        {
-                            mesh = bakedMesh,
-                            subMeshIndex = subMesh,
-                            transform = sourceRoot.transform.worldToLocalMatrix
-                                * renderer.transform.localToWorldMatrix
-                        });
-                    }
-                }
-            }
-
-            if (combineInstances.Count == 0)
-            {
-                return null;
-            }
-
-            var combinedMesh = new Mesh
-            {
-                name = "CardPackIdleSharedMesh",
-                indexFormat = UnityEngine.Rendering.IndexFormat.UInt32
-            };
-            combinedMesh.CombineMeshes(combineInstances.ToArray(), true, true, false);
-            var center = combinedMesh.bounds.center;
-            var vertices = combinedMesh.vertices;
-            for (var i = 0; i < vertices.Length; i++)
-            {
-                vertices[i] -= center;
-            }
-
-            combinedMesh.vertices = vertices;
-            combinedMesh.RecalculateBounds();
-            return combinedMesh;
-        }
-        catch (Exception exception)
-        {
-            Debug.LogWarning($"Failed to build shared card-pack idle mesh: {exception.Message}");
-            return null;
-        }
-        finally
-        {
-            for (var i = 0; i < bakedMeshes.Count; i++)
-            {
-                DestroyTemporaryObject(bakedMeshes[i]);
-            }
-
-            DestroyTemporaryObject(sourceRoot);
-        }
-    }
-
-    private static void DestroyTemporaryObject(UnityEngine.Object target)
-    {
-        if (target == null)
-        {
-            return;
-        }
-
-        if (Application.isPlaying)
-        {
-            UnityEngine.Object.Destroy(target);
-        }
-        else
-        {
-            UnityEngine.Object.DestroyImmediate(target);
-        }
-    }
-
     private static CardPackEffectInstance GetOrSpawnCardPackEffect(Transform anchor)
     {
         if (sSpawnedEffects.TryGetValue(FullCardPackObjectName, out var cachedEffect)
@@ -1008,7 +708,17 @@ public static class GameAnimationUtility
             return null;
         }
 
-        var root = new GameObject(FullCardPackObjectName);
+        var effect = SpawnCardPackEffect(FullCardPackObjectName);
+        if (effect != null)
+        {
+            sSpawnedEffects[FullCardPackObjectName] = effect;
+        }
+        return effect;
+    }
+
+    private static CardPackEffectInstance SpawnCardPackEffect(string rootName)
+    {
+        var root = new GameObject(rootName);
         var animators = new List<Animator>(CardPackAnimatedPrefabNames.Length);
         var cardRenderers = new List<Renderer>(CardPackAnimatedPrefabNames.Length);
         for (var i = 0; i < CardPackAnimatedPrefabNames.Length; i++)
@@ -1057,8 +767,35 @@ public static class GameAnimationUtility
             Animators = animators.ToArray(),
             CardRenderers = cardRenderers.ToArray()
         };
-        sSpawnedEffects[FullCardPackObjectName] = effect;
         return effect;
+    }
+
+    private static CardPackEffectInstance BindCardPackEffect(GameObject authoredRoot, string rootName)
+    {
+        if (authoredRoot == null)
+        {
+            Debug.LogWarning("Card-pack effect is missing from PackItem prefab.");
+            return null;
+        }
+
+        authoredRoot.name = rootName;
+        authoredRoot.transform.SetParent(null, true);
+        var animators = authoredRoot.GetComponentsInChildren<Animator>(true);
+        var renderers = authoredRoot.GetComponentsInChildren<Renderer>(true);
+        if (animators.Length == 0 || renderers.Length == 0)
+        {
+            Debug.LogWarning(
+                $"PackItem card-pack effect is incomplete. animators={animators.Length}, renderers={renderers.Length}.");
+            UnityEngine.Object.Destroy(authoredRoot);
+            return null;
+        }
+
+        return new CardPackEffectInstance
+        {
+            Root = authoredRoot,
+            Animators = animators,
+            CardRenderers = renderers
+        };
     }
 
     private static GameObject LoadCardPackPrefab(string objectName)
@@ -1077,7 +814,8 @@ public static class GameAnimationUtility
     private static void ApplyPreviewPose(
         CardPackEffectInstance effect,
         Transform anchor,
-        Sprite coverSprite = null)
+        Sprite coverSprite = null,
+        bool applyCover = true)
     {
         if (effect == null || effect.Root == null || anchor == null)
         {
@@ -1108,7 +846,10 @@ public static class GameAnimationUtility
         targetTransform.gameObject.SetActive(true);
 
         SetRenderersEnabled(effect.CardRenderers, false);
-        ApplyCardPackMaterials(effect.CardRenderers, coverSprite);
+        if (applyCover)
+        {
+            ApplyCardPackCovers(effect.CardRenderers, coverSprite);
+        }
 
         if (hasAnchorBounds && TryGetCurrentPoseBounds(effect.CardRenderers, out var modelBounds))
         {
@@ -1151,6 +892,22 @@ public static class GameAnimationUtility
         }
     }
 
+    private static void SetRendererSortingOrder(Renderer[] renderers, int sortingOrder)
+    {
+        if (renderers == null)
+        {
+            return;
+        }
+
+        for (var i = 0; i < renderers.Length; i++)
+        {
+            if (renderers[i] != null)
+            {
+                renderers[i].sortingOrder = sortingOrder;
+            }
+        }
+    }
+
     private static bool TryGetCurrentPoseBounds(Renderer[] renderers, out Bounds bounds)
     {
         bounds = default;
@@ -1189,13 +946,9 @@ public static class GameAnimationUtility
         return hasBounds;
     }
 
-    /// <summary>
-    /// 用途：为卡包模型统一应用开包材质，并写入当前卡包封面。返回：无。
-    /// </summary>
-    private static void ApplyCardPackMaterials(Renderer[] renderers, Sprite coverSprite = null)
+    private static void ApplyCardPackCovers(Renderer[] renderers, Sprite coverSprite = null)
     {
-        var cardPackMaterial = GetCardPackMaterial();
-        if (cardPackMaterial == null || renderers == null)
+        if (renderers == null)
         {
             return;
         }
@@ -1206,22 +959,6 @@ public static class GameAnimationUtility
             if (renderer == null)
             {
                 continue;
-            }
-
-            var materials = renderer.sharedMaterials;
-            var changed = false;
-            for (var j = 0; j < materials.Length; j++)
-            {
-                if (materials[j] != cardPackMaterial)
-                {
-                    materials[j] = cardPackMaterial;
-                    changed = true;
-                }
-            }
-
-            if (changed)
-            {
-                renderer.sharedMaterials = materials;
             }
 
             ApplyCardPackCover(renderer, coverSprite);
@@ -1261,7 +998,7 @@ public static class GameAnimationUtility
     private static void ApplyCardPackAppearance(
         Renderer renderer,
         Sprite coverSprite,
-        Color tint,
+        Color? frontColorOverride,
         Rect screenClipRect,
         bool useClipRect)
     {
@@ -1273,35 +1010,11 @@ public static class GameAnimationUtility
 
         var propertyBlock = new MaterialPropertyBlock();
         renderer.GetPropertyBlock(propertyBlock);
-        propertyBlock.SetColor(FrontFacesColorPropertyId, tint);
-        SetClipProperties(propertyBlock, screenClipRect, useClipRect);
-        renderer.SetPropertyBlock(propertyBlock);
-    }
-
-    private static void ApplyCardPackOverlayAppearance(
-        Renderer renderer,
-        Sprite sprite,
-        Color tint)
-    {
-        if (renderer == null || sprite == null || sprite.texture == null)
+        if (frontColorOverride.HasValue)
         {
-            return;
+            propertyBlock.SetColor(FrontFacesColorPropertyId, frontColorOverride.Value);
         }
-
-        var texture = sprite.texture;
-        texture.wrapMode = TextureWrapMode.Clamp;
-        texture.filterMode = FilterMode.Bilinear;
-        var uvTransform = CalculateCoverUvTransform(sprite);
-        var propertyBlock = new MaterialPropertyBlock();
-        propertyBlock.SetTexture(FrontFacesAlbedoPropertyId, texture);
-        propertyBlock.SetVector(FrontFacesAlbedoTransformPropertyId, uvTransform);
-        propertyBlock.SetColor(FrontFacesColorPropertyId, tint);
-        propertyBlock.SetTexture(BackFacesAlbedoPropertyId, texture);
-        propertyBlock.SetVector(BackFacesAlbedoTransformPropertyId, uvTransform);
-        propertyBlock.SetColor(BackFacesColorPropertyId, tint);
-        propertyBlock.SetTexture(ClipTexturePropertyId, Texture2D.whiteTexture);
-        propertyBlock.SetVector(ClipTextureTransformPropertyId, new Vector4(1f, 1f, 0f, 0f));
-        propertyBlock.SetFloat(UnlitOverlayPropertyId, 1f);
+        SetClipProperties(propertyBlock, screenClipRect, useClipRect);
         renderer.SetPropertyBlock(propertyBlock);
     }
 
@@ -1367,73 +1080,6 @@ public static class GameAnimationUtility
             sourceRect.y / texture.height);
     }
 
-    private static Material GetCardPackMaterial()
-    {
-        if (sCardPackMaterial != null)
-        {
-            return sCardPackMaterial;
-        }
-
-        sCardPackMaterial = Resources.Load<Material>(CardPackMaterialResourcesPath);
-        if (sCardPackMaterial != null)
-        {
-            return sCardPackMaterial;
-        }
-
-#if UNITY_EDITOR
-        sCardPackMaterial = AssetDatabase.LoadAssetAtPath<Material>(CardPackMaterialEditorPath);
-        if (sCardPackMaterial != null)
-        {
-            return sCardPackMaterial;
-        }
-#endif
-
-        var shader = Shader.Find("Unlit/Texture");
-        if (shader == null)
-        {
-            return null;
-        }
-
-        sCardPackMaterial = new Material(shader)
-        {
-            name = "CardPackRuntimeFallback"
-        };
-        return sCardPackMaterial;
-    }
-
-    private static Material GetCardPackIdleMaterial()
-    {
-        if (sCardPackIdleMaterial != null)
-        {
-            return sCardPackIdleMaterial;
-        }
-
-        var sourceMaterial = GetCardPackMaterial();
-        if (sourceMaterial == null)
-        {
-            return null;
-        }
-
-        var shader = Resources.Load<Shader>(CardPackListUnlitShaderResourcesPath);
-        if (shader == null)
-        {
-            shader = Shader.Find(CardPackListUnlitShaderName);
-        }
-
-        if (shader == null)
-        {
-            Debug.LogWarning("Card-pack list unlit Shader is missing; using the lit opening material.");
-            return sourceMaterial;
-        }
-
-        sCardPackIdleMaterial = new Material(sourceMaterial)
-        {
-            name = "CardPackListUnlitMaterial",
-            shader = shader,
-            renderQueue = sourceMaterial.renderQueue
-        };
-        return sCardPackIdleMaterial;
-    }
 }
 
 internal sealed class CardPackDismantleLifetime : MonoBehaviour
@@ -1459,7 +1105,6 @@ internal sealed class CardPackDismantleLifetime : MonoBehaviour
     private IEnumerator Start()
     {
         yield return new WaitForSecondsRealtime(mLifetime);
-        CardFxRuntimeUtility.ReleasePreparedMaterials(gameObject);
         Destroy(gameObject);
     }
 }

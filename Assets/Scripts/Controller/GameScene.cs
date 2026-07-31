@@ -3378,8 +3378,23 @@ public class GameScene : MonoBehaviour
         rect.SetAsLastSibling();
 
         var image = buttonObject.GetComponent<Image>();
-        image.sprite = Resources.GetBuiltinResource<Sprite>("UI/Skin/UISprite.psd");
-        image.type = Image.Type.Sliced;
+        var hintButton = hintObject != null ? hintObject.GetComponent<Button>() : null;
+        var sourceImage = hintObject != null ? hintObject.GetComponent<Image>() : null;
+        if (sourceImage == null && hintButton != null)
+        {
+            sourceImage = hintButton.targetGraphic as Image;
+        }
+
+        if (sourceImage != null)
+        {
+            image.sprite = sourceImage.sprite;
+            image.type = sourceImage.type;
+            image.material = sourceImage.material;
+        }
+        else
+        {
+            image.type = Image.Type.Simple;
+        }
         image.color = new Color32(63, 66, 62, 242);
 
         var button = buttonObject.GetComponent<Button>();

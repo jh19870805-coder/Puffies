@@ -86,6 +86,7 @@ public class MainScene : MonoBehaviour
     private const string PackShadowObjectName = "PackShadow";
     private const string PackCoverObjectName = "PackCover";
     private const string PackSizeObjectName = "PackSize";
+    private const string PackEffectObjectName = "CardPackEffect";
     private const string PackNameTextObjectName = "NameText";
     private const string MenuButtonObjectName = "BtnMenu";
     private const string MenuPanelObjectName = "PanelMenu";
@@ -125,8 +126,9 @@ public class MainScene : MonoBehaviour
     private const string BagSelectNewPackActionText = "玩";
     private const string BagSelectReplayActionText = "重玩";
     private const string TaskItemObjectName = "TaskItem";
-    private static readonly Color CompletedPackageTint = new Color(0.78f, 0.78f, 0.78f, 1f);
     private static bool sHookedSceneLoaded;
+
+    [SerializeField] private GameObject mPackageItemPrefab;
 
     private readonly Dictionary<int, PackageEntry> mPackageSlotsById = new Dictionary<int, PackageEntry>();
     private readonly Dictionary<int, Sprite> mPackageShadowSpritesById = new Dictionary<int, Sprite>();
@@ -207,9 +209,11 @@ public class MainScene : MonoBehaviour
         public Image Image;
         public Image ShadowImage;
         public Image SizeImage;
+        public GameObject EffectRoot;
         public RectTransform RectTransform;
+        public Vector2 SizeBaseAnchoredPosition;
+        public Vector3 SizeBaseLocalScale;
         public GameAnimationUtility.CardPackIdleDisplay IdleDisplay;
-        public Color DisplayTint = Color.white;
         public float BreathPhase;
         public int RenderOrder;
         public bool SuppressDisplay;
@@ -321,8 +325,6 @@ public class MainScene : MonoBehaviour
         {
             GameCommonUtility.SetupOrthographicCamera(targetCamera, ReferenceHeight, PixelsPerUnit);
         }
-        GameAnimationUtility.ConfigureCardPackEnvironment(transform);
-
         if (!TryResolvePackageList())
         {
             Debug.LogWarning("MainScene: package list not found. Expected PackageScrollView/Page_1 with PackItem prefab, or legacy Package001.");
@@ -1105,7 +1107,9 @@ public class MainScene : MonoBehaviour
         mPackageItemTemplate = LoadPackItemPrefab();
         if (mPackageItemTemplate == null)
         {
-            mPackageItemTemplate = CreateRuntimePackItemTemplate(mPackagePageTemplate);
+            Debug.LogWarning(
+                "MainScene: PackItem prefab is not assigned. Configure mPackageItemPrefab in MainScene.");
+            return false;
         }
 
         mUsesPagedPackageGrid = true;
@@ -1282,12 +1286,12 @@ public class MainScene : MonoBehaviour
 
         var coverImage = FindChild(slotObject.transform, PackCoverObjectName)?.GetComponent<Image>() ?? rootImage;
         var shadowImage = FindChild(slotObject.transform, PackShadowObjectName)?.GetComponent<Image>();
-        if (shadowImage == null && coverImage != rootImage)
-        {
-            shadowImage = CreatePackShadowImage(slotObject.transform, coverImage.rectTransform.sizeDelta);
-        }
-
         var sizeImage = FindChild(slotObject.transform, PackSizeObjectName)?.GetComponent<Image>();
+        var effectRoot = FindChild(slotObject.transform, PackEffectObjectName)?.gameObject;
+        if (effectRoot != null)
+        {
+            effectRoot.SetActive(false);
+        }
         PreparePagedPackageItem(slotObject, rootRect, rootImage, coverImage, shadowImage, sizeImage);
         EnsurePackageInteractionHandler(slotObject, coverImage, packId);
 
@@ -1298,7 +1302,14 @@ public class MainScene : MonoBehaviour
             Image = coverImage,
             ShadowImage = shadowImage,
             SizeImage = sizeImage,
+            EffectRoot = effectRoot,
             RectTransform = rootRect,
+            SizeBaseAnchoredPosition = sizeImage != null
+                ? sizeImage.rectTransform.anchoredPosition
+                : Vector2.zero,
+            SizeBaseLocalScale = sizeImage != null
+                ? sizeImage.rectTransform.localScale
+                : Vector3.one,
             BreathPhase = packId * 0.6180339f,
             RenderOrder = PackageListSortingOrderBase + index * PackageSortingOrderStride
         };
@@ -1402,31 +1413,48 @@ public class MainScene : MonoBehaviour
                 && IsRectVisibleInViewport(anchor, viewport);
             if (shouldRender && entry.IdleDisplay == null)
             {
-                if (GameAnimationUtility.TryCreateCardPackIdleDisplay(
+                if (GameAnimationUtility.TryBindCardPackIdleDisplay(
+                    entry.EffectRoot,
                     entry.BagId,
                     entry.Image.sprite,
-                    entry.SizeImage != null ? entry.SizeImage.sprite : null,
-                    entry.DisplayTint,
                     entry.RenderOrder,
                     out var display))
                 {
                     entry.IdleDisplay = display;
+                    entry.EffectRoot = null;
                     SetPackageCoverAndShadowVisible(entry, false);
-                    SetPackageSizeImageVisible(entry, false);
                 }
             }
 
-            if (entry.IdleDisplay != null)
+            if (entry.IdleDisplay != null && entry != mSelectedPackageEntry)
             {
                 GameAnimationUtility.UpdateCardPackIdleDisplay(
                     entry.IdleDisplay,
                     anchor,
-                    entry.SizeImage != null ? entry.SizeImage.rectTransform : null,
                     clipRect,
                     GetPackageBreathScale(entry),
                     shouldRender);
             }
+
+            if (entry != mSelectedPackageEntry)
+            {
+                UpdatePackageSizeImage(entry, GetPackageBreathScale(entry), shouldRender);
+            }
         }
+    }
+
+    private static void UpdatePackageSizeImage(PackageEntry entry, float scaleMultiplier, bool visible)
+    {
+        if (entry?.SizeImage == null)
+        {
+            return;
+        }
+
+        var sizeImage = entry.SizeImage;
+        var multiplier = Mathf.Max(0.001f, scaleMultiplier);
+        sizeImage.enabled = visible && sizeImage.sprite != null;
+        sizeImage.rectTransform.anchoredPosition = entry.SizeBaseAnchoredPosition * multiplier;
+        sizeImage.rectTransform.localScale = entry.SizeBaseLocalScale * multiplier;
     }
 
     private bool IsAnyPackagePanelOpen()
@@ -1526,18 +1554,14 @@ public class MainScene : MonoBehaviour
 
     private static void ApplyPackageLifecycleVisual(PackageEntry entry, int packId)
     {
-        var tint = CardPackDataUtility.IsPackCompleted(packId)
-            ? CompletedPackageTint
-            : Color.white;
-        entry.DisplayTint = tint;
         if (entry.Image != null)
         {
-            entry.Image.color = tint;
+            entry.Image.color = Color.white;
         }
 
         if (entry.SizeImage != null)
         {
-            entry.SizeImage.color = tint;
+            entry.SizeImage.color = Color.white;
         }
     }
 
@@ -2268,8 +2292,13 @@ public class MainScene : MonoBehaviour
         return int.TryParse(idText, out bagId) && bagId > 0;
     }
 
-    private static GameObject LoadPackItemPrefab()
+    private GameObject LoadPackItemPrefab()
     {
+        if (mPackageItemPrefab != null)
+        {
+            return mPackageItemPrefab;
+        }
+
 #if UNITY_EDITOR
         var editorPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(PackItemPrefabEditorPath);
         if (editorPrefab != null)
@@ -2278,53 +2307,6 @@ public class MainScene : MonoBehaviour
         }
 #endif
         return Resources.Load<GameObject>(PackItemPrefabResourcesPath);
-    }
-
-    private static GameObject CreateRuntimePackItemTemplate(Transform parent)
-    {
-        var root = new GameObject(PackItemTemplateObjectName, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(LayoutElement));
-        root.transform.SetParent(parent, false);
-        root.SetActive(false);
-
-        var rootImage = root.GetComponent<Image>();
-        rootImage.color = new Color(1f, 1f, 1f, 0f);
-        rootImage.raycastTarget = true;
-
-        var layout = root.GetComponent<LayoutElement>();
-        layout.minWidth = PackageSlotWidth;
-        layout.minHeight = PackageSlotHeight;
-
-        var coverObject = new GameObject(PackCoverObjectName, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
-        coverObject.transform.SetParent(root.transform, false);
-        var coverImage = coverObject.GetComponent<Image>();
-        coverImage.preserveAspect = true;
-        coverImage.raycastTarget = false;
-        coverImage.rectTransform.sizeDelta = new Vector2(PackageCoverWidth, PackageCoverHeight);
-
-        var shadowImage = CreatePackShadowImage(root.transform, coverImage.rectTransform.sizeDelta);
-
-        var sizeObject = new GameObject(PackSizeObjectName, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
-        sizeObject.transform.SetParent(root.transform, false);
-        var sizeImage = sizeObject.GetComponent<Image>();
-        sizeImage.preserveAspect = true;
-        sizeImage.raycastTarget = false;
-        var sizeRect = sizeImage.rectTransform;
-        sizeRect.anchorMin = Vector2.zero;
-        sizeRect.anchorMax = Vector2.zero;
-        sizeRect.pivot = Vector2.zero;
-        sizeRect.anchoredPosition = new Vector2(0f, 25.2f);
-        sizeRect.sizeDelta = new Vector2(109.6f, 63.2f);
-
-        var nameObject = new GameObject(PackNameTextObjectName, typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
-        nameObject.transform.SetParent(root.transform, false);
-        var nameText = nameObject.GetComponent<TextMeshProUGUI>();
-        nameText.fontSize = 36f;
-        nameText.alignment = TextAlignmentOptions.Center;
-        nameText.raycastTarget = false;
-        GameFontUtility.ApplyDefaultFont(nameText);
-
-        PreparePagedPackageItem(root, root.GetComponent<RectTransform>(), rootImage, coverImage, shadowImage, sizeImage);
-        return root;
     }
 
     private static void PreparePagedPackageItem(
@@ -2384,39 +2366,6 @@ public class MainScene : MonoBehaviour
             nameText.alignment = TextAlignmentOptions.Center;
             GameFontUtility.ApplyDefaultFont(nameText);
         }
-    }
-
-    private static Image CreatePackShadowImage(Transform parent, Vector2 sourceCoverSize)
-    {
-        if (sourceCoverSize.x <= 0f || sourceCoverSize.y <= 0f)
-        {
-            sourceCoverSize = new Vector2(PackageCoverWidth, PackageCoverHeight);
-        }
-
-        var sourceScale = new Vector2(
-            sourceCoverSize.x / PackageCoverWidth,
-            sourceCoverSize.y / PackageCoverHeight);
-        var shadowObject = new GameObject(
-            PackShadowObjectName,
-            typeof(RectTransform),
-            typeof(CanvasRenderer),
-            typeof(Image));
-        shadowObject.transform.SetParent(parent, false);
-        shadowObject.transform.SetSiblingIndex(0);
-
-        var shadowImage = shadowObject.GetComponent<Image>();
-        var shadowRect = shadowImage.rectTransform;
-        shadowRect.anchorMin = new Vector2(0.5f, 0.5f);
-        shadowRect.anchorMax = new Vector2(0.5f, 0.5f);
-        shadowRect.pivot = new Vector2(0.5f, 0.5f);
-        shadowRect.anchoredPosition = new Vector2(
-            PackageShadowOffsetX * sourceScale.x,
-            PackageShadowOffsetY * sourceScale.y);
-        shadowRect.sizeDelta = new Vector2(
-            sourceCoverSize.x + PackageShadowHorizontalPadding * 2f * sourceScale.x,
-            sourceCoverSize.y + PackageShadowVerticalPadding * 2f * sourceScale.y);
-        ConfigurePackShadow(shadowImage);
-        return shadowImage;
     }
 
     private static void ConfigurePackShadow(Image shadowImage)
@@ -2809,9 +2758,7 @@ public class MainScene : MonoBehaviour
             SetPackageCoverAndShadowVisible(entry, visible);
         }
 
-        SetPackageSizeImageVisible(
-            entry,
-            visible && (entry.IdleDisplay == null || !entry.IdleDisplay.IsValid));
+        SetPackageSizeImageVisible(entry, visible);
 
         GameAnimationUtility.SetCardPackIdleDisplayVisible(entry.IdleDisplay, visible);
     }
@@ -2839,6 +2786,7 @@ public class MainScene : MonoBehaviour
         SetPackageVisualsVisible(entry, false);
         yield return CaptureBagSelectBackdrop();
         var prepared = GameAnimationUtility.PrepareCardPackAnimation(
+            entry.IdleDisplay,
             bagId,
             coverSprite,
             anchor,
@@ -2905,8 +2853,19 @@ public class MainScene : MonoBehaviour
             yield break;
         }
 
-        yield return new WaitForEndOfFrame();
-        var screenshot = ScreenCapture.CaptureScreenshotAsTexture();
+        var wasCursorVisible = Cursor.visible;
+        Texture2D screenshot;
+        Cursor.visible = false;
+        try
+        {
+            yield return new WaitForEndOfFrame();
+            screenshot = ScreenCapture.CaptureScreenshotAsTexture();
+        }
+        finally
+        {
+            Cursor.visible = wasCursorVisible;
+        }
+
         if (screenshot == null)
         {
             yield break;

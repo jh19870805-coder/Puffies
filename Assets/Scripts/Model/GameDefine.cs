@@ -50,20 +50,22 @@ public static class GameDefine
     public const string CardFxFolder = "CardFx";
 
     public const string PlaneGroupPrefabEditorPath = "Assets/Resources/Effects/PlaneGroup/PlaneGroup_001.prefab";
-    public const string PlaneGroupMaterialEditorPath = "Assets/Resources/Effects/PlaneGroup/PlaneGroupLit.mat";
+    public const string PlaneGroupMaterialEditorPath =
+        "Assets/Resources/Effects/PlaneGroup/Materials/PlaneGroupLit04.mat";
     public const string PlaneGroupPrefabResourcesPath = "Effects/PlaneGroup/PlaneGroup_001";
-    public const string PlaneGroupMaterialResourcesPath = "Effects/PlaneGroup/PlaneGroupLit";
-    public const string PlaneGroupFbxEditorFolder = "Assets/Resources/Effects/PlaneGroup";
+    public const string PlaneGroupMaterialResourcesPath =
+        "Effects/PlaneGroup/Materials/PlaneGroupLit04";
+    public const string PlaneGroupFbxEditorFolder = "Assets/Resources/Effects/CardPack/Models";
 
     public const string CardPackPrefabResourcesFolder =
-        "Effects/CardPack/CardBagPrefab/CardBag01/";
-    public const string CardPackOpeningPrefabName = "CardPackOpening_001";
+        "Effects/CardPack/CardBagPrefab/CardBag_caPiBaLa/";
+    public const string CardPackOpeningPrefabName = "CardPackOpening_caPiBaLa_001";
     public const string CardPackMaterialResourcesPath =
-        "Effects/CardPack/ModTextures/Materials/CardPackOpeningMaterial";
+        "Effects/CardPack/ModTextures/Materials/CardPackOpeningMaterial_caPiBaLa";
     public const string CardPackPrefabEditorFolder =
-        "Assets/Resources/Effects/CardPack/CardBagPrefab/CardBag01";
+        "Assets/Resources/Effects/CardPack/CardBagPrefab/CardBag_caPiBaLa";
     public const string CardPackMaterialEditorPath =
-        "Assets/Resources/Effects/CardPack/ModTextures/Materials/CardPackOpeningMaterial.mat";
+        "Assets/Resources/Effects/CardPack/ModTextures/Materials/CardPackOpeningMaterial_caPiBaLa.mat";
     public const string CardPackDismantleResourcesPath =
         "Effects/CardFx/Profabs/fx_chai_w_001";
     public const string CardPackTearTrailResourcesPath =
