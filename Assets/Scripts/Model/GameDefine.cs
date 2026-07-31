@@ -111,7 +111,6 @@ public static class GameDefine
     public const string TaskConfigFileName = "TaskConfig.csv";
     public const string TaskConfigEditorPath = "Assets/Resources/Configs/TaskConfig.csv";
     public const string TaskConfigResourcesPath = "Configs/TaskConfig";
-    public const int DefaultTaskId = 1;
 
     // Resource file names and suffixes
     public const string PackageFilePrefix = "Package";

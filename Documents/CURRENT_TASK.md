@@ -1,52 +1,60 @@
 # 当前任务
 
-- 任务：增加开包白色划线拖尾
-- 状态：实现与编译验证完成，等待 Play Mode 视觉确认
+- 任务：重做随机任务系统
+- 状态：代码与配置实现完成，等待 Unity Play Mode 验证
 - 更新时间：2026-07-31
 
 ## 用户意图
 
-- 点击卡包开始开包时，参考视频增加一条从左向右滑过的白色粗动画线。
-- 优先使用已经导入工程的制作方特效，不重新制作替代视觉。
+- 支持累计分数、收集贴纸、完成卡包三种任务类型。
+- 每种任务支持任意尺寸和随机指定尺寸。
+- 任务从配置表随机生成；积分目标不能纯随机，使用循环顺序。
 
 ## 工作记录
 
-- 确认现有开包流程只调用完整卡包动画和 `fx_chai_w_001` 拆包粒子，没有调用最新拖尾资源。
-- 确认 `Resources/Effects/CardFx/Profabs/FX_ui_tuowei_w_001.prefab` 是制作方最新拖尾，包含 4 个循环粒子系统，使用工程内 Built-in 加法粒子 Shader。
-- 点击卡包或完成顶部横划后，运行时按当前卡包 Renderer 世界边界计算顶部封口线；拖尾在 `0.42s` 内从宽度 `4%` 处滑至 `96%` 处。
-- 白色拖尾完成横扫后停止继续发射，保留 `1.2s` 让已有粒子自然消散；随后衔接现有开包动画和 `fx_chai_w_001` 拆包粒子。
-- 拖尾使用当前卡包宽度计算缩放、沿用卡包 Sorting Layer 并高于拆包粒子；资源缺失或卡包边界无效时跳过拖尾，不阻断原开包流程。
-- 本次未修改数据结构或持久化内容，无需删除本地数据。
+- `TaskConfig.csv` 改为 6 行任务模板池，配置启用状态、类型、尺寸模式、尺寸池、目标池、权重、章节范围、重玩规则和奖励。
+- 当前任务改为持久化的独立实例，记录 `TaskInstanceId`、模板、实际尺寸、实际目标和当前进度。
+- 模板按权重随机且避免连续使用同一模板；指定尺寸只从当前可玩尺寸中选择。
+- 积分目标按 `200 -> 400 -> 600 -> 800 -> 1000 -> 1200` 循环；贴纸目标从 `60|80|100` 随机；完成卡包目标从 `1|2|3` 随机。
+- GameScene 完整结算时按任务类型累计最终得分、卡包全部 Piece 数量或 1 个完成卡包；尺寸不匹配时进度不变，重玩按配置计入。
+- 首页和 RewardPanel 的共享 `TaskItem` 已支持三类动态文案和进度动画。
+- 待发任务奖励改为按唯一 `TaskInstanceId` 去重。
 
 ## 修改文件
 
-- `Assets/Scripts/Controller/MainScene.cs`
-- `Assets/Scripts/Model/GameAnimationUtility.cs`
-- `Assets/Scripts/Model/CardFxRuntimeUtility.cs`
+- `Assets/Resources/Configs/TaskConfig.csv`
+- `Assets/Scripts/Model/GameTaskUtility.cs`
+- `Assets/Scripts/Model/GameConfigRepository.cs`
+- `Assets/Scripts/Model/CardPackDataUtility.cs`
 - `Assets/Scripts/Model/GameDefine.cs`
+- `Assets/Scripts/View/TaskProgressUIUtility.cs`
+- `Assets/Scripts/Controller/MainScene.cs`
+- `Assets/Scripts/Controller/GameScene.cs`
 - `Documents/CURRENT_TASK.md`
 - `Documents/PROJECT_CONTEXT.md`
+- `Documents/GAME_DESIGN_REQUIREMENTS.md`
 
 ## 决策
 
-- 使用最新的 `FX_ui_tuowei_w_001`，不使用旧 `CardTrail_001`，也不修改制作方 Prefab。
-- 白线先完成横扫，再启动卡包主体开包；尾迹消散阶段与开包主体重叠，保持“划开封口后展开”的动作关系。
-- 位置和缩放以运行时卡包世界边界为准，不绑定固定分辨率或 UI 坐标。
+- 当前仍只同时维护一个任务，完成后随机生成下一任务。
+- 三类任务都在完整完成卡包时原子结算；贴纸任务不会在中途放置单片时提前累计。
+- `CountReplay=1`，保持已确认的重玩可推进任务规则。
+- 积分溢出只在下一任务仍是积分任务且本局卡包符合新任务条件时结转。
+- 本次任务 JSON 和待发奖励 SQLite 结构均不兼容，不增加旧数据迁移。
 
 ## 验证
 
 - `dotnet build Puffies.sln --no-restore`：通过，0 警告、0 错误。
-- 已确认拖尾 Resources 路径存在、Prefab 包含 4 个 ParticleSystem，引用的 `AParticleFireClipAdd10.shader` 存在。
-- `git diff --check`：通过，仅有仓库现有的 LF/CRLF 转换提示。
-- 尚未在 Unity Play Mode 中确认白线粗细、封口高度和 `0.42s` 节奏。
+- 已静态确认旧顺序 TaskId API 和旧 `TaskConfigData` 引用均已清除。
+- 尚未在 Unity Play Mode 验证首次随机任务、指定尺寸筛选、六级积分循环和三类结算表现。
 
 ## 下一步
 
-1. 在 MainScene 选择任意卡包，点击“玩”后轻点居中卡包，确认白线从左向右贴着顶部封口滑动。
-2. 确认白线结束后立即衔接开包主体和拆包粒子，尾迹自然消散且不残留循环粒子。
-3. 分别测试轻点和手动横划，两种输入都只能触发一次白线与一次开包。
-4. 根据 Play Mode 观感微调粗细、Y 位置或 `0.42s` 时长。
+1. 关闭 Unity，删除 `LocalData.json` 和 `LocalData.db` 后重新进入项目。
+2. 验证首页随机任务文案和尺寸要求；连续完成任务，确认模板不连续重复且积分目标按固定顺序循环。
+3. 分别验证分数、贴纸、完成卡包三类任务，以及尺寸匹配、不匹配和重玩场景。
+4. 根据试玩结果调整模板权重与类型3的 `1|2|3` 目标池。
 
 ## 恢复提示
 
-继续 Puffies 当前任务。最新 `FX_ui_tuowei_w_001` 已接入开包前的 `0.42s` 左到右白色拖尾；下一步在 MainScene Play Mode 确认线条粗细、封口位置和开包衔接节奏。
+继续 Puffies 随机任务系统。配置、解析、任务实例持久化、三类结算和 UI 已完成；测试前删除 `LocalData.json` 与 `LocalData.db`，再在 Unity Play Mode 验证随机与循环规则。

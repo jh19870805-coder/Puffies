@@ -74,7 +74,7 @@ public static class GameConfigRepository
     private static bool sTaskConfigsLoadSucceeded;
     private static bool sCardPackConfigsLoaded;
     private static bool sCardPackConfigsLoadSucceeded;
-    private static readonly List<TaskConfigData> sTaskConfigs = new List<TaskConfigData>();
+    private static readonly List<TaskTemplateConfigData> sTaskTemplates = new List<TaskTemplateConfigData>();
     private static readonly List<CardPackConfigData> sCardPackConfigs = new List<CardPackConfigData>();
 
     public static void SetTextSource(IGameConfigTextSource textSource)
@@ -89,36 +89,36 @@ public static class GameConfigRepository
         sTaskConfigsLoadSucceeded = false;
         sCardPackConfigsLoaded = false;
         sCardPackConfigsLoadSucceeded = false;
-        sTaskConfigs.Clear();
+        sTaskTemplates.Clear();
         sCardPackConfigs.Clear();
     }
 
-    public static IReadOnlyList<TaskConfigData> GetTaskConfigs()
+    public static IReadOnlyList<TaskTemplateConfigData> GetTaskTemplates()
     {
         EnsureTaskConfigsLoaded();
-        return sTaskConfigs;
+        return sTaskTemplates;
     }
 
-    public static bool TryGetTaskConfigs(out IReadOnlyList<TaskConfigData> configs)
+    public static bool TryGetTaskTemplates(out IReadOnlyList<TaskTemplateConfigData> templates)
     {
         EnsureTaskConfigsLoaded();
-        configs = sTaskConfigs;
+        templates = sTaskTemplates;
         return sTaskConfigsLoadSucceeded;
     }
 
-    public static bool TryGetTaskConfig(int taskId, out TaskConfigData config)
+    public static bool TryGetTaskTemplate(int templateId, out TaskTemplateConfigData template)
     {
         EnsureTaskConfigsLoaded();
-        for (var i = 0; i < sTaskConfigs.Count; i++)
+        for (var i = 0; i < sTaskTemplates.Count; i++)
         {
-            if (sTaskConfigs[i].TaskId == taskId)
+            if (sTaskTemplates[i].TemplateId == templateId)
             {
-                config = sTaskConfigs[i];
+                template = sTaskTemplates[i];
                 return true;
             }
         }
 
-        config = default;
+        template = default;
         return false;
     }
 
@@ -158,7 +158,7 @@ public static class GameConfigRepository
             return;
         }
 
-        sTaskConfigs.Clear();
+        sTaskTemplates.Clear();
         if (!TryLoadConfigTable(TaskConfigAsset, out var table))
         {
             sTaskConfigsLoadSucceeded = false;
@@ -169,16 +169,24 @@ public static class GameConfigRepository
         for (var i = 0; i < table.Rows.Count; i++)
         {
             var row = table.Rows[i];
-            if (!TryParseTaskConfig(row, out var config))
+            if (!TryParseTaskConfig(row, out var template))
             {
                 Debug.LogWarning($"{TaskConfigAsset.DisplayName}: skipped invalid row at line {row.LineNumber}.");
                 continue;
             }
 
-            sTaskConfigs.Add(config);
+            if (sTaskTemplates.Exists(item => item.TemplateId == template.TemplateId))
+            {
+                Debug.LogWarning(
+                    $"{TaskConfigAsset.DisplayName}: skipped duplicate TemplateId={template.TemplateId} " +
+                    $"at line {row.LineNumber}.");
+                continue;
+            }
+
+            sTaskTemplates.Add(template);
         }
 
-        sTaskConfigsLoadSucceeded = true;
+        sTaskConfigsLoadSucceeded = sTaskTemplates.Count > 0;
         sTaskConfigsLoaded = true;
     }
 
@@ -232,26 +240,98 @@ public static class GameConfigRepository
         return true;
     }
 
-    private static bool TryParseTaskConfig(CsvRow row, out TaskConfigData config)
+    private static bool TryParseTaskConfig(CsvRow row, out TaskTemplateConfigData config)
     {
         config = default;
         if (!row.TryGetInt("Index", out var index)
-            || !row.TryGetInt("TaskId", out var taskId)
-            || taskId <= 0)
+            || !row.TryGetInt("TemplateId", out var templateId)
+            || templateId <= 0
+            || !row.TryGetInt("Enabled", out var enabled)
+            || !row.TryGetInt("TaskType", out var taskTypeValue)
+            || taskTypeValue < (int)TaskType.AccumulateScore
+            || taskTypeValue > (int)TaskType.CompleteCardPacks
+            || !row.TryGetInt("SizeMode", out var sizeModeValue)
+            || sizeModeValue < (int)TaskSizeMode.Any
+            || sizeModeValue > (int)TaskSizeMode.Specific
+            || !TryParsePositiveIntPool(row, "TargetPool", out var targetPool))
         {
             return false;
         }
 
-        config = new TaskConfigData
+        var sizeMode = (TaskSizeMode)sizeModeValue;
+        var sizePool = Array.Empty<int>();
+        if (sizeMode == TaskSizeMode.Specific
+            && (!TryParsePositiveIntPool(row, "SizePool", out sizePool)
+                || !IsValidSizePool(sizePool)))
+        {
+            return false;
+        }
+
+        var weight = GetOptionalInt(row, "Weight");
+        var minChapter = GetOptionalInt(row, "MinChapter");
+        var maxChapter = GetOptionalInt(row, "MaxChapter");
+        if (enabled != 0 && weight <= 0)
+        {
+            return false;
+        }
+
+        config = new TaskTemplateConfigData
         {
             Index = index,
-            TaskId = taskId,
-            TaskType = (TaskType)GetOptionalInt(row, "TaskType"),
-            CompleteValue = GetOptionalInt(row, "CompleteValue"),
+            TemplateId = templateId,
+            Enabled = enabled != 0,
+            TaskType = (TaskType)taskTypeValue,
+            SizeMode = sizeMode,
+            SizePool = sizePool,
+            TargetPool = targetPool,
+            Weight = Math.Max(0, weight),
+            MinChapter = Math.Max(1, minChapter),
+            MaxChapter = maxChapter > 0 ? maxChapter : int.MaxValue,
+            CountReplay = GetOptionalInt(row, "CountReplay") != 0,
             RewardType = (RewardType)GetOptionalInt(row, "RewardType"),
             RewardId = GetOptionalInt(row, "RewardId"),
             RewardValue = GetOptionalInt(row, "RewardValue")
         };
+        return config.MinChapter <= config.MaxChapter;
+    }
+
+    private static bool TryParsePositiveIntPool(CsvRow row, string header, out int[] values)
+    {
+        values = Array.Empty<int>();
+        if (!row.TryGetString(header, out var text) || string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        var tokens = text.Split('|');
+        var parsed = new List<int>(tokens.Length);
+        for (var i = 0; i < tokens.Length; i++)
+        {
+            if (!int.TryParse(tokens[i].Trim(), out var value) || value <= 0)
+            {
+                return false;
+            }
+
+            if (!parsed.Contains(value))
+            {
+                parsed.Add(value);
+            }
+        }
+
+        values = parsed.ToArray();
+        return values.Length > 0;
+    }
+
+    private static bool IsValidSizePool(int[] sizes)
+    {
+        for (var i = 0; i < sizes.Length; i++)
+        {
+            if (sizes[i] < (int)CardPackSize.XS || sizes[i] > (int)CardPackSize.XXXL)
+            {
+                return false;
+            }
+        }
+
         return true;
     }
 

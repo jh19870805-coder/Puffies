@@ -17,7 +17,7 @@ public static class TaskProgressUIUtility
     /// </summary>
     public static bool RefreshTask(
         Transform taskItem,
-        TaskConfigData taskConfig,
+        TaskInstanceData task,
         int displayValue,
         bool showCompletedMessage = false)
     {
@@ -28,9 +28,9 @@ public static class TaskProgressUIUtility
         }
 
         taskItem.gameObject.SetActive(true);
-        RefreshTaskContent(taskItem, taskConfig, showCompletedMessage);
-        RefreshReward(taskItem, taskConfig);
-        return SetProgressInternal(taskItem, taskConfig, displayValue, true);
+        RefreshTaskContent(taskItem, task, showCompletedMessage);
+        RefreshReward(taskItem, task);
+        return SetProgressInternal(taskItem, task, displayValue, true);
     }
 
     /// <summary>
@@ -38,15 +38,15 @@ public static class TaskProgressUIUtility
     /// </summary>
     public static bool SetProgress(
         Transform taskItem,
-        TaskConfigData taskConfig,
+        TaskInstanceData task,
         int displayValue)
     {
-        return SetProgressInternal(taskItem, taskConfig, displayValue, false);
+        return SetProgressInternal(taskItem, task, displayValue, false);
     }
 
     private static bool SetProgressInternal(
         Transform taskItem,
-        TaskConfigData taskConfig,
+        TaskInstanceData task,
         int displayValue,
         bool initialize)
     {
@@ -70,7 +70,7 @@ public static class TaskProgressUIUtility
         }
 
         var safeDisplayValue = Mathf.Max(0, displayValue);
-        var targetValue = Mathf.Max(0, taskConfig.CompleteValue);
+        var targetValue = Mathf.Max(0, task.CompleteValue);
         if (initialize)
         {
             GameFontUtility.ApplyDefaultFont(progressText);
@@ -93,7 +93,7 @@ public static class TaskProgressUIUtility
 
     private static void RefreshTaskContent(
         Transform taskItem,
-        TaskConfigData taskConfig,
+        TaskInstanceData task,
         bool showCompletedMessage)
     {
         var taskContent = taskItem.Find(TaskContentPath)?.GetComponent<TMP_Text>();
@@ -104,14 +104,33 @@ public static class TaskProgressUIUtility
         }
 
         GameFontUtility.ApplyDefaultFont(taskContent);
+        var description = BuildTaskDescription(task);
         taskContent.text = showCompletedMessage
-            ? $"累计获得 {taskConfig.CompleteValue} 分，获得卡包奖励！"
-            : $"累计获得 {taskConfig.CompleteValue} 分";
+            ? $"{description}，获得卡包奖励！"
+            : description;
     }
 
-    private static void RefreshReward(Transform taskItem, TaskConfigData taskConfig)
+    private static string BuildTaskDescription(TaskInstanceData task)
     {
-        var rewardValue = taskConfig.RewardValue > 0 ? taskConfig.RewardValue : 1;
+        var sizeText = task.RequiredPackSize == CardPackSize.None
+            ? "任意尺寸"
+            : task.RequiredPackSize.ToString();
+        switch (task.TaskType)
+        {
+            case TaskType.AccumulateScore:
+                return $"从{sizeText}拼图包中累计获得 {task.CompleteValue} 分";
+            case TaskType.CollectStickers:
+                return $"从{sizeText}拼图包中收集 {task.CompleteValue} 个贴纸";
+            case TaskType.CompleteCardPacks:
+                return $"完成 {task.CompleteValue} 个{sizeText}拼图包";
+            default:
+                return "";
+        }
+    }
+
+    private static void RefreshReward(Transform taskItem, TaskInstanceData task)
+    {
+        var rewardValue = task.RewardValue > 0 ? task.RewardValue : 1;
 
         var rewardCountText = taskItem.Find(RewardCountPath)?.GetComponent<TMP_Text>();
         if (rewardCountText != null)

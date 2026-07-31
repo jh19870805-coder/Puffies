@@ -355,8 +355,7 @@ public class MainScene : MonoBehaviour
         }
 
         if (!GameTaskUtility.Initialize()
-            || !GameTaskUtility.IsCurrentTaskAccumulateScore()
-            || !GameTaskUtility.TryGetCurrentTaskConfig(out var taskConfig))
+            || !GameTaskUtility.TryGetCurrentTask(out var task))
         {
             taskItemObject.SetActive(false);
             return;
@@ -364,7 +363,7 @@ public class MainScene : MonoBehaviour
 
         TaskProgressUIUtility.RefreshTask(
             taskItemObject.transform,
-            taskConfig,
+            task,
             GameTaskUtility.GetCurrentCompleteValue());
     }
 

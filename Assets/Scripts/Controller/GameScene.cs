@@ -124,7 +124,7 @@ public class GameScene : MonoBehaviour
     private Vector2 _originalGameBoardAnchoredPosition;
     private bool _hasOriginalGameBoardAnchoredPosition;
     private bool _isGameFinished;
-    private bool _isAccumulateScoreTaskActive;
+    private bool _isTaskTrackingActive;
     private bool _wasHintUsed;
     private bool _isLevelOutlineEnabled;
     private bool _isStickerOutlineEnabled;
@@ -3678,12 +3678,19 @@ public class GameScene : MonoBehaviour
 
     private void InitializeTaskTracking()
     {
-        GameTaskUtility.Initialize();
-        _isAccumulateScoreTaskActive = GameTaskUtility.IsCurrentTaskAccumulateScore();
-        if (_isAccumulateScoreTaskActive)
+        var task = default(TaskInstanceData);
+        _isTaskTrackingActive = GameTaskUtility.Initialize();
+        if (_isTaskTrackingActive)
+        {
+            _isTaskTrackingActive = GameTaskUtility.TryGetCurrentTask(out task);
+        }
+
+        if (_isTaskTrackingActive)
         {
             Debug.Log(
-                $"GameScene: AccumulateScore task active. taskId={GameTaskUtility.GetCurrentTaskId()}, " +
+                $"GameScene: task active. taskInstanceId={task.TaskInstanceId}, " +
+                $"templateId={task.TemplateId}, taskType={task.TaskType}, " +
+                $"requiredPackSize={task.RequiredPackSize}, target={task.CompleteValue}, " +
                 $"progress={GameTaskUtility.GetCurrentCompleteValue()}");
         }
     }
@@ -3795,8 +3802,8 @@ public class GameScene : MonoBehaviour
             $"time=+{scoreResult.CompletionTimeBonusPercent}% ({scoreResult.CompletionTimeSeconds:F2}s), " +
             $"total=+{scoreResult.TotalBonusPercent}%, final={scoreResult.FinalScore}");
 
-        if (!_isAccumulateScoreTaskActive
-            || !GameTaskUtility.TryGetCurrentTaskConfig(out var taskConfig))
+        if (!_isTaskTrackingActive
+            || !GameTaskUtility.TryGetCurrentTask(out var task))
         {
             SetTaskRewardSectionVisible(false);
             yield return AnimateTaskSettlementProgress(
@@ -3804,22 +3811,30 @@ public class GameScene : MonoBehaviour
                 null,
                 0,
                 0,
+                false,
                 scoreResult);
             yield break;
         }
 
         var progressBeforeSettlement = GameTaskUtility.GetCurrentCompleteValue();
-        if (!GameTaskUtility.AddCurrentScore(settlementScore))
+        var stickerCount = CountGrooveImages(_board.GrooveImagesByGroup);
+        if (!GameTaskUtility.ApplyCompletedPack(
+                packId,
+                stickerCount,
+                settlementScore,
+                _wasSelectedPackCompletedOnEntry,
+                out var taskContribution))
         {
             Debug.LogWarning(
-                $"GameScene: failed to add settlement score to current task. " +
-                $"packId={packId}, score={settlementScore}");
+                $"GameScene: failed to apply completed pack to current task. " +
+                $"packId={packId}, score={settlementScore}, stickers={stickerCount}");
             SetTaskRewardSectionVisible(false);
             yield return AnimateTaskSettlementProgress(
                 null,
                 null,
                 0,
                 0,
+                false,
                 scoreResult);
             yield break;
         }
@@ -3827,32 +3842,38 @@ public class GameScene : MonoBehaviour
         var progressAfterSettlement = GameTaskUtility.GetCurrentCompleteValue();
         var isTaskCompleted = GameTaskUtility.IsCurrentTaskCompleted();
         Debug.Log(
-            $"GameScene: settlement score added to task. packId={packId}, score={settlementScore}, " +
-            $"progress={progressAfterSettlement}");
+            $"GameScene: completed pack applied to task. packId={packId}, " +
+            $"taskType={task.TaskType}, contribution={taskContribution}, " +
+            $"progress={progressAfterSettlement}/{task.CompleteValue}");
 
         SetTaskRewardSectionVisible(true);
         var taskItem = _rewardTaskItem;
         TaskProgressUIUtility.RefreshTask(
             taskItem,
-            taskConfig,
+            task,
             progressBeforeSettlement,
             isTaskCompleted);
 
         if (isTaskCompleted)
         {
-            if (QueueTaskReward(taskConfig))
+            if (QueueTaskReward(task))
             {
-                if (GameTaskUtility.TryCompleteAndAdvanceTask())
+                if (GameTaskUtility.TryCompleteAndAdvanceTask(
+                        packId,
+                        _wasSelectedPackCompletedOnEntry))
                 {
                     _didAdvanceTaskDuringSettlement = true;
-                    _isAccumulateScoreTaskActive = GameTaskUtility.IsCurrentTaskAccumulateScore();
-                    Debug.Log($"GameScene: task advanced. nextTaskId={GameTaskUtility.GetCurrentTaskId()}");
+                    _isTaskTrackingActive = GameTaskUtility.TryGetCurrentTask(out var nextTask);
+                    Debug.Log(
+                        $"GameScene: task advanced. taskInstanceId={nextTask.TaskInstanceId}, " +
+                        $"templateId={nextTask.TemplateId}");
                 }
                 else
                 {
                     _didFailTaskAdvanceDuringSettlement = true;
                     Debug.LogError(
-                        $"GameScene: task reward queued but task advance failed. taskId={taskConfig.TaskId}");
+                        $"GameScene: task reward queued but task advance failed. " +
+                        $"taskInstanceId={task.TaskInstanceId}");
                 }
             }
         }
@@ -3860,27 +3881,29 @@ public class GameScene : MonoBehaviour
         RefreshSettlementBagCount();
         yield return AnimateTaskSettlementProgress(
             taskItem,
-            taskConfig,
+            task,
             progressBeforeSettlement,
             progressAfterSettlement,
+            task.TaskType == TaskType.AccumulateScore && taskContribution > 0,
             scoreResult);
     }
 
-    private bool QueueTaskReward(TaskConfigData taskConfig)
+    private bool QueueTaskReward(TaskInstanceData task)
     {
-        var preferredPackId = taskConfig.RewardType == RewardType.CardPack
-            ? taskConfig.RewardId
+        var preferredPackId = task.RewardType == RewardType.CardPack
+            ? task.RewardId
             : 0;
-        if (!CardPackDistributionUtility.EnqueueTaskReward(taskConfig.TaskId, preferredPackId))
+        if (!CardPackDistributionUtility.EnqueueTaskReward(task.TaskInstanceId, preferredPackId))
         {
             Debug.LogError(
                 $"GameScene: failed to persist guaranteed task reward. " +
-                $"taskId={taskConfig.TaskId}, preferredPackId={preferredPackId}");
+                $"taskInstanceId={task.TaskInstanceId}, preferredPackId={preferredPackId}");
             return false;
         }
 
         Debug.Log(
-            $"GameScene: guaranteed task reward queued. taskId={taskConfig.TaskId}, " +
+            $"GameScene: guaranteed task reward queued. taskInstanceId={task.TaskInstanceId}, " +
+            $"templateId={task.TemplateId}, " +
             $"preferredPackId={preferredPackId}, " +
             $"pending={CardPackDistributionUtility.GetPendingTaskRewardCount()}");
         return true;
@@ -3916,21 +3939,23 @@ public class GameScene : MonoBehaviour
 
     private IEnumerator AnimateTaskSettlementProgress(
         Transform taskItem,
-        TaskConfigData? taskConfig,
+        TaskInstanceData? task,
         int progressBeforeSettlement,
         int progressAfterSettlement,
+        bool syncTaskWithScore,
         GameScoreResult scoreResult)
     {
-        SetSettlementTaskProgress(taskItem, taskConfig, progressBeforeSettlement);
+        SetSettlementTaskProgress(taskItem, task, progressBeforeSettlement);
         SetSettlementScore(0);
         SetSettlementScoreTitle("基础得分");
         yield return AnimateSettlementScoreRange(
             taskItem,
-            taskConfig,
+            task,
             progressBeforeSettlement,
             0,
             scoreResult.BaseScore,
-            SettlementBaseRollDuration);
+            SettlementBaseRollDuration,
+            syncTaskWithScore);
 
         var currentScore = scoreResult.BaseScore;
         var cumulativeBonusPercent = 0;
@@ -3942,10 +3967,11 @@ public class GameScene : MonoBehaviour
                 cumulativeBonusPercent);
             yield return AnimateSettlementBonusStage(
                 taskItem,
-                taskConfig,
+                task,
                 progressBeforeSettlement,
                 currentScore,
                 targetScore,
+                syncTaskWithScore,
                 $"未使用提示 +{scoreResult.NoHintBonusPercent}%");
             currentScore = targetScore;
         }
@@ -3958,10 +3984,11 @@ public class GameScene : MonoBehaviour
                 cumulativeBonusPercent);
             yield return AnimateSettlementBonusStage(
                 taskItem,
-                taskConfig,
+                task,
                 progressBeforeSettlement,
                 currentScore,
                 targetScore,
+                syncTaskWithScore,
                 $"关闭关卡描边 +{scoreResult.LevelOutlineDisabledBonusPercent}%");
             currentScore = targetScore;
         }
@@ -3974,10 +4001,11 @@ public class GameScene : MonoBehaviour
                 cumulativeBonusPercent);
             yield return AnimateSettlementBonusStage(
                 taskItem,
-                taskConfig,
+                task,
                 progressBeforeSettlement,
                 currentScore,
                 targetScore,
+                syncTaskWithScore,
                 $"关闭贴纸描边 +{scoreResult.StickerOutlineDisabledBonusPercent}%");
             currentScore = targetScore;
         }
@@ -3990,10 +4018,11 @@ public class GameScene : MonoBehaviour
                 cumulativeBonusPercent);
             yield return AnimateSettlementBonusStage(
                 taskItem,
-                taskConfig,
+                task,
                 progressBeforeSettlement,
                 currentScore,
                 targetScore,
+                syncTaskWithScore,
                 $"快速完成 +{scoreResult.CompletionTimeBonusPercent}%");
             currentScore = targetScore;
         }
@@ -4002,53 +4031,70 @@ public class GameScene : MonoBehaviour
         {
             yield return AnimateSettlementScoreRange(
                 taskItem,
-                taskConfig,
+                task,
                 progressBeforeSettlement,
                 currentScore,
                 scoreResult.FinalScore,
-                TaskProgressRollDuration);
+                TaskProgressRollDuration,
+                syncTaskWithScore);
         }
 
         SetSettlementScore(scoreResult.FinalScore);
         SetSettlementScoreTitle("最终得分");
-        SetSettlementTaskProgress(taskItem, taskConfig, progressAfterSettlement);
+        if (!syncTaskWithScore && progressAfterSettlement != progressBeforeSettlement)
+        {
+            yield return AnimateSettlementTaskProgressRange(
+                taskItem,
+                task,
+                progressBeforeSettlement,
+                progressAfterSettlement,
+                TaskProgressRollDuration);
+        }
+
+        SetSettlementTaskProgress(taskItem, task, progressAfterSettlement);
         yield return new WaitForSecondsRealtime(SettlementFinalPauseDuration);
     }
 
     private IEnumerator AnimateSettlementBonusStage(
         Transform taskItem,
-        TaskConfigData? taskConfig,
+        TaskInstanceData? task,
         int progressBeforeSettlement,
         int fromScore,
         int toScore,
+        bool syncTaskWithScore,
         string title)
     {
         SetSettlementScoreTitle(title);
         yield return new WaitForSecondsRealtime(SettlementStagePauseDuration);
         yield return AnimateSettlementScoreRange(
             taskItem,
-            taskConfig,
+            task,
             progressBeforeSettlement,
             fromScore,
             toScore,
-            TaskProgressRollDuration);
+            TaskProgressRollDuration,
+            syncTaskWithScore);
     }
 
     private IEnumerator AnimateSettlementScoreRange(
         Transform taskItem,
-        TaskConfigData? taskConfig,
+        TaskInstanceData? task,
         int progressBeforeSettlement,
         int fromScore,
         int toScore,
-        float duration)
+        float duration,
+        bool syncTaskWithScore)
     {
         if (duration <= 0f)
         {
             SetSettlementScore(toScore);
-            SetSettlementTaskProgress(
-                taskItem,
-                taskConfig,
-                progressBeforeSettlement + toScore);
+            if (syncTaskWithScore)
+            {
+                SetSettlementTaskProgress(
+                    taskItem,
+                    task,
+                    progressBeforeSettlement + toScore);
+            }
             yield break;
         }
 
@@ -4062,12 +4108,45 @@ public class GameScene : MonoBehaviour
             var animatedTaskProgress = progressBeforeSettlement + animatedScore;
 
             SetSettlementScore(animatedScore);
-            SetSettlementTaskProgress(taskItem, taskConfig, animatedTaskProgress);
+            if (syncTaskWithScore)
+            {
+                SetSettlementTaskProgress(taskItem, task, animatedTaskProgress);
+            }
             yield return null;
         }
 
         SetSettlementScore(toScore);
-        SetSettlementTaskProgress(taskItem, taskConfig, progressBeforeSettlement + toScore);
+        if (syncTaskWithScore)
+        {
+            SetSettlementTaskProgress(taskItem, task, progressBeforeSettlement + toScore);
+        }
+    }
+
+    private static IEnumerator AnimateSettlementTaskProgressRange(
+        Transform taskItem,
+        TaskInstanceData? task,
+        int fromProgress,
+        int toProgress,
+        float duration)
+    {
+        if (duration <= 0f)
+        {
+            SetSettlementTaskProgress(taskItem, task, toProgress);
+            yield break;
+        }
+
+        var elapsed = 0f;
+        while (elapsed < duration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            var normalizedTime = Mathf.Clamp01(elapsed / duration);
+            var easedTime = Mathf.SmoothStep(0f, 1f, normalizedTime);
+            var progress = Mathf.RoundToInt(Mathf.Lerp(fromProgress, toProgress, easedTime));
+            SetSettlementTaskProgress(taskItem, task, progress);
+            yield return null;
+        }
+
+        SetSettlementTaskProgress(taskItem, task, toProgress);
     }
 
     private static int CalculateSettlementStageScore(int baseScore, int cumulativeBonusPercent)
@@ -4077,12 +4156,12 @@ public class GameScene : MonoBehaviour
 
     private static void SetSettlementTaskProgress(
         Transform taskItem,
-        TaskConfigData? taskConfig,
+        TaskInstanceData? task,
         int progress)
     {
-        if (taskItem != null && taskConfig.HasValue)
+        if (taskItem != null && task.HasValue)
         {
-            TaskProgressUIUtility.SetProgress(taskItem, taskConfig.Value, progress);
+            TaskProgressUIUtility.SetProgress(taskItem, task.Value, progress);
         }
     }
 

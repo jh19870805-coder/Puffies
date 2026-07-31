@@ -860,7 +860,7 @@ public readonly struct CardPackGrantDecision
 [Serializable]
 public sealed class PendingCardPackTaskReward
 {
-    public int TaskId;
+    public int TaskInstanceId;
     public int PreferredPackId;
 }
 
@@ -875,9 +875,9 @@ public static class CardPackDistributionUtility
     private const string ProgressCollection = "CardPackDistribution";
     private const string ProgressKey = "Progress";
 
-    public static bool EnqueueTaskReward(int taskId, int preferredPackId)
+    public static bool EnqueueTaskReward(int taskInstanceId, int preferredPackId)
     {
-        if (taskId <= 0)
+        if (taskInstanceId <= 0)
         {
             return false;
         }
@@ -886,7 +886,7 @@ public static class CardPackDistributionUtility
         for (var i = 0; i < progress.PendingTaskRewards.Count; i++)
         {
             if (progress.PendingTaskRewards[i] != null
-                && progress.PendingTaskRewards[i].TaskId == taskId)
+                && progress.PendingTaskRewards[i].TaskInstanceId == taskInstanceId)
             {
                 return true;
             }
@@ -894,7 +894,7 @@ public static class CardPackDistributionUtility
 
         progress.PendingTaskRewards.Add(new PendingCardPackTaskReward
         {
-            TaskId = taskId,
+            TaskInstanceId = taskInstanceId,
             PreferredPackId = Mathf.Max(0, preferredPackId)
         });
         return SaveProgress(progress);
@@ -1059,7 +1059,7 @@ public static class CardPackDistributionUtility
                 progress.PendingTaskRewards = new List<PendingCardPackTaskReward>();
             }
 
-            progress.PendingTaskRewards.RemoveAll(item => item == null || item.TaskId <= 0);
+            progress.PendingTaskRewards.RemoveAll(item => item == null || item.TaskInstanceId <= 0);
 
             return progress;
         }
