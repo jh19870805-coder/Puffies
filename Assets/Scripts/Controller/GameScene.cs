@@ -56,6 +56,8 @@ public class GameScene : MonoBehaviour
     private const float HintOutlineScrollSpeed = 60f;
     private const int TutorialCanvasSortingOrder = 30000;
     private const float TutorialTrayDimAlpha = 0.58f;
+    private const float TutorialPracticePromptGap = 24f;
+    private const float TutorialPromptScreenMargin = 24f;
     private const string TutorialCollection = "Tutorial";
     private const string PiecePlacementTutorialKey = "CardBag001TutorialCompleted";
     private const string TutorialCanvasObjectName = "PiecePlacementTutorialCanvas";
@@ -93,7 +95,6 @@ public class GameScene : MonoBehaviour
     private static readonly Color PieceHintOutlineColor = new Color32(112, 151, 75, 255);
     private static readonly Color TutorialTargetOutlineColor = new Color32(80, 139, 230, 255);
     private static readonly Vector2 TutorialStrongPromptAnchor = new Vector2(0.42f, 0.78f);
-    private static readonly Vector2 TutorialPracticePromptAnchor = new Vector2(0.5f, 0.14f);
     private static readonly Vector2 TutorialHintPromptAnchor = new Vector2(0.73f, 0.76f);
 
     private enum TutorialStage
@@ -2688,14 +2689,12 @@ public class GameScene : MonoBehaviour
         promptRect.anchorMin = new Vector2(0.5f, 0.5f);
         promptRect.anchorMax = new Vector2(0.5f, 0.5f);
         promptRect.pivot = new Vector2(0.5f, 0.5f);
-        var normalizedAnchor = GetTutorialPromptAnchor(stage);
-        var targetPosition = new Vector2(
-            Mathf.Lerp(parent.rect.xMin, parent.rect.xMax, normalizedAnchor.x),
-            Mathf.Lerp(parent.rect.yMin, parent.rect.yMax, normalizedAnchor.y));
-        promptRect.anchoredPosition = targetPosition;
-        promptRect.sizeDelta = stage == TutorialStage.TwoPiecePractice
+        var promptSize = stage == TutorialStage.TwoPiecePractice
             ? new Vector2(580f, 232f)
             : new Vector2(540f, 224f);
+        var targetPosition = GetTutorialPromptPosition(parent, stage, promptSize);
+        promptRect.anchoredPosition = targetPosition;
+        promptRect.sizeDelta = promptSize;
 
         var promptImage = promptObject.GetComponent<Image>();
         promptImage.sprite = _tutorialTipBackgroundSprite;
@@ -2744,13 +2743,76 @@ public class GameScene : MonoBehaviour
             entranceOffset);
     }
 
-    private static Vector2 GetTutorialPromptAnchor(TutorialStage stage)
+    private Vector2 GetTutorialPromptPosition(
+        RectTransform parent,
+        TutorialStage stage,
+        Vector2 promptSize)
     {
-        return stage == TutorialStage.StrongPlacement
+        if (stage == TutorialStage.TwoPiecePractice
+            && TryGetCurrentTutorialGrooveBounds(parent, out var grooveBounds))
+        {
+            return ClampTutorialPromptPosition(
+                parent.rect,
+                new Vector2(
+                    grooveBounds.center.x,
+                    grooveBounds.yMax + TutorialPracticePromptGap + promptSize.y * 0.5f),
+                promptSize);
+        }
+
+        var normalizedAnchor = stage == TutorialStage.StrongPlacement
             ? TutorialStrongPromptAnchor
-            : stage == TutorialStage.TwoPiecePractice
-                ? TutorialPracticePromptAnchor
-                : TutorialHintPromptAnchor;
+            : TutorialHintPromptAnchor;
+        return ClampTutorialPromptPosition(
+            parent.rect,
+            new Vector2(
+                Mathf.Lerp(parent.rect.xMin, parent.rect.xMax, normalizedAnchor.x),
+                Mathf.Lerp(parent.rect.yMin, parent.rect.yMax, normalizedAnchor.y)),
+            promptSize);
+    }
+
+    private bool TryGetCurrentTutorialGrooveBounds(
+        RectTransform canvasRect,
+        out Rect grooveBounds)
+    {
+        grooveBounds = default;
+        var hasBounds = false;
+        for (var i = 0; i < _drag.CurrentGroupDraggables.Count; i++)
+        {
+            var grooveRect = _drag.CurrentGroupDraggables[i]?.GrooveRect;
+            if (!TryGetRectTransformScreenRect(grooveRect, out var screenRect)
+                || !TryScreenRectToCanvasRect(canvasRect, screenRect, out var canvasBounds))
+            {
+                continue;
+            }
+
+            grooveBounds = hasBounds
+                ? Rect.MinMaxRect(
+                    Mathf.Min(grooveBounds.xMin, canvasBounds.xMin),
+                    Mathf.Min(grooveBounds.yMin, canvasBounds.yMin),
+                    Mathf.Max(grooveBounds.xMax, canvasBounds.xMax),
+                    Mathf.Max(grooveBounds.yMax, canvasBounds.yMax))
+                : canvasBounds;
+            hasBounds = true;
+        }
+
+        return hasBounds;
+    }
+
+    private static Vector2 ClampTutorialPromptPosition(
+        Rect canvasRect,
+        Vector2 position,
+        Vector2 promptSize)
+    {
+        var halfSize = promptSize * 0.5f;
+        return new Vector2(
+            Mathf.Clamp(
+                position.x,
+                canvasRect.xMin + halfSize.x + TutorialPromptScreenMargin,
+                canvasRect.xMax - halfSize.x - TutorialPromptScreenMargin),
+            Mathf.Clamp(
+                position.y,
+                canvasRect.yMin + halfSize.y + TutorialPromptScreenMargin,
+                canvasRect.yMax - halfSize.y - TutorialPromptScreenMargin));
     }
 
     private static string GetTutorialInstruction(TutorialStage stage)
