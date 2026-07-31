@@ -1,49 +1,55 @@
 # 当前任务
 
-- 任务：GameScene 一键完成测试按钮
-- 状态：等待运行时确认
-- 更新时间：2026-07-30
+- 任务：参考视频重做新手引导与棋盘切组节奏
+- 状态：等待 Unity Play Mode 视觉确认
+- 更新时间：2026-07-31
 
 ## 用户意图
 
-- 在游戏界面增加一个方便测试的“一键完成”按钮。
-- 点击后直接显示全部拼图并进入正式结算，自动执行完整的卡包、分数、任务和发包数据计算。
+- 按参考视频的路径和节奏重做 `CardBag001` 新手引导。
+- 增加棋盘、托盘和新一组贴纸的平滑切组动画。
+- 三步提示使用不同位置，并显示用户指定的三段中文内容。
+- 尽量让引导、切组、成功反馈和结算节奏接近参考视频。
 
 ## 工作记录
 
-- `GameScene` 在 Unity Editor 和 Development Build 中运行时创建 `BtnCompleteAllTest`，位置在 `BtnTips` 左侧；正式非 Development Build 不包含该测试入口。
-- 点击按钮后收集当前 CardBag 全部分组的合法 Piece 编号，并一次性写入当前拼图会话。
-- 快捷完成会清理提示和进行中的新手引导，显示全部棋盘 Piece，然后复用现有 `ShowRewardPanel()` 正式结算链。
-- 卡包生命周期、完成时间、分数加成、任务进度、完成卡包数量、任务奖励和首次完成概率发包均沿用正式逻辑。
-- `CardPackDataUtility.TryRecordPlacedPiece` 改为复用新的批量保存接口，原单片拖拽保存行为不变。
-- 本次没有数据表或 JSON 结构变化，不需要删除本地数据；但点击测试按钮会产生真实的本地完成、任务和发包记录。
+- 将旧的逐片强制引导改为与 `CardBag001` 三个分组对应的三阶段流程：第1组单片强引导、第2组双贴纸自由练习、第3组提示按钮介绍。
+- 第1步仅允许拖动目标贴纸，显示托盘遮罩、目标贴纸高亮、蓝色滚动虚线和 `GameImgArrow.png`；拿起时保留文字和目标虚线。
+- 第2步同时突出两片贴纸，允许任意顺序放置；完成第一片后只刷新剩余贴纸焦点，不重复播放提示文字入场。
+- 第3步恢复正常交互、关卡描边和提示按钮，并持久化 `Tutorial/CardBag001TutorialCompleted`。
+- 三个提示框分别位于左上、底部居中和右上，并从对应方向用 `0.32s` 淡入滑动。
+- 正确放置增加 `0.3s` 绿色确认反馈；切组时棋盘和相机用 `0.72s` 平滑定位，托盘同步滑动，新组贴纸用 `0.38s` 错峰进入托盘。
+- 切组动画期间锁定拖拽、提示按钮和“一键完成”测试按钮。
+- RewardPanel 按“基础得分 -> 实际生效的逐项加成 -> 最终得分”分段滚动，沿用项目现有加成比例。
+- 本次未修改 SQLite 表或 JSON 结构，无需删除本地数据。教程持久化键已更名；测试完整新流程时需要清除开发环境旧教程记录及 `CardBag001` 拼图进度。
 
 ## 修改文件
 
 - `Assets/Scripts/Controller/GameScene.cs`
-- `Assets/Scripts/Model/CardPackDataUtility.cs`
 - `Documents/CURRENT_TASK.md`
 - `Documents/PROJECT_CONTEXT.md`
 
 ## 决策
 
-- 测试按钮仅在 `UNITY_EDITOR` 或 `DEVELOPMENT_BUILD` 条件下编译显示，避免进入正式发布版本。
-- 快捷完成不维护第二套结算实现，只负责补齐全部 Piece 状态并调用正式完成流程。
-- 如果玩家已经手工拼入部分 Piece，已有提示使用状态、当前计时和设置快照继续参与结算；尚未放置过 Piece 时，快捷完成按即时完成计算。
+- 教程阶段直接对应 `CardBag001` 的 `Piece11`、`Piece21/22`、`Piece31-35` 三组，不新增独立教程关卡资源。
+- 前两阶段隐藏提示按钮和当前组烘焙描边；第三阶段恢复正式游戏规则。
+- 教程提示框在阶段内保持稳定，拖放过程只重建会变化的遮罩、高亮、箭头和虚线。
+- 棋盘切组动画对所有卡包生效；三阶段教学内容仅对尚未完成教程的 `CardBag001` 生效。
+- 结算动画只改变展示节奏，不改变实际分数、任务推进或发包计算。
 
 ## 验证
 
 - `dotnet build Puffies.sln --no-restore`：通过，0 警告、0 错误。
-- `git diff --check`：通过。
-- 当前 Unity Editor 日志未出现新的 `error CS`、`NullReferenceException` 或 `MissingReferenceException`。
-- 尚未在当前已打开的 Unity 中实际点击按钮完成 Play Mode 全流程。
+- `git diff --check`：通过，仅有仓库现有的 LF/CRLF 转换提示。
+- 已完成代码级关键路径检查；尚未在 Unity Play Mode 中完成三阶段视觉和交互回归。
 
 ## 下一步
 
-1. 重新进入 `GameScene`，确认右上角 `BtnTips` 左侧显示“一键完成”。
-2. 分别在零进度和已有部分 Piece 进度时点击，确认棋盘完整显示、RewardPanel 正常结算且完成按钮最终可用。
-3. 返回 MainScene，确认卡包完成状态、任务进度和可能发放的新卡包已刷新。
+1. 清除 `CardBag001` 的开发进度和 `Tutorial/CardBag001TutorialCompleted` 后，从正常开包流程进入游戏，检查三步位置、文案和节奏。
+2. 验证第1步拿起后蓝色虚线保留、第2步两片可任意顺序且文字不重复入场、第3步提示按钮可用。
+3. 验证每次切组时棋盘、相机、托盘和新贴纸无跳变，并检查 RewardPanel 分段滚分。
+4. 用一个普通卡包回归切组动画，确认不会出现 `CardBag001` 教程内容。
 
 ## 恢复提示
 
-继续 Puffies 当前任务。先阅读 AGENTS.md、Documents/WORKFLOW.md 和 Documents/CURRENT_TASK.md；GameScene 一键完成测试按钮已实现，下一步是在当前 Unity 中验证零进度和部分进度两条结算路径。
+继续 Puffies 当前任务。先阅读 AGENTS.md、Documents/WORKFLOW.md 和 Documents/CURRENT_TASK.md；三阶段新手引导、棋盘切组动画和分段结算已实现，下一步是在 Unity Play Mode 中清理 CardBag001 开发进度后完成视觉回归。

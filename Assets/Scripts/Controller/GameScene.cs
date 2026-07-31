@@ -21,6 +21,9 @@ public class GameScene : MonoBehaviour
     private const float SnapDistanceSizeRatio = 0.22f;
     private const float PieceBgSlideDuration = 0.25f;
     private const float TaskProgressRollDuration = 0.8f;
+    private const float SettlementBaseRollDuration = 1f;
+    private const float SettlementStagePauseDuration = 0.28f;
+    private const float SettlementFinalPauseDuration = 0.24f;
     private const float PieceBgSlideOutPadding = 0.15f;
     private const int PieceBgFillSortingOrder = 499;
     private const int PieceBgSortingOrder = 500;
@@ -36,6 +39,13 @@ public class GameScene : MonoBehaviour
     private const float GameEntranceControlDuration = 0.24f;
     private const int GameEntranceWarmupFrameCount = 2;
     private const float GameEntranceMaxFrameDelta = 1f / 30f;
+    private const float GroupTransitionBoardDuration = 0.72f;
+    private const float GroupTransitionPieceDuration = 0.38f;
+    private const float GroupTransitionPieceStagger = 0.045f;
+    private const float GroupTransitionPromptDelay = 0.22f;
+    private const float GroupTransitionStrongHoldDuration = 0.3f;
+    private const float GroupTransitionDefaultHoldDuration = 0.1f;
+    private const float PiecePlacementFlashDuration = 0.3f;
     private const int PieceSortingOrder = 520;
     private const float HintShakeAngle = 6f;
     private const float HintShakeCyclesPerSecond = 4.5f;
@@ -47,14 +57,17 @@ public class GameScene : MonoBehaviour
     private const int TutorialCanvasSortingOrder = 30000;
     private const float TutorialTrayDimAlpha = 0.58f;
     private const string TutorialCollection = "Tutorial";
-    private const string PiecePlacementTutorialKey = "CardBag001AllPiecesCompleted";
+    private const string PiecePlacementTutorialKey = "CardBag001TutorialCompleted";
     private const string TutorialCanvasObjectName = "PiecePlacementTutorialCanvas";
     private const string TutorialTrayDimObjectName = "TutorialTrayDim";
     private const string TutorialPieceObjectName = "TutorialPiece";
     private const string TutorialArrowObjectName = "TutorialArrow";
     private const string TutorialTextObjectName = "TutorialText";
     private const string TutorialArrowPath = GameDefine.UiRoot + "/GameScene/GameImgArrow.png";
-    private const string TutorialInstruction = "从托盘中选出匹配的贴纸，贴在板子的正确位置上。";
+    private const string TutorialTipBackgroundPath = GameDefine.UiRoot + "/GameScene/GuideTipBg.png";
+    private const string TutorialStrongInstruction = "从托盘中选出匹配的贴纸，贴在板子的正确位置上。";
+    private const string TutorialPracticeInstruction = "将两个贴纸贴在板子的合适位置上，完成关卡。";
+    private const string TutorialHintInstruction = "攻克这一关！如果遇到困难，请使用“提示”按钮。";
     private const string BootstrapObjectName = "GameSceneBootstrap";
     private const string PieceBgFillObjectName = "PieceBgFill";
     private const string PieceBgObjectName = "PieceBg";
@@ -67,6 +80,7 @@ public class GameScene : MonoBehaviour
     private const string ActiveGroupOutlineRootObjectName = "ActiveGroupOutline";
     private const string PlacedPiecesRootObjectName = "PlacedPieces";
     private const string TaskItemObjectName = "TaskItem";
+    private const string TaskScoreTitlePath = "TaskBg2/TaskTitle2";
     private const string TaskScorePath = "TaskBg2/TaskScore";
     private const string TaskBagCountPath = "TaskBg2/TaskBagNum";
     private const string TaskRewardImgBagPath = "ImgBagBg/ImgBag";
@@ -77,6 +91,19 @@ public class GameScene : MonoBehaviour
     private const string TestCompleteButtonText = "一键完成";
 #endif
     private static readonly Color PieceHintOutlineColor = new Color32(112, 151, 75, 255);
+    private static readonly Color TutorialTargetOutlineColor = new Color32(80, 139, 230, 255);
+    private static readonly Vector2 TutorialStrongPromptAnchor = new Vector2(0.42f, 0.78f);
+    private static readonly Vector2 TutorialPracticePromptAnchor = new Vector2(0.5f, 0.14f);
+    private static readonly Vector2 TutorialHintPromptAnchor = new Vector2(0.73f, 0.76f);
+
+    private enum TutorialStage
+    {
+        None,
+        StrongPlacement,
+        TwoPiecePractice,
+        HintIntroduction
+    }
+
     private static bool sHookedSceneLoaded;
     private readonly BoardState _board = new BoardState();
     private readonly DragState _drag = new DragState();
@@ -105,6 +132,7 @@ public class GameScene : MonoBehaviour
     private bool _didSavePackCompletion;
     private GameObject _rewardPanelRoot;
     private Transform _rewardTaskItem;
+    private TMP_Text _settlementScoreTitleText;
     private TMP_Text _settlementScoreText;
     private TMP_Text _settlementBagCountText;
     private Image _taskRewardImage;
@@ -112,6 +140,7 @@ public class GameScene : MonoBehaviour
     private bool _isSettlementReadyForFinish;
     private bool _isFinishTransitionStarted;
     private bool _isEntranceAnimating;
+    private bool _isGroupTransitionAnimating;
     private GameObject _loadedCardBagRoot;
     private RectTransform _loadedCardBagRect;
     private Sprite _runtimeCardBoardBackgroundSprite;
@@ -131,10 +160,18 @@ public class GameScene : MonoBehaviour
     private Button _testCompleteButton;
 #endif
     private bool _isTutorialPending;
-    private bool _isTutorialActive;
+    private TutorialStage _tutorialStage;
     private DraggablePieceState _tutorialPiece;
     private GameObject _tutorialCanvasRoot;
+    private GameObject _tutorialFocusRoot;
     private Sprite _tutorialArrowSprite;
+    private Sprite _tutorialTipBackgroundSprite;
+
+    private bool IsTutorialActive => _tutorialStage != TutorialStage.None;
+
+    private bool IsTutorialBlockingOutline =>
+        _tutorialStage == TutorialStage.StrongPlacement
+        || _tutorialStage == TutorialStage.TwoPiecePractice;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Bootstrap()
@@ -202,6 +239,7 @@ public class GameScene : MonoBehaviour
         GameCursorUtility.SetDefault();
         StopPiecePlacementTutorial(persistCompletion: false, restoreLevelOutline: false);
         DestroyTutorialArrowSprite();
+        DestroyTutorialTipBackgroundSprite();
         DestroyRuntimeCardBoardBackgroundSprite();
         ClearPieceHint();
         HintDashedOutlineGraphic.ClearPathCache();
@@ -210,7 +248,7 @@ public class GameScene : MonoBehaviour
     private void Update()
     {
         UpdatePieceHintAnimation();
-        if (_isEntranceAnimating)
+        if (_isEntranceAnimating || _isGroupTransitionAnimating)
         {
             GameCursorUtility.SetDefault();
             return;
@@ -1205,7 +1243,7 @@ public class GameScene : MonoBehaviour
 
     private void TryRefreshActiveGroupOutline(int groupIndex)
     {
-        if (_isTutorialPending || _isTutorialActive)
+        if (_isTutorialPending || IsTutorialBlockingOutline)
         {
             ClearActiveGroupOutline();
             return;
@@ -1317,9 +1355,10 @@ public class GameScene : MonoBehaviour
             return;
         }
 
-        if (_isTutorialActive && state == _tutorialPiece)
+        if ((_tutorialStage == TutorialStage.StrongPlacement && state == _tutorialPiece)
+            || _tutorialStage == TutorialStage.TwoPiecePractice)
         {
-            HidePiecePlacementTutorialPresentation(clearHintOutline: false);
+            HideTutorialFocusPresentation();
         }
 
         var world = ToGameplayWorld(screenPosition);
@@ -1364,7 +1403,7 @@ public class GameScene : MonoBehaviour
         for (var i = _drag.CurrentGroupDraggables.Count - 1; i >= 0; i--)
         {
             var state = _drag.CurrentGroupDraggables[i];
-            if (_isTutorialActive && state != _tutorialPiece)
+            if (_tutorialStage == TutorialStage.StrongPlacement && state != _tutorialPiece)
             {
                 continue;
             }
@@ -1424,13 +1463,13 @@ public class GameScene : MonoBehaviour
             {
                 CompactFollowingTrayPieces(state);
             }
-            var shouldAdvanceTutorial = _isTutorialActive && state == _tutorialPiece;
             RecordPlacedPiece(state);
             CommitPlacedPieceToBoardImage(state);
-            TryAdvanceGroup();
-            if (shouldAdvanceTutorial)
+            StartCoroutine(PlayPiecePlacementSuccessFlash(state.GrooveImage));
+            var didAdvanceGroup = TryAdvanceGroup();
+            if (!didAdvanceGroup && _tutorialStage == TutorialStage.TwoPiecePractice)
             {
-                AdvancePiecePlacementTutorial();
+                RefreshPiecePlacementTutorialPresentation();
             }
             return;
         }
@@ -1578,6 +1617,53 @@ public class GameScene : MonoBehaviour
         state.PieceRenderer.gameObject.SetActive(false);
         Destroy(state.PieceRenderer.gameObject);
         state.PieceRenderer = null;
+    }
+
+    private IEnumerator PlayPiecePlacementSuccessFlash(Image grooveImage)
+    {
+        if (grooveImage == null || grooveImage.sprite == null)
+        {
+            yield break;
+        }
+
+        var sourceRect = grooveImage.rectTransform;
+        var flashObject = new GameObject(
+            "PiecePlacementSuccessFlash",
+            typeof(RectTransform),
+            typeof(CanvasRenderer),
+            typeof(Image));
+        var flashRect = flashObject.GetComponent<RectTransform>();
+        flashRect.SetParent(sourceRect.parent, false);
+        flashRect.anchorMin = sourceRect.anchorMin;
+        flashRect.anchorMax = sourceRect.anchorMax;
+        flashRect.pivot = sourceRect.pivot;
+        flashRect.anchoredPosition = sourceRect.anchoredPosition;
+        flashRect.sizeDelta = sourceRect.sizeDelta;
+        flashRect.localRotation = sourceRect.localRotation;
+        flashRect.localScale = sourceRect.localScale * 1.035f;
+        flashRect.SetAsLastSibling();
+
+        var flashImage = flashObject.GetComponent<Image>();
+        flashImage.sprite = grooveImage.sprite;
+        flashImage.preserveAspect = grooveImage.preserveAspect;
+        flashImage.raycastTarget = false;
+        flashImage.maskable = false;
+
+        var elapsed = 0f;
+        while (elapsed < PiecePlacementFlashDuration && flashImage != null)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            var progress = Mathf.Clamp01(elapsed / PiecePlacementFlashDuration);
+            var pulse = 1f - Mathf.Abs(progress * 2f - 1f);
+            flashImage.color = new Color(0.62f, 0.88f, 0.38f, pulse * 0.5f);
+            flashRect.localScale = sourceRect.localScale * Mathf.Lerp(1.01f, 1.055f, pulse);
+            yield return null;
+        }
+
+        if (flashObject != null)
+        {
+            Destroy(flashObject);
+        }
     }
 
     private int CountUnplacedTrayPieces()
@@ -1768,13 +1854,13 @@ public class GameScene : MonoBehaviour
         return Mathf.Clamp(adaptiveDistance, SnapDistanceMin, SnapDistanceMax);
     }
 
-    private void TryAdvanceGroup()
+    private bool TryAdvanceGroup()
     {
         for (var i = 0; i < _drag.CurrentGroupDraggables.Count; i++)
         {
             if (!_drag.CurrentGroupDraggables[i].IsPlaced)
             {
-                return;
+                return false;
             }
         }
 
@@ -1782,11 +1868,238 @@ public class GameScene : MonoBehaviour
         if (_board.GrooveImagesByGroup != null && nextGroupIndex < _board.GrooveImagesByGroup.Count)
         {
             MarkCurrentPackInProgress();
-            CreateDraggableGroup(nextGroupIndex);
-            return;
+            StartCoroutine(PlayGroupTransition(nextGroupIndex));
+            return true;
         }
 
         ShowRewardPanel();
+        return true;
+    }
+
+    private IEnumerator PlayGroupTransition(int nextGroupIndex)
+    {
+        _isGroupTransitionAnimating = true;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        if (_testCompleteButton != null)
+        {
+            _testCompleteButton.interactable = false;
+        }
+#endif
+        var wasTutorialActive = IsTutorialActive;
+        var transitionHoldDuration = _tutorialStage == TutorialStage.StrongPlacement
+            ? GroupTransitionStrongHoldDuration
+            : GroupTransitionDefaultHoldDuration;
+        if (transitionHoldDuration > 0f)
+        {
+            yield return new WaitForSecondsRealtime(transitionHoldDuration);
+        }
+
+        HidePiecePlacementTutorialPresentation();
+
+        var camera = Camera.main;
+        var boardRect = _loadedCardBagRect;
+        var boardStart = boardRect != null ? boardRect.anchoredPosition : Vector2.zero;
+        var cameraStartSize = camera != null ? camera.orthographicSize : 0f;
+        var trayRect = _board.PieceBoardRect;
+        var trayStart = trayRect != null ? trayRect.anchoredPosition : Vector2.zero;
+        var pieceBackground = _board.PieceBgRenderer;
+        var pieceBackgroundStart = pieceBackground != null
+            ? pieceBackground.transform.position
+            : Vector3.zero;
+        var pieceBgFillTransform = GetPieceBgFillTransform();
+
+        CreateDraggableGroup(nextGroupIndex);
+
+        var boardTarget = boardRect != null ? boardRect.anchoredPosition : boardStart;
+        var cameraTargetSize = camera != null ? camera.orthographicSize : cameraStartSize;
+        var trayTarget = trayRect != null ? trayRect.anchoredPosition : trayStart;
+        var pieceBackgroundTarget = pieceBackground != null
+            ? pieceBackground.transform.position
+            : pieceBackgroundStart;
+        var pieceCount = _drag.CurrentGroupDraggables.Count;
+        var pieceTargets = new Vector3[pieceCount];
+        var pieceStarts = new Vector3[pieceCount];
+        var pieceTargetScales = new Vector3[pieceCount];
+        var pieceTargetRotations = new Quaternion[pieceCount];
+        var pieceTargetColors = new Color[pieceCount];
+        var activeGroupBounds = BuildActiveGroupBounds(nextGroupIndex);
+        var pieceSourceCenter = activeGroupBounds.size.sqrMagnitude > 0f
+            ? activeGroupBounds.center
+            : Vector3.zero;
+
+        for (var i = 0; i < pieceCount; i++)
+        {
+            var renderer = _drag.CurrentGroupDraggables[i]?.PieceRenderer;
+            if (renderer == null)
+            {
+                continue;
+            }
+
+            pieceTargets[i] = renderer.transform.position;
+            pieceTargetScales[i] = renderer.transform.localScale;
+            pieceTargetRotations[i] = renderer.transform.rotation;
+            pieceTargetColors[i] = renderer.color;
+            var angle = i * 137.5f * Mathf.Deg2Rad;
+            var radius = 0.08f + (i % 3) * 0.055f;
+            pieceStarts[i] = pieceSourceCenter + new Vector3(
+                Mathf.Cos(angle) * radius,
+                Mathf.Sin(angle) * radius,
+                0f);
+            pieceStarts[i].z = pieceTargets[i].z;
+            renderer.transform.position = pieceStarts[i];
+            renderer.transform.localScale = pieceTargetScales[i] * 1.08f;
+            var hiddenColor = pieceTargetColors[i];
+            hiddenColor.a = 0f;
+            renderer.color = hiddenColor;
+        }
+
+        if (boardRect != null)
+        {
+            boardRect.anchoredPosition = boardStart;
+        }
+
+        if (camera != null)
+        {
+            camera.orthographicSize = cameraStartSize;
+        }
+
+        if (trayRect != null)
+        {
+            ApplyPieceBoardSlidePosition(trayStart, pieceBgFillTransform);
+        }
+        else if (pieceBackground != null)
+        {
+            ApplyPieceBgSlidePosition(pieceBackgroundStart, pieceBgFillTransform);
+        }
+
+        var elapsed = 0f;
+        while (elapsed < GroupTransitionBoardDuration)
+        {
+            elapsed += Mathf.Min(Time.unscaledDeltaTime, GameEntranceMaxFrameDelta);
+            var progress = SmootherStep01(elapsed / GroupTransitionBoardDuration);
+            if (boardRect != null)
+            {
+                boardRect.anchoredPosition = Vector2.LerpUnclamped(boardStart, boardTarget, progress);
+            }
+
+            if (camera != null)
+            {
+                camera.orthographicSize = Mathf.LerpUnclamped(
+                    cameraStartSize,
+                    cameraTargetSize,
+                    progress);
+            }
+
+            var trayProgress = SmootherStep01(
+                (elapsed - GroupTransitionBoardDuration * 0.18f)
+                / (GroupTransitionBoardDuration * 0.72f));
+            if (trayRect != null)
+            {
+                ApplyPieceBoardSlidePosition(
+                    Vector2.LerpUnclamped(trayStart, trayTarget, trayProgress),
+                    pieceBgFillTransform);
+            }
+            else if (pieceBackground != null)
+            {
+                ApplyPieceBgSlidePosition(
+                    Vector3.LerpUnclamped(
+                        pieceBackgroundStart,
+                        pieceBackgroundTarget,
+                        trayProgress),
+                    pieceBgFillTransform);
+            }
+
+            yield return null;
+        }
+
+        if (boardRect != null)
+        {
+            boardRect.anchoredPosition = boardTarget;
+        }
+
+        if (camera != null)
+        {
+            camera.orthographicSize = cameraTargetSize;
+        }
+
+        if (trayRect != null)
+        {
+            ApplyPieceBoardSlidePosition(trayTarget, pieceBgFillTransform);
+        }
+        else if (pieceBackground != null)
+        {
+            ApplyPieceBgSlidePosition(pieceBackgroundTarget, pieceBgFillTransform);
+        }
+
+        elapsed = 0f;
+        var pieceAnimationDuration = GroupTransitionPieceDuration
+            + Mathf.Max(0, pieceCount - 1) * GroupTransitionPieceStagger;
+        while (elapsed < pieceAnimationDuration)
+        {
+            elapsed += Mathf.Min(Time.unscaledDeltaTime, GameEntranceMaxFrameDelta);
+            for (var i = 0; i < pieceCount; i++)
+            {
+                var renderer = _drag.CurrentGroupDraggables[i]?.PieceRenderer;
+                if (renderer == null)
+                {
+                    continue;
+                }
+
+                var progress = SmootherStep01(
+                    (elapsed - i * GroupTransitionPieceStagger) / GroupTransitionPieceDuration);
+                renderer.transform.position = Vector3.LerpUnclamped(
+                    pieceStarts[i],
+                    pieceTargets[i],
+                    progress);
+                renderer.transform.localScale = Vector3.LerpUnclamped(
+                    pieceTargetScales[i] * 1.08f,
+                    pieceTargetScales[i],
+                    progress);
+                renderer.transform.rotation = Quaternion.SlerpUnclamped(
+                    Quaternion.Euler(0f, 0f, Mathf.Sin(i * 137.5f * Mathf.Deg2Rad) * 12f),
+                    pieceTargetRotations[i],
+                    progress);
+                var color = pieceTargetColors[i];
+                color.a *= progress;
+                renderer.color = color;
+            }
+
+            yield return null;
+        }
+
+        for (var i = 0; i < pieceCount; i++)
+        {
+            var renderer = _drag.CurrentGroupDraggables[i]?.PieceRenderer;
+            if (renderer == null)
+            {
+                continue;
+            }
+
+            renderer.transform.position = pieceTargets[i];
+            renderer.transform.localScale = pieceTargetScales[i];
+            renderer.transform.rotation = pieceTargetRotations[i];
+            renderer.color = pieceTargetColors[i];
+        }
+
+        if (wasTutorialActive)
+        {
+            yield return new WaitForSecondsRealtime(GroupTransitionPromptDelay);
+            EnterTutorialStageForGroup(nextGroupIndex);
+        }
+
+        _isGroupTransitionAnimating = false;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        if (_testCompleteButton != null)
+        {
+            _testCompleteButton.interactable = !_isGameFinished;
+        }
+#endif
+    }
+
+    private static float SmootherStep01(float value)
+    {
+        var t = Mathf.Clamp01(value);
+        return t * t * t * (t * (t * 6f - 15f) + 10f);
     }
 
     private static void MarkCurrentPackInProgress()
@@ -1835,6 +2148,7 @@ public class GameScene : MonoBehaviour
     private void CacheRewardPanelReferences()
     {
         _rewardTaskItem = null;
+        _settlementScoreTitleText = null;
         _settlementScoreText = null;
         _settlementBagCountText = null;
         _taskRewardImage = null;
@@ -1844,6 +2158,7 @@ public class GameScene : MonoBehaviour
         }
 
         _rewardTaskItem = _rewardPanelRoot.transform.Find(TaskItemObjectName);
+        _settlementScoreTitleText = _rewardPanelRoot.transform.Find(TaskScoreTitlePath)?.GetComponent<TMP_Text>();
         _settlementScoreText = _rewardPanelRoot.transform.Find(TaskScorePath)?.GetComponent<TMP_Text>();
         _settlementBagCountText = _rewardPanelRoot.transform.Find(TaskBagCountPath)?.GetComponent<TMP_Text>();
         _taskRewardImage = _rewardPanelRoot.transform.Find(TaskRewardImgBagPath)?.GetComponent<Image>();
@@ -1860,6 +2175,11 @@ public class GameScene : MonoBehaviour
         else
         {
             GameFontUtility.ApplyDefaultFont(_settlementScoreText);
+        }
+
+        if (_settlementScoreTitleText != null)
+        {
+            GameFontUtility.ApplyDefaultFont(_settlementScoreTitleText);
         }
 
         if (_settlementBagCountText == null)
@@ -1879,7 +2199,19 @@ public class GameScene : MonoBehaviour
             return;
         }
 
+        if (_isTutorialPending || IsTutorialActive)
+        {
+            StopPiecePlacementTutorial(
+                persistCompletion: GameManager.GetBagId() == GameDefine.DefaultBagId,
+                restoreLevelOutline: false);
+        }
+
         _isGameFinished = true;
+        if (_hintButton != null)
+        {
+            _hintButton.interactable = false;
+            _hintButton.gameObject.SetActive(false);
+        }
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         if (_testCompleteButton != null)
         {
@@ -2090,16 +2422,11 @@ public class GameScene : MonoBehaviour
 
     private void TryStartPiecePlacementTutorial()
     {
-        if (!_isTutorialPending || _isGameFinished || _isEntranceAnimating)
+        if (!_isTutorialPending
+            || _isGameFinished
+            || _isEntranceAnimating
+            || _isGroupTransitionAnimating)
         {
-            return;
-        }
-
-        var target = FindHintTarget();
-        if (target == null)
-        {
-            _isTutorialPending = false;
-            TryRefreshActiveGroupOutline(_drag.CurrentGroupIndex);
             return;
         }
 
@@ -2115,17 +2442,48 @@ public class GameScene : MonoBehaviour
             Debug.LogWarning(
                 $"GameScene: tutorial arrow is missing at {TutorialArrowPath}; tutorial skipped.");
             _isTutorialPending = false;
+            SetHintButtonTutorialState();
             TryRefreshActiveGroupOutline(_drag.CurrentGroupIndex);
             return;
         }
 
-        _tutorialPiece = target;
-        _isTutorialPending = false;
-        _isTutorialActive = true;
-        ClearActiveGroupOutline();
-        if (_hintButton != null)
+        if (_tutorialTipBackgroundSprite == null)
         {
-            _hintButton.interactable = false;
+            _tutorialTipBackgroundSprite = GameCommonUtility.LoadSpriteByPath(
+                TutorialTipBackgroundPath,
+                PixelsPerUnit);
+        }
+
+        _isTutorialPending = false;
+        EnterTutorialStageForGroup(_drag.CurrentGroupIndex);
+    }
+
+    private void EnterTutorialStageForGroup(int groupIndex)
+    {
+        _tutorialStage = groupIndex <= 0
+            ? TutorialStage.StrongPlacement
+            : groupIndex == 1
+                ? TutorialStage.TwoPiecePractice
+                : TutorialStage.HintIntroduction;
+        _tutorialPiece = _tutorialStage == TutorialStage.StrongPlacement
+            ? FindHintTarget()
+            : null;
+
+        if (_tutorialStage == TutorialStage.StrongPlacement && _tutorialPiece == null)
+        {
+            Debug.LogWarning("GameScene: strong tutorial has no available target; tutorial skipped.");
+            StopPiecePlacementTutorial(persistCompletion: false, restoreLevelOutline: true);
+            return;
+        }
+
+        SetHintButtonTutorialState();
+        if (IsTutorialBlockingOutline)
+        {
+            ClearActiveGroupOutline();
+        }
+        else
+        {
+            TryRefreshActiveGroupOutline(groupIndex);
         }
 
         if (!ShowPiecePlacementTutorialPresentation())
@@ -2135,26 +2493,26 @@ public class GameScene : MonoBehaviour
             return;
         }
 
+        if (_tutorialStage == TutorialStage.HintIntroduction)
+        {
+            PersistPiecePlacementTutorialCompletion();
+        }
+
         Debug.Log(
-            $"GameScene: Piece placement tutorial started. piece={GetPieceNumberFromState(target)}");
+            $"GameScene: tutorial stage started. stage={_tutorialStage}, group={groupIndex}, "
+            + $"piece={GetPieceNumberFromState(_tutorialPiece)}");
     }
 
     private bool ShowPiecePlacementTutorialPresentation()
     {
         HidePiecePlacementTutorialPresentation();
-        if (!_isTutorialActive
-            || _tutorialPiece?.PieceRenderer == null
-            || _tutorialPiece.GrooveRect == null
-            || _tutorialArrowSprite == null)
+        if (!IsTutorialActive)
         {
             return false;
         }
 
         var camera = Camera.main;
-        if (camera == null
-            || !TryGetPieceTrayScreenRect(camera, out var trayScreenRect)
-            || !TryGetRendererScreenRect(_tutorialPiece.PieceRenderer, camera, out var pieceScreenRect)
-            || !TryGetRectTransformScreenCenter(_tutorialPiece.GrooveRect, out var grooveScreenCenter))
+        if (camera == null)
         {
             return false;
         }
@@ -2178,27 +2536,95 @@ public class GameScene : MonoBehaviour
         Canvas.ForceUpdateCanvases();
 
         var canvasRect = _tutorialCanvasRoot.GetComponent<RectTransform>();
-        if (!TryScreenRectToCanvasRect(canvasRect, trayScreenRect, out var trayCanvasRect)
-            || !TryScreenRectToCanvasRect(canvasRect, pieceScreenRect, out var pieceCanvasRect)
-            || !RectTransformUtility.ScreenPointToLocalPointInRectangle(
-                canvasRect,
-                grooveScreenCenter,
-                null,
-                out var grooveCanvasCenter))
+        CreateTutorialInstruction(canvasRect, _tutorialStage);
+        if (_tutorialStage == TutorialStage.HintIntroduction)
         {
-            HidePiecePlacementTutorialPresentation();
+            return true;
+        }
+
+        return RebuildTutorialFocusPresentation();
+    }
+
+    private bool RebuildTutorialFocusPresentation()
+    {
+        HideTutorialFocusPresentation();
+        ClearPieceHint();
+        if (!IsTutorialBlockingOutline || _tutorialCanvasRoot == null)
+        {
             return false;
         }
 
-        CreateTutorialTrayDim(canvasRect, trayCanvasRect);
-        CreateTutorialPieceCopy(canvasRect, pieceCanvasRect);
-        CreateTutorialInstruction(canvasRect, trayCanvasRect);
-        CreateTutorialArrow(canvasRect, pieceCanvasRect, grooveCanvasCenter);
-        CreatePieceHintOutline(_tutorialPiece);
+        var camera = Camera.main;
+        if (camera == null)
+        {
+            return false;
+        }
+
+        var canvasRect = _tutorialCanvasRoot.GetComponent<RectTransform>();
+        if (!TryGetPieceTrayScreenRect(camera, out var trayScreenRect)
+            || !TryScreenRectToCanvasRect(canvasRect, trayScreenRect, out var trayCanvasRect))
+        {
+            return false;
+        }
+
+        _tutorialFocusRoot = new GameObject("TutorialFocus", typeof(RectTransform));
+        var focusRect = _tutorialFocusRoot.GetComponent<RectTransform>();
+        focusRect.SetParent(canvasRect, false);
+        focusRect.anchorMin = Vector2.zero;
+        focusRect.anchorMax = Vector2.one;
+        focusRect.offsetMin = Vector2.zero;
+        focusRect.offsetMax = Vector2.zero;
+        CreateTutorialTrayDim(focusRect, canvasRect, trayCanvasRect);
+
+        if (_tutorialStage == TutorialStage.StrongPlacement)
+        {
+            if (_tutorialPiece?.PieceRenderer == null
+                || _tutorialPiece.GrooveRect == null
+                || !TryGetRendererScreenRect(
+                    _tutorialPiece.PieceRenderer,
+                    camera,
+                    out var pieceScreenRect)
+                || !TryScreenRectToCanvasRect(canvasRect, pieceScreenRect, out var pieceCanvasRect)
+                || !TryGetRectTransformScreenCenter(
+                    _tutorialPiece.GrooveRect,
+                    out var grooveScreenCenter)
+                || !RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                    canvasRect,
+                    grooveScreenCenter,
+                    null,
+                    out var grooveCanvasCenter))
+            {
+                return false;
+            }
+
+            CreateTutorialPieceCopy(focusRect, _tutorialPiece, pieceCanvasRect);
+            CreateTutorialArrow(focusRect, pieceCanvasRect, grooveCanvasCenter);
+            CreatePieceHintOutline(_tutorialPiece, TutorialTargetOutlineColor);
+            return true;
+        }
+
+        for (var i = 0; i < _drag.CurrentGroupDraggables.Count; i++)
+        {
+            var state = _drag.CurrentGroupDraggables[i];
+            if (state == null
+                || state.IsPlaced
+                || state.PieceRenderer == null
+                || !TryGetRendererScreenRect(state.PieceRenderer, camera, out var pieceScreenRect)
+                || !TryScreenRectToCanvasRect(canvasRect, pieceScreenRect, out var pieceCanvasRect))
+            {
+                continue;
+            }
+
+            CreateTutorialPieceCopy(focusRect, state, pieceCanvasRect);
+        }
+
         return true;
     }
 
-    private static void CreateTutorialTrayDim(RectTransform parent, Rect trayRect)
+    private static void CreateTutorialTrayDim(
+        RectTransform parent,
+        RectTransform canvasRect,
+        Rect trayRect)
     {
         var dimObject = new GameObject(
             TutorialTrayDimObjectName,
@@ -2210,15 +2636,24 @@ public class GameScene : MonoBehaviour
         dimRect.anchorMin = new Vector2(0.5f, 0.5f);
         dimRect.anchorMax = new Vector2(0.5f, 0.5f);
         dimRect.pivot = new Vector2(0.5f, 0.5f);
-        dimRect.anchoredPosition = trayRect.center;
-        dimRect.sizeDelta = trayRect.size;
+        var dimTop = Mathf.Max(
+            trayRect.yMax,
+            canvasRect.rect.yMin + canvasRect.rect.height * 0.34f);
+        var dimHeight = dimTop - canvasRect.rect.yMin;
+        dimRect.anchoredPosition = new Vector2(
+            canvasRect.rect.center.x,
+            canvasRect.rect.yMin + dimHeight * 0.5f);
+        dimRect.sizeDelta = new Vector2(canvasRect.rect.width, dimHeight);
 
         var image = dimObject.GetComponent<Image>();
         image.color = new Color(0f, 0f, 0f, TutorialTrayDimAlpha);
         image.raycastTarget = false;
     }
 
-    private void CreateTutorialPieceCopy(RectTransform parent, Rect pieceRect)
+    private static void CreateTutorialPieceCopy(
+        RectTransform parent,
+        DraggablePieceState state,
+        Rect pieceRect)
     {
         var pieceObject = new GameObject(
             TutorialPieceObjectName,
@@ -2232,41 +2667,99 @@ public class GameScene : MonoBehaviour
         pieceImage.rectTransform.pivot = new Vector2(0.5f, 0.5f);
         pieceImage.rectTransform.anchoredPosition = pieceRect.center;
         pieceImage.rectTransform.sizeDelta = pieceRect.size;
-        pieceImage.rectTransform.localRotation = _tutorialPiece.PieceRenderer.transform.rotation;
-        pieceImage.sprite = _tutorialPiece.PieceRenderer.sprite;
-        pieceImage.color = _tutorialPiece.PieceRenderer.color;
+        pieceImage.rectTransform.localRotation = state.PieceRenderer.transform.rotation;
+        pieceImage.sprite = state.PieceRenderer.sprite;
+        pieceImage.color = state.PieceRenderer.color;
         pieceImage.preserveAspect = false;
         pieceImage.raycastTarget = false;
     }
 
-    private static void CreateTutorialInstruction(RectTransform parent, Rect trayRect)
+    private void CreateTutorialInstruction(RectTransform parent, TutorialStage stage)
     {
-        var textObject = new GameObject(
+        var promptObject = new GameObject(
             TutorialTextObjectName,
+            typeof(RectTransform),
+            typeof(CanvasRenderer),
+            typeof(Image),
+            typeof(CanvasGroup),
+            typeof(TutorialPromptMotion));
+        var promptRect = promptObject.GetComponent<RectTransform>();
+        promptRect.SetParent(parent, false);
+        promptRect.anchorMin = new Vector2(0.5f, 0.5f);
+        promptRect.anchorMax = new Vector2(0.5f, 0.5f);
+        promptRect.pivot = new Vector2(0.5f, 0.5f);
+        var normalizedAnchor = GetTutorialPromptAnchor(stage);
+        var targetPosition = new Vector2(
+            Mathf.Lerp(parent.rect.xMin, parent.rect.xMax, normalizedAnchor.x),
+            Mathf.Lerp(parent.rect.yMin, parent.rect.yMax, normalizedAnchor.y));
+        promptRect.anchoredPosition = targetPosition;
+        promptRect.sizeDelta = stage == TutorialStage.TwoPiecePractice
+            ? new Vector2(580f, 232f)
+            : new Vector2(540f, 224f);
+
+        var promptImage = promptObject.GetComponent<Image>();
+        promptImage.sprite = _tutorialTipBackgroundSprite;
+        promptImage.color = _tutorialTipBackgroundSprite != null
+            ? Color.white
+            : new Color(0.24f, 0.36f, 0.68f, 0.96f);
+        promptImage.preserveAspect = true;
+        promptImage.raycastTarget = false;
+
+        var textObject = new GameObject(
+            "Content",
             typeof(RectTransform),
             typeof(CanvasRenderer),
             typeof(TextMeshProUGUI),
             typeof(Shadow));
         var text = textObject.GetComponent<TextMeshProUGUI>();
-        text.rectTransform.SetParent(parent, false);
-        text.rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
-        text.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
-        text.rectTransform.pivot = new Vector2(0.5f, 0.5f);
-        text.rectTransform.anchoredPosition = new Vector2(
-            trayRect.center.x,
-            trayRect.yMin + 42f);
-        text.rectTransform.sizeDelta = new Vector2(Mathf.Max(320f, trayRect.width - 80f), 58f);
-        text.text = TutorialInstruction;
-        text.fontSize = 32f;
+        text.rectTransform.SetParent(promptRect, false);
+        text.rectTransform.anchorMin = Vector2.zero;
+        text.rectTransform.anchorMax = Vector2.one;
+        text.rectTransform.offsetMin = new Vector2(42f, 28f);
+        text.rectTransform.offsetMax = new Vector2(-42f, -52f);
+        text.text = GetTutorialInstruction(stage);
+        text.fontSize = 29f;
+        text.fontSizeMin = 21f;
+        text.fontSizeMax = 29f;
+        text.enableAutoSizing = true;
         text.color = Color.white;
         text.alignment = TextAlignmentOptions.Center;
-        text.enableWordWrapping = false;
+        text.enableWordWrapping = true;
         text.raycastTarget = false;
         GameFontUtility.ApplyDefaultFont(text);
 
         var shadow = textObject.GetComponent<Shadow>();
         shadow.effectColor = new Color(0f, 0f, 0f, 0.72f);
         shadow.effectDistance = new Vector2(2f, -2f);
+
+        var entranceOffset = stage == TutorialStage.StrongPlacement
+            ? new Vector2(-72f, 0f)
+            : stage == TutorialStage.TwoPiecePractice
+                ? new Vector2(0f, -72f)
+                : new Vector2(72f, 0f);
+        promptObject.GetComponent<TutorialPromptMotion>().Configure(
+            promptRect,
+            promptObject.GetComponent<CanvasGroup>(),
+            targetPosition,
+            entranceOffset);
+    }
+
+    private static Vector2 GetTutorialPromptAnchor(TutorialStage stage)
+    {
+        return stage == TutorialStage.StrongPlacement
+            ? TutorialStrongPromptAnchor
+            : stage == TutorialStage.TwoPiecePractice
+                ? TutorialPracticePromptAnchor
+                : TutorialHintPromptAnchor;
+    }
+
+    private static string GetTutorialInstruction(TutorialStage stage)
+    {
+        return stage == TutorialStage.StrongPlacement
+            ? TutorialStrongInstruction
+            : stage == TutorialStage.TwoPiecePractice
+                ? TutorialPracticeInstruction
+                : TutorialHintInstruction;
     }
 
     private void CreateTutorialArrow(
@@ -2314,8 +2807,19 @@ public class GameScene : MonoBehaviour
             grooveCenter - direction.normalized * arrowRect.sizeDelta.y);
     }
 
+    private void HideTutorialFocusPresentation()
+    {
+        if (_tutorialFocusRoot != null)
+        {
+            _tutorialFocusRoot.SetActive(false);
+            Destroy(_tutorialFocusRoot);
+            _tutorialFocusRoot = null;
+        }
+    }
+
     private void HidePiecePlacementTutorialPresentation(bool clearHintOutline = true)
     {
+        HideTutorialFocusPresentation();
         if (clearHintOutline)
         {
             ClearPieceHint();
@@ -2331,67 +2835,70 @@ public class GameScene : MonoBehaviour
 
     private void RestorePiecePlacementTutorialPresentation(DraggablePieceState state)
     {
-        if (!_isTutorialActive || state != _tutorialPiece || state.IsPlaced)
+        if (!IsTutorialActive
+            || state == null
+            || state.IsPlaced
+            || (_tutorialStage == TutorialStage.StrongPlacement && state != _tutorialPiece)
+            || _tutorialStage == TutorialStage.HintIntroduction)
         {
             return;
         }
 
-        if (!ShowPiecePlacementTutorialPresentation())
+        RefreshPiecePlacementTutorialPresentation();
+    }
+
+    private void RefreshPiecePlacementTutorialPresentation()
+    {
+        if (!RebuildTutorialFocusPresentation())
         {
             StopPiecePlacementTutorial(persistCompletion: false, restoreLevelOutline: true);
         }
     }
 
-    private void AdvancePiecePlacementTutorial()
-    {
-        if (!_isTutorialActive)
-        {
-            return;
-        }
-
-        HidePiecePlacementTutorialPresentation();
-        _tutorialPiece = FindHintTarget();
-        if (_tutorialPiece != null && !_isGameFinished)
-        {
-            if (!ShowPiecePlacementTutorialPresentation())
-            {
-                StopPiecePlacementTutorial(persistCompletion: false, restoreLevelOutline: true);
-            }
-
-            return;
-        }
-
-        StopPiecePlacementTutorial(
-            persistCompletion: _isGameFinished,
-            restoreLevelOutline: !_isGameFinished);
-    }
-
     private void StopPiecePlacementTutorial(bool persistCompletion, bool restoreLevelOutline)
     {
-        var wasActive = _isTutorialActive || _isTutorialPending;
+        var wasActive = IsTutorialActive || _isTutorialPending;
         _isTutorialPending = false;
-        _isTutorialActive = false;
+        _tutorialStage = TutorialStage.None;
         HidePiecePlacementTutorialPresentation();
         _tutorialPiece = null;
-        if (_hintButton != null)
-        {
-            _hintButton.interactable = true;
-        }
+        SetHintButtonTutorialState();
 
-        if (persistCompletion
-            && (!SqliteLocalStore.Initialize()
-                || !SqliteLocalStore.Upsert(
-                    TutorialCollection,
-                    PiecePlacementTutorialKey,
-                    "true")))
+        if (persistCompletion)
         {
-            Debug.LogWarning("GameScene: failed to persist Piece placement tutorial completion.");
+            PersistPiecePlacementTutorialCompletion();
         }
 
         if (restoreLevelOutline && wasActive && !_isGameFinished)
         {
             TryRefreshActiveGroupOutline(_drag.CurrentGroupIndex);
         }
+    }
+
+    private static void PersistPiecePlacementTutorialCompletion()
+    {
+        if (!SqliteLocalStore.Initialize()
+            || !SqliteLocalStore.Upsert(
+                TutorialCollection,
+                PiecePlacementTutorialKey,
+                "true"))
+        {
+            Debug.LogWarning("GameScene: failed to persist Piece placement tutorial completion.");
+        }
+    }
+
+    private void SetHintButtonTutorialState()
+    {
+        if (_hintButton == null)
+        {
+            return;
+        }
+
+        var hiddenForTutorial = _isTutorialPending
+            || _tutorialStage == TutorialStage.StrongPlacement
+            || _tutorialStage == TutorialStage.TwoPiecePractice;
+        _hintButton.gameObject.SetActive(!hiddenForTutorial);
+        _hintButton.interactable = !hiddenForTutorial && !_isGameFinished;
     }
 
     private void DestroyTutorialArrowSprite()
@@ -2404,6 +2911,22 @@ public class GameScene : MonoBehaviour
         var texture = _tutorialArrowSprite.texture;
         Destroy(_tutorialArrowSprite);
         _tutorialArrowSprite = null;
+        if (texture != null)
+        {
+            Destroy(texture);
+        }
+    }
+
+    private void DestroyTutorialTipBackgroundSprite()
+    {
+        if (_tutorialTipBackgroundSprite == null)
+        {
+            return;
+        }
+
+        var texture = _tutorialTipBackgroundSprite.texture;
+        Destroy(_tutorialTipBackgroundSprite);
+        _tutorialTipBackgroundSprite = null;
         if (texture != null)
         {
             Destroy(texture);
@@ -2543,6 +3066,7 @@ public class GameScene : MonoBehaviour
 
         _hintButton.onClick.RemoveListener(OnHintButtonClicked);
         _hintButton.onClick.AddListener(OnHintButtonClicked);
+        SetHintButtonTutorialState();
     }
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
@@ -2567,7 +3091,9 @@ public class GameScene : MonoBehaviour
             return;
         }
 
-        _testCompleteButton.interactable = !_isGameFinished && !_isEntranceAnimating;
+        _testCompleteButton.interactable = !_isGameFinished
+            && !_isEntranceAnimating
+            && !_isGroupTransitionAnimating;
         _testCompleteButton.onClick.RemoveListener(OnTestCompleteAllClicked);
         _testCompleteButton.onClick.AddListener(OnTestCompleteAllClicked);
     }
@@ -2657,6 +3183,7 @@ public class GameScene : MonoBehaviour
     {
         if (_isGameFinished
             || _isEntranceAnimating
+            || _isGroupTransitionAnimating
             || _drag.DraggingPiece != null
             || _board.GrooveImagesByGroup == null)
         {
@@ -2693,7 +3220,7 @@ public class GameScene : MonoBehaviour
 
         _testCompleteButton.interactable = false;
         var shouldCompleteTutorial = packId == GameDefine.DefaultBagId
-            && (_isTutorialPending || _isTutorialActive);
+            && (_isTutorialPending || IsTutorialActive);
         StopPiecePlacementTutorial(
             persistCompletion: shouldCompleteTutorial,
             restoreLevelOutline: false);
@@ -2720,8 +3247,9 @@ public class GameScene : MonoBehaviour
     {
         if (_isGameFinished
             || _isEntranceAnimating
+            || _isGroupTransitionAnimating
             || _isTutorialPending
-            || _isTutorialActive
+            || IsTutorialBlockingOutline
             || _drag.DraggingPiece != null)
         {
             return;
@@ -2788,7 +3316,7 @@ public class GameScene : MonoBehaviour
         _hintedPieceBaseRotation = state.PieceRenderer.transform.rotation;
         _hintShakeStartTime = Time.unscaledTime;
         _isHintPieceShaking = true;
-        CreatePieceHintOutline(state);
+        CreatePieceHintOutline(state, PieceHintOutlineColor);
     }
 
     private void UpdatePieceHintAnimation()
@@ -2829,7 +3357,7 @@ public class GameScene : MonoBehaviour
         renderer.transform.rotation = _hintedPieceBaseRotation * Quaternion.Euler(0f, 0f, angle);
     }
 
-    private void CreatePieceHintOutline(DraggablePieceState state)
+    private void CreatePieceHintOutline(DraggablePieceState state, Color outlineColor)
     {
         var grooveRect = state.GrooveRect;
         var outlineObject = new GameObject(
@@ -2852,7 +3380,7 @@ public class GameScene : MonoBehaviour
         outlineGraphic.maskable = false;
         outlineGraphic.Configure(
             state.GrooveImage.sprite,
-            PieceHintOutlineColor,
+            outlineColor,
             HintOutlineWidth,
             HintDashLength,
             HintDashGap,
@@ -3027,7 +3555,12 @@ public class GameScene : MonoBehaviour
             || !GameTaskUtility.TryGetCurrentTaskConfig(out var taskConfig))
         {
             SetTaskRewardSectionVisible(false);
-            SetSettlementScore(settlementScore);
+            yield return AnimateTaskSettlementProgress(
+                null,
+                null,
+                0,
+                0,
+                scoreResult);
             yield break;
         }
 
@@ -3038,7 +3571,12 @@ public class GameScene : MonoBehaviour
                 $"GameScene: failed to add settlement score to current task. " +
                 $"packId={packId}, score={settlementScore}");
             SetTaskRewardSectionVisible(false);
-            SetSettlementScore(settlementScore);
+            yield return AnimateTaskSettlementProgress(
+                null,
+                null,
+                0,
+                0,
+                scoreResult);
             yield break;
         }
 
@@ -3081,7 +3619,7 @@ public class GameScene : MonoBehaviour
             taskConfig,
             progressBeforeSettlement,
             progressAfterSettlement,
-            settlementScore);
+            scoreResult);
     }
 
     private bool QueueTaskReward(TaskConfigData taskConfig)
@@ -3134,30 +3672,182 @@ public class GameScene : MonoBehaviour
 
     private IEnumerator AnimateTaskSettlementProgress(
         Transform taskItem,
-        TaskConfigData taskConfig,
+        TaskConfigData? taskConfig,
         int progressBeforeSettlement,
         int progressAfterSettlement,
-        int settlementScore)
+        GameScoreResult scoreResult)
     {
-        TaskProgressUIUtility.SetProgress(taskItem, taskConfig, progressBeforeSettlement);
+        SetSettlementTaskProgress(taskItem, taskConfig, progressBeforeSettlement);
         SetSettlementScore(0);
+        SetSettlementScoreTitle("基础得分");
+        yield return AnimateSettlementScoreRange(
+            taskItem,
+            taskConfig,
+            progressBeforeSettlement,
+            0,
+            scoreResult.BaseScore,
+            SettlementBaseRollDuration);
+
+        var currentScore = scoreResult.BaseScore;
+        var cumulativeBonusPercent = 0;
+        if (scoreResult.NoHintBonusPercent > 0)
+        {
+            cumulativeBonusPercent += scoreResult.NoHintBonusPercent;
+            var targetScore = CalculateSettlementStageScore(
+                scoreResult.BaseScore,
+                cumulativeBonusPercent);
+            yield return AnimateSettlementBonusStage(
+                taskItem,
+                taskConfig,
+                progressBeforeSettlement,
+                currentScore,
+                targetScore,
+                $"未使用提示 +{scoreResult.NoHintBonusPercent}%");
+            currentScore = targetScore;
+        }
+
+        if (scoreResult.LevelOutlineDisabledBonusPercent > 0)
+        {
+            cumulativeBonusPercent += scoreResult.LevelOutlineDisabledBonusPercent;
+            var targetScore = CalculateSettlementStageScore(
+                scoreResult.BaseScore,
+                cumulativeBonusPercent);
+            yield return AnimateSettlementBonusStage(
+                taskItem,
+                taskConfig,
+                progressBeforeSettlement,
+                currentScore,
+                targetScore,
+                $"关闭关卡描边 +{scoreResult.LevelOutlineDisabledBonusPercent}%");
+            currentScore = targetScore;
+        }
+
+        if (scoreResult.StickerOutlineDisabledBonusPercent > 0)
+        {
+            cumulativeBonusPercent += scoreResult.StickerOutlineDisabledBonusPercent;
+            var targetScore = CalculateSettlementStageScore(
+                scoreResult.BaseScore,
+                cumulativeBonusPercent);
+            yield return AnimateSettlementBonusStage(
+                taskItem,
+                taskConfig,
+                progressBeforeSettlement,
+                currentScore,
+                targetScore,
+                $"关闭贴纸描边 +{scoreResult.StickerOutlineDisabledBonusPercent}%");
+            currentScore = targetScore;
+        }
+
+        if (scoreResult.CompletionTimeBonusPercent > 0)
+        {
+            cumulativeBonusPercent += scoreResult.CompletionTimeBonusPercent;
+            var targetScore = CalculateSettlementStageScore(
+                scoreResult.BaseScore,
+                cumulativeBonusPercent);
+            yield return AnimateSettlementBonusStage(
+                taskItem,
+                taskConfig,
+                progressBeforeSettlement,
+                currentScore,
+                targetScore,
+                $"快速完成 +{scoreResult.CompletionTimeBonusPercent}%");
+            currentScore = targetScore;
+        }
+
+        if (currentScore != scoreResult.FinalScore)
+        {
+            yield return AnimateSettlementScoreRange(
+                taskItem,
+                taskConfig,
+                progressBeforeSettlement,
+                currentScore,
+                scoreResult.FinalScore,
+                TaskProgressRollDuration);
+        }
+
+        SetSettlementScore(scoreResult.FinalScore);
+        SetSettlementScoreTitle("最终得分");
+        SetSettlementTaskProgress(taskItem, taskConfig, progressAfterSettlement);
+        yield return new WaitForSecondsRealtime(SettlementFinalPauseDuration);
+    }
+
+    private IEnumerator AnimateSettlementBonusStage(
+        Transform taskItem,
+        TaskConfigData? taskConfig,
+        int progressBeforeSettlement,
+        int fromScore,
+        int toScore,
+        string title)
+    {
+        SetSettlementScoreTitle(title);
+        yield return new WaitForSecondsRealtime(SettlementStagePauseDuration);
+        yield return AnimateSettlementScoreRange(
+            taskItem,
+            taskConfig,
+            progressBeforeSettlement,
+            fromScore,
+            toScore,
+            TaskProgressRollDuration);
+    }
+
+    private IEnumerator AnimateSettlementScoreRange(
+        Transform taskItem,
+        TaskConfigData? taskConfig,
+        int progressBeforeSettlement,
+        int fromScore,
+        int toScore,
+        float duration)
+    {
+        if (duration <= 0f)
+        {
+            SetSettlementScore(toScore);
+            SetSettlementTaskProgress(
+                taskItem,
+                taskConfig,
+                progressBeforeSettlement + toScore);
+            yield break;
+        }
 
         var elapsed = 0f;
-        while (elapsed < TaskProgressRollDuration)
+        while (elapsed < duration)
         {
             elapsed += Time.unscaledDeltaTime;
-            var normalizedTime = Mathf.Clamp01(elapsed / TaskProgressRollDuration);
+            var normalizedTime = Mathf.Clamp01(elapsed / duration);
             var easedTime = Mathf.SmoothStep(0f, 1f, normalizedTime);
-            var animatedScore = Mathf.RoundToInt(Mathf.Lerp(0f, settlementScore, easedTime));
+            var animatedScore = Mathf.RoundToInt(Mathf.Lerp(fromScore, toScore, easedTime));
             var animatedTaskProgress = progressBeforeSettlement + animatedScore;
 
             SetSettlementScore(animatedScore);
-            TaskProgressUIUtility.SetProgress(taskItem, taskConfig, animatedTaskProgress);
+            SetSettlementTaskProgress(taskItem, taskConfig, animatedTaskProgress);
             yield return null;
         }
 
-        SetSettlementScore(settlementScore);
-        TaskProgressUIUtility.SetProgress(taskItem, taskConfig, progressAfterSettlement);
+        SetSettlementScore(toScore);
+        SetSettlementTaskProgress(taskItem, taskConfig, progressBeforeSettlement + toScore);
+    }
+
+    private static int CalculateSettlementStageScore(int baseScore, int cumulativeBonusPercent)
+    {
+        return (baseScore * (100 + cumulativeBonusPercent) + 99) / 100;
+    }
+
+    private static void SetSettlementTaskProgress(
+        Transform taskItem,
+        TaskConfigData? taskConfig,
+        int progress)
+    {
+        if (taskItem != null && taskConfig.HasValue)
+        {
+            TaskProgressUIUtility.SetProgress(taskItem, taskConfig.Value, progress);
+        }
+    }
+
+    private void SetSettlementScoreTitle(string title)
+    {
+        if (_settlementScoreTitleText != null)
+        {
+            _settlementScoreTitleText.text = title;
+        }
     }
 
     private void SetSettlementScore(int score)
@@ -3977,6 +4667,51 @@ public class GameScene : MonoBehaviour
     private void OnReturnButtonClicked()
     {
         GameManager.EnterMainScene();
+    }
+}
+
+internal sealed class TutorialPromptMotion : MonoBehaviour
+{
+    private const float Duration = 0.32f;
+    private RectTransform _rectTransform;
+    private CanvasGroup _canvasGroup;
+    private Vector2 _startPosition;
+    private Vector2 _targetPosition;
+    private float _startTime;
+
+    public void Configure(
+        RectTransform rectTransform,
+        CanvasGroup canvasGroup,
+        Vector2 targetPosition,
+        Vector2 entranceOffset)
+    {
+        _rectTransform = rectTransform;
+        _canvasGroup = canvasGroup;
+        _targetPosition = targetPosition;
+        _startPosition = targetPosition + entranceOffset;
+        _startTime = Time.unscaledTime;
+        _rectTransform.anchoredPosition = _startPosition;
+        _canvasGroup.alpha = 0f;
+    }
+
+    private void Update()
+    {
+        if (_rectTransform == null || _canvasGroup == null)
+        {
+            return;
+        }
+
+        var progress = Mathf.Clamp01((Time.unscaledTime - _startTime) / Duration);
+        var eased = progress * progress * (3f - 2f * progress);
+        _rectTransform.anchoredPosition = Vector2.LerpUnclamped(
+            _startPosition,
+            _targetPosition,
+            eased);
+        _canvasGroup.alpha = eased;
+        if (progress >= 1f)
+        {
+            enabled = false;
+        }
     }
 }
 
