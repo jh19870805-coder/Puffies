@@ -1,70 +1,48 @@
 # 当前任务
 
-- 任务：参考视频重做新手引导与棋盘切组节奏
-- 状态：等待 Unity Play Mode 视觉确认
+- 任务：重新导入并清理特效资源
+- 状态：代码与 Unity 导入校验通过，等待 Play Mode 视觉确认
 - 更新时间：2026-07-31
 
 ## 用户意图
 
-- 按参考视频的路径和节奏重做 `CardBag001` 新手引导。
-- 增加棋盘、托盘和新一组贴纸的平滑切组动画。
-- 三步提示使用不同位置，并显示用户指定的三段中文内容。
-- 尽量让引导、切组、成功反馈和结算节奏接近参考视频。
-- 贴图仍可停放在棋盘外的桌面区域；未命中自己的凹槽时不得停留或覆盖棋盘。
-- 适配新命名的引导箭头，并让第三步显示提示弹窗曲线箭头和提示按钮；`CardBag001` 重玩时仍完整播放引导。
-- 自定义手型鼠标需要按照当前屏幕尺寸适配，不能始终使用 PNG 原始像素大小。
+- 重新导入 `特效资源/` 下的六个 `.unitypackage`。
+- 使用特效制作方最新提供的卡包微调、拆包、拖尾和解锁资源。
+- `CardFx/Shaders` 只保留 `2_Sided`、`AParticleFireClip10`、`AParticleFireClipAdd10`、`ReceiveShadow`，删除其余旧特效 Shader。
 
 ## 工作记录
 
-- 将旧的逐片强制引导改为与 `CardBag001` 三个分组对应的三阶段流程：第1组单片强引导、第2组双贴纸自由练习、第3组提示按钮介绍。
-- 第1步仅允许拖动目标贴纸，显示托盘遮罩、目标贴纸高亮、蓝色滚动虚线和 `GameImgArrow.png`；拿起时保留文字和目标虚线。
-- 第2步同时突出两片贴纸，允许任意顺序放置；完成第一片后只刷新剩余贴纸焦点，不重复播放提示文字入场。
-- 第3步恢复正常交互、关卡描边和提示按钮，并持久化 `Tutorial/CardBag001TutorialCompleted`。
-- 三个提示框分别位于左上、第二组待拼凹槽上方和右上，并从对应方向用 `0.32s` 淡入滑动；第二步位置根据当前凹槽整体边界动态计算，并限制在屏幕安全范围内。
-- 正确放置增加 `0.3s` 绿色确认反馈；切组时棋盘和相机用 `0.72s` 平滑定位，托盘同步滑动，新组贴纸用 `0.38s` 错峰进入托盘。
-- 切组动画期间锁定拖拽、提示按钮和“一键完成”测试按钮。
-- RewardPanel 按“基础得分 -> 实际生效的逐项加成 -> 最终得分”分段滚动，沿用项目现有加成比例。
-- 松手判定增加棋盘占用限制：正确凹槽吸附保持最高优先级；未正确吸附且贴图边界与 CardBag 棋盘相交时，贴图恢复到本次拖拽起点。从托盘拿起则恢复托盘尺寸和位置，从桌面拿起则恢复原桌面位置。
-- 第1步动画箭头资源调用改为 `GuideArrow1.png`。第三步运行时从场景 `GuideTip/Arrow` 读取 `GuideArrow2.png`、位置、尺寸和旋转；提示框入场后曲线箭头淡入并循环向右上推进。
-- MainScene 重玩确认会向 GameScene 传递一次性 replay 标记。`CardBag001` 重玩忽略 `Tutorial/CardBag001TutorialCompleted`，清空拼图会话后从第1组重新引导；普通继续游戏和其他卡包不受影响。
-- `BtnTips` 在教程待开始、第1步和第2步保持隐藏，进入第3步后才显示并启用。
-- `GameCursorUtility` 改为保留三张源纹理，并按照 `2560x1440`、CanvasScaler `Match=0.5` 动态生成等比缩放纹理；热点按实际生成宽高同步缩放。监听渲染前事件，窗口尺寸变化后自动重建并重新应用当前手型。
-- 本次未修改 SQLite 表或 JSON 结构，无需删除本地数据。教程持久化键已更名；测试完整新流程时需要清除开发环境旧教程记录及 `CardBag001` 拼图进度。
+- 按“资源管理 -> 桌面环境 -> 卡包微调 -> 拆包 -> 拖尾 -> 解锁”的顺序解析并覆盖导入包内资源，保留原始路径、Meta 和 GUID。
+- 导入结果继续位于 `Assets/Resources/Effects/`，预览场景继续使用 `Assets/Scenes/EffectScene001.unity`；未导入包内重复的 UI、字体和 `TaskItem`。
+- 更新了 `CardPackOpening_001`、`fx_chai_w_001`、`FX_ui_tuowei_w_001`、`FX_ui_jieSuo_w` 及其最新材质、贴图和模型依赖。
+- 新增拆包/拖尾依赖：`FX_dot_w_012.mat`、`FX_dot_w_013.mat`、`FX_dot_w_027_01.mat` 和 `FX_dot_w_012.png`。
+- 删除四个旧 Shader、七个旧 HLSL 及对应 Meta；`CardFx/Shaders` 现在只包含制作方指定的四个 Shader。
+- 将遗留的 `default_unlit`、`FX_dot_w_002`、`FX_dot_w_003` 材质切换到保留 Shader，避免引用已删除的 URP Shader。
+- `CardFxRuntimeUtility` 的 Trail 回退改用 `AParticleFireClipAdd10`，普通粒子回退使用 `AParticleFireClip10`，不再查找已删除的 URP/BF Packet Shader。
+- 本次未修改 SQLite 或 JSON 数据结构，无需删除本地数据。
 
-## 修改文件
+## 修改范围
 
-- `Assets/Scripts/Controller/GameScene.cs`
+- `Assets/Resources/Effects/CardFx/`
+- `Assets/Resources/Effects/CardPack/`
+- `Assets/Scripts/Model/CardFxRuntimeUtility.cs`
 - `Documents/CURRENT_TASK.md`
 - `Documents/PROJECT_CONTEXT.md`
-
-## 决策
-
-- 教程阶段直接对应 `CardBag001` 的 `Piece11`、`Piece21/22`、`Piece31-35` 三组，不新增独立教程关卡资源。
-- 前两阶段隐藏提示按钮和当前组烘焙描边；第三阶段恢复正式游戏规则。
-- 教程提示框在阶段内保持稳定，拖放过程只重建会变化的遮罩、高亮、箭头和虚线。
-- 棋盘切组动画对所有卡包生效；三阶段教学内容仅对尚未完成教程的 `CardBag001` 生效。
-- 结算动画只改变展示节奏，不改变实际分数、任务推进或发包计算。
-- 棋盘占用按贴图渲染边界与当前 `CardBagNNN` 根 RectTransform 的 XY 相交判断，避免贴图局部压在棋盘边框上仍被当作合法桌面放置。
-- 重玩状态仅在 MainScene 到下一次 GameScene 之间传递，不写入 SQLite；教程完成记录继续保留，用于避免普通首次流程重复触发。
-- 光标继续使用 `CursorMode.ForceSoftware`，但不再直接提交源 PNG；每种手型单独等比缩放，避免宽高比不同导致压扁。
 
 ## 验证
 
 - `dotnet build Puffies.sln --no-restore`：通过，0 警告、0 错误。
 - `git diff --check`：通过，仅有仓库现有的 LF/CRLF 转换提示。
-- 已完成代码级关键路径检查；尚未在 Unity Play Mode 中完成三阶段视觉和交互回归。
+- Unity 编辑器已自动刷新资源；`Editor.log` 未发现 Shader 编译、Missing Shader、GUID 冲突或 C# 错误。
+- 四个正式特效 Prefab 的依赖闭包只使用制作方指定的四个 Shader。
 
 ## 下一步
 
-1. 清除 `CardBag001` 的开发进度和 `Tutorial/CardBag001TutorialCompleted` 后，从正常开包流程进入游戏，检查三步位置、文案和节奏。
-2. 验证第1步拿起后蓝色虚线保留、第2步两片可任意顺序且文字不重复入场、第3步提示按钮可用。
-3. 检查第1步使用 `GuideArrow1.png`；第3步提示框使用编辑器中的 `GuideTip/Arrow` 布局，曲线箭头和 `BtnTips` 都不提前出现。
-4. 完成 `CardBag001` 后从 MainScene 点击重玩，确认清空进度并从第1步重新播放完整引导。
-5. 分别从托盘和桌面拖一片贴图到棋盘错误位置，确认回到各自拖拽起点；拖到棋盘外确认仍可停放。
-6. 验证每次切组时棋盘、相机、托盘和新贴纸无跳变，并检查 RewardPanel 分段滚分。
-7. 用一个普通卡包回归切组动画，确认不会出现 `CardBag001` 教程内容。
-8. 分别用 `2560x1440`、`1920x1080` 和窗口化自由缩放测试三种手型，确认大小跟随 UI、宽高比和热点正确。
+1. 在 MainScene 检查列表卡包外观和呼吸动画。
+2. 进入开包流程，确认最新卡包模型、材质和拆包特效正常。
+3. 在 `EffectScene001` 或临时预览中检查 `FX_ui_tuowei_w_001` 与 `FX_ui_jieSuo_w` 的完整表现。
+4. 完成一次正常进入 GameScene 的流程，确认新特效没有层级、缩放或紫色材质问题。
 
 ## 恢复提示
 
-继续 Puffies 当前任务。先阅读 AGENTS.md、Documents/WORKFLOW.md 和 Documents/CURRENT_TASK.md；三阶段新手引导、棋盘切组动画和分段结算已实现，下一步是在 Unity Play Mode 中清理 CardBag001 开发进度后完成视觉回归。
+继续 Puffies 当前任务。特效六个资源包已重新覆盖导入，CardFx Shader 已精简为制作方指定的四个；下一步在 Unity Play Mode 回归卡包、拆包、拖尾和解锁视觉效果。

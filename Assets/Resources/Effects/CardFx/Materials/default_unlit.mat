@@ -8,7 +8,7 @@ Material:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: default_unlit
-  m_Shader: {fileID: 4800000, guid: 1c16dbc48fbde524baf4749a591d8cec, type: 3}
+  m_Shader: {fileID: 4800000, guid: 3239348eb6fc01d4aadddc0762544181, type: 3}
   m_ValidKeywords: []
   m_InvalidKeywords:
   - _ENABLE_LIGHT_OFF

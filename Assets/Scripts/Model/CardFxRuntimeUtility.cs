@@ -7,14 +7,11 @@ using UnityEngine.Rendering;
 public static class CardFxRuntimeUtility
 {
     private const float PreviewMaxParticleSize = 9000f;
-    private const string UiFxShaderToken = "UI_FX";
-    private const string WorldFxShaderName = "URP/Effect/UPR_FX_Common";
-    private const string BuiltInPacketShaderName = "BF/Effect/EffectPacket";
+    private const string BuiltInAdditiveShaderName = "BF/Effect/A/AParticleFireClipAdd10";
     private const string BuiltInClipShaderName = "BF/Effect/A/AParticleFireClip10";
     private const string InternalErrorShaderName = "Hidden/InternalErrorShader";
 
-    private static Shader sWorldFxShader;
-    private static Shader sBuiltInPacketShader;
+    private static Shader sBuiltInAdditiveShader;
     private static Shader sBuiltInClipShader;
     private static Material sFallbackMaterial;
 
@@ -127,7 +124,6 @@ public static class CardFxRuntimeUtility
         int sortingLayerId,
         int sortingOrder)
     {
-        EnsureWorldFxShader();
         var renderers = root.GetComponentsInChildren<ParticleSystemRenderer>(true);
         for (var i = 0; i < renderers.Length; i++)
         {
@@ -183,24 +179,6 @@ public static class CardFxRuntimeUtility
                     : 3000;
             }
         }
-        else if (!string.IsNullOrEmpty(shaderName) && shaderName.Contains(UiFxShaderToken))
-        {
-            EnsureWorldFxShader();
-            if (sWorldFxShader == null)
-            {
-                previewMaterial = new Material(source) { name = source.name + "_Preview" };
-            }
-            else
-            {
-                previewMaterial = new Material(sWorldFxShader)
-                {
-                    name = source.name + "_WorldPreview",
-                    renderQueue = source.renderQueue > 0 ? source.renderQueue : 3000
-                };
-                previewMaterial.CopyPropertiesFromMaterial(source);
-                previewMaterial.shaderKeywords = source.shaderKeywords;
-            }
-        }
         else
         {
             previewMaterial = new Material(source) { name = source.name + "_Preview" };
@@ -215,11 +193,11 @@ public static class CardFxRuntimeUtility
         if (!string.IsNullOrEmpty(materialName)
             && materialName.Contains("Trail"))
         {
-            if (sBuiltInPacketShader == null)
+            if (sBuiltInAdditiveShader == null)
             {
-                sBuiltInPacketShader = Shader.Find(BuiltInPacketShaderName);
+                sBuiltInAdditiveShader = Shader.Find(BuiltInAdditiveShaderName);
             }
-            return sBuiltInPacketShader;
+            return sBuiltInAdditiveShader;
         }
 
         if (sBuiltInClipShader == null)
@@ -259,9 +237,7 @@ public static class CardFxRuntimeUtility
             return sFallbackMaterial;
         }
 
-        EnsureWorldFxShader();
-        var shader = sWorldFxShader
-            ?? Shader.Find("URP/Effect/URP_UI_FX_Common")
+        var shader = Shader.Find(BuiltInClipShaderName)
             ?? Shader.Find("Particles/Standard Unlit");
         if (shader == null)
         {
@@ -276,19 +252,5 @@ public static class CardFxRuntimeUtility
 
         ApplyDepthPreviewFix(sFallbackMaterial);
         return sFallbackMaterial;
-    }
-
-    private static void EnsureWorldFxShader()
-    {
-        if (sWorldFxShader != null)
-        {
-            return;
-        }
-
-        sWorldFxShader = Shader.Find(WorldFxShaderName);
-        if (sWorldFxShader == null)
-        {
-            Debug.LogWarning($"CardFxRuntimeUtility: shader not found: {WorldFxShaderName}");
-        }
     }
 }

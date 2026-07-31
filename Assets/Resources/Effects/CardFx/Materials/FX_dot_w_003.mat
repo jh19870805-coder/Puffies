@@ -21,7 +21,7 @@ Material:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: FX_dot_w_003
-  m_Shader: {fileID: 4800000, guid: b757b491f32dc7547a07a35807574453, type: 3}
+  m_Shader: {fileID: 4800000, guid: 5d5e2ecbb34f59941a1719513e80c509, type: 3}
   m_ValidKeywords:
   - _MASKLAYERACTIVE_OFF
   m_InvalidKeywords:
