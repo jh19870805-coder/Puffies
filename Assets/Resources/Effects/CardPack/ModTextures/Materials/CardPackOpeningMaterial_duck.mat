@@ -7,7 +7,7 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: CardPackOpeningMaterial001
+  m_Name: CardPackOpeningMaterial_duck
   m_Shader: {fileID: 4800000, guid: 3239348eb6fc01d4aadddc0762544181, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
@@ -40,7 +40,7 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _FrontFacesAlbedo:
-        m_Texture: {fileID: 2800000, guid: a2142fc0e36dbad46b91883b6e70c4c0, type: 3}
+        m_Texture: {fileID: 2800000, guid: 1ec9c7b959a34c64e9a6eb5a6005d603, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _FrontFacesNormal:
@@ -69,30 +69,30 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
-    - _AmbientLightPower: 0.8
+    - _AmbientLightPower: 0.28
     - _BackLightScale: 0.1
-    - _CubemapPower: 0.64
-    - _CubemapValue: 0.212
+    - _CubemapPower: 4.71
+    - _CubemapValue: 0.157
     - _Cutoff: 0.5
     - _DepthTest: 4
     - _GlossyReflections: 1
-    - _LightParametersPower: 0.94
+    - _LightParametersPower: 1.5
     - _MaskClipValue: 0.5
     - _MetallicParameters: 0.36
-    - _MetallicPower: 0.18
-    - _MetallicScale: 0.437
-    - _OcclutionValue: 0.93
-    - _RampTexValue: 0.121
-    - _RampUVScale: -0.67
-    - _SmoothnessParameters: 0.867
+    - _MetallicPower: 0.2
+    - _MetallicScale: 0.682
+    - _OcclutionValue: 1.41
+    - _RampTexValue: 0.093
+    - _RampUVScale: -0.93
+    - _SmoothnessParameters: 0.841
     - _SpecularHighlights: 1
     - _UnlitOverlay: 0
     - _UseUiClipRect: 0
     - __dirty: 0
     m_Colors:
     - _BackFacesColor: {r: 1, g: 1, b: 1, a: 1}
-    - _CubeMapPosition: {r: 0.38, g: 0, b: 0, a: 0}
-    - _FrontFacesColor: {r: 1.0155091, g: 1.0155091, b: 1.0155091, a: 1}
-    - _RampColor: {r: 1, g: 1, b: 1, a: 1}
+    - _CubeMapPosition: {r: 0.1, g: -0.08, b: 0, a: 0}
+    - _FrontFacesColor: {r: 0.6830188, g: 0.6830188, b: 0.6830188, a: 1}
+    - _RampColor: {r: 0.9528302, g: 0.9528302, b: 0.9528302, a: 1}
     - _UiClipRect: {r: 0, g: 0, b: 0, a: 0}
   m_BuildTextureStacks: []
