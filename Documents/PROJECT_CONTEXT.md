@@ -41,7 +41,7 @@ Unity **2022.3** / Built-in Render Pipeline 项目，使用 Linear 色彩空间�
 
 - 任务配置来自 `Resources/Configs/TaskConfig.csv`。
 - 卡包配置来自 `Resources/Configs/CardPacks.csv`。
-- `CardPacks.csv/PackSize` 按卡包碎片 PNG 数量确定：`<30=XS`、`30..37=S`、`38..49=M`、`50..69=L`、`70..84=XL`、`85..99=XXL`、`>=100=XXXL`。编辑器工具只统计 `Assets/UI/CardBags/CardBagNNN` 顶层的 `PiecesNNN.png` 和新导入阶段的 `piece_NNN.png`，不统计 `BoardTitle.png`、`GameBoard.png` 或其他 PNG。
+- `CardPacks.csv/PackSize` 按卡包碎片 PNG 数量确定：`<30=XS`、`30..37=S`、`38..49=M`、`50..69=L`、`70..84=XL`、`85..99=XXL`、`>=100=XXXL`。编辑器工具只统计 `Assets/UI/CardBags/CardBagNNN` 顶层的标准碎片名 `piece_NNN.png`，不统计 `BoardTitle.png`、`GameBoard.png` 或其他 PNG。
 - 任务使用随机模板池：`TaskType=1` 累计结算分数、`TaskType=2` 收集贴纸数量、`TaskType=3` 完成卡包数量。三类任务都只在完整完成一个符合尺寸要求的卡包后结算一次；贴纸任务按该卡包的全部 Piece 数量累计。
 - `SizeMode=0` 表示任意尺寸；`SizeMode=1` 从模板 `SizePool` 与玩家当前可玩卡包尺寸的交集中随机指定一个尺寸。任务模板按 `Weight` 加权随机，并在存在其他候选时避免连续使用同一个 `TemplateId`。
 - 积分任务目标不随机，按 `TargetPool` 的 `200 -> 400 -> 600 -> 800 -> 1000 -> 1200` 顺序循环并持久化循环游标。贴纸任务目标从 `60|80|100` 随机，完成卡包任务目标从 `1|2|3` 随机。
@@ -64,7 +64,7 @@ Unity **2022.3** / Built-in Render Pipeline 项目，使用 Linear 色彩空间�
 
 - 新卡包沿用唯一 `Package001` 模板；`MainScene` 在运行时动态创建列表项。
 - 新拼图通过在 `Resources/CardBagPrefabs/` 下新增 `CardBagNNN` Prefab 实现；每个 Prefab 包含 `GameBoard` 和 `Piece01`...`PieceNN`，不创建 Package JSON。
-- 编辑器批量生成器可扫描 `CardBagNNN` 资源目录，使用完整的 `Previews/CardBagNNN.png` 与透明 Piece PNG 进行像素匹配，并以 `GameBoard.png` 作为运行时棋盘底图批量创建 Prefab，不依赖 Package JSON 或 `unity_layout.json`。
+- 编辑器批量生成器可扫描 `CardBagNNN` 资源目录，使用完整的 `Previews/CardBagNNN.png` 与透明 Piece PNG 进行像素匹配，并以 `GameBoard.png` 作为运行时棋盘底图批量创建 Prefab，不依赖 Package JSON 或 `unity_layout.json`。每个源目录除 `BoardTitle.png`、`GameBoard.png` 外的碎片统一命名为小写三位编号 `piece_001.png`、`piece_002.png`……；已有 `.meta` 必须随 PNG 一起移动以保持 Prefab Sprite GUID 引用。
 - 新特效已按包内原始结构导入 `Resources/Effects/`；运行时通过 `Resources.Load` 加载，不对原始资源执行重命名或目录重组。
 - 构建前执行 `Puffies -> Sync Build Resources`，将运行时磁盘加载的 UI 目录同步到 `StreamingAssets/UI`。
 

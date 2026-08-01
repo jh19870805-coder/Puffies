@@ -35,7 +35,7 @@ public static class CardBagPrefabGeneratorEditor
         @"^CardBag(\d{3})$",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly Regex PackSizePieceRegex = new Regex(
-        @"^(?:Pieces\d+|piece_\d+)$",
+        @"^piece_\d{3}$",
         RegexOptions.CultureInvariant);
 
     [MenuItem("Puffies/Card Packs/Update Pack Sizes From Piece Counts")]
@@ -212,7 +212,7 @@ public static class CardBagPrefabGeneratorEditor
         if (pieceCountsByPackId.Count == 0)
         {
             throw new InvalidDataException(
-                "Card pack size updater: no PiecesNNN.png or piece_NNN.png files were found.");
+                "Card pack size updater: no piece_NNN.png files were found.");
         }
 
         var configAssetPath = GameDefine.CardPackConfigEditorPath;

@@ -1,55 +1,54 @@
 # 当前任务
 
-- 任务：按卡包碎片数量一键更新 PackSize
-- 状态：实现完成，已更新当前配置并通过静态验证
-- 更新时间：2026-08-01
+- 任务：统一 CardBag 碎片资源命名
+- 状态：资源重命名完成，Prefab GUID 引用已验证
+- 更新时间：2026-08-02
 
 ## 用户意图
 
-- 扫描 `Assets/UI/CardBags/CardBagNNN` 中的卡包源资源，按实际碎片 PNG 数量更新 `CardPacks.csv/PackSize`。
-- `BoardTitle.png`、`GameBoard.png` 和其他非碎片图片不得计入。
-- 后续导入新卡包资源后，可以从 Unity 菜单一键重复更新。
+- 扫描 `Assets/UI/CardBags/CardBagXXX`，保留 `BoardTitle.png` 和 `GameBoard.png`。
+- 其他拼图碎片如果不是 `piece_xxx.png` 格式，则从 `piece_001.png` 开始按原文件数字顺序重命名。
+- 已有 Prefab 使用这些纹理时同步保证引用有效。
 
 ## 工作记录
 
-- 在现有 `CardBagPrefabGeneratorEditor` 中新增菜单 `Puffies -> Card Packs -> Update Pack Sizes From Piece Counts`。
-- 工具只统计卡包目录顶层的正式分组名 `PiecesNNN.png` 和新导入阶段名 `piece_NNN.png`；其他 PNG 自动排除。
-- 尺寸规则为：`0..29=XS(1)`、`30..37=S(2)`、`38..49=M(3)`、`50..69=L(4)`、`70..84=XL(5)`、`85..99=XXL(6)`、`>=100=XXXL(7)`。
-- 工具使用项目统一 `CsvTable` 读取 CSV，按 `PackId` 更新 `PackSize`，保留其他列、行顺序、换行格式和 CSV 引号规则。
-- 没有合法碎片的资源目录不会被写成 XS；资源目录没有配置行、配置行没有资源目录或 PackId 重复时会报告。
-- 已按相同规则直接更新当前 `CardPacks.csv`。21 个现有资源目录全部匹配；`CardBag007` 没有源目录，因此 PackId 7 保持原配置值。
+- `CardBag001`：`Pieces001..008.png` 改为 `piece_001..008.png`。
+- `CardBag007`：19 张 `图层N.png` 按数字自然顺序改为 `piece_001..019.png`。
+- `CardBag009`：36 张 `PiecesNN.png` 按数字自然顺序改为 `piece_001..036.png`。
+- `CardBag017`：37 张 `PiecesNN.png` 按数字自然顺序改为 `piece_001..037.png`。
+- `CardBag002` 原文件均已符合目标格式，因此保持原编号不变，包括现有编号缺口。
+- 001、009、017 的 PNG 与 `.meta` 成对移动，GUID 未改变；007 当前没有 `CardBag007.prefab` 且源 PNG 尚无 Meta，等待 Unity 导入时生成。
+- PackSize 一键更新工具同步收紧为只统计标准名 `piece_NNN.png`。
 
 ## 修改文件
 
+- `Assets/UI/CardBags/CardBag001/`
+- `Assets/UI/CardBags/CardBag007/`
+- `Assets/UI/CardBags/CardBag009/`
+- `Assets/UI/CardBags/CardBag017/`
 - `Assets/Scripts/Editor/CardBagPrefabGeneratorEditor.cs`
-- `Assets/Resources/Configs/CardPacks.csv`
 - `Documents/CURRENT_TASK.md`
 - `Documents/PROJECT_CONTEXT.md`
 
 ## 决策
 
-- 将工具放入现有 CardBag 编辑器模块，不新增单一用途编辑器文件。
-- 同时支持 `PiecesNNN.png` 和 `piece_NNN.png`，保证资源刚导入、尚未人工分组时也能正确统计。
-- 工具只更新已有 CSV 行，不根据文件夹自动创建章节、BoardScale 等其他业务配置。
+- 每个 CardBag 独立从 1 编号；旧文件按文件名末尾数字做自然排序，避免 `1、10、11、2` 的字典序错误。
+- Prefab 的 Sprite 引用由 GUID 确定，不修改 Prefab YAML；保留并移动原 `.meta` 即完成引用同步。
+- 已符合 `piece_三位数字.png` 格式的文件不因编号缺口而重排，避免无必要地改变现有资源路径。
 
 ## 验证
 
-- `dotnet build Puffies.sln --no-restore`：通过，0 警告、0 错误。
-- 使用独立统计脚本逐项核对 21 个 CardBag 目录，资源片数映射结果与更新后的 CSV 全部一致。
-- 边界实现严格使用 `<30`、`<38`、`<50`、`<70`、`<85`、`<100` 和其余 `>=100`。
-- `git diff --check`：通过，仅有工作区现有的行尾转换提示。
-- 当前 Unity 进程尚未刷新最新 Editor 程序集，因此菜单点击流程待编辑器重新聚焦或重启后验证。
-
-## 本地数据重置
-
-- `CardPacks` SQLite 表和当前任务 JSON 可能仍保留旧尺寸。测试新尺寸规则前，关闭 Play Mode，删除 `%USERPROFILE%/AppData/LocalLow/MainTown/Puffies/LocalData.db` 和 `LocalData.json`。
-- 未自动删除用户本地存档。
+- 已扫描全部 `CardBagXXX` 一级目录，除 `BoardTitle.png`、`GameBoard.png` 外没有不符合 `piece_三位数字.png` 的 PNG。
+- `CardBag001` 的 8/8、`CardBag009` 的 36/36、`CardBag017` 的 37/37 个改名后 Meta GUID 均仍存在于对应 Prefab。
+- 代码和序列化资源中没有按旧 PNG 文件名保存的字符串引用。
+- Unity 当前进程没有可交互窗口，资源导入和 007 Meta 生成待编辑器重新聚焦或重启后确认。
 
 ## 下一步
 
-1. 重新聚焦或重启 Unity，执行 `Puffies -> Card Packs -> Update Pack Sizes From Piece Counts`，确认结果弹窗和 Console 变更摘要。
-2. 清理本地开发存档后进入 MainScene，验证尺寸图标和尺寸限定任务。
+1. 重新聚焦或重启 Unity，等待 AssetDatabase 完成重命名资源导入。
+2. 检查 Console 无 Missing Sprite，并打开 CardBag001、009、017 Prefab 确认 Image Sprite 正常。
+3. 生成 `CardBag007.prefab` 后验证新资源布局和纹理匹配。
 
 ## 恢复提示
 
-继续 Puffies 卡包尺寸更新工具回归。先阅读 `AGENTS.md`、`Documents/WORKFLOW.md` 和 `Documents/CURRENT_TASK.md`；当前 CSV 已按资源片数更新，下一步验证 Unity 菜单执行和重置存档后的尺寸业务表现。
+继续 Puffies CardBag 碎片命名回归。先阅读 `AGENTS.md`、`Documents/WORKFLOW.md` 和 `Documents/CURRENT_TASK.md`；资源已统一为 `piece_NNN.png`，先完成 Unity 导入和 Prefab 可视检查，不要回退用户已有的 CardBag007、022 或美术源文件改动。
