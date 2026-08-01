@@ -115,21 +115,32 @@ public static class PuzzleOutlineBakerEditor
             }
 
             var groupMasks = new SortedDictionary<int, bool[]>();
+            var stickerBoundaryMasks = new SortedDictionary<int, bool[]>();
             foreach (var pair in groups)
             {
-                var mask = new bool[width * height];
+                var groupMask = new bool[width * height];
+                var stickerBoundaryMask = new bool[width * height];
                 for (var i = 0; i < pair.Value.Count; i++)
                 {
-                    RasterizePieceAlpha(
+                    var pieceMask = new bool[width * height];
+                    var pieceBounds = RasterizePieceAlpha(
                         pair.Value[i],
                         boardImage.rectTransform,
                         width,
                         height,
-                        mask,
+                        pieceMask,
                         loadedTextures);
+                    UnionInto(groupMask, pieceMask, pieceBounds, width, height);
+                    UnionMaskBoundaryInto(
+                        stickerBoundaryMask,
+                        pieceMask,
+                        pieceBounds,
+                        width,
+                        height);
                 }
 
-                groupMasks[pair.Key] = mask;
+                groupMasks[pair.Key] = groupMask;
+                stickerBoundaryMasks[pair.Key] = stickerBoundaryMask;
             }
 
             var pieceUnionMask = UnionMasks(groupMasks, width * height);
@@ -185,9 +196,29 @@ public static class PuzzleOutlineBakerEditor
 
                 var outputPath = $"{outputFolder}/Group{pair.Key:D2}.png";
                 WritePng(outputPath, width, height, outputPixels);
+
+                var closedGroupMask = CloseMask(pair.Value, width, height, MaskCloseRadius);
+                var groupExterior = FloodExterior(closedGroupMask, width, height);
+                var levelBoundary = BuildExteriorBoundary(
+                    closedGroupMask,
+                    groupExterior,
+                    width,
+                    height);
+                var levelOutputPixels = BuildGroupOutline(levelBoundary, width, height);
+                var levelOutputPath = $"{outputFolder}/Group{pair.Key:D2}_Level.png";
+                WritePng(levelOutputPath, width, height, levelOutputPixels);
+
+                var stickerOutputPixels = BuildGroupOutline(
+                    stickerBoundaryMasks[pair.Key],
+                    width,
+                    height);
+                var stickerOutputPath = $"{outputFolder}/Group{pair.Key:D2}_Stickers.png";
+                WritePng(stickerOutputPath, width, height, stickerOutputPixels);
                 Debug.Log(
                     $"Puzzle outline baker: {GameDefine.CardBagPrefabPrefix}{bagId:D3} " +
-                    $"Group{pair.Key:D2} contains {CountOpaque(outputPixels)} outline pixel(s).");
+                    $"Group{pair.Key:D2} contains connection={CountOpaque(outputPixels)}, " +
+                    $"level={CountOpaque(levelOutputPixels)}, " +
+                    $"stickers={CountOpaque(stickerOutputPixels)} outline pixel(s).");
             }
 
             Debug.Log(
@@ -340,7 +371,7 @@ public static class PuzzleOutlineBakerEditor
         return new SpritePixels(texture.GetPixels32(), texture.width, texture.height, rawRect);
     }
 
-    private static void RasterizePieceAlpha(
+    private static RectInt RasterizePieceAlpha(
         Image pieceImage,
         RectTransform boardRect,
         int boardWidth,
@@ -375,6 +406,11 @@ public static class PuzzleOutlineBakerEditor
             maxY = Mathf.Max(maxY, Mathf.CeilToInt(pixelY));
         }
 
+        if (maxX < 0 || maxY < 0 || minX >= boardWidth || minY >= boardHeight)
+        {
+            return new RectInt();
+        }
+
         minX = Mathf.Clamp(minX, 0, boardWidth - 1);
         minY = Mathf.Clamp(minY, 0, boardHeight - 1);
         maxX = Mathf.Clamp(maxX, 0, boardWidth - 1);
@@ -400,6 +436,8 @@ public static class PuzzleOutlineBakerEditor
                 }
             }
         }
+
+        return new RectInt(minX, minY, maxX - minX + 1, maxY - minY + 1);
     }
 
     private static float BoardLocalToPixelX(float localX, Rect rect, int width)
@@ -424,6 +462,61 @@ public static class PuzzleOutlineBakerEditor
         }
 
         return union;
+    }
+
+    private static void UnionInto(
+        bool[] target,
+        bool[] source,
+        RectInt bounds,
+        int width,
+        int height)
+    {
+        if (bounds.width <= 0 || bounds.height <= 0)
+        {
+            return;
+        }
+
+        var xMin = Mathf.Clamp(bounds.xMin, 0, width);
+        var xMax = Mathf.Clamp(bounds.xMax, 0, width);
+        var yMin = Mathf.Clamp(bounds.yMin, 0, height);
+        var yMax = Mathf.Clamp(bounds.yMax, 0, height);
+        for (var y = yMin; y < yMax; y++)
+        {
+            for (var x = xMin; x < xMax; x++)
+            {
+                var index = y * width + x;
+                target[index] |= source[index];
+            }
+        }
+    }
+
+    private static void UnionMaskBoundaryInto(
+        bool[] target,
+        bool[] mask,
+        RectInt bounds,
+        int width,
+        int height)
+    {
+        if (bounds.width <= 0 || bounds.height <= 0)
+        {
+            return;
+        }
+
+        var xMin = Mathf.Clamp(bounds.xMin - 1, 0, width);
+        var xMax = Mathf.Clamp(bounds.xMax + 1, 0, width);
+        var yMin = Mathf.Clamp(bounds.yMin - 1, 0, height);
+        var yMax = Mathf.Clamp(bounds.yMax + 1, 0, height);
+        for (var y = yMin; y < yMax; y++)
+        {
+            for (var x = xMin; x < xMax; x++)
+            {
+                var index = y * width + x;
+                if (mask[index] && IsMaskBoundary(mask, x, y, width, height))
+                {
+                    target[index] = true;
+                }
+            }
+        }
     }
 
     private static bool[] BuildBoardCutoutMask(SpritePixels board, int width, int height)

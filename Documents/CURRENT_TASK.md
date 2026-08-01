@@ -1,50 +1,63 @@
 # 当前任务
 
-- 任务：修复 CardBag022 自动生成关卡的颜色匹配失败
-- 状态：实现完成，编译与抽样匹配验证通过，待 Unity 内完整生成
+- 任务：扩展关卡描边与贴纸描边辅助开关
+- 状态：代码与描边资源生成完成，待 Play Mode 四种开关组合画面验证
 - 更新时间：2026-08-02
 
 ## 用户意图
 
-- 处理自动生成 CardBag022 时 `piece_001.png` 无法在 Preview 或 GameBoard 中定位的异常。
-- 保持自动生成流程，不要求美术重新制作 115 张切图。
-- 不能为了通过生成而把相似贴纸放到错误位置。
+- “关卡描边”打开时，显示当前待拼组的完整外描边；关闭时保持现有逻辑，只显示当前阶段连接区域。
+- “贴纸描边”打开时，显示当前待拼组每一块凹槽的描边；关闭时不显示单块凹槽描边。
+- 两个开关初始化默认都关闭，默认视觉与当前功能逻辑一致。
 
 ## 工作记录
 
-- 确认 `piece_001.png` 为 `277x212`，Preview 与 GameBoard 均为 `1820x2744`，不是尺寸不匹配。
-- 当前 `Previews/CardBag022.png` 是替换后的新文件；碎片与 Preview 几何一致，但导出 RGB 存在色差。首张正确位置约为左上 `(3,4)`，平均每通道偏差约 `9.86`，导致旧算法找不到任何完全相同的颜色锚点并返回 `-100%`。
-- 保留原有精确匹配作为首选路径，只在精确匹配失败时执行感知颜色回退。
-- 感知回退先以低数量高区分度采样进行全图粗搜，再围绕最佳候选细搜，最后用最多 512 个不透明内部像素复核。
-- 回退结果必须达到 `78%` 最低相似度，并且与远距离第二候选至少相差 `1.5%`；不满足时继续报错，不生成可能错位的 Prefab。
-- 错误信息新增感知匹配分和第二候选分，后续资源问题可以直接区分“颜色不同但位置明确”和“候选确实不唯一”。
+- `PuzzleOutlineBakerEditor` 每组继续生成现有 `GroupNN.png` 连接区域，并新增：
+  - `GroupNN_Level.png`：当前组所有 Piece Alpha 合并后的完整外边界。
+  - `GroupNN_Stickers.png`：当前组每个 Piece Alpha 独立边界的合并图。
+- 逐贴纸边界在每片蒙版生成后直接合并到组级结果，不额外长期保留每片全尺寸边界图，控制 CardBag022 等大棋盘的烘焙内存峰值。
+- 逐片蒙版合并和边界提取只扫描该贴纸在棋盘上的包围盒，避免大型棋盘对每张贴纸重复遍历全部像素；输出结果不变。
+- GameScene 始终创建当前阶段描边：关卡描边关闭加载 `GroupNN.png`，打开加载 `GroupNN_Level.png`；贴纸描边打开时叠加 `GroupNN_Stickers.png`。
+- 新资源缺失时关卡完整外框回退到连接区域，贴纸轮廓单独跳过；缺失描边不阻断拼图创建。
+- `GameSettingsData.UsableOption1` 和默认设置工厂均改为 `false`；`UsableOption2` 已为 `false`，因此两个开关新建设置时都关闭。
+- 结算加成规则不变：关闭关卡描边仍加 `2%`，关闭贴纸描边仍加 `5%`。
 
 ## 修改文件
 
-- `Assets/Scripts/Editor/CardBagPrefabGeneratorEditor.cs`
+- `Assets/Scripts/Controller/GameScene.cs`
+- `Assets/Scripts/Editor/PuzzleOutlineBakerEditor.cs`
+- `Assets/Scripts/Model/GameDefine.cs`
+- `Assets/Scripts/Model/LocalDataStore.cs`
 - `Documents/CURRENT_TASK.md`
 - `Documents/PROJECT_CONTEXT.md`
 
 ## 决策
 
-- 不修改 CardBag022 的 PNG 颜色、尺寸、透明通道或美术内容。
-- 不降低原精确匹配阈值；新逻辑仅作为失败回退，既有可精确生成的卡包行为不变。
-- 使用相似度和候选分差双重门槛，重复图案不能仅凭宽松色差被接受。
+- 不用运行时 Shader 动态计算描边，继续沿用离线 PNG 烘焙和 UGUI Image，保证结果稳定并复用现有对齐规则。
+- 完整关卡外框和逐贴纸轮廓分开烘焙，支持两个开关四种组合。
+- 默认关卡描边关闭不是隐藏全部描边，而是保留旧 `GroupNN.png` 的连接区域提示。
 
 ## 验证
 
 - `dotnet build Puffies.sln --no-restore`：通过，0 警告、0 错误。
-- 独立像素探针抽查 022：001 为 `84.89%`、025 为 `85.04%`、050 为 `91.70%`、075 为 `87.86%`、100 为 `90.35%`。
-- 第 115 张使用与正式实现一致的高区分度采样后定位到唯一候选，相似度 `90.92%`。
-- 首张第二个远距离候选为 `56.08%`，与正确位置相差 `28.81%`，明显高于安全门槛。
-- Unity 编辑器尚未刷新 2026-08-02 00:41 后的最新脚本，因此完整 115 张生成和 Prefab 画面待编辑器重新聚焦后验证。
+- 静态检查确认两个新资源路径均位于现有 `Resources/Generated/PuzzleOutlines/CardBagNNN/`，无需修改构建同步。
+- Unity 已刷新最新脚本并完成域重载，Editor 日志无 C# 编译错误。
+- 已执行新版 **Bake Outline Masks**：CardBag001 到 CardBag021 共 93 个分组，基础 `GroupNN.png`、`GroupNN_Level.png`、`GroupNN_Stickers.png` 均各 93 张，数量一一对应并生成 Unity Meta。
+- 抽查 CardBag001 第二组：`_Level` 只保留组级合并外边界，`_Stickers` 会额外显示组内每块贴纸之间的凹槽边界。
+- CardBag022 当前 Prefab 仍使用自动生成过程的 `Piece001...` 顺序占位名，按烘焙器既有保护规则跳过并移除陈旧输出；需完成正确分组后再烘焙，不影响 CardBag001 到 CardBag021。
+- 尚未在 Play Mode 实际切换四种组合，因此设置页到 GameScene 的最终画面仍待人工回归。
+
+## 本地数据重置
+
+- 已保存的 `GameSettings/Runtime` 会继续保留旧开关值。验证“首次初始化默认关闭”前，退出 Play Mode 后删除 `%USERPROFILE%/AppData/LocalLow/MainTown/Puffies/LocalData.db`。
+- 未自动删除本地存档。
 
 ## 下一步
 
-1. 重新聚焦 Unity，等待脚本编译完成。
-2. 再次执行 CardBag022 自动生成，检查 115 张全部完成；Console 中允许出现说明使用感知匹配的警告，但不得有定位异常。
-3. 打开生成后的 `CardBag022.prefab`，重点抽查首张、紫色坐垫和重复猫咪图案的位置。
+1. 在 GameScene 分别验证：全关、仅关卡描边、仅贴纸描边、两项全开。
+2. 重点检查后续组与已完成区域的接触边和同组贴纸缝隙。
+3. CardBag022 完成正式分组后重新执行 **Bake Outline Masks**，再检查其大棋盘耗时与内存。
 
 ## 恢复提示
 
-继续 Puffies CardBag022 自动生成回归。先阅读 `AGENTS.md`、`Documents/WORKFLOW.md` 和 `Documents/CURRENT_TASK.md`；生成器已增加色差回退，先在 Unity 内完整生成 022 并检查警告与 Prefab 布局，不要修改 CardBag022 美术 PNG 或回退用户已有资源改动。
+继续 Puffies 描边辅助开关回归。先阅读 `AGENTS.md`、`Documents/WORKFLOW.md` 和 `Documents/CURRENT_TASK.md`；CardBag001 到 CardBag021 的三类描边资源已生成，下一步在 Play Mode 验证四种组合，不要回退用户现有 CardBag、特效或场景修改。

@@ -584,7 +584,7 @@ public sealed class GameSettingsData
     public float MusicVolume = 1f;
     public float EffectVolume = 1f;
     public bool IsWindowed;
-    public bool UsableOption1 = true;
+    public bool UsableOption1;
     public bool UsableOption2;
     public bool UsableOption3;
 
@@ -772,7 +772,7 @@ public static class GameSettingsUtility
             MusicVolume = 1f,
             EffectVolume = 1f,
             IsWindowed = !Screen.fullScreen,
-            UsableOption1 = true,
+            UsableOption1 = false,
             UsableOption2 = false,
             UsableOption3 = false
         };

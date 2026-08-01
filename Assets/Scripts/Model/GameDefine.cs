@@ -89,6 +89,16 @@ public static class GameDefine
         return $"{PuzzleOutlineResourcesFolder}{CardBagPrefabPrefix}{bagId:D3}/Group{groupNumber:D2}";
     }
 
+    public static string FormatPuzzleLevelOutlineResourcesPath(int bagId, int groupNumber)
+    {
+        return $"{PuzzleOutlineResourcesFolder}{CardBagPrefabPrefix}{bagId:D3}/Group{groupNumber:D2}_Level";
+    }
+
+    public static string FormatPuzzleStickerOutlineResourcesPath(int bagId, int groupNumber)
+    {
+        return $"{PuzzleOutlineResourcesFolder}{CardBagPrefabPrefix}{bagId:D3}/Group{groupNumber:D2}_Stickers";
+    }
+
     public static string FormatPackImagePath(int packId)
     {
         return $"{UiRoot}/{PackImagesFolder}/{PackImageFilePrefix}{packId:D3}{ImageExtPng}";
