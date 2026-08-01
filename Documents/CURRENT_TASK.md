@@ -1,7 +1,7 @@
 # 当前任务
 
 - 任务：扩展关卡描边与贴纸描边辅助开关
-- 状态：代码与描边资源生成完成，待 Play Mode 四种开关组合画面验证
+- 状态：描边功能与 PanelUsable 预览响应完成，待 Play Mode 画面验证
 - 更新时间：2026-08-02
 
 ## 用户意图
@@ -21,10 +21,17 @@
 - 新资源缺失时关卡完整外框回退到连接区域，贴纸轮廓单独跳过；缺失描边不阻断拼图创建。
 - `GameSettingsData.UsableOption1` 和默认设置工厂均改为 `false`；`UsableOption2` 已为 `false`，因此两个开关新建设置时都关闭。
 - 结算加成规则不变：关闭关卡描边仍加 `2%`，关闭贴纸描边仍加 `5%`。
+- PanelUsable 的预览图会随设置立即响应：
+  - `ImgContentBg`：高对比度关闭使用 `MainSetHigh1.png`，打开使用 `MainSetHigh2.png`。
+  - `ImgContentLine`：两项描边全关使用 `MainSetLine1.png`；仅关卡描边打开使用 `MainSetLine2.png`；贴纸描边打开使用 `MainSetLine3.png`。两项同时打开时贴纸预览优先，仍使用信息更完整的 `MainSetLine3.png`。
+- 预览只替换 Image Sprite，不修改场景中配置的尺寸、锚点、位置、颜色和层级。
+- `BuildSync` 已将 `Assets/UI/MainScene` 加入同步白名单，确保 Player 可以从 `StreamingAssets/UI/MainScene` 加载这些预览图。
 
 ## 修改文件
 
 - `Assets/Scripts/Controller/GameScene.cs`
+- `Assets/Scripts/Controller/MainScene.cs`
+- `Assets/Scripts/Editor/BuildSync.cs`
 - `Assets/Scripts/Editor/PuzzleOutlineBakerEditor.cs`
 - `Assets/Scripts/Model/GameDefine.cs`
 - `Assets/Scripts/Model/LocalDataStore.cs`
@@ -42,6 +49,9 @@
 - `dotnet build Puffies.sln --no-restore`：通过，0 警告、0 错误。
 - 静态检查确认两个新资源路径均位于现有 `Resources/Generated/PuzzleOutlines/CardBagNNN/`，无需修改构建同步。
 - Unity 已刷新最新脚本并完成域重载，Editor 日志无 C# 编译错误。
+- MainScene UI 响应修改后再次通过 `dotnet build Puffies.sln --no-restore`，0 警告、0 错误；Unity Tundra 编译成功且程序集完成域重载。
+- 已确认 `ImgContentBg`、`ImgContentLine`、`Toggle1`、`Toggle2`、`Toggle3` 均存在于当前 `PanelUsable`；五张预览图路径和导入类型有效。
+- `Assets/UI/MainScene` 已按 BuildSync 规则同步到 `Assets/StreamingAssets/UI/MainScene`。
 - 已执行新版 **Bake Outline Masks**：CardBag001 到 CardBag021 共 93 个分组，基础 `GroupNN.png`、`GroupNN_Level.png`、`GroupNN_Stickers.png` 均各 93 张，数量一一对应并生成 Unity Meta。
 - 抽查 CardBag001 第二组：`_Level` 只保留组级合并外边界，`_Stickers` 会额外显示组内每块贴纸之间的凹槽边界。
 - CardBag022 当前 Prefab 仍使用自动生成过程的 `Piece001...` 顺序占位名，按烘焙器既有保护规则跳过并移除陈旧输出；需完成正确分组后再烘焙，不影响 CardBag001 到 CardBag021。
@@ -54,10 +64,10 @@
 
 ## 下一步
 
-1. 在 GameScene 分别验证：全关、仅关卡描边、仅贴纸描边、两项全开。
-2. 重点检查后续组与已完成区域的接触边和同组贴纸缝隙。
+1. 在 PanelUsable 切换三个开关，确认 `ImgContentBg` 和 `ImgContentLine` 即时替换且布局不变。
+2. 在 GameScene 分别验证：全关、仅关卡描边、仅贴纸描边、两项全开，并重点检查后续组接触边和同组贴纸缝隙。
 3. CardBag022 完成正式分组后重新执行 **Bake Outline Masks**，再检查其大棋盘耗时与内存。
 
 ## 恢复提示
 
-继续 Puffies 描边辅助开关回归。先阅读 `AGENTS.md`、`Documents/WORKFLOW.md` 和 `Documents/CURRENT_TASK.md`；CardBag001 到 CardBag021 的三类描边资源已生成，下一步在 Play Mode 验证四种组合，不要回退用户现有 CardBag、特效或场景修改。
+继续 Puffies 描边辅助开关回归。先阅读 `AGENTS.md`、`Documents/WORKFLOW.md` 和 `Documents/CURRENT_TASK.md`；PanelUsable 预览响应和 CardBag001 到 CardBag021 的三类描边资源已完成，下一步在 Play Mode 验证预览替换与四种游戏组合，不要回退用户现有 CardBag、特效或场景修改。

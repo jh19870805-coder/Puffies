@@ -101,6 +101,13 @@ public class MainScene : MonoBehaviour
     private const string UsableToggle1ObjectName = "Toggle1";
     private const string UsableToggle2ObjectName = "Toggle2";
     private const string UsableToggle3ObjectName = "Toggle3";
+    private const string UsableContentBackgroundObjectName = "ImgContentBg";
+    private const string UsableContentLineObjectName = "ImgContentLine";
+    private const string UsableHighContrastOffPath = GameDefine.UiRoot + "/MainScene/MainSetHigh1.png";
+    private const string UsableHighContrastOnPath = GameDefine.UiRoot + "/MainScene/MainSetHigh2.png";
+    private const string UsableLineOffPath = GameDefine.UiRoot + "/MainScene/MainSetLine1.png";
+    private const string UsableLevelOutlinePath = GameDefine.UiRoot + "/MainScene/MainSetLine2.png";
+    private const string UsableStickerOutlinePath = GameDefine.UiRoot + "/MainScene/MainSetLine3.png";
     private const string SavePanelObjectName = "PanelSave";
     private const string SaveButtonObjectName = "BtnData";
     private const string BagSelectPanelObjectName = "PanelBagSelect";
@@ -160,6 +167,13 @@ public class MainScene : MonoBehaviour
     private Toggle mUsableToggle1;
     private Toggle mUsableToggle2;
     private Toggle mUsableToggle3;
+    private Image mUsableContentBackgroundImage;
+    private Image mUsableContentLineImage;
+    private Sprite mUsableHighContrastOffSprite;
+    private Sprite mUsableHighContrastOnSprite;
+    private Sprite mUsableLineOffSprite;
+    private Sprite mUsableLevelOutlineSprite;
+    private Sprite mUsableStickerOutlineSprite;
     private bool mUsesPagedPackageGrid;
     private bool mIsPlayingAnimation;
     private bool mHasSwitchedToGameScene;
@@ -232,6 +246,7 @@ public class MainScene : MonoBehaviour
     {
         ReleaseBagSelectBackdropTexture();
         ReleaseGeneratedPhoto();
+        ReleaseUsablePanelPreviewSprites();
         if (mOpeningStageBackgroundSprite != null)
         {
             var texture = mOpeningStageBackgroundSprite.texture;
@@ -2070,6 +2085,14 @@ public class MainScene : MonoBehaviour
         mUsableToggle1 = FindChild(mUsablePanelRoot.transform, UsableToggle1ObjectName)?.GetComponent<Toggle>();
         mUsableToggle2 = FindChild(mUsablePanelRoot.transform, UsableToggle2ObjectName)?.GetComponent<Toggle>();
         mUsableToggle3 = FindChild(mUsablePanelRoot.transform, UsableToggle3ObjectName)?.GetComponent<Toggle>();
+        mUsableContentBackgroundImage = FindChild(
+            mUsablePanelRoot.transform,
+            UsableContentBackgroundObjectName)?.GetComponent<Image>();
+        mUsableContentLineImage = FindChild(
+            mUsablePanelRoot.transform,
+            UsableContentLineObjectName)?.GetComponent<Image>();
+
+        LoadUsablePanelPreviewSprites();
 
         ApplyUsablePanelValues(GameSettingsUtility.GetSettings());
         BindUsableControls();
@@ -2147,6 +2170,7 @@ public class MainScene : MonoBehaviour
         }
 
         GameSettingsUtility.SetUsableOption1(value);
+        RefreshUsablePanelPreview();
     }
 
     private void OnUsableToggle2Changed(bool value)
@@ -2157,6 +2181,7 @@ public class MainScene : MonoBehaviour
         }
 
         GameSettingsUtility.SetUsableOption2(value);
+        RefreshUsablePanelPreview();
     }
 
     private void OnUsableToggle3Changed(bool value)
@@ -2167,6 +2192,7 @@ public class MainScene : MonoBehaviour
         }
 
         GameSettingsUtility.SetUsableOption3(value);
+        RefreshUsablePanelPreview();
     }
 
     private void ConfigureSavePanel()
@@ -2253,6 +2279,107 @@ public class MainScene : MonoBehaviour
         }
 
         mIsApplyingSettingsToUi = false;
+        RefreshUsablePanelPreview(
+            settings.UsableOption1,
+            settings.UsableOption2,
+            settings.UsableOption3);
+    }
+
+    private void LoadUsablePanelPreviewSprites()
+    {
+        mUsableHighContrastOffSprite = GameCommonUtility.LoadSpriteByPath(
+            UsableHighContrastOffPath,
+            PixelsPerUnit);
+        mUsableHighContrastOnSprite = GameCommonUtility.LoadSpriteByPath(
+            UsableHighContrastOnPath,
+            PixelsPerUnit);
+        mUsableLineOffSprite = GameCommonUtility.LoadSpriteByPath(
+            UsableLineOffPath,
+            PixelsPerUnit);
+        mUsableLevelOutlineSprite = GameCommonUtility.LoadSpriteByPath(
+            UsableLevelOutlinePath,
+            PixelsPerUnit);
+        mUsableStickerOutlineSprite = GameCommonUtility.LoadSpriteByPath(
+            UsableStickerOutlinePath,
+            PixelsPerUnit);
+
+        if (mUsableContentBackgroundImage == null)
+        {
+            Debug.LogWarning(
+                $"MainScene: usable preview image not found. Expected {UsableContentBackgroundObjectName} " +
+                $"under {UsablePanelObjectName}.");
+        }
+
+        if (mUsableContentLineImage == null)
+        {
+            Debug.LogWarning(
+                $"MainScene: usable preview image not found. Expected {UsableContentLineObjectName} " +
+                $"under {UsablePanelObjectName}.");
+        }
+    }
+
+    private void RefreshUsablePanelPreview()
+    {
+        RefreshUsablePanelPreview(
+            mUsableToggle1 != null && mUsableToggle1.isOn,
+            mUsableToggle2 != null && mUsableToggle2.isOn,
+            mUsableToggle3 != null && mUsableToggle3.isOn);
+    }
+
+    private void RefreshUsablePanelPreview(
+        bool levelOutlineEnabled,
+        bool stickerOutlineEnabled,
+        bool highContrastEnabled)
+    {
+        if (mUsableContentBackgroundImage != null)
+        {
+            var backgroundSprite = highContrastEnabled
+                ? mUsableHighContrastOnSprite
+                : mUsableHighContrastOffSprite;
+            if (backgroundSprite != null)
+            {
+                mUsableContentBackgroundImage.sprite = backgroundSprite;
+            }
+        }
+
+        if (mUsableContentLineImage != null)
+        {
+            var lineSprite = stickerOutlineEnabled
+                ? mUsableStickerOutlineSprite
+                : levelOutlineEnabled
+                    ? mUsableLevelOutlineSprite
+                    : mUsableLineOffSprite;
+            if (lineSprite != null)
+            {
+                mUsableContentLineImage.sprite = lineSprite;
+            }
+        }
+    }
+
+    private void ReleaseUsablePanelPreviewSprites()
+    {
+        ReleaseRuntimeSprite(ref mUsableHighContrastOffSprite);
+        ReleaseRuntimeSprite(ref mUsableHighContrastOnSprite);
+        ReleaseRuntimeSprite(ref mUsableLineOffSprite);
+        ReleaseRuntimeSprite(ref mUsableLevelOutlineSprite);
+        ReleaseRuntimeSprite(ref mUsableStickerOutlineSprite);
+    }
+
+    private static void ReleaseRuntimeSprite(ref Sprite sprite)
+    {
+        if (sprite == null)
+        {
+            return;
+        }
+
+        var texture = sprite.texture;
+        Destroy(sprite);
+        if (texture != null)
+        {
+            Destroy(texture);
+        }
+
+        sprite = null;
     }
 
     private void ConfigurePackageCanvas(Camera targetCamera)

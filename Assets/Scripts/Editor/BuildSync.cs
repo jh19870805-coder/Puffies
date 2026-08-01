@@ -16,6 +16,7 @@ public class BuildSync : IPreprocessBuildWithReport
     {
         "PackImages",
         "BasicUI",
+        "MainScene",
         "GameScene",
         "AchieveScene",
         "RankScene"

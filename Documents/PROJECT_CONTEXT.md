@@ -217,7 +217,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 - GameScene 在推进任务前先持久化任务权益，且仅在任务推进保存成功后尝试发放，避免任务进度保存失败时重复发包。
 - MainScene 设置以集合/键 `GameSettings/Runtime` 保存在 `AppRecords`：音乐音量、音效音量和窗口模式。
 - MainScene 辅助选项开关同样保存在 `GameSettings/Runtime`，字段为 `UsableOption1`、`UsableOption2` 和 `UsableOption3`。
-- `UsableOption1` 是关卡描边开关，`UsableOption2` 是贴纸描边开关，两者新建设置时都默认关闭；`UsableOption3` 是高对比度并默认关闭。已持久化的用户选择优先。关卡描边关闭时 GameScene 保留现有当前阶段连接区域，打开时改为显示当前待拼组的完整合并外边界；贴纸描边关闭时不显示单块轮廓，打开时叠加当前组每块凹槽的独立轮廓。GameScene 的 CardBag 根背景在高对比度关闭时使用 `UI/BasicUI/BgCardBoard1.png`，打开时使用 `BgCardBoard2.png`；运行时只替换根 `Image.sprite`，不改变 Prefab 布局。
+- `UsableOption1` 是关卡描边开关，`UsableOption2` 是贴纸描边开关，两者新建设置时都默认关闭；`UsableOption3` 是高对比度并默认关闭。已持久化的用户选择优先。关卡描边关闭时 GameScene 保留现有当前阶段连接区域，打开时改为显示当前待拼组的完整合并外边界；贴纸描边关闭时不显示单块轮廓，打开时叠加当前组每块凹槽的独立轮廓。PanelUsable 的 `ImgContentBg` 按高对比度状态显示 `MainSetHigh1/2.png`；`ImgContentLine` 在描边全关、仅关卡描边、贴纸描边打开时分别显示 `MainSetLine1/2/3.png`，两项同时打开使用信息更完整的 `MainSetLine3.png`。GameScene 的 CardBag 根背景在高对比度关闭时使用 `UI/BasicUI/BgCardBoard1.png`，打开时使用 `BgCardBoard2.png`；运行时只替换根 `Image.sprite`，不改变 Prefab 布局。
 - MainScene 和 GameScene 引用相同 `TaskItem.prefab` GUID。场景 Override 只定位根节点（`MainScene`：`10,508`；`GameScene`：`-6,455`）；子节点布局和视觉必须在共享 Prefab 中修改。
 - 共享 TaskItem 子节点名称为 `TaskContent`、`TextProgress`、`ProgressMask`、`BagIcon` 和 `BagBg`。任务 UI 绑定代码应相对 TaskItem 实例解析这些名称，不得使用场景专属后缀。
 - `TaskProgressUIUtility` 是两个 TaskItem 实例共用的运行时绑定。任务文案按任务类型和实际指定尺寸生成；`TextProgress` 显示当前值与任务实例目标值，可见 `ProgressMask` 宽度使用两者比值并限制在有效范围。`BagIcon` 始终使用共享 Prefab 中配置的固定 Sprite，运行时不得按任务奖励或卡包编号替换。
@@ -333,7 +333,7 @@ MainScene 正式流程使用上述 `_001` 卡包、模板环境光和拆包粒�
 
 ## 8. 构建
 
-构建前执行 **Puffies -> Sync Build Resources**。该命令将 `PackImages`、`BasicUI`、`GameScene`、`AchieveScene` 和 `RankScene` 复制到 `StreamingAssets/UI`；CardBag 源贴图通过游戏 Prefab 的 Sprite 引用进入构建，因此不复制。
+构建前执行 **Puffies -> Sync Build Resources**。该命令将 `PackImages`、`BasicUI`、`MainScene`、`GameScene`、`AchieveScene` 和 `RankScene` 复制到 `StreamingAssets/UI`；CardBag 源贴图通过游戏 Prefab 的 Sprite 引用进入构建，因此不复制。
 
 建议 Build Settings 顺序：LoadingScene -> MainScene -> GameScene -> RankScene -> AchieveScene。
 
