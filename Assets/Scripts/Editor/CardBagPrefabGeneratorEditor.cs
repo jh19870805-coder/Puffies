@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEditor.Callbacks;
@@ -33,6 +34,31 @@ public static class CardBagPrefabGeneratorEditor
     private static readonly Regex CardBagFolderRegex = new Regex(
         @"^CardBag(\d{3})$",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex PackSizePieceRegex = new Regex(
+        @"^(?:Pieces\d+|piece_\d+)$",
+        RegexOptions.CultureInvariant);
+
+    [MenuItem("Puffies/Card Packs/Update Pack Sizes From Piece Counts")]
+    public static void UpdatePackSizesFromPieceCounts()
+    {
+        try
+        {
+            var result = UpdatePackSizesFromPieceCountsInternal();
+            Debug.Log(result.BuildLogMessage());
+            EditorUtility.DisplayDialog(
+                "Card Pack Sizes Updated",
+                result.BuildDialogMessage(),
+                "OK");
+        }
+        catch (Exception exception)
+        {
+            Debug.LogException(exception);
+            EditorUtility.DisplayDialog(
+                "Card Pack Size Update Failed",
+                exception.Message,
+                "OK");
+        }
+    }
 
     [MenuItem("Puffies/Puzzles/Generate CardBag Prefabs From Images")]
     public static void OpenGeneratorWindow()
@@ -133,6 +159,251 @@ public static class CardBagPrefabGeneratorEditor
 
         packs.Sort((left, right) => left.PackId.CompareTo(right.PackId));
         return packs;
+    }
+
+    internal static PackSizeUpdateResult UpdatePackSizesFromPieceCountsInternal()
+    {
+        AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+
+        var sourceRoot = ToAbsolutePath(CardBagSourceRoot);
+        if (!Directory.Exists(sourceRoot))
+        {
+            throw new DirectoryNotFoundException(
+                $"Card pack size updater: source folder not found: {CardBagSourceRoot}");
+        }
+
+        var pieceCountsByPackId = new Dictionary<int, int>();
+        var emptySourceFolders = new List<string>();
+        var sourceDirectories = Directory.GetDirectories(
+            sourceRoot,
+            "*",
+            SearchOption.TopDirectoryOnly);
+        for (var i = 0; i < sourceDirectories.Length; i++)
+        {
+            var folderName = Path.GetFileName(sourceDirectories[i]);
+            var folderMatch = CardBagFolderRegex.Match(folderName);
+            if (!folderMatch.Success
+                || !int.TryParse(
+                    folderMatch.Groups[1].Value,
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out var packId)
+                || packId <= 0)
+            {
+                continue;
+            }
+
+            var pieceCount = CountPackSizePieceFiles(sourceDirectories[i]);
+            if (pieceCount <= 0)
+            {
+                emptySourceFolders.Add(folderName);
+                continue;
+            }
+
+            if (pieceCountsByPackId.ContainsKey(packId))
+            {
+                throw new InvalidDataException(
+                    $"Card pack size updater: duplicate source folder for PackId {packId}.");
+            }
+
+            pieceCountsByPackId.Add(packId, pieceCount);
+        }
+
+        if (pieceCountsByPackId.Count == 0)
+        {
+            throw new InvalidDataException(
+                "Card pack size updater: no PiecesNNN.png or piece_NNN.png files were found.");
+        }
+
+        var configAssetPath = GameDefine.CardPackConfigEditorPath;
+        var configPath = ToAbsolutePath(configAssetPath);
+        if (!File.Exists(configPath))
+        {
+            throw new FileNotFoundException(
+                $"Card pack size updater: config not found: {configAssetPath}");
+        }
+
+        var csvText = File.ReadAllText(configPath, Encoding.UTF8);
+        var table = CsvTable.Parse(csvText);
+        var hasPackIdColumn = FindHeaderIndex(table.Headers, "PackId") >= 0;
+        var packSizeColumn = FindHeaderIndex(table.Headers, "PackSize");
+        if (!hasPackIdColumn || packSizeColumn < 0)
+        {
+            throw new InvalidDataException(
+                "Card pack size updater: CardPacks.csv must contain PackId and PackSize columns.");
+        }
+
+        var result = new PackSizeUpdateResult();
+        result.EmptySourceFolders.AddRange(emptySourceFolders);
+        var configuredPackIds = new HashSet<int>();
+        var outputRows = new List<IReadOnlyList<string>>(table.Rows.Count + 1)
+        {
+            table.Headers
+        };
+        for (var i = 0; i < table.Rows.Count; i++)
+        {
+            var row = table.Rows[i];
+            if (!row.TryGetInt("PackId", out var packId) || packId <= 0)
+            {
+                throw new InvalidDataException(
+                    $"Card pack size updater: invalid PackId at CSV line {row.LineNumber}.");
+            }
+
+            if (!configuredPackIds.Add(packId))
+            {
+                throw new InvalidDataException(
+                    $"Card pack size updater: duplicate PackId {packId} in CardPacks.csv.");
+            }
+
+            var values = new List<string>(row.Values);
+            while (values.Count < table.Headers.Count)
+            {
+                values.Add(string.Empty);
+            }
+
+            if (pieceCountsByPackId.TryGetValue(packId, out var pieceCount))
+            {
+                var size = ResolvePackSize(pieceCount);
+                var oldValue = values[packSizeColumn];
+                var newValue = ((int)size).ToString(CultureInfo.InvariantCulture);
+                if (!string.Equals(oldValue?.Trim(), newValue, StringComparison.Ordinal))
+                {
+                    values[packSizeColumn] = newValue;
+                    result.Changes.Add(
+                        $"CardBag{packId:D3}: {pieceCount} pieces, {oldValue} -> {newValue} ({size})");
+                }
+
+                result.ScannedPackCount++;
+            }
+            else
+            {
+                result.ConfigsWithoutSource.Add(packId);
+            }
+
+            outputRows.Add(values);
+        }
+
+        foreach (var packId in pieceCountsByPackId.Keys.OrderBy(value => value))
+        {
+            if (!configuredPackIds.Contains(packId))
+            {
+                result.SourcesWithoutConfig.Add(packId);
+            }
+        }
+
+        if (result.Changes.Count > 0)
+        {
+            var newLine = csvText.Contains("\r\n") ? "\r\n" : "\n";
+            var output = SerializeCsv(outputRows, newLine, csvText.EndsWith(newLine));
+            File.WriteAllText(configPath, output, new UTF8Encoding(false));
+            AssetDatabase.ImportAsset(configAssetPath, ImportAssetOptions.ForceSynchronousImport);
+            GameConfigRepository.ResetCache();
+        }
+
+        return result;
+    }
+
+    internal static CardPackSize ResolvePackSize(int pieceCount)
+    {
+        if (pieceCount < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(pieceCount));
+        }
+
+        if (pieceCount < 30)
+        {
+            return CardPackSize.XS;
+        }
+
+        if (pieceCount < 38)
+        {
+            return CardPackSize.S;
+        }
+
+        if (pieceCount < 50)
+        {
+            return CardPackSize.M;
+        }
+
+        if (pieceCount < 70)
+        {
+            return CardPackSize.L;
+        }
+
+        if (pieceCount < 85)
+        {
+            return CardPackSize.XL;
+        }
+
+        if (pieceCount < 100)
+        {
+            return CardPackSize.XXL;
+        }
+
+        return CardPackSize.XXXL;
+    }
+
+    private static int CountPackSizePieceFiles(string absoluteFolder)
+    {
+        return Directory.GetFiles(absoluteFolder, "*.png", SearchOption.TopDirectoryOnly)
+            .Count(path => PackSizePieceRegex.IsMatch(Path.GetFileNameWithoutExtension(path)));
+    }
+
+    private static int FindHeaderIndex(IReadOnlyList<string> headers, string expectedHeader)
+    {
+        for (var i = 0; i < headers.Count; i++)
+        {
+            if (string.Equals(
+                    headers[i]?.Trim(),
+                    expectedHeader,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    private static string SerializeCsv(
+        IReadOnlyList<IReadOnlyList<string>> rows,
+        string newLine,
+        bool includeTrailingNewLine)
+    {
+        var builder = new StringBuilder();
+        for (var rowIndex = 0; rowIndex < rows.Count; rowIndex++)
+        {
+            var row = rows[rowIndex];
+            for (var columnIndex = 0; columnIndex < row.Count; columnIndex++)
+            {
+                if (columnIndex > 0)
+                {
+                    builder.Append(',');
+                }
+
+                AppendCsvField(builder, row[columnIndex] ?? string.Empty);
+            }
+
+            if (rowIndex < rows.Count - 1 || includeTrailingNewLine)
+            {
+                builder.Append(newLine);
+            }
+        }
+
+        return builder.ToString();
+    }
+
+    private static void AppendCsvField(StringBuilder builder, string value)
+    {
+        if (value.IndexOfAny(new[] { ',', '"', '\r', '\n' }) < 0)
+        {
+            builder.Append(value);
+            return;
+        }
+
+        builder.Append('"');
+        builder.Append(value.Replace("\"", "\"\""));
+        builder.Append('"');
     }
 
     internal static BatchGenerationResult GenerateBatch(IReadOnlyList<int> packIds)
@@ -1019,6 +1290,80 @@ public static class CardBagPrefabGeneratorEditor
     {
         public List<int> GeneratedPackIds { get; } = new List<int>();
         public Dictionary<int, string> Failures { get; } = new Dictionary<int, string>();
+    }
+
+    internal sealed class PackSizeUpdateResult
+    {
+        public int ScannedPackCount { get; set; }
+        public List<string> Changes { get; } = new List<string>();
+        public List<int> ConfigsWithoutSource { get; } = new List<int>();
+        public List<int> SourcesWithoutConfig { get; } = new List<int>();
+        public List<string> EmptySourceFolders { get; } = new List<string>();
+
+        public string BuildDialogMessage()
+        {
+            var builder = new StringBuilder();
+            builder.AppendLine($"Scanned: {ScannedPackCount}");
+            builder.AppendLine($"Updated: {Changes.Count}");
+            if (Changes.Count > 0)
+            {
+                builder.AppendLine();
+                var visibleChanges = Changes.Take(10).ToList();
+                for (var i = 0; i < visibleChanges.Count; i++)
+                {
+                    builder.AppendLine(visibleChanges[i]);
+                }
+
+                if (Changes.Count > visibleChanges.Count)
+                {
+                    builder.AppendLine($"...and {Changes.Count - visibleChanges.Count} more. See Console.");
+                }
+            }
+
+            AppendWarnings(builder);
+            return builder.ToString().TrimEnd();
+        }
+
+        public string BuildLogMessage()
+        {
+            var builder = new StringBuilder();
+            builder.AppendLine(
+                $"Card pack size updater finished. scanned={ScannedPackCount}, updated={Changes.Count}");
+            for (var i = 0; i < Changes.Count; i++)
+            {
+                builder.AppendLine(Changes[i]);
+            }
+
+            AppendWarnings(builder);
+            return builder.ToString().TrimEnd();
+        }
+
+        private void AppendWarnings(StringBuilder builder)
+        {
+            if (ConfigsWithoutSource.Count > 0)
+            {
+                builder.AppendLine();
+                builder.AppendLine(
+                    "Config rows without a matching source folder: "
+                    + string.Join(", ", ConfigsWithoutSource.Select(id => id.ToString("D3"))));
+            }
+
+            if (SourcesWithoutConfig.Count > 0)
+            {
+                builder.AppendLine();
+                builder.AppendLine(
+                    "Source folders without a CardPacks.csv row: "
+                    + string.Join(", ", SourcesWithoutConfig.Select(id => id.ToString("D3"))));
+            }
+
+            if (EmptySourceFolders.Count > 0)
+            {
+                builder.AppendLine();
+                builder.AppendLine(
+                    "Source folders with no recognized piece PNGs: "
+                    + string.Join(", ", EmptySourceFolders));
+            }
+        }
     }
 
     private sealed class RawTexture : IDisposable
