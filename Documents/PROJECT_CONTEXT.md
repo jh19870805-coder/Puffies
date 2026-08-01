@@ -41,7 +41,7 @@ Unity **2022.3** / Built-in Render Pipeline 项目，使用 Linear 色彩空间�
 
 - 任务配置来自 `Resources/Configs/TaskConfig.csv`。
 - 卡包配置来自 `Resources/Configs/CardPacks.csv`。
-- `CardPacks.csv/PackSize` 按卡包碎片 PNG 数量确定：`<30=XS`、`30..37=S`、`38..49=M`、`50..69=L`、`70..84=XL`、`85..99=XXL`、`>=100=XXXL`。编辑器工具只统计 `Assets/UI/CardBags/CardBagNNN` 顶层的 `PiecesNNN.png` 和新导入阶段的 `piece_NNN.png`，不统计 `BoardTitle.png`、`GameBoard.png` 或其他 PNG。
+- `CardPacks.csv/PackSize` 按卡包碎片 PNG 数量确定：`<30=XS`、`30..37=S`、`38..49=M`、`50..69=L`、`70..84=XL`、`85..99=XXL`、`>=100=XXXL`。编辑器工具只统计 `Assets/UI/CardBags/CardBagNNN` 顶层的标准碎片名 `piece_NNN.png`，不统计 `BoardTitle.png`、`GameBoard.png` 或其他 PNG。
 - 任务使用随机模板池：`TaskType=1` 累计结算分数、`TaskType=2` 收集贴纸数量、`TaskType=3` 完成卡包数量。三类任务都只在完整完成一个符合尺寸要求的卡包后结算一次；贴纸任务按该卡包的全部 Piece 数量累计。
 - `SizeMode=0` 表示任意尺寸；`SizeMode=1` 从模板 `SizePool` 与玩家当前可玩卡包尺寸的交集中随机指定一个尺寸。任务模板按 `Weight` 加权随机，并在存在其他候选时避免连续使用同一个 `TemplateId`。
 - 积分任务目标不随机，按 `TargetPool` 的 `200 -> 400 -> 600 -> 800 -> 1000 -> 1200` 顺序循环并持久化循环游标。贴纸任务目标从 `60|80|100` 随机，完成卡包任务目标从 `1|2|3` 随机。
@@ -64,7 +64,7 @@ Unity **2022.3** / Built-in Render Pipeline 项目，使用 Linear 色彩空间�
 
 - 新卡包沿用唯一 `Package001` 模板；`MainScene` 在运行时动态创建列表项。
 - 新拼图通过在 `Resources/CardBagPrefabs/` 下新增 `CardBagNNN` Prefab 实现；每个 Prefab 包含 `GameBoard` 和 `Piece01`...`PieceNN`，不创建 Package JSON。
-- 编辑器批量生成器可扫描 `CardBagNNN` 资源目录，使用完整的 `Previews/CardBagNNN.png` 与透明 Piece PNG 进行像素匹配，并以 `GameBoard.png` 作为运行时棋盘底图批量创建 Prefab，不依赖 Package JSON 或 `unity_layout.json`。
+- 编辑器批量生成器可扫描 `CardBagNNN` 资源目录，使用完整的 `Previews/CardBagNNN.png` 与透明 Piece PNG 进行像素匹配，并以 `GameBoard.png` 作为运行时棋盘底图批量创建 Prefab，不依赖 Package JSON 或 `unity_layout.json`。生成器优先使用精确 RGB 锚点；切图与预览几何一致但存在导出色差时，回退到分阶段感知颜色匹配，并且只有最低相似度和远距离第二候选分差同时达标才接受，避免相似贴纸误定位。每个源目录除 `BoardTitle.png`、`GameBoard.png` 外的碎片统一命名为小写三位编号 `piece_001.png`、`piece_002.png`……；已有 `.meta` 必须随 PNG 一起移动以保持 Prefab Sprite GUID 引用。
 - 新特效已按包内原始结构导入 `Resources/Effects/`；运行时通过 `Resources.Load` 加载，不对原始资源执行重命名或目录重组。
 - 构建前执行 `Puffies -> Sync Build Resources`，将运行时磁盘加载的 UI 目录同步到 `StreamingAssets/UI`。
 
@@ -167,7 +167,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 | `TextLoading` | 加载进度文字，支持 TextMeshPro `TMP_Text` 和旧 `UnityEngine.UI.Text` |
 | `CardBagNNN` | 从 `Resources/CardBagPrefabs/` 加载的运行时游戏 Prefab |
 | `GameBoard` / `Piece01`... | `CardBagNNN` Prefab 内的棋盘和槽位 |
-| `ActiveGroupOutline` | `GameBoard` 下运行时显示的烘焙描边 UGUI Image |
+| `ActiveGroupOutline` | `GameBoard` 下运行时显示烘焙描边的根节点，按设置组合 `LevelOutline` 与 `StickerOutlines` UGUI Image |
 | `PieceBoard` | 拼图碎片托盘 |
 | `RewardPanel` | 拼图完成奖励面板 |
 | `TaskItem` | MainScene 任务进度和 GameScene RewardPanel 结算共用的 `Assets/Prefabs/TaskItem.prefab` 实例 |
@@ -217,7 +217,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 - GameScene 在推进任务前先持久化任务权益，且仅在任务推进保存成功后尝试发放，避免任务进度保存失败时重复发包。
 - MainScene 设置以集合/键 `GameSettings/Runtime` 保存在 `AppRecords`：音乐音量、音效音量和窗口模式。
 - MainScene 辅助选项开关同样保存在 `GameSettings/Runtime`，字段为 `UsableOption1`、`UsableOption2` 和 `UsableOption3`。
-- `UsableOption1` 是关卡外框开关，新建设置时默认开启；`UsableOption2` 是贴纸完整轮廓开关；`UsableOption3` 是高对比度并默认关闭。已持久化的用户选择优先。GameScene 的 CardBag 根背景在关闭时使用 `UI/BasicUI/BgCardBoard1.png`，打开时使用 `BgCardBoard2.png`；运行时只替换根 `Image.sprite`，不改变 Prefab 布局。
+- `UsableOption1` 是关卡描边开关，`UsableOption2` 是贴纸描边开关，两者新建设置时都默认关闭；`UsableOption3` 是高对比度并默认关闭。已持久化的用户选择优先。关卡描边关闭时 GameScene 保留现有当前阶段连接区域，打开时改为显示当前待拼组的完整合并外边界；贴纸描边关闭时不显示单块轮廓，打开时叠加当前组每块凹槽的独立轮廓。GameScene 的 CardBag 根背景在高对比度关闭时使用 `UI/BasicUI/BgCardBoard1.png`，打开时使用 `BgCardBoard2.png`；运行时只替换根 `Image.sprite`，不改变 Prefab 布局。
 - MainScene 和 GameScene 引用相同 `TaskItem.prefab` GUID。场景 Override 只定位根节点（`MainScene`：`10,508`；`GameScene`：`-6,455`）；子节点布局和视觉必须在共享 Prefab 中修改。
 - 共享 TaskItem 子节点名称为 `TaskContent`、`TextProgress`、`ProgressMask`、`BagIcon` 和 `BagBg`。任务 UI 绑定代码应相对 TaskItem 实例解析这些名称，不得使用场景专属后缀。
 - `TaskProgressUIUtility` 是两个 TaskItem 实例共用的运行时绑定。任务文案按任务类型和实际指定尺寸生成；`TextProgress` 显示当前值与任务实例目标值，可见 `ProgressMask` 宽度使用两者比值并限制在有效范围。`BagIcon` 始终使用共享 Prefab 中配置的固定 Sprite，运行时不得按任务奖励或卡包编号替换。
@@ -272,8 +272,8 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 4. 源贴图放在 `Assets/UI/CardBags/CardBagNNN/`，按分组命名，例如 `Pieces11`...`Pieces14` 和 `Pieces21`...`Pieces25`。
 5. 不使用 `PieceGroup` 父节点；分组只读取 `Piece` 后面的数字。
 6. 不创建 Package JSON；运行时数据来自已加载 Prefab 的 Image。
-7. 新增或修改 CardBag 后，执行 **Puffies -> Puzzles -> Bake Outline Masks**。烘焙器优先使用 `GameBoard.png` 的透明挖空 Alpha 作为最终拼图外边界，并使用已完成 Piece 的 Alpha 作为后续组接触边；GameBoard 没有有效挖空时回退到全部 Piece Alpha 并集。结果写入 `Resources/Generated/PuzzleOutlines/CardBagNNN/GroupNN.png`。第 1 组只包含自身最终拼图外边界；后续每张图只包含当前组最终外边界及其与低编号已完成组的接触边。同一描边像素按组顺序只由最早需要它的阶段认领，后续组不得重复绘制。接触边和最终外轮廓均使用圆形最近距离与局部边界法线判定归属，切线方向的邻近不得延长端点；两类线在交汇处分别于对方边界 `24px` 范围外结束。
-8. `GameScene` 将烘焙的 `#3f423e` 当前组 Sprite 作为不可交互的 `GameBoard` 子 Image 显示。蒙版排除已完成组的无关边界、当前组与未来组的边界以及同组各 Piece 之间的接缝。不要在 Prefab 中手工制作描边对象。
+7. 新增或修改 CardBag 后，执行 **Puffies -> Puzzles -> Bake Outline Masks**。烘焙器优先使用 `GameBoard.png` 的透明挖空 Alpha 作为最终拼图外边界，并使用已完成 Piece 的 Alpha 作为后续组接触边；GameBoard 没有有效挖空时回退到全部 Piece Alpha 并集。每组生成三张同尺寸资源：`GroupNN.png` 是默认连接区域；`GroupNN_Level.png` 是当前组 Piece Alpha 并集的完整外边界；`GroupNN_Stickers.png` 是当前组每块 Piece Alpha 边界的并集。默认连接图第 1 组只包含自身最终拼图外边界，后续图只包含当前组最终外边界及其与低编号已完成组的接触边；同一描边像素按组顺序只由最早需要它的阶段认领。接触边和最终外轮廓均使用圆形最近距离与局部边界法线判定归属，切线方向的邻近不得延长端点；两类线在交汇处分别于对方边界 `24px` 范围外结束。
+8. `GameScene` 将烘焙的 `#3f423e` Sprite 作为不可交互的 `GameBoard` 子 Image 显示。关卡描边关闭时加载 `GroupNN.png`，打开时替换为 `GroupNN_Level.png`；贴纸描边打开时额外叠加 `GroupNN_Stickers.png`。不要在 Prefab 中手工制作描边对象。
 9. 缺少生成 Sprite 时，运行时记录制作警告，并在无描边情况下继续游戏。交付前重新运行烘焙器。
 - 创建一组碎片时按编号从左向右排列。Piece 首次离开托盘时只允许仍在托盘且编号靠后的 Piece 沿 X 前移，不得刷新前序 Piece、桌面 Piece 或任何剩余 Piece 的 Y/缩放；先拿队尾 Piece 时其余 Piece 不移动。未吸附 Piece 仅可停留在 CardBag 棋盘范围外的桌面；与棋盘相交但未命中自身凹槽时恢复到本次拖拽起点。桌面 Piece 与黑色托盘水平相交且垂直重叠达到自身当前高度 `50%` 时，松手后恢复托盘尺寸并按编号自动重排。未吸附松手时空托盘恢复为回收目标，最后一块正确吸附后仍进入切组或结算。
 
@@ -297,6 +297,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 ### 拼图描边渲染
 
 - 拼图描边由 `PuzzleOutlineBakerEditor` 离线生成，并通过 Unity UGUI `Image` 渲染。
+- 关卡描边与贴纸描边默认都关闭；默认状态仍显示现有连接区域，不等于完全隐藏全部描边。
 - 烘焙器在单个 CardBag 内累计已输出像素；后续组删除与前序组重叠的描边像素，防止接触边在阶段交界处沿旧外边界多画。
 - 边界归属除距离外还校验目标组位于边界的正确法线方向；最终外轮廓要求目标组位于轮廓内侧，已完成组接触边要求当前组位于旧组边界外侧。
 - 后续组外轮廓靠近已完成区域时提前截断，已完成组接触边靠近最终外轮廓时对称截断；交汇处允许保留小间隔，不能以连接线跨入贴纸空白区域。

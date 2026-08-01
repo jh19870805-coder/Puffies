@@ -84,6 +84,8 @@ public class GameScene : MonoBehaviour
         GameDefine.UiRoot + "/BasicUI/BgCardBoard2.png";
     private const string DraggableGroupRootObjectName = "DraggableGroupPieces";
     private const string ActiveGroupOutlineRootObjectName = "ActiveGroupOutline";
+    private const string LevelOutlineLayerObjectName = "LevelOutline";
+    private const string StickerOutlineLayerObjectName = "StickerOutlines";
     private const string PlacedPiecesRootObjectName = "PlacedPieces";
     private const string TaskItemObjectName = "TaskItem";
     private const string TaskScoreTitlePath = "TaskBg2/TaskTitle2";
@@ -1260,12 +1262,6 @@ public class GameScene : MonoBehaviour
             return;
         }
 
-        if (!_isLevelOutlineEnabled)
-        {
-            ClearActiveGroupOutline();
-            return;
-        }
-
         try
         {
             RefreshActiveGroupOutline(groupIndex);
@@ -1298,23 +1294,46 @@ public class GameScene : MonoBehaviour
             return;
         }
 
-        var resourcePath = GameDefine.FormatPuzzleOutlineResourcesPath(
-            GameManager.GetBagId(),
-            groupNumber);
-        var outlineSprite = Resources.Load<Sprite>(resourcePath);
-        if (outlineSprite == null)
+        var bagId = GameManager.GetBagId();
+        var levelResourcePath = _isLevelOutlineEnabled
+            ? GameDefine.FormatPuzzleLevelOutlineResourcesPath(bagId, groupNumber)
+            : GameDefine.FormatPuzzleOutlineResourcesPath(bagId, groupNumber);
+        var levelOutlineSprite = Resources.Load<Sprite>(levelResourcePath);
+        if (levelOutlineSprite == null && _isLevelOutlineEnabled)
         {
             Debug.LogWarning(
-                $"GameScene: baked puzzle outline is missing at Resources/{resourcePath}. " +
+                $"GameScene: full level outline is missing at Resources/{levelResourcePath}; " +
+                "falling back to the connection outline.");
+            levelResourcePath = GameDefine.FormatPuzzleOutlineResourcesPath(bagId, groupNumber);
+            levelOutlineSprite = Resources.Load<Sprite>(levelResourcePath);
+        }
+
+        Sprite stickerOutlineSprite = null;
+        var stickerResourcePath = string.Empty;
+        if (_isStickerOutlineEnabled)
+        {
+            stickerResourcePath = GameDefine.FormatPuzzleStickerOutlineResourcesPath(
+                bagId,
+                groupNumber);
+            stickerOutlineSprite = Resources.Load<Sprite>(stickerResourcePath);
+            if (stickerOutlineSprite == null)
+            {
+                Debug.LogWarning(
+                    $"GameScene: sticker outlines are missing at Resources/{stickerResourcePath}.");
+            }
+        }
+
+        if (levelOutlineSprite == null && stickerOutlineSprite == null)
+        {
+            Debug.LogWarning(
+                $"GameScene: baked puzzle outline is missing at Resources/{levelResourcePath}. " +
                 "Run Puffies/Puzzles/Bake Outline Masks in the Unity Editor.");
             return;
         }
 
         var outlineObject = new GameObject(
             ActiveGroupOutlineRootObjectName,
-            typeof(RectTransform),
-            typeof(CanvasRenderer),
-            typeof(Image));
+            typeof(RectTransform));
         var outlineRect = outlineObject.GetComponent<RectTransform>();
         outlineRect.SetParent(_board.GameBoardImage.rectTransform, false);
         outlineRect.anchorMin = Vector2.zero;
@@ -1325,8 +1344,40 @@ public class GameScene : MonoBehaviour
         outlineRect.offsetMax = Vector2.zero;
         outlineRect.localScale = Vector3.one;
 
+        CreateOutlineLayer(
+            outlineRect,
+            LevelOutlineLayerObjectName,
+            levelOutlineSprite);
+        CreateOutlineLayer(
+            outlineRect,
+            StickerOutlineLayerObjectName,
+            stickerOutlineSprite);
+    }
+
+    private static void CreateOutlineLayer(Transform parent, string objectName, Sprite sprite)
+    {
+        if (parent == null || sprite == null)
+        {
+            return;
+        }
+
+        var outlineObject = new GameObject(
+            objectName,
+            typeof(RectTransform),
+            typeof(CanvasRenderer),
+            typeof(Image));
+        var outlineRect = outlineObject.GetComponent<RectTransform>();
+        outlineRect.SetParent(parent, false);
+        outlineRect.anchorMin = Vector2.zero;
+        outlineRect.anchorMax = Vector2.one;
+        outlineRect.pivot = new Vector2(0.5f, 0.5f);
+        outlineRect.anchoredPosition = Vector2.zero;
+        outlineRect.offsetMin = Vector2.zero;
+        outlineRect.offsetMax = Vector2.zero;
+        outlineRect.localScale = Vector3.one;
+
         var outlineImage = outlineObject.GetComponent<Image>();
-        outlineImage.sprite = outlineSprite;
+        outlineImage.sprite = sprite;
         outlineImage.color = Color.white;
         outlineImage.raycastTarget = false;
         outlineImage.maskable = false;

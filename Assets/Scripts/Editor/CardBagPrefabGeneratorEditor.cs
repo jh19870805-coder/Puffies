@@ -25,6 +25,15 @@ public static class CardBagPrefabGeneratorEditor
     private const int MaxVerificationSamples = 512;
     private const float MinimumPixelMatch = 0.98f;
     private const float MinimumUniqueAnchorMatch = 0.90f;
+    private const float MinimumPerceptualMatch = 0.78f;
+    private const float MinimumPerceptualMatchGap = 0.015f;
+    private const int PerceptualCoarseStride = 6;
+    private const int PerceptualRefineRadius = 7;
+    private const int PerceptualCoarseSampleCount = 12;
+    private const int PerceptualVerificationSampleCount = 128;
+    private const int PerceptualCandidateCount = 48;
+    private const int PerceptualFinalistCount = 24;
+    private const int PerceptualColorDistanceScale = 64;
     private static readonly Regex NumberedPieceRegex = new Regex(
         @"^piece_(\d+)$",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
@@ -35,7 +44,7 @@ public static class CardBagPrefabGeneratorEditor
         @"^CardBag(\d{3})$",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly Regex PackSizePieceRegex = new Regex(
-        @"^(?:Pieces\d+|piece_\d+)$",
+        @"^piece_\d{3}$",
         RegexOptions.CultureInvariant);
 
     [MenuItem("Puffies/Card Packs/Update Pack Sizes From Piece Counts")]
@@ -212,7 +221,7 @@ public static class CardBagPrefabGeneratorEditor
         if (pieceCountsByPackId.Count == 0)
         {
             throw new InvalidDataException(
-                "Card pack size updater: no PiecesNNN.png or piece_NNN.png files were found.");
+                "Card pack size updater: no piece_NNN.png files were found.");
         }
 
         var configAssetPath = GameDefine.CardPackConfigEditorPath;
@@ -803,6 +812,18 @@ public static class CardBagPrefabGeneratorEditor
         }
 
         placement = FindPlacementPass(board, piece, boardColorIndex, false);
+        var perceptualPlacement = FindPerceptualPlacement(board, piece);
+        if (perceptualPlacement.Score >= MinimumPerceptualMatch
+            && perceptualPlacement.EquivalentBestCount == 1)
+        {
+            Debug.LogWarning(
+                $"CardBag generator: accepted {piecePath} with perceptual color matching against " +
+                $"{referenceName}. match={perceptualPlacement.Score:P2}, " +
+                $"next distinct candidate={perceptualPlacement.SecondBestScore:P2}. " +
+                "The source piece and reference have matching geometry but different exported colors.");
+            return perceptualPlacement;
+        }
+
         if (placement.EquivalentBestCount > 1)
         {
             throw new InvalidOperationException(
@@ -815,7 +836,9 @@ public static class CardBagPrefabGeneratorEditor
         {
             throw new InvalidOperationException(
                 $"CardBag generator: could not place {piecePath}. Best pixel match was {placement.Score:P2}, " +
-                $"anchor occurrences={placement.AnchorBoardOccurrenceCount}.");
+                $"anchor occurrences={placement.AnchorBoardOccurrenceCount}, " +
+                $"perceptual match={perceptualPlacement.Score:P2}, " +
+                $"next distinct candidate={perceptualPlacement.SecondBestScore:P2}.");
         }
 
         if (placement.Score < MinimumPixelMatch)
@@ -826,6 +849,225 @@ public static class CardBagPrefabGeneratorEditor
         }
 
         return placement;
+    }
+
+    private static PiecePlacement FindPerceptualPlacement(RawTexture board, RawTexture piece)
+    {
+        if (piece.Width > board.Width || piece.Height > board.Height)
+        {
+            return PiecePlacement.Invalid;
+        }
+
+        var allSamples = BuildVerificationSamples(piece, false);
+        if (allSamples.Count == 0)
+        {
+            allSamples = BuildVerificationSamples(piece, true);
+        }
+
+        if (allSamples.Count == 0)
+        {
+            return PiecePlacement.Invalid;
+        }
+
+        var verificationSamples = ReduceSamples(
+            allSamples,
+            PerceptualVerificationSampleCount);
+        var coarseSamples = verificationSamples
+            .OrderByDescending(GetSampleDistinctiveness)
+            .Take(Mathf.Min(PerceptualCoarseSampleCount, verificationSamples.Count))
+            .ToList();
+        if (coarseSamples.Count == 0)
+        {
+            return PiecePlacement.Invalid;
+        }
+
+        var maxOriginX = board.Width - piece.Width;
+        var maxOriginY = board.Height - piece.Height;
+        var coarseCandidates = new List<PerceptualCandidate>(PerceptualCandidateCount);
+        for (var originY = 0; originY <= maxOriginY; originY += PerceptualCoarseStride)
+        {
+            for (var originX = 0; originX <= maxOriginX; originX += PerceptualCoarseStride)
+            {
+                AddPerceptualCandidate(
+                    coarseCandidates,
+                    new PerceptualCandidate(
+                        originX,
+                        originY,
+                        ScorePerceptualPlacement(board, coarseSamples, originX, originY)),
+                    PerceptualCandidateCount);
+            }
+        }
+
+        if (coarseCandidates.Count == 0)
+        {
+            return PiecePlacement.Invalid;
+        }
+
+        var refinedCandidates = new List<PerceptualCandidate>(PerceptualCandidateCount);
+        var visitedOrigins = new HashSet<int>();
+        for (var i = 0; i < coarseCandidates.Count; i++)
+        {
+            var coarse = coarseCandidates[i];
+            var minY = Mathf.Max(0, coarse.OriginY - PerceptualRefineRadius);
+            var maxY = Mathf.Min(maxOriginY, coarse.OriginY + PerceptualRefineRadius);
+            var minX = Mathf.Max(0, coarse.OriginX - PerceptualRefineRadius);
+            var maxX = Mathf.Min(maxOriginX, coarse.OriginX + PerceptualRefineRadius);
+            for (var originY = minY; originY <= maxY; originY++)
+            {
+                for (var originX = minX; originX <= maxX; originX++)
+                {
+                    var originKey = originY * (maxOriginX + 1) + originX;
+                    if (!visitedOrigins.Add(originKey))
+                    {
+                        continue;
+                    }
+
+                    AddPerceptualCandidate(
+                        refinedCandidates,
+                        new PerceptualCandidate(
+                            originX,
+                            originY,
+                            ScorePerceptualPlacement(
+                                board,
+                                verificationSamples,
+                                originX,
+                                originY)),
+                        PerceptualCandidateCount);
+                }
+            }
+        }
+
+        var finalists = new List<PerceptualCandidate>(PerceptualFinalistCount);
+        for (var i = 0; i < refinedCandidates.Count; i++)
+        {
+            var refined = refinedCandidates[i];
+            AddPerceptualCandidate(
+                finalists,
+                new PerceptualCandidate(
+                    refined.OriginX,
+                    refined.OriginY,
+                    ScorePerceptualPlacement(
+                        board,
+                        allSamples,
+                        refined.OriginX,
+                        refined.OriginY)),
+                PerceptualFinalistCount);
+        }
+
+        if (finalists.Count == 0)
+        {
+            return PiecePlacement.Invalid;
+        }
+
+        var best = finalists[0];
+        var secondBestScore = -1f;
+        for (var i = 1; i < finalists.Count; i++)
+        {
+            var candidate = finalists[i];
+            if (Mathf.Abs(candidate.OriginX - best.OriginX) <= PerceptualRefineRadius
+                && Mathf.Abs(candidate.OriginY - best.OriginY) <= PerceptualRefineRadius)
+            {
+                continue;
+            }
+
+            secondBestScore = candidate.Score;
+            break;
+        }
+
+        var isDistinct = secondBestScore < 0f
+                         || best.Score - secondBestScore >= MinimumPerceptualMatchGap;
+        return new PiecePlacement
+        {
+            OriginX = best.OriginX,
+            OriginY = best.OriginY,
+            Width = piece.Width,
+            Height = piece.Height,
+            Score = best.Score,
+            EquivalentBestCount = isDistinct ? 1 : 2,
+            AnchorBoardOccurrenceCount = 0,
+            SecondBestScore = Mathf.Max(0f, secondBestScore)
+        };
+    }
+
+    private static List<PixelSample> ReduceSamples(List<PixelSample> samples, int maximumCount)
+    {
+        if (samples.Count <= maximumCount)
+        {
+            return new List<PixelSample>(samples);
+        }
+
+        var result = new List<PixelSample>(maximumCount);
+        var stride = samples.Count / (float)maximumCount;
+        for (var i = 0; i < maximumCount; i++)
+        {
+            result.Add(samples[Mathf.FloorToInt(i * stride)]);
+        }
+
+        return result;
+    }
+
+    private static int GetSampleDistinctiveness(PixelSample sample)
+    {
+        var color = sample.Color;
+        var maximum = Mathf.Max(color.r, Mathf.Max(color.g, color.b));
+        var minimum = Mathf.Min(color.r, Mathf.Min(color.g, color.b));
+        var brightness = (color.r + color.g + color.b) / 3;
+        return (maximum - minimum) * 2 + Mathf.Abs(brightness - 192);
+    }
+
+    private static float ScorePerceptualPlacement(
+        RawTexture board,
+        IReadOnlyList<PixelSample> samples,
+        int originX,
+        int originY)
+    {
+        var similarity = 0f;
+        var maximumDistance = PerceptualColorDistanceScale * 3;
+        for (var i = 0; i < samples.Count; i++)
+        {
+            var sample = samples[i];
+            var boardColor = board.Pixels[
+                (originY + sample.Y) * board.Width + originX + sample.X];
+            var distance = Mathf.Abs(sample.Color.r - boardColor.r)
+                           + Mathf.Abs(sample.Color.g - boardColor.g)
+                           + Mathf.Abs(sample.Color.b - boardColor.b);
+            similarity += 1f - Mathf.Min(distance, maximumDistance) / (float)maximumDistance;
+        }
+
+        return similarity / samples.Count;
+    }
+
+    private static void AddPerceptualCandidate(
+        List<PerceptualCandidate> candidates,
+        PerceptualCandidate candidate,
+        int maximumCount)
+    {
+        if (candidates.Count >= maximumCount
+            && candidate.Score <= candidates[candidates.Count - 1].Score)
+        {
+            return;
+        }
+
+        var insertIndex = candidates.Count;
+        for (var i = 0; i < candidates.Count; i++)
+        {
+            if (candidate.Score > candidates[i].Score)
+            {
+                insertIndex = i;
+                break;
+            }
+        }
+
+        if (insertIndex >= maximumCount)
+        {
+            return;
+        }
+
+        candidates.Insert(insertIndex, candidate);
+        if (candidates.Count > maximumCount)
+        {
+            candidates.RemoveAt(candidates.Count - 1);
+        }
     }
 
     private static PiecePlacement FindPlacementPass(
@@ -1422,6 +1664,20 @@ public static class CardBagPrefabGeneratorEditor
         public int FirstIndex;
     }
 
+    private readonly struct PerceptualCandidate
+    {
+        public readonly int OriginX;
+        public readonly int OriginY;
+        public readonly float Score;
+
+        public PerceptualCandidate(int originX, int originY, float score)
+        {
+            OriginX = originX;
+            OriginY = originY;
+            Score = score;
+        }
+    }
+
     private sealed class PiecePlacement
     {
         public static PiecePlacement Invalid => new PiecePlacement { Score = -1f };
@@ -1435,6 +1691,7 @@ public static class CardBagPrefabGeneratorEditor
         public float Score;
         public int EquivalentBestCount;
         public int AnchorBoardOccurrenceCount;
+        public float SecondBestScore;
     }
 }
 
