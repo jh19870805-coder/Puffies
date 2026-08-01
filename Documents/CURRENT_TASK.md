@@ -1,54 +1,50 @@
 # 当前任务
 
-- 任务：统一 CardBag 碎片资源命名
-- 状态：资源重命名完成，Prefab GUID 引用已验证
+- 任务：修复 CardBag022 自动生成关卡的颜色匹配失败
+- 状态：实现完成，编译与抽样匹配验证通过，待 Unity 内完整生成
 - 更新时间：2026-08-02
 
 ## 用户意图
 
-- 扫描 `Assets/UI/CardBags/CardBagXXX`，保留 `BoardTitle.png` 和 `GameBoard.png`。
-- 其他拼图碎片如果不是 `piece_xxx.png` 格式，则从 `piece_001.png` 开始按原文件数字顺序重命名。
-- 已有 Prefab 使用这些纹理时同步保证引用有效。
+- 处理自动生成 CardBag022 时 `piece_001.png` 无法在 Preview 或 GameBoard 中定位的异常。
+- 保持自动生成流程，不要求美术重新制作 115 张切图。
+- 不能为了通过生成而把相似贴纸放到错误位置。
 
 ## 工作记录
 
-- `CardBag001`：`Pieces001..008.png` 改为 `piece_001..008.png`。
-- `CardBag007`：19 张 `图层N.png` 按数字自然顺序改为 `piece_001..019.png`。
-- `CardBag009`：36 张 `PiecesNN.png` 按数字自然顺序改为 `piece_001..036.png`。
-- `CardBag017`：37 张 `PiecesNN.png` 按数字自然顺序改为 `piece_001..037.png`。
-- `CardBag002` 原文件均已符合目标格式，因此保持原编号不变，包括现有编号缺口。
-- 001、009、017 的 PNG 与 `.meta` 成对移动，GUID 未改变；007 当前没有 `CardBag007.prefab` 且源 PNG 尚无 Meta，等待 Unity 导入时生成。
-- PackSize 一键更新工具同步收紧为只统计标准名 `piece_NNN.png`。
+- 确认 `piece_001.png` 为 `277x212`，Preview 与 GameBoard 均为 `1820x2744`，不是尺寸不匹配。
+- 当前 `Previews/CardBag022.png` 是替换后的新文件；碎片与 Preview 几何一致，但导出 RGB 存在色差。首张正确位置约为左上 `(3,4)`，平均每通道偏差约 `9.86`，导致旧算法找不到任何完全相同的颜色锚点并返回 `-100%`。
+- 保留原有精确匹配作为首选路径，只在精确匹配失败时执行感知颜色回退。
+- 感知回退先以低数量高区分度采样进行全图粗搜，再围绕最佳候选细搜，最后用最多 512 个不透明内部像素复核。
+- 回退结果必须达到 `78%` 最低相似度，并且与远距离第二候选至少相差 `1.5%`；不满足时继续报错，不生成可能错位的 Prefab。
+- 错误信息新增感知匹配分和第二候选分，后续资源问题可以直接区分“颜色不同但位置明确”和“候选确实不唯一”。
 
 ## 修改文件
 
-- `Assets/UI/CardBags/CardBag001/`
-- `Assets/UI/CardBags/CardBag007/`
-- `Assets/UI/CardBags/CardBag009/`
-- `Assets/UI/CardBags/CardBag017/`
 - `Assets/Scripts/Editor/CardBagPrefabGeneratorEditor.cs`
 - `Documents/CURRENT_TASK.md`
 - `Documents/PROJECT_CONTEXT.md`
 
 ## 决策
 
-- 每个 CardBag 独立从 1 编号；旧文件按文件名末尾数字做自然排序，避免 `1、10、11、2` 的字典序错误。
-- Prefab 的 Sprite 引用由 GUID 确定，不修改 Prefab YAML；保留并移动原 `.meta` 即完成引用同步。
-- 已符合 `piece_三位数字.png` 格式的文件不因编号缺口而重排，避免无必要地改变现有资源路径。
+- 不修改 CardBag022 的 PNG 颜色、尺寸、透明通道或美术内容。
+- 不降低原精确匹配阈值；新逻辑仅作为失败回退，既有可精确生成的卡包行为不变。
+- 使用相似度和候选分差双重门槛，重复图案不能仅凭宽松色差被接受。
 
 ## 验证
 
-- 已扫描全部 `CardBagXXX` 一级目录，除 `BoardTitle.png`、`GameBoard.png` 外没有不符合 `piece_三位数字.png` 的 PNG。
-- `CardBag001` 的 8/8、`CardBag009` 的 36/36、`CardBag017` 的 37/37 个改名后 Meta GUID 均仍存在于对应 Prefab。
-- 代码和序列化资源中没有按旧 PNG 文件名保存的字符串引用。
-- Unity 当前进程没有可交互窗口，资源导入和 007 Meta 生成待编辑器重新聚焦或重启后确认。
+- `dotnet build Puffies.sln --no-restore`：通过，0 警告、0 错误。
+- 独立像素探针抽查 022：001 为 `84.89%`、025 为 `85.04%`、050 为 `91.70%`、075 为 `87.86%`、100 为 `90.35%`。
+- 第 115 张使用与正式实现一致的高区分度采样后定位到唯一候选，相似度 `90.92%`。
+- 首张第二个远距离候选为 `56.08%`，与正确位置相差 `28.81%`，明显高于安全门槛。
+- Unity 编辑器尚未刷新 2026-08-02 00:41 后的最新脚本，因此完整 115 张生成和 Prefab 画面待编辑器重新聚焦后验证。
 
 ## 下一步
 
-1. 重新聚焦或重启 Unity，等待 AssetDatabase 完成重命名资源导入。
-2. 检查 Console 无 Missing Sprite，并打开 CardBag001、009、017 Prefab 确认 Image Sprite 正常。
-3. 生成 `CardBag007.prefab` 后验证新资源布局和纹理匹配。
+1. 重新聚焦 Unity，等待脚本编译完成。
+2. 再次执行 CardBag022 自动生成，检查 115 张全部完成；Console 中允许出现说明使用感知匹配的警告，但不得有定位异常。
+3. 打开生成后的 `CardBag022.prefab`，重点抽查首张、紫色坐垫和重复猫咪图案的位置。
 
 ## 恢复提示
 
-继续 Puffies CardBag 碎片命名回归。先阅读 `AGENTS.md`、`Documents/WORKFLOW.md` 和 `Documents/CURRENT_TASK.md`；资源已统一为 `piece_NNN.png`，先完成 Unity 导入和 Prefab 可视检查，不要回退用户已有的 CardBag007、022 或美术源文件改动。
+继续 Puffies CardBag022 自动生成回归。先阅读 `AGENTS.md`、`Documents/WORKFLOW.md` 和 `Documents/CURRENT_TASK.md`；生成器已增加色差回退，先在 Unity 内完整生成 022 并检查警告与 Prefab 布局，不要修改 CardBag022 美术 PNG 或回退用户已有资源改动。
