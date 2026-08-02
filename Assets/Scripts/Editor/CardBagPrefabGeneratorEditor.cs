@@ -236,18 +236,34 @@ public static class CardBagPrefabGeneratorEditor
         var table = CsvTable.Parse(csvText);
         var hasPackIdColumn = FindHeaderIndex(table.Headers, "PackId") >= 0;
         var packSizeColumn = FindHeaderIndex(table.Headers, "PackSize");
-        if (!hasPackIdColumn || packSizeColumn < 0)
+        var boardScaleColumn = FindHeaderIndex(table.Headers, "BoardScale");
+        if (!hasPackIdColumn || packSizeColumn < 0 || boardScaleColumn < 0)
         {
             throw new InvalidDataException(
-                "Card pack size updater: CardPacks.csv must contain PackId and PackSize columns.");
+                "Card pack size updater: CardPacks.csv must contain PackId, PackSize and BoardScale columns.");
         }
 
         var result = new PackSizeUpdateResult();
         result.EmptySourceFolders.AddRange(emptySourceFolders);
+        var outputHeaders = new List<string>(table.Headers);
+        var autoUpdateColumn = FindHeaderIndex(table.Headers, "AutoUpdate");
+        if (autoUpdateColumn < 0)
+        {
+            autoUpdateColumn = outputHeaders.Count;
+            outputHeaders.Add("AutoUpdate");
+            result.AddedAutoUpdateColumn = true;
+        }
+        else if (autoUpdateColumn != table.Headers.Count - 1)
+        {
+            throw new InvalidDataException(
+                "Card pack size updater: AutoUpdate must be the last column in CardPacks.csv.");
+        }
+
+        var configChanged = result.AddedAutoUpdateColumn;
         var configuredPackIds = new HashSet<int>();
         var outputRows = new List<IReadOnlyList<string>>(table.Rows.Count + 1)
         {
-            table.Headers
+            outputHeaders
         };
         for (var i = 0; i < table.Rows.Count; i++)
         {
@@ -265,21 +281,64 @@ public static class CardBagPrefabGeneratorEditor
             }
 
             var values = new List<string>(row.Values);
-            while (values.Count < table.Headers.Count)
+            while (values.Count < outputHeaders.Count)
             {
                 values.Add(string.Empty);
+            }
+
+            var autoUpdateText = values[autoUpdateColumn]?.Trim();
+            if (string.IsNullOrEmpty(autoUpdateText))
+            {
+                autoUpdateText = "1";
+                values[autoUpdateColumn] = autoUpdateText;
+                result.DefaultedAutoUpdateCount++;
+                configChanged = true;
+            }
+
+            if (!int.TryParse(
+                    autoUpdateText,
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out var autoUpdate)
+                || autoUpdate < 0
+                || autoUpdate > 1)
+            {
+                throw new InvalidDataException(
+                    $"Card pack size updater: AutoUpdate must be 0 or 1 at CSV line {row.LineNumber}.");
+            }
+
+            if (autoUpdate == 0)
+            {
+                result.SkippedPackIds.Add(packId);
+                outputRows.Add(values);
+                continue;
             }
 
             if (pieceCountsByPackId.TryGetValue(packId, out var pieceCount))
             {
                 var size = ResolvePackSize(pieceCount);
-                var oldValue = values[packSizeColumn];
-                var newValue = ((int)size).ToString(CultureInfo.InvariantCulture);
-                if (!string.Equals(oldValue?.Trim(), newValue, StringComparison.Ordinal))
+                var boardScale = ResolveBoardScale(size);
+                var oldSizeValue = values[packSizeColumn];
+                var oldBoardScaleValue = values[boardScaleColumn];
+                var newSizeValue = ((int)size).ToString(CultureInfo.InvariantCulture);
+                var newBoardScaleValue = boardScale.ToString("0.00", CultureInfo.InvariantCulture);
+                var sizeChanged = !string.Equals(
+                    oldSizeValue?.Trim(),
+                    newSizeValue,
+                    StringComparison.Ordinal);
+                var boardScaleChanged = !string.Equals(
+                    oldBoardScaleValue?.Trim(),
+                    newBoardScaleValue,
+                    StringComparison.Ordinal);
+                if (sizeChanged || boardScaleChanged)
                 {
-                    values[packSizeColumn] = newValue;
+                    values[packSizeColumn] = newSizeValue;
+                    values[boardScaleColumn] = newBoardScaleValue;
                     result.Changes.Add(
-                        $"CardBag{packId:D3}: {pieceCount} pieces, {oldValue} -> {newValue} ({size})");
+                        $"CardBag{packId:D3}: {pieceCount} pieces, "
+                        + $"PackSize {oldSizeValue} -> {newSizeValue} ({size}), "
+                        + $"BoardScale {oldBoardScaleValue} -> {newBoardScaleValue}");
+                    configChanged = true;
                 }
 
                 result.ScannedPackCount++;
@@ -300,7 +359,7 @@ public static class CardBagPrefabGeneratorEditor
             }
         }
 
-        if (result.Changes.Count > 0)
+        if (configChanged)
         {
             var newLine = csvText.Contains("\r\n") ? "\r\n" : "\n";
             var output = SerializeCsv(outputRows, newLine, csvText.EndsWith(newLine));
@@ -350,6 +409,29 @@ public static class CardBagPrefabGeneratorEditor
         }
 
         return CardPackSize.XXXL;
+    }
+
+    internal static float ResolveBoardScale(CardPackSize packSize)
+    {
+        switch (packSize)
+        {
+            case CardPackSize.XS:
+                return 0.75f;
+            case CardPackSize.S:
+                return 0.78f;
+            case CardPackSize.M:
+                return 1.10f;
+            case CardPackSize.L:
+                return 1.30f;
+            case CardPackSize.XL:
+                return 1.00f;
+            case CardPackSize.XXL:
+                return 1.15f;
+            case CardPackSize.XXXL:
+                return 1.30f;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(packSize));
+        }
     }
 
     private static int CountPackSizePieceFiles(string absoluteFolder)
@@ -1537,7 +1619,10 @@ public static class CardBagPrefabGeneratorEditor
     internal sealed class PackSizeUpdateResult
     {
         public int ScannedPackCount { get; set; }
+        public int DefaultedAutoUpdateCount { get; set; }
+        public bool AddedAutoUpdateColumn { get; set; }
         public List<string> Changes { get; } = new List<string>();
+        public List<int> SkippedPackIds { get; } = new List<int>();
         public List<int> ConfigsWithoutSource { get; } = new List<int>();
         public List<int> SourcesWithoutConfig { get; } = new List<int>();
         public List<string> EmptySourceFolders { get; } = new List<string>();
@@ -1547,6 +1632,12 @@ public static class CardBagPrefabGeneratorEditor
             var builder = new StringBuilder();
             builder.AppendLine($"Scanned: {ScannedPackCount}");
             builder.AppendLine($"Updated: {Changes.Count}");
+            builder.AppendLine($"Skipped by AutoUpdate: {SkippedPackIds.Count}");
+            if (AddedAutoUpdateColumn)
+            {
+                builder.AppendLine("Added AutoUpdate column with default value 1.");
+            }
+
             if (Changes.Count > 0)
             {
                 builder.AppendLine();
@@ -1570,7 +1661,14 @@ public static class CardBagPrefabGeneratorEditor
         {
             var builder = new StringBuilder();
             builder.AppendLine(
-                $"Card pack size updater finished. scanned={ScannedPackCount}, updated={Changes.Count}");
+                $"Card pack size updater finished. scanned={ScannedPackCount}, "
+                + $"updated={Changes.Count}, skipped={SkippedPackIds.Count}");
+            if (AddedAutoUpdateColumn)
+            {
+                builder.AppendLine(
+                    $"Added AutoUpdate column; defaulted rows={DefaultedAutoUpdateCount}.");
+            }
+
             for (var i = 0; i < Changes.Count; i++)
             {
                 builder.AppendLine(Changes[i]);
@@ -1582,6 +1680,14 @@ public static class CardBagPrefabGeneratorEditor
 
         private void AppendWarnings(StringBuilder builder)
         {
+            if (SkippedPackIds.Count > 0)
+            {
+                builder.AppendLine();
+                builder.AppendLine(
+                    "Rows skipped because AutoUpdate=0: "
+                    + string.Join(", ", SkippedPackIds.Select(id => id.ToString("D3"))));
+            }
+
             if (ConfigsWithoutSource.Count > 0)
             {
                 builder.AppendLine();

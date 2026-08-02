@@ -13,6 +13,7 @@ public struct CardPackConfigData
     public CardPackSize PackSize;
     public int ChapterId;
     public float BoardScale;
+    public bool AutoUpdate;
 }
 
 public readonly struct GameConfigAssetDefinition
@@ -360,7 +361,11 @@ public static class GameConfigRepository
             chapterId = ((Math.Max(1, index) - 1) / 18) + 1;
         }
 
-        if (!row.TryGetFloat("BoardScale", out var boardScale) || boardScale <= 0f)
+        if (!row.TryGetFloat("BoardScale", out var boardScale)
+            || boardScale <= 0f
+            || !row.TryGetInt("AutoUpdate", out var autoUpdate)
+            || autoUpdate < 0
+            || autoUpdate > 1)
         {
             return false;
         }
@@ -371,7 +376,8 @@ public static class GameConfigRepository
             PackId = packId,
             PackSize = (CardPackSize)GetOptionalInt(row, "PackSize"),
             ChapterId = chapterId,
-            BoardScale = boardScale
+            BoardScale = boardScale,
+            AutoUpdate = autoUpdate != 0
         };
         return true;
     }

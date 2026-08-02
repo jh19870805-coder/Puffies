@@ -41,7 +41,8 @@ Unity **2022.3** / Built-in Render Pipeline 项目，使用 Linear 色彩空间�
 
 - 任务配置来自 `Resources/Configs/TaskConfig.csv`。
 - 卡包配置来自 `Resources/Configs/CardPacks.csv`。
-- `CardPacks.csv/PackSize` 按卡包碎片 PNG 数量确定：`<30=XS`、`30..37=S`、`38..49=M`、`50..69=L`、`70..84=XL`、`85..99=XXL`、`>=100=XXXL`。编辑器工具只统计 `Assets/UI/CardBags/CardBagNNN` 顶层的标准碎片名 `piece_NNN.png`，不统计 `BoardTitle.png`、`GameBoard.png` 或其他 PNG。
+- `CardPacks.csv/PackSize` 按卡包碎片 PNG 数量确定：`<30=XS`、`30..37=S`、`38..49=M`、`50..69=L`、`70..84=XL`、`85..99=XXL`、`>=100=XXXL`。尺寸更新工具同时将 `BoardScale` 更新为：`XS=0.75`、`S=0.78`、`M=1.10`、`L=1.30`、`XL=1.00`、`XXL=1.15`、`XXXL=1.30`。工具只统计 `Assets/UI/CardBags/CardBagNNN` 顶层的标准碎片名 `piece_NNN.png`，不统计 `BoardTitle.png`、`GameBoard.png` 或其他 PNG。
+- `CardPacks.csv` 最后一列 `AutoUpdate` 只允许 `0` 或 `1`，默认值为 `1`。尺寸更新工具遇到空值会补为 `1`；设为 `0` 的配置行会保留手工填写的 `PackSize` 和 `BoardScale`，不进行自动更新。
 - 任务使用随机模板池：`TaskType=1` 累计结算分数、`TaskType=2` 收集贴纸数量、`TaskType=3` 完成卡包数量。三类任务都只在完整完成一个符合尺寸要求的卡包后结算一次；贴纸任务按该卡包的全部 Piece 数量累计。
 - `SizeMode=0` 表示任意尺寸；`SizeMode=1` 从模板 `SizePool` 与玩家当前可玩卡包尺寸的交集中随机指定一个尺寸。任务模板按 `Weight` 加权随机，并在存在其他候选时避免连续使用同一个 `TemplateId`。
 - 积分任务目标不随机，按 `TargetPool` 的 `200 -> 400 -> 600 -> 800 -> 1000 -> 1200` 顺序循环并持久化循环游标。贴纸任务目标从 `60|80|100` 随机，完成卡包任务目标从 `1|2|3` 随机。
@@ -199,7 +200,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 |------|------|-------------|
 | 任务配置 | `GameConfigRepository` 读取 `Resources/Configs/TaskConfig.csv` | 只读 |
 | 任务进度 | `GameTaskUtility` | `persistentDataPath/LocalData.json` 根对象 `TaskProgressData` |
-| 卡包配置（`PackId`、`PackSize`、`ChapterId`、`BoardScale`） | `GameConfigRepository` 读取 `Resources/Configs/CardPacks.csv` | 只读 |
+| 卡包配置（`PackId`、`PackSize`、`ChapterId`、`BoardScale`、`AutoUpdate`） | `GameConfigRepository` 读取 `Resources/Configs/CardPacks.csv` | 只读 |
 | 卡包生命周期 | `CardPackDataUtility` | `LocalData.db` 的 `CardPacks` 表 |
 | 卡包当前拼图会话 | `CardPackDataUtility` | `LocalData.db` 的 `CardPackPuzzleProgress` 表 |
 | 通用集合与键值存储 | `SqliteLocalStore` API | `LocalData.db` 的 `AppRecords` 表 |
@@ -259,7 +260,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 `PackItem/PackShadow` 是渲染在 `PackCover` 后方的同级 Image。MainScene 读取运行时可读封面贴图，将 Alpha 缩小到 `240 x 272` 显示尺寸，并执行三次可分离 Box Blur，水平半径 2、垂直半径 5。缓存阴影 Sprite 尺寸为 `256 x 344`、偏移为 `(0,-20)`，使投影只向下而不是向右。水平/垂直内边距为 `8/36` 像素，阴影颜色 `#1f292d`，最大 Alpha `0.52`。MainScene 销毁时释放生成的阴影 Sprite 和 Texture。`PackSize` 保持在两张图片上方。
 
 1. 场景中只保留一个模板对象：`Package001`。
-2. 在 `CardPacks.csv` 增加一行（`PackId`、临时 `PackSize`、`ChapterId`、正数 `BoardScale`），随后执行尺寸更新工具按实际片数覆盖 `PackSize`。
+2. 在 `CardPacks.csv` 增加一行（`PackId`、临时 `PackSize`、`ChapterId`、正数 `BoardScale`、`AutoUpdate=1`），随后执行尺寸更新工具按实际片数同步 `PackSize` 和 `BoardScale`。需要手工固定这两个值时将该行 `AutoUpdate` 改为 `0`。
 3. 在 `UI/PackImages/` 下按 `PackIconNNN.png` 命名增加对应封面。`GameDefine.FormatPackImagePath` 将 PackId `1` 映射到 `UI/PackImages/PackIcon001.png`。
 4. 通过 `CardPackDataUtility` 将生命周期写入 SQLite `CardPacks` 表。
 5. 不创建每个卡包专属的 3D 资源。运行时复用完整的 `CardPackOpening_caPiBaLa_001` 动画 Prefab、`CardPackStatic_caPiBaLa_001` 闭合模型、Controller 和材质；选中的 `PackIconNNN.png` 成为卡包正面封面。共享资源缺失时，MainScene 使用 2D 回退。
@@ -356,7 +357,7 @@ MainScene 正式流程使用上述 `_001` 卡包、模板环境光和拆包粒�
 | Puffies -> Fonts -> Setup Default Chinese Font | 设置中文字体 |
 | Puffies -> Puzzles -> Bake Outline Masks | 为每个 CardBag Prefab 重建各分组外边界描边 |
 | Puffies -> Puzzles -> Generate CardBag Prefabs From Images | 扫描完整背景和透明碎图，选择并批量生成 CardBag Prefab |
-| Puffies -> Card Packs -> Update Pack Sizes From Piece Counts | 扫描 CardBag 源资源的碎片 PNG 数量并更新 `CardPacks.csv/PackSize` |
+| Puffies -> Card Packs -> Update Pack Sizes From Piece Counts | 扫描 CardBag 源资源的碎片 PNG 数量并同步更新 `CardPacks.csv/PackSize` 与 `BoardScale`；跳过 `AutoUpdate=0` 的行 |
 
 ---
 
