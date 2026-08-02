@@ -30,6 +30,31 @@ public static class GameAnimationUtility
     {
         GameDefine.CardPackOpeningPrefabName
     };
+    private static readonly string[] AuthoredCardPackPrefabResourcesPaths =
+    {
+        null,
+        "Effects/CardPack/CardBagPrefab/CardBag_tutorial/CardPackOpening_springOuting_001",
+        "Effects/CardPack/CardBagPrefab/CardBag_duckQuack/CardPackOpening_duckQuack_001",
+        "Effects/CardPack/CardBagPrefab/CardBag_littleKittens/CardPackOpening_littleKittens_001",
+        "Effects/CardPack/CardBagPrefab/CardBag_puppy/CardPackOpening_puppy_001",
+        "Effects/CardPack/CardBagPrefab/CardBag_sushiFriends/CardPackOpening_sushiFriends_001",
+        "Effects/CardPack/CardBagPrefab/CardBag_coffeeTime/CardPackOpening_coffeeTime_001",
+        "Effects/CardPack/CardBagPrefab/CardBag_spellsMagic/CardPackOpening_spellsMagic_001",
+        "Effects/CardPack/CardBagPrefab/CardBag_caPiBaLa/CardPackOpening_caPiBaLa_001",
+        "Effects/CardPack/CardBagPrefab/CardBag_powerRock/CardPackOpening_powerRock_001",
+        "Effects/CardPack/CardBagPrefab/CardBag_stoneAgePals/CardPackOpening_stoneAgePals_001",
+        "Effects/CardPack/CardBagPrefab/CardBag_pharaohsTreasure/CardPackOpening_pharaohsTreasure_001",
+        "Effects/CardPack/CardBagPrefab/CardBag_piggyPals/CardPackOpening_piggyPals_001",
+        "Effects/CardPack/CardBagPrefab/CardBag_freshmanPerks/CardPackOpening_freshmanPerks_001",
+        "Effects/CardPack/CardBagPrefab/CardBag_chefBunny/CardPackOpening_chefBunny_001",
+        "Effects/CardPack/CardBagPrefab/CardBag_duchsQuack01/CardPackOpening_duchsQuack01_001",
+        "Effects/CardPack/CardBagPrefab/CardBag_jollyHoliday/CardPackOpening_jollyHoliday_001",
+        "Effects/CardPack/CardBagPrefab/CardBag_swimmingPool/CardPackOpening_swimmingPool_001",
+        "Effects/CardPack/CardBagPrefab/CardBag_snappyCrab/CardPackOpening_snappyCrab_001",
+        "Effects/CardPack/CardBagPrefab/CardBag_myLovelyHair/CardPackOpening_myLovelyHair_001",
+        "Effects/CardPack/CardBagPrefab/CardBag_fairy/CardPackOpening_fairy_001",
+        "Effects/CardPack/CardBagPrefab/CardBag_oldGadgets/CardPackOpening_oldGadgets_001"
+    };
     private static readonly int BaseMapPropertyId = Shader.PropertyToID("_BaseMap");
     private static readonly int BaseMapTransformPropertyId = Shader.PropertyToID("_BaseMap_ST");
     private static readonly int MainTexturePropertyId = Shader.PropertyToID("_MainTex");
@@ -51,6 +76,7 @@ public static class GameAnimationUtility
         public Vector3 BaseRootScale;
         public Vector3 ScaleCenter;
         public bool HasPreparedPose;
+        public bool PreserveAuthoredAppearance;
     }
 
     public sealed class CardPackIdleDisplay
@@ -185,7 +211,24 @@ public static class GameAnimationUtility
             return false;
         }
 
-        var effect = BindCardPackEffect(authoredRoot, $"CardPackIdle_{packId:D3}");
+        var effectRoot = authoredRoot;
+        var preserveAuthoredAppearance = TryInstantiateAuthoredCardPackPrefab(
+            packId,
+            out var authoredPrefabRoot);
+        if (preserveAuthoredAppearance)
+        {
+            if (effectRoot != null)
+            {
+                UnityEngine.Object.Destroy(effectRoot);
+            }
+
+            effectRoot = authoredPrefabRoot;
+        }
+
+        var effect = BindCardPackEffect(
+            effectRoot,
+            $"CardPackIdle_{packId:D3}",
+            preserveAuthoredAppearance);
         if (effect == null)
         {
             return false;
@@ -205,12 +248,15 @@ public static class GameAnimationUtility
             }
 
             renderer.sortingOrder = sortingOrder;
-            ApplyCardPackAppearance(
-                renderer,
-                coverSprite,
-                null,
-                default,
-                false);
+            if (!effect.PreserveAuthoredAppearance)
+            {
+                ApplyCardPackAppearance(
+                    renderer,
+                    coverSprite,
+                    null,
+                    default,
+                    false);
+            }
         }
 
         if (!TryGetCurrentPoseBounds(effect.CardRenderers, out var referenceBounds))
@@ -268,7 +314,10 @@ public static class GameAnimationUtility
         rootTransform.localScale = Vector3.one * finalScale;
         rootTransform.position = anchorBounds.center - meshBounds.center * finalScale;
         SetRendererSortingOrder(display.Effect.CardRenderers, display.SortingOrder);
-        ApplyCardPackClip(display.Effect.CardRenderers, screenClipRect, true);
+        if (!display.Effect.PreserveAuthoredAppearance)
+        {
+            ApplyCardPackClip(display.Effect.CardRenderers, screenClipRect, true);
+        }
         SetRenderersEnabled(display.Effect.CardRenderers, true);
     }
 
@@ -346,7 +395,10 @@ public static class GameAnimationUtility
         effect.Root.SetActive(true);
         ResetCardPackAnimators(effect, pause: true);
         ApplyPreviewPose(effect, anchor, coverSprite, !usesIdleDisplay);
-        ApplyCardPackClip(effect.CardRenderers, default, false);
+        if (!effect.PreserveAuthoredAppearance)
+        {
+            ApplyCardPackClip(effect.CardRenderers, default, false);
+        }
         SetPreparedCardPackScale(scaleMultiplier);
         return true;
     }
@@ -770,7 +822,10 @@ public static class GameAnimationUtility
         return effect;
     }
 
-    private static CardPackEffectInstance BindCardPackEffect(GameObject authoredRoot, string rootName)
+    private static CardPackEffectInstance BindCardPackEffect(
+        GameObject authoredRoot,
+        string rootName,
+        bool preserveAuthoredAppearance)
     {
         if (authoredRoot == null)
         {
@@ -794,8 +849,43 @@ public static class GameAnimationUtility
         {
             Root = authoredRoot,
             Animators = animators,
-            CardRenderers = renderers
+            CardRenderers = renderers,
+            PreserveAuthoredAppearance = preserveAuthoredAppearance
         };
+    }
+
+    private static bool TryInstantiateAuthoredCardPackPrefab(int packId, out GameObject instance)
+    {
+        instance = null;
+        if (packId <= 0 || packId >= AuthoredCardPackPrefabResourcesPaths.Length)
+        {
+            return false;
+        }
+
+        var resourcesPath = AuthoredCardPackPrefabResourcesPaths[packId];
+        if (string.IsNullOrEmpty(resourcesPath))
+        {
+            return false;
+        }
+
+        var prefab = Resources.Load<GameObject>(resourcesPath);
+        if (prefab == null)
+        {
+            Debug.LogWarning(
+                $"Card-pack authored prefab missing for PackId={packId}: Resources/{resourcesPath}.");
+            return false;
+        }
+
+        var layoutRoot = new GameObject($"CardPackAuthored_{packId:D3}");
+        var authoredInstance = UnityEngine.Object.Instantiate(prefab, layoutRoot.transform, false);
+        if (authoredInstance == null)
+        {
+            UnityEngine.Object.Destroy(layoutRoot);
+            return false;
+        }
+
+        instance = layoutRoot;
+        return true;
     }
 
     private static GameObject LoadCardPackPrefab(string objectName)
