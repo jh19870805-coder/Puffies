@@ -1,62 +1,54 @@
 # 当前任务
 
-- 任务：恢复卡包撕开动画的横向白色光效
-- 状态：已改为读取制作方蒙皮顶点边界，待 Play Mode 画面验证
+- 任务：修正首页卡包姿态与尺寸图标层级
+- 状态：代码与 Prefab 已修改，待 MainScene Play Mode 画面确认
 - 更新时间：2026-08-02
 
 ## 用户意图
 
-- 卡包撕开时恢复从左到右扫过的横向粗白光。
-- 保留最新 EffectScene 卡包的原始材质、Animator 和粒子设置。
+- 首页列表卡包保持 `EffectScene001` 中制作方 Prefab 的原始静态朝向。
+- 卡包尺寸图片显示在对应卡包上方，但不能覆盖其他卡包或弹窗。
 
 ## 工作记录
 
-- 确认 `PlaySelectedPackage()` 仍调用 `FX_ui_tuowei_w_001`，资源路径存在，Unity 导入日志无 Shader、材质或 Prefab 加载错误。
-- 确认该 Prefab 本体主要是星点粒子，不包含可稳定覆盖 UI 开包舞台的粗横向核心光。
-- 在现有顶层 `CardPackTearGuideCanvas` 创建独立横光，由白色核心、淡蓝白柔光和头部亮点组成。
-- 用户画面验证确认 `Bone006` 的 Transform 原点位于卡包外侧；进一步检查确认它是动画骨架父节点，不是蒙皮撕口边界，已删除该错误定位方式。
-- 直接解析制作方 `CardPackOpeningModel.FBX` 的 621 个顶点、蒙皮 Cluster 与骨骼权重：未撕开的主体由 `Dummy001` 主导，其最高受控顶点行为 FBX `Y=38.4792`；上封口骨骼从该边界向上控制网格。
-- 首次运行时使用 `BakeMesh` 后又执行 Transform 转换，重复带入当前缩放，导致撕口坐标被二次放大并移动到卡包上方；用户第二次画面验证确认该方案错误，已删除 `BakeMesh` 路径。
-- `GameAnimationUtility` 现在按 Unity 标准蒙皮公式 `renderer.worldToLocalMatrix * bone.localToWorldMatrix * bindpose` 计算闭合首帧顶点，只进行一次世界坐标转换；随后按每个顶点的最大蒙皮权重找出 `Dummy001` 主导主体的最高顶点行，并将该行中心缓存为卡包根节点局部撕口坐标。
-- 运行时额外校验计算结果必须落在当前卡包 Renderer 的实际 Y 边界内；超出卡包立即拒绝并使用模型实测回退位置，避免指示再次出现在卡包外。
-- 滑动指示、手势有效区域、UI 粗横光、原 `FX_ui_tuowei_w_001` 星点拖尾和 `fx_chai_w_001` 拆包粒子全部读取同一蒙皮边界；鼠标只负责输入，不改变撕口高度。
-- 现有 23 个正式开包 Prefab 都包含 `Dummy001` 和对应 SkinnedMeshRenderer 骨骼引用。只有未来资源缺少该蒙皮边界时，才按当前模型实测位置回退并输出一次明确警告。
-- 滑动指示原本使用相机空间 Canvas，虽然排序值高于卡包，但会被有厚度的 3D 卡包正面写入的深度遮挡；专用 Canvas 已改为 `ScreenSpaceOverlay`，确保指示圆和横光始终显示在卡包之上。
-- 核心光高度由 `16px` 加粗到 `26px`，柔光由 `46px` 扩大到 `72px`，头部亮点由 `62px` 放大到 `82px`；柔光 Alpha 提高到 `0.78`，并缩短淡入淡出。
-- 原 `FX_ui_tuowei_w_001` 继续同步播放；没有修改制作方卡包 Prefab、材质、Animator、Shader 或粒子参数。
-- 保留未提交的新手引导修复：CardBag001 中途退出后按活动拼图会话恢复引导，教程完成标记只在整包结算时写入。
+- 确认 `EffectScene001` 和正式卡包 Prefab 的根节点朝向均为 `Y=180`，不是场景灯光或 Prefab Override 导致角度差异。
+- 列表此前会强制执行 `Animator.Rebind()` 并采样 `CardPackOpening` 第 0 帧，动画曲线可能覆盖制作方保存的静态姿态。
+- 正式 authored 卡包列表状态现改为禁用 Animator 并保留 Prefab 静态姿态；点击“玩”后才重置并播放开包动画。
+- `PackItem.prefab/PackSize` 保留为编辑器配置的 Image；创建列表项后将其迁入共享根级 `CardPackSizeCanvas`，每帧根据对应卡包屏幕中心同步位置、呼吸缩放和可见范围。
+- 画面验证确认仅提高 Canvas 排序或把尺寸层放在世界 `Z=-0.05` 仍可能被有厚度的 3D 卡包前表面遮挡。尺寸图标现在使用独立的 `UI/Default` 材质实例，并将 `unity_GUIZTestMode` 固定为 `Always`；尺寸 Canvas 排序为 `15000`，因此覆盖普通卡包，同时仍低于排序为 `20000` 的选择弹窗。
+- 选包画面验证发现其他列表卡包的实时尺寸图标会覆盖中央放大的卡包，且四分之一分辨率截图直接拉伸的虚化质量不足。现改为独立选中卡包渲染层：展开卡包及子粒子临时切到 Layer 29，由后置 `SelectedCardPackCamera` 单独绘制；主相机继续绘制列表、尺寸图标和虚化弹窗，不再隐藏尺寸图标。
+- 选包背景改为半分辨率输出的三级降采样与回采样虚化，替代单次四分之一分辨率拉伸；拍照闪光 Canvas 改为 Screen Space Overlay，确保仍覆盖后置卡包相机。
+- 尝试启动 Unity 批处理姿态诊断时发现工程已由用户编辑器打开，已终止本次批处理实例，没有关闭用户编辑器，也没有保留诊断脚本。
 
 ## 修改文件
 
+- `Assets/Prefabs/PackItem.prefab`
 - `Assets/Scripts/Controller/MainScene.cs`
 - `Assets/Scripts/Model/GameAnimationUtility.cs`
-- `Assets/Scripts/Controller/GameScene.cs`
+- `ProjectSettings/TagManager.asset`
 - `Documents/CURRENT_TASK.md`
 - `Documents/PROJECT_CONTEXT.md`
 
 ## 决策
 
-- 粗横光属于项目侧撕包交互反馈，放在撕包 Canvas 保证层级稳定；制作方原始卡包和粒子保持不变。
-- 横光和原星点拖尾并行播放，之后再启动卡包原 Animator 与拆包粒子。
-- 撕口位置属于制作方蒙皮数据，以闭合首帧 `Dummy001` 主导主体区域的最高顶点边界为唯一来源，不使用骨骼 Transform 原点、手工高度比例或鼠标位置猜测。
+- 不通过额外欧拉角猜测修正卡包，而是保持制作方 Prefab 的静态 Transform 和蒙皮姿态。
+- 不修改制作方材质、Shader、纹理、灯光和粒子参数。
+- 尺寸图片继续使用 `PackItem.prefab` 中的编辑器尺寸和偏移配置；运行时共享 Canvas 只负责跟随定位。专用 UI 材质跳过 3D 深度测试，但不修改制作方卡包的任何材质或 Shader。
+- 选中卡包使用独立 Layer 与后置 Camera 解决跨 3D/UI 排序，不创建第二份卡包，不修改制作方特效参数；返回列表时恢复原 Layer 和主相机 Culling Mask。
 
 ## 验证
 
 - `dotnet build Puffies.sln --no-restore`：通过，0 警告、0 错误。
 - `git diff --check`：通过，仅有仓库既有的 LF/CRLF 转换提示。
-- 扫描 `Assets/Resources/Effects/CardPack/CardBagPrefab` 下 23 个正式开包 Prefab：全部包含 `Dummy001` 和 SkinnedMeshRenderer 骨骼列表，缺失数为 0。
-- 静态检查确认滑动指示、输入带、横光、星点拖尾和拆包粒子统一读取缓存的蒙皮边界世界坐标；代码中已无 `TearGuideVerticalPositionRatio`、`Bone006` 撕口定位或鼠标反写特效高度逻辑。
-- 静态检查确认滑动指示 Canvas 使用 Overlay 模式，屏幕坐标转换在 Overlay 下使用空事件相机。
-- 尚未在 MainScene Play Mode 检查横光实际亮度、粗细和节奏。
+- Unity `Editor.log`：资源刷新后未发现新增 C# 编译、Prefab 导入或断言错误。
+- 独立选中卡包渲染层和多级背景虚化尚未在 MainScene Play Mode 人工确认最终画面。
 
 ## 下一步
 
-1. 在 MainScene 选择任意卡包，点击“玩”进入撕包舞台。
-2. 确认滑动指示圆完整显示在卡包上层，并沿制作方模型真实撕口从左向右移动。
-3. 在撕口横划，确认粗白光、星点拖尾和拆包粒子都严格沿同一位置播放，且亮度足够。
-4. 检查横光结束后原卡包 Animator、拆包粒子和进入 GameScene 的流程不变。
-5. 回归 CardBag001 中途退出后的新手引导恢复。
+1. 在 MainScene Play Mode 查看首页列表，确认卡包正面朝向与 `EffectScene001` 一致。
+2. 确认每个 `PackSize` 位于自己的卡包上方；点开卡包后，尺寸图标保留在虚化背景层内，独立后置相机绘制的中央卡包位于其上方。
+3. 点击卡包再返回，确认静态姿态不跳变；点击“玩”后确认开包动画仍从闭合状态正常开始。
 
 ## 恢复提示
 
-继续验证卡包撕开横光。先阅读 `AGENTS.md`、`Documents/WORKFLOW.md` 和 `Documents/CURRENT_TASK.md`；粗横光已放在顶层撕包 Canvas 并与原粒子并行，下一步在 MainScene Play Mode 检查画面，不要修改 EffectScene 原始卡包和粒子参数。
+继续验证 MainScene 卡包静态姿态和 `PackSize` 层级。先阅读 `AGENTS.md`、`Documents/WORKFLOW.md` 和 `Documents/CURRENT_TASK.md`；不要修改制作方材质、Shader、灯光或粒子参数。

@@ -81,6 +81,8 @@ public static class GameAnimationUtility
         public Vector3 ScaleCenter;
         public bool HasPreparedPose;
         public bool PreserveAuthoredAppearance;
+        public Transform[] RenderLayerTransforms;
+        public int[] OriginalRenderLayers;
     }
 
     public sealed class CardPackIdleDisplay
@@ -239,7 +241,14 @@ public static class GameAnimationUtility
         }
 
         effect.Root.SetActive(true);
-        ResetCardPackAnimators(effect, pause: true);
+        if (effect.PreserveAuthoredAppearance)
+        {
+            SuspendCardPackAnimatorsAtAuthoredPose(effect);
+        }
+        else
+        {
+            ResetCardPackAnimators(effect, pause: true);
+        }
         effect.Root.transform.position = Vector3.zero;
         effect.Root.transform.rotation = Quaternion.identity;
         effect.Root.transform.localScale = Vector3.one;
@@ -332,7 +341,14 @@ public static class GameAnimationUtility
             display.Effect.Root.SetActive(visible);
             if (visible)
             {
-                ResetCardPackAnimators(display.Effect, pause: true);
+                if (display.Effect.PreserveAuthoredAppearance)
+                {
+                    SuspendCardPackAnimatorsAtAuthoredPose(display.Effect);
+                }
+                else
+                {
+                    ResetCardPackAnimators(display.Effect, pause: true);
+                }
                 SetRendererSortingOrder(display.Effect.CardRenderers, display.SortingOrder);
             }
             SetRenderersEnabled(display.Effect.CardRenderers, visible);
@@ -397,7 +413,10 @@ public static class GameAnimationUtility
 
         sSpawnedEffects[FullCardPackObjectName] = effect;
         effect.Root.SetActive(true);
-        ResetCardPackAnimators(effect, pause: true);
+        if (!usesIdleDisplay || !effect.PreserveAuthoredAppearance)
+        {
+            ResetCardPackAnimators(effect, pause: true);
+        }
         ApplyPreviewPose(effect, anchor, coverSprite, !usesIdleDisplay);
         if (!effect.PreserveAuthoredAppearance)
         {
@@ -475,6 +494,64 @@ public static class GameAnimationUtility
                 renderer.sortingOrder = sortingOrder;
             }
         }
+    }
+
+    public static bool SetPreparedCardPackRenderLayer(int layer)
+    {
+        if (!TryGetSpawnedCardPackEffect(out var effect)
+            || !effect.HasPreparedPose
+            || layer < 0
+            || layer > 31)
+        {
+            return false;
+        }
+
+        if (effect.RenderLayerTransforms == null
+            || effect.OriginalRenderLayers == null)
+        {
+            effect.RenderLayerTransforms = effect.Root.GetComponentsInChildren<Transform>(true);
+            effect.OriginalRenderLayers = new int[effect.RenderLayerTransforms.Length];
+            for (var i = 0; i < effect.RenderLayerTransforms.Length; i++)
+            {
+                effect.OriginalRenderLayers[i] = effect.RenderLayerTransforms[i].gameObject.layer;
+            }
+        }
+
+        for (var i = 0; i < effect.RenderLayerTransforms.Length; i++)
+        {
+            var target = effect.RenderLayerTransforms[i];
+            if (target != null)
+            {
+                target.gameObject.layer = layer;
+            }
+        }
+
+        return true;
+    }
+
+    public static void RestorePreparedCardPackRenderLayers()
+    {
+        if (!TryGetSpawnedCardPackEffect(out var effect)
+            || effect.RenderLayerTransforms == null
+            || effect.OriginalRenderLayers == null)
+        {
+            return;
+        }
+
+        var count = Mathf.Min(
+            effect.RenderLayerTransforms.Length,
+            effect.OriginalRenderLayers.Length);
+        for (var i = 0; i < count; i++)
+        {
+            var target = effect.RenderLayerTransforms[i];
+            if (target != null)
+            {
+                target.gameObject.layer = effect.OriginalRenderLayers[i];
+            }
+        }
+
+        effect.RenderLayerTransforms = null;
+        effect.OriginalRenderLayers = null;
     }
 
     public static bool PlayPreparedCardPackAnimation()
@@ -556,6 +633,7 @@ public static class GameAnimationUtility
 
         var root = UnityEngine.Object.Instantiate(prefab);
         root.name = RuntimeDismantleObjectName;
+        SetLayerRecursively(root.transform, effect.Root.layer);
         root.transform.position = new Vector3(
             cardBounds.center.x,
             seamPosition.y,
@@ -600,6 +678,7 @@ public static class GameAnimationUtility
 
         var root = UnityEngine.Object.Instantiate(prefab);
         root.name = RuntimeTearTrailObjectName;
+        SetLayerRecursively(root.transform, effect.Root.layer);
         root.transform.rotation = Quaternion.identity;
 
         var startPosition = new Vector3(
@@ -902,6 +981,26 @@ public static class GameAnimationUtility
             CardRenderers = renderers,
             PreserveAuthoredAppearance = preserveAuthoredAppearance
         };
+    }
+
+    private static void SuspendCardPackAnimatorsAtAuthoredPose(CardPackEffectInstance effect)
+    {
+        if (effect == null || effect.Animators == null)
+        {
+            return;
+        }
+
+        for (var i = 0; i < effect.Animators.Length; i++)
+        {
+            var animator = effect.Animators[i];
+            if (animator == null)
+            {
+                continue;
+            }
+
+            animator.speed = 0f;
+            animator.enabled = false;
+        }
     }
 
     private static void CacheCardPackTearSeam(CardPackEffectInstance effect)
@@ -1232,6 +1331,20 @@ public static class GameAnimationUtility
             {
                 renderers[i].sortingOrder = sortingOrder;
             }
+        }
+    }
+
+    private static void SetLayerRecursively(Transform root, int layer)
+    {
+        if (root == null)
+        {
+            return;
+        }
+
+        root.gameObject.layer = layer;
+        for (var i = 0; i < root.childCount; i++)
+        {
+            SetLayerRecursively(root.GetChild(i), layer);
         }
     }
 
