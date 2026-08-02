@@ -41,7 +41,7 @@ public static class GameAnimationUtility
         "Effects/CardPack/CardBagPrefab/CardBag_sushiFriends/CardPackOpening_sushiFriends_001",
         "Effects/CardPack/CardBagPrefab/CardBag_coffeeTime/CardPackOpening_coffeeTime_001",
         "Effects/CardPack/CardBagPrefab/CardBag_spellsMagic/CardPackOpening_spellsMagic_001",
-        "Effects/CardPack/CardBagPrefab/CardBag_caPiBaLa/CardPackOpening_caPiBaLa_001",
+        "Effects/CardPack/CardBagPrefab/CardBag_springOuting/CardPackOpening_springOuting_001",
         "Effects/CardPack/CardBagPrefab/CardBag_powerRock/CardPackOpening_powerRock_001",
         "Effects/CardPack/CardBagPrefab/CardBag_stoneAgePals/CardPackOpening_stoneAgePals_001",
         "Effects/CardPack/CardBagPrefab/CardBag_pharaohsTreasure/CardPackOpening_pharaohsTreasure_001",

@@ -1,48 +1,59 @@
 # 当前任务
 
-- 任务：清理此前导入的全部特效，准备重新整理和导入
-- 状态：旧特效已清空，等待确认并导入新的资源包
+- 任务：导入并重新接入新卡包特效
+- 状态：已完成，等待 MainScene Play Mode 视觉验收
 - 更新时间：2026-08-02
 
 ## 用户意图
 
-- 先彻底删除此前导入工程的特效资产和场景配置。
-- 保留新的源 `.unitypackage`，后续从干净状态重新导入和接入。
+- 从清空旧特效后的干净状态导入 `特效资源` 中的新资源包。
+- 保持制作方 Prefab、材质、Shader、粒子、Animator 和灯光参数原样。
+- 首页列表继续常驻卡包特效，选中后放大，确认后播放原开包动画并进入游戏。
+- UI 配置保留在 Prefab/场景中，不覆盖资源包重复携带的项目 UI、字体或 `TaskItem`。
 
 ## 工作记录
 
-- 删除 `Assets/Resources/Effects/` 及其 Meta，清除了旧 CardFx、CardPack、PlaneGroup、材质、Shader、纹理、模型、动画和 Prefab。
-- 删除旧预览场景 `Assets/Scenes/EffectScene001.unity` 及其 Meta。
-- 从 `Assets/Prefabs/PackItem.prefab` 移除旧 `CardPackEffect` 容器和嵌套的制作方 Prefab，避免资源删除后出现 Missing Prefab。
-- MainScene 恢复导入特效前的环境光、天空盒和 Sun Source 设置，并删除为旧卡包特效加入的 Directional Light。
-- 保留 `特效资源/effect文件夹.unitypackage` 与 `特效资源/场景卡包和特效展示.unitypackage`，没有执行导入、重命名或内容修改。
-- 保留现有特效接入业务代码；旧资源缺失期间，MainScene 按既有逻辑使用 2D 卡包回退。待新包导入后再按实际资源路径集中适配。
-- 用户新增的 `特效资源/录制_2026_08_01_11_58_42_915.mkv` 未修改。
+- 解析 `特效资源/effect文件夹.unitypackage`：441 项全部属于 `Assets/Resources/Effects`，已按原始路径完整导入。
+- 解析 `特效资源/场景卡包和特效展示.unitypackage`：导入 `Assets/Scenes/EffectScene001.unity`；其中重复的 152 项 Effects 与第一个包逐项一致，没有重复覆盖；31 项项目 UI、字体和 `TaskItem` 未导入。
+- `PackItem.prefab` 恢复 `CardPackEffect` 编辑器节点，并嵌套制作方 `CardBag_tutorial/CardPackOpening_springOuting_001` Prefab；只保留既有尺寸容器配置，没有修改制作方资源参数。
+- MainScene 精确恢复 `EffectScene001` 的环境光、Skybox、Sun Source 和强度 `1.3` 的 Directional Light。
+- 修正默认卡包和 PackId 8 的资源路径，由新包不存在的 `caPiBaLa` 改为 `springOuting`。`CardPackOpeningMaterial_caPiBaLa` 仍保留，因为制作方 `springOuting` Prefab 原生引用该材质。
+- 21 个制作方 `_001` 开包 Prefab 已全部映射到 PackId 1-21。新包没有第 22 个制作方 Prefab，PackId 22 继续使用 `PackItem` 内的共享 `springOuting` 实例并替换卡包封面。
+- 未对制作方材质、Shader、纹理、粒子、Animator、颜色、亮度或灯光做运行时参数补偿。
+- 清理临时解包目录 `Temp/CodexNewFxA` 和 `Temp/CodexNewFxB`。
 
 ## 修改文件
 
+- 新增 `Assets/Resources/Effects/`
+- 新增 `Assets/Scenes/EffectScene001.unity`
 - `Assets/Prefabs/PackItem.prefab`
 - `Assets/Scenes/MainScene.unity`
-- 删除 `Assets/Resources/Effects/`
-- 删除 `Assets/Scenes/EffectScene001.unity`
+- `Assets/Scripts/Model/GameDefine.cs`
+- `Assets/Scripts/Model/GameAnimationUtility.cs`
 - `Documents/CURRENT_TASK.md`
 - `Documents/PROJECT_CONTEXT.md`
 
+## 决策
+
+- 新资源包中的原始路径和 GUID 是正式来源，不执行重命名或目录重组。
+- 当前首页和开包流程只使用制作方开包 Prefab；不把示例包中重复携带的项目 UI 覆盖回工程。
+- 源包内部有 6 个未随包导出的旧序列化 GUID。`EffectScene001`、MainScene、`PackItem` 和 21 个当前开包 Prefab 的直接依赖完整，因此不使用相似纹理猜测补齐，也不改写制作方材质。
+
 ## 验证
 
-- 已确认 `Assets/Resources/Effects`、对应 Meta、`EffectScene001.unity` 和对应 Meta 均不存在。
-- 扫描两个保留资源包中的 441 个旧特效 GUID，工程外部悬空引用为 0。
-- `PackItem.prefab` 不再包含 `CardPackEffect` 或旧嵌套 Prefab GUID。
+- 第一个包 441 项与导入结果逐项哈希一致，0 项不匹配。
+- `EffectScene001`、MainScene 和 `PackItem` 的资源引用均能在 Assets、Packages 或 PackageCache 中解析。
+- PackId 1-21 的制作方 Prefab 路径逐项存在；工程代码中不再引用不存在的 `CardBag_caPiBaLa` Prefab。
+- Unity 2022.3 当前会话成功导入 `PackItem.prefab` 和 MainScene；本次会话日志未发现 C#、Shader、Prefab、Missing Reference 或资源导入错误。
 - `dotnet build Puffies.sln --no-restore` 通过，0 警告、0 错误。
 - `git diff --check` 通过，仅有仓库既有的 LF/CRLF 转换提示。
-- 本轮未启动 Unity Editor；下次打开工程时由 Unity 正常刷新 983 个已删除资产。
 
 ## 下一步
 
-1. 确认两个新 `.unitypackage` 的职责和覆盖关系。
-2. 按 Unity 原始路径导入需要的特效内容，避免把包内重复的项目 UI 覆盖进工程。
-3. 以新包实际 Prefab、场景、灯光和资源路径重新接入首页常驻卡包及开包流程。
+1. 在 MainScene Play Mode 依次检查首页列表常驻效果、尺寸图标呼吸和层级。
+2. 检查选中放大、返回复位、拆包光效、原 Animator 开包动画及进入 GameScene。
+3. 重点检查 PackId 8 的 `springOuting` 和缺少专属制作方 Prefab 的 PackId 22。
 
 ## 恢复提示
 
-旧特效已经清空。继续前先读取 `AGENTS.md`、`Documents/WORKFLOW.md` 和本文件；不要恢复旧 `Effects` 目录或旧 `EffectScene001` 配置，下一步以 `特效资源` 中保留的新包为准。
+新特效已按原始路径导入并接回现有业务流程。继续前读取 `AGENTS.md`、`Documents/WORKFLOW.md` 和本文件；不要对制作方特效参数做额外补偿，视觉问题优先对照 `Assets/Scenes/EffectScene001.unity` 排查场景环境、Prefab 选择和层级。

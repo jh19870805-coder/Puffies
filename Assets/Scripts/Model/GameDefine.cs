@@ -58,12 +58,12 @@ public static class GameDefine
     public const string PlaneGroupFbxEditorFolder = "Assets/Resources/Effects/CardPack/Models";
 
     public const string CardPackPrefabResourcesFolder =
-        "Effects/CardPack/CardBagPrefab/CardBag_caPiBaLa/";
-    public const string CardPackOpeningPrefabName = "CardPackOpening_caPiBaLa_001";
+        "Effects/CardPack/CardBagPrefab/CardBag_springOuting/";
+    public const string CardPackOpeningPrefabName = "CardPackOpening_springOuting_001";
     public const string CardPackMaterialResourcesPath =
         "Effects/CardPack/ModTextures/Materials/CardPackOpeningMaterial_caPiBaLa";
     public const string CardPackPrefabEditorFolder =
-        "Assets/Resources/Effects/CardPack/CardBagPrefab/CardBag_caPiBaLa";
+        "Assets/Resources/Effects/CardPack/CardBagPrefab/CardBag_springOuting";
     public const string CardPackMaterialEditorPath =
         "Assets/Resources/Effects/CardPack/ModTextures/Materials/CardPackOpeningMaterial_caPiBaLa.mat";
     public const string CardPackDismantleResourcesPath =
