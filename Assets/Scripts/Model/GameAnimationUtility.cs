@@ -241,14 +241,7 @@ public static class GameAnimationUtility
         }
 
         effect.Root.SetActive(true);
-        if (effect.PreserveAuthoredAppearance)
-        {
-            SuspendCardPackAnimatorsAtAuthoredPose(effect);
-        }
-        else
-        {
-            ResetCardPackAnimators(effect, pause: true);
-        }
+        ResetCardPackAnimators(effect, pause: true);
         effect.Root.transform.position = Vector3.zero;
         effect.Root.transform.rotation = Quaternion.identity;
         effect.Root.transform.localScale = Vector3.one;
@@ -341,14 +334,7 @@ public static class GameAnimationUtility
             display.Effect.Root.SetActive(visible);
             if (visible)
             {
-                if (display.Effect.PreserveAuthoredAppearance)
-                {
-                    SuspendCardPackAnimatorsAtAuthoredPose(display.Effect);
-                }
-                else
-                {
-                    ResetCardPackAnimators(display.Effect, pause: true);
-                }
+                ResetCardPackAnimators(display.Effect, pause: true);
                 SetRendererSortingOrder(display.Effect.CardRenderers, display.SortingOrder);
             }
             SetRenderersEnabled(display.Effect.CardRenderers, visible);
@@ -1025,26 +1011,6 @@ public static class GameAnimationUtility
             CardRenderers = renderers,
             PreserveAuthoredAppearance = preserveAuthoredAppearance
         };
-    }
-
-    private static void SuspendCardPackAnimatorsAtAuthoredPose(CardPackEffectInstance effect)
-    {
-        if (effect == null || effect.Animators == null)
-        {
-            return;
-        }
-
-        for (var i = 0; i < effect.Animators.Length; i++)
-        {
-            var animator = effect.Animators[i];
-            if (animator == null)
-            {
-                continue;
-            }
-
-            animator.speed = 0f;
-            animator.enabled = false;
-        }
     }
 
     private static void CacheCardPackTearSeam(CardPackEffectInstance effect)

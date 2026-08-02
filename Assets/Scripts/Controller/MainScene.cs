@@ -15,6 +15,7 @@ public class MainScene : MonoBehaviour
 {
     private const float ReferenceHeight = GameDefine.DesignHeight;
     private const float PixelsPerUnit = GameDefine.PixelsPerUnit;
+    private const float CardPackEffectOrthographicSize = 2.66f;
     private const float PackageClickScaleRatio = 1.15f;
     private const float PackageClickAnimDuration = 0.12f;
     private const float PackageBreathMinScale = 0.98f;
@@ -380,7 +381,8 @@ public class MainScene : MonoBehaviour
         var targetCamera = Camera.main;
         if (targetCamera != null)
         {
-            GameCommonUtility.SetupOrthographicCamera(targetCamera, ReferenceHeight, PixelsPerUnit);
+            targetCamera.orthographic = true;
+            targetCamera.orthographicSize = CardPackEffectOrthographicSize;
         }
         if (!TryResolvePackageList())
         {
