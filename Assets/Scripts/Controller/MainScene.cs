@@ -119,6 +119,8 @@ public class MainScene : MonoBehaviour
     private const string BagSelectCanvasObjectName = "PanelBagSelectCanvas";
     private const string BagSelectBackdropObjectName = "PanelBagSelectBlurredBackdrop";
     private const string SelectedPackageCameraObjectName = "SelectedCardPackCamera";
+    private const string SelectedPackageCanvasObjectName = "SelectedCardPackCanvas";
+    private const string SelectedPackageImageObjectName = "SelectedCardPackImage";
     private const string OpeningStageBackgroundObjectName = "CardPackOpeningStageBackground";
     private const string TearGuideCanvasObjectName = "CardPackTearGuideCanvas";
     private const string TearGuideObjectName = "CardPackTearGuide";
@@ -158,6 +160,9 @@ public class MainScene : MonoBehaviour
     private GameObject mBagSelectPanelRoot;
     private Canvas mBagSelectOverlayCanvas;
     private Camera mSelectedPackageOverlayCamera;
+    private Canvas mSelectedPackageOverlayCanvas;
+    private RawImage mSelectedPackageOverlayImage;
+    private RenderTexture mSelectedPackageRenderTexture;
     private Camera mSelectedPackageSourceCamera;
     private int mSelectedPackageSourceCullingMask;
     private bool mIsSelectedPackageRenderLayerActive;
@@ -269,6 +274,12 @@ public class MainScene : MonoBehaviour
             Destroy(mSelectedPackageOverlayCamera.gameObject);
         }
 
+        ReleaseSelectedPackageRenderTexture();
+        if (mSelectedPackageOverlayCanvas != null)
+        {
+            Destroy(mSelectedPackageOverlayCanvas.gameObject);
+        }
+
         ReleaseBagSelectBackdropTexture();
         ReleaseGeneratedPhoto();
         ReleaseUsablePanelPreviewSprites();
@@ -323,6 +334,7 @@ public class MainScene : MonoBehaviour
 
     private void LateUpdate()
     {
+        EnsureSelectedPackageRenderTexture();
         UpdatePackageDisplays();
     }
 
@@ -764,6 +776,8 @@ public class MainScene : MonoBehaviour
             ReferenceHeight,
             PixelsPerUnit,
             BagSelectPanelWorldDepth);
+        mBagSelectOverlayCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        mBagSelectOverlayCanvas.worldCamera = null;
         mBagSelectOverlayCanvas.sortingLayerID = sourceCanvas.sortingLayerID;
         mBagSelectOverlayCanvas.sortingOrder = BagSelectPanelSortingOrder;
 
@@ -788,11 +802,30 @@ public class MainScene : MonoBehaviour
         }
 
         var sourceCamera = Camera.main;
-        if (sourceCamera == null
-            || !GameAnimationUtility.SetPreparedCardPackRenderLayer(
-                SelectedPackageRenderLayer))
+        if (sourceCamera == null)
         {
             Debug.LogWarning("MainScene: selected card pack render layer could not be enabled.");
+            return;
+        }
+
+        foreach (var pair in mPackageSlotsById)
+        {
+            GameAnimationUtility.RestoreCardPackIdleDisplayRenderLayers(
+                pair.Value?.IdleDisplay);
+        }
+
+        var layerAssigned = GameAnimationUtility.SetCardPackIdleDisplayRenderLayer(
+            mSelectedPackageEntry?.IdleDisplay,
+            SelectedPackageRenderLayer);
+        if (!layerAssigned)
+        {
+            layerAssigned = GameAnimationUtility.SetPreparedCardPackRenderLayer(
+                SelectedPackageRenderLayer);
+        }
+
+        if (!layerAssigned)
+        {
+            Debug.LogWarning("MainScene: selected card pack instance could not be isolated.");
             return;
         }
 
@@ -804,21 +837,28 @@ public class MainScene : MonoBehaviour
             mSelectedPackageOverlayCamera = cameraObject.GetComponent<Camera>();
         }
 
+        CreateSelectedPackageOverlayCanvas(sourceCamera);
+
         mSelectedPackageSourceCamera = sourceCamera;
         mSelectedPackageSourceCullingMask = sourceCamera.cullingMask;
-        sourceCamera.cullingMask &= ~(1 << SelectedPackageRenderLayer);
-
         mSelectedPackageOverlayCamera.CopyFrom(sourceCamera);
         mSelectedPackageOverlayCamera.transform.SetPositionAndRotation(
             sourceCamera.transform.position,
             sourceCamera.transform.rotation);
         mSelectedPackageOverlayCamera.cullingMask = 1 << SelectedPackageRenderLayer;
-        mSelectedPackageOverlayCamera.clearFlags = CameraClearFlags.Depth;
-        mSelectedPackageOverlayCamera.depth = sourceCamera.depth + 10f;
+        mSelectedPackageOverlayCamera.clearFlags = CameraClearFlags.SolidColor;
+        mSelectedPackageOverlayCamera.backgroundColor = Color.clear;
         mSelectedPackageOverlayCamera.eventMask = 0;
         mSelectedPackageOverlayCamera.useOcclusionCulling = false;
-        mSelectedPackageOverlayCamera.enabled = true;
+        sourceCamera.cullingMask &= ~(1 << SelectedPackageRenderLayer);
+
         mIsSelectedPackageRenderLayerActive = true;
+        EnsureSelectedPackageRenderTexture();
+        mSelectedPackageOverlayCamera.enabled = true;
+        if (mSelectedPackageOverlayCanvas != null)
+        {
+            mSelectedPackageOverlayCanvas.gameObject.SetActive(true);
+        }
     }
 
     private void DisableSelectedPackageRenderLayer()
@@ -833,14 +873,123 @@ public class MainScene : MonoBehaviour
             mSelectedPackageSourceCamera.cullingMask = mSelectedPackageSourceCullingMask;
         }
 
+        GameAnimationUtility.RestoreCardPackIdleDisplayRenderLayers(
+            mSelectedPackageEntry?.IdleDisplay);
         GameAnimationUtility.RestorePreparedCardPackRenderLayers();
         if (mSelectedPackageOverlayCamera != null)
         {
+            mSelectedPackageOverlayCamera.targetTexture = null;
             mSelectedPackageOverlayCamera.enabled = false;
         }
 
+        if (mSelectedPackageOverlayCanvas != null)
+        {
+            mSelectedPackageOverlayCanvas.gameObject.SetActive(false);
+        }
+
+        ReleaseSelectedPackageRenderTexture();
+
         mSelectedPackageSourceCamera = null;
         mIsSelectedPackageRenderLayerActive = false;
+    }
+
+    private void CreateSelectedPackageOverlayCanvas(Camera sourceCamera)
+    {
+        if (mSelectedPackageOverlayCanvas != null || sourceCamera == null)
+        {
+            return;
+        }
+
+        var canvasObject = new GameObject(
+            SelectedPackageCanvasObjectName,
+            typeof(RectTransform),
+            typeof(Canvas),
+            typeof(CanvasScaler));
+        canvasObject.layer = mBagSelectPanelRoot != null ? mBagSelectPanelRoot.layer : 5;
+        mSelectedPackageOverlayCanvas = canvasObject.GetComponent<Canvas>();
+        GameCommonUtility.ConfigureCanvasForGameplay(
+            mSelectedPackageOverlayCanvas,
+            sourceCamera,
+            GameDefine.DesignWidth,
+            ReferenceHeight,
+            PixelsPerUnit,
+            SelectedPackageWorldDepth);
+        mSelectedPackageOverlayCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        mSelectedPackageOverlayCanvas.worldCamera = null;
+        mSelectedPackageOverlayCanvas.sortingLayerID = mBagSelectOverlayCanvas != null
+            ? mBagSelectOverlayCanvas.sortingLayerID
+            : 0;
+        mSelectedPackageOverlayCanvas.sortingOrder = SelectedPackageSortingOrder;
+
+        var imageObject = new GameObject(
+            SelectedPackageImageObjectName,
+            typeof(RectTransform),
+            typeof(CanvasRenderer),
+            typeof(RawImage));
+        imageObject.layer = canvasObject.layer;
+        StretchToParent(imageObject.GetComponent<RectTransform>(), canvasObject.transform);
+        mSelectedPackageOverlayImage = imageObject.GetComponent<RawImage>();
+        mSelectedPackageOverlayImage.color = Color.white;
+        mSelectedPackageOverlayImage.raycastTarget = false;
+        canvasObject.SetActive(false);
+    }
+
+    private void EnsureSelectedPackageRenderTexture()
+    {
+        if (!mIsSelectedPackageRenderLayerActive
+            || mSelectedPackageOverlayCamera == null
+            || mSelectedPackageOverlayImage == null
+            || Screen.width <= 0
+            || Screen.height <= 0)
+        {
+            return;
+        }
+
+        if (mSelectedPackageRenderTexture != null
+            && mSelectedPackageRenderTexture.width == Screen.width
+            && mSelectedPackageRenderTexture.height == Screen.height)
+        {
+            return;
+        }
+
+        ReleaseSelectedPackageRenderTexture();
+        mSelectedPackageRenderTexture = new RenderTexture(
+            Screen.width,
+            Screen.height,
+            24,
+            RenderTextureFormat.ARGB32,
+            RenderTextureReadWrite.Default)
+        {
+            name = "SelectedCardPackRenderTexture",
+            filterMode = FilterMode.Bilinear,
+            wrapMode = TextureWrapMode.Clamp
+        };
+        mSelectedPackageRenderTexture.Create();
+        mSelectedPackageOverlayCamera.targetTexture = mSelectedPackageRenderTexture;
+        mSelectedPackageOverlayImage.texture = mSelectedPackageRenderTexture;
+    }
+
+    private void ReleaseSelectedPackageRenderTexture()
+    {
+        if (mSelectedPackageOverlayImage != null)
+        {
+            mSelectedPackageOverlayImage.texture = null;
+        }
+
+        if (mSelectedPackageRenderTexture == null)
+        {
+            return;
+        }
+
+        if (mSelectedPackageOverlayCamera != null
+            && mSelectedPackageOverlayCamera.targetTexture == mSelectedPackageRenderTexture)
+        {
+            mSelectedPackageOverlayCamera.targetTexture = null;
+        }
+
+        mSelectedPackageRenderTexture.Release();
+        Destroy(mSelectedPackageRenderTexture);
+        mSelectedPackageRenderTexture = null;
     }
 
     private void CreateOpeningStageBackground()

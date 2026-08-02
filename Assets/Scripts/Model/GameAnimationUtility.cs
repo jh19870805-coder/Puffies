@@ -506,6 +506,38 @@ public static class GameAnimationUtility
             return false;
         }
 
+        return SetCardPackEffectRenderLayer(effect, layer);
+    }
+
+    public static bool SetCardPackIdleDisplayRenderLayer(
+        CardPackIdleDisplay display,
+        int layer)
+    {
+        return display != null
+            && display.IsValid
+            && layer >= 0
+            && layer <= 31
+            && SetCardPackEffectRenderLayer(display.Effect, layer);
+    }
+
+    public static void RestoreCardPackIdleDisplayRenderLayers(
+        CardPackIdleDisplay display)
+    {
+        if (display != null && display.Effect != null)
+        {
+            RestoreCardPackEffectRenderLayers(display.Effect);
+        }
+    }
+
+    private static bool SetCardPackEffectRenderLayer(
+        CardPackEffectInstance effect,
+        int layer)
+    {
+        if (effect == null || effect.Root == null)
+        {
+            return false;
+        }
+
         if (effect.RenderLayerTransforms == null
             || effect.OriginalRenderLayers == null)
         {
@@ -532,6 +564,18 @@ public static class GameAnimationUtility
     public static void RestorePreparedCardPackRenderLayers()
     {
         if (!TryGetSpawnedCardPackEffect(out var effect)
+            || effect == null)
+        {
+            return;
+        }
+
+        RestoreCardPackEffectRenderLayers(effect);
+    }
+
+    private static void RestoreCardPackEffectRenderLayers(
+        CardPackEffectInstance effect)
+    {
+        if (effect == null
             || effect.RenderLayerTransforms == null
             || effect.OriginalRenderLayers == null)
         {
