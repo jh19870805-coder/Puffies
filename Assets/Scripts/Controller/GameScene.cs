@@ -250,7 +250,7 @@ public class GameScene : MonoBehaviour
     private void OnDestroy()
     {
         GameCursorUtility.SetDefault();
-        StopPiecePlacementTutorial(persistCompletion: false, restoreLevelOutline: false);
+        StopPiecePlacementTutorial(restoreLevelOutline: false);
         DestroyTutorialArrowSprite();
         DestroyTutorialTipBackgroundSprite();
         DestroyRuntimeCardBoardBackgroundSprite();
@@ -2364,11 +2364,14 @@ public class GameScene : MonoBehaviour
             return;
         }
 
+        if (GameManager.GetBagId() == GameDefine.DefaultBagId)
+        {
+            PersistPiecePlacementTutorialCompletion();
+        }
+
         if (_isTutorialPending || IsTutorialActive)
         {
-            StopPiecePlacementTutorial(
-                persistCompletion: GameManager.GetBagId() == GameDefine.DefaultBagId,
-                restoreLevelOutline: false);
+            StopPiecePlacementTutorial(restoreLevelOutline: false);
         }
 
         _isGameFinished = true;
@@ -2586,6 +2589,11 @@ public class GameScene : MonoBehaviour
             return true;
         }
 
+        if (CardPackDataUtility.HasActivePuzzleSession(bagId))
+        {
+            return true;
+        }
+
         if (_wasSelectedPackCompletedOnEntry)
         {
             return false;
@@ -2647,7 +2655,7 @@ public class GameScene : MonoBehaviour
         if (_tutorialStage == TutorialStage.StrongPlacement && _tutorialPiece == null)
         {
             Debug.LogWarning("GameScene: strong tutorial has no available target; tutorial skipped.");
-            StopPiecePlacementTutorial(persistCompletion: false, restoreLevelOutline: true);
+            StopPiecePlacementTutorial(restoreLevelOutline: true);
             return;
         }
 
@@ -2664,13 +2672,8 @@ public class GameScene : MonoBehaviour
         if (!ShowPiecePlacementTutorialPresentation())
         {
             Debug.LogWarning("GameScene: tutorial presentation could not be created; tutorial skipped.");
-            StopPiecePlacementTutorial(persistCompletion: false, restoreLevelOutline: true);
+            StopPiecePlacementTutorial(restoreLevelOutline: true);
             return;
-        }
-
-        if (_tutorialStage == TutorialStage.HintIntroduction)
-        {
-            PersistPiecePlacementTutorialCompletion();
         }
 
         Debug.Log(
@@ -3065,7 +3068,7 @@ public class GameScene : MonoBehaviour
             typeof(RectTransform),
             typeof(CanvasRenderer),
             typeof(Image),
-            typeof(TutorialArrowScale));
+            typeof(TutorialArrowMotion));
         var arrowRect = arrowObject.GetComponent<RectTransform>();
         arrowRect.SetParent(parent, false);
         arrowRect.anchorMin = new Vector2(0.5f, 0.5f);
@@ -3079,7 +3082,7 @@ public class GameScene : MonoBehaviour
         arrowImage.preserveAspect = true;
         arrowImage.raycastTarget = false;
 
-        var tailStart = new Vector2(pieceRect.center.x, pieceRect.yMax + 8f);
+        var tailStart = pieceRect.center;
         var direction = grooveCenter - tailStart;
         if (direction.sqrMagnitude <= 0.001f)
         {
@@ -3092,7 +3095,7 @@ public class GameScene : MonoBehaviour
             0f,
             Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg - 90f);
 
-        var arrow = arrowObject.GetComponent<TutorialArrowScale>();
+        var arrow = arrowObject.GetComponent<TutorialArrowMotion>();
         arrow.Configure(
             arrowRect,
             arrowImage,
@@ -3144,11 +3147,11 @@ public class GameScene : MonoBehaviour
     {
         if (!RebuildTutorialFocusPresentation())
         {
-            StopPiecePlacementTutorial(persistCompletion: false, restoreLevelOutline: true);
+            StopPiecePlacementTutorial(restoreLevelOutline: true);
         }
     }
 
-    private void StopPiecePlacementTutorial(bool persistCompletion, bool restoreLevelOutline)
+    private void StopPiecePlacementTutorial(bool restoreLevelOutline)
     {
         var wasActive = IsTutorialActive || _isTutorialPending;
         _isTutorialPending = false;
@@ -3156,11 +3159,6 @@ public class GameScene : MonoBehaviour
         HidePiecePlacementTutorialPresentation();
         _tutorialPiece = null;
         SetHintButtonTutorialState();
-
-        if (persistCompletion)
-        {
-            PersistPiecePlacementTutorialCompletion();
-        }
 
         if (restoreLevelOutline && wasActive && !_isGameFinished)
         {
@@ -3528,11 +3526,7 @@ public class GameScene : MonoBehaviour
         }
 
         _testCompleteButton.interactable = false;
-        var shouldCompleteTutorial = packId == GameDefine.DefaultBagId
-            && (_isTutorialPending || IsTutorialActive);
-        StopPiecePlacementTutorial(
-            persistCompletion: shouldCompleteTutorial,
-            restoreLevelOutline: false);
+        StopPiecePlacementTutorial(restoreLevelOutline: false);
         ClearPieceHint();
         StartGameplayTimerIfNeeded();
 
@@ -5173,9 +5167,9 @@ internal sealed class TutorialPromptMotion : MonoBehaviour
     }
 }
 
-internal sealed class TutorialArrowScale : MonoBehaviour
+internal sealed class TutorialArrowMotion : MonoBehaviour
 {
-    private const float ScaleDuration = 0.9f;
+    private const float MoveDuration = 0.9f;
     private const float HoldDuration = 0.12f;
     private const float GapDuration = 0.2f;
     private RectTransform _rectTransform;
@@ -5195,7 +5189,8 @@ internal sealed class TutorialArrowScale : MonoBehaviour
         _startPosition = startPosition;
         _endPosition = endPosition;
         _animationStartTime = Time.unscaledTime;
-        ApplyScale(0f);
+        _rectTransform.localScale = Vector3.one;
+        ApplyPosition(0f);
     }
 
     private void Update()
@@ -5205,19 +5200,19 @@ internal sealed class TutorialArrowScale : MonoBehaviour
             return;
         }
 
-        var cycleDuration = ScaleDuration + HoldDuration + GapDuration;
+        var cycleDuration = MoveDuration + HoldDuration + GapDuration;
         var phase = Mathf.Repeat(Time.unscaledTime - _animationStartTime, cycleDuration);
-        if (phase >= ScaleDuration + HoldDuration)
+        if (phase >= MoveDuration + HoldDuration)
         {
             _image.enabled = false;
             return;
         }
 
         _image.enabled = true;
-        var progress = phase < ScaleDuration
-            ? SmootherStep(phase / ScaleDuration)
+        var progress = phase < MoveDuration
+            ? SmootherStep(phase / MoveDuration)
             : 1f;
-        ApplyScale(progress);
+        ApplyPosition(progress);
     }
 
     private static float SmootherStep(float value)
@@ -5226,14 +5221,13 @@ internal sealed class TutorialArrowScale : MonoBehaviour
         return t * t * t * (t * (t * 6f - 15f) + 10f);
     }
 
-    private void ApplyScale(float progress)
+    private void ApplyPosition(float progress)
     {
         var normalized = Mathf.Clamp01(progress);
         _rectTransform.anchoredPosition = Vector2.LerpUnclamped(
             _startPosition,
             _endPosition,
             normalized);
-        _rectTransform.localScale = Vector3.one * normalized;
     }
 }
 

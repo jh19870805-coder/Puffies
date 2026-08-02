@@ -69,7 +69,6 @@ public class MainScene : MonoBehaviour
     private const float TearGuidePauseDuration = 0.25f;
     private const float TearTrailTravelDuration = 0.42f;
     private const float TearGuideBandHeightRatio = 0.24f;
-    private const float TearGuideVerticalPositionRatio = 0.82f;
     private const float TearSwipeStartMaxRatio = 0.38f;
     private const float TearSwipeRequiredDistanceRatio = 0.5f;
     private const float TearSwipeMaxVerticalDriftRatio = 0.2f;
@@ -116,6 +115,7 @@ public class MainScene : MonoBehaviour
     private const string OpeningStageBackgroundObjectName = "CardPackOpeningStageBackground";
     private const string TearGuideCanvasObjectName = "CardPackTearGuideCanvas";
     private const string TearGuideObjectName = "CardPackTearGuide";
+    private const string TearFlashObjectName = "CardPackTearFlash";
     private const string OpeningStageBackgroundPath = GameDefine.UiRoot + "/BasicUI/BgGame.png";
     private const string BagSelectPlayButtonObjectName = "BtnPlay";
     private const string BagSelectBackButtonObjectName = "BtnBack";
@@ -160,6 +160,11 @@ public class MainScene : MonoBehaviour
     private Texture2D mTearGuideCircleTexture;
     private RectTransform mTearGuideRect;
     private CanvasGroup mTearGuideCanvasGroup;
+    private RectTransform mTearFlashRect;
+    private RectTransform mTearFlashHaloRect;
+    private RectTransform mTearFlashCoreRect;
+    private RectTransform mTearFlashHeadRect;
+    private CanvasGroup mTearFlashCanvasGroup;
     private RenderTexture mBagSelectBackdropTexture;
     private FakeSettingsSliderInput mMusicSlider;
     private FakeSettingsSliderInput mEffectSlider;
@@ -804,6 +809,8 @@ public class MainScene : MonoBehaviour
             ReferenceHeight,
             PixelsPerUnit,
             SelectedPackageWorldDepth - 0.01f);
+        mTearGuideCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        mTearGuideCanvas.worldCamera = null;
         mTearGuideCanvas.sortingLayerID = sourceCanvas.sortingLayerID;
         mTearGuideCanvas.sortingOrder = TearGuideSortingOrder;
 
@@ -824,6 +831,58 @@ public class MainScene : MonoBehaviour
         CreateTearGuideCircle("Halo", mTearGuideCircleSprite, 112f, new Color(0.55f, 0.92f, 1f, 0.42f));
         CreateTearGuideCircle("Core", mTearGuideCircleSprite, 52f, new Color(1f, 1f, 1f, 0.94f));
         guideObject.SetActive(false);
+
+        CreateTearFlash();
+    }
+
+    private void CreateTearFlash()
+    {
+        var flashObject = new GameObject(
+            TearFlashObjectName,
+            typeof(RectTransform),
+            typeof(CanvasGroup));
+        flashObject.layer = mTearGuideCanvas.gameObject.layer;
+        mTearFlashRect = flashObject.GetComponent<RectTransform>();
+        mTearFlashRect.SetParent(mTearGuideCanvas.transform, false);
+        mTearFlashRect.anchorMin = new Vector2(0.5f, 0.5f);
+        mTearFlashRect.anchorMax = new Vector2(0.5f, 0.5f);
+        mTearFlashRect.pivot = new Vector2(0.5f, 0.5f);
+        mTearFlashRect.sizeDelta = Vector2.zero;
+        mTearFlashCanvasGroup = flashObject.GetComponent<CanvasGroup>();
+        mTearFlashCanvasGroup.interactable = false;
+        mTearFlashCanvasGroup.blocksRaycasts = false;
+
+        mTearFlashHaloRect = CreateTearFlashImage(
+            "Halo",
+            new Color(0.68f, 0.93f, 1f, 0.78f));
+        mTearFlashCoreRect = CreateTearFlashImage(
+            "Core",
+            Color.white);
+        mTearFlashHeadRect = CreateTearFlashImage(
+            "Head",
+            Color.white);
+        flashObject.SetActive(false);
+    }
+
+    private RectTransform CreateTearFlashImage(string objectName, Color color)
+    {
+        var imageObject = new GameObject(
+            objectName,
+            typeof(RectTransform),
+            typeof(CanvasRenderer),
+            typeof(Image));
+        imageObject.layer = mTearFlashRect.gameObject.layer;
+        var imageRect = imageObject.GetComponent<RectTransform>();
+        imageRect.SetParent(mTearFlashRect, false);
+        imageRect.anchorMin = new Vector2(0.5f, 0.5f);
+        imageRect.anchorMax = new Vector2(0.5f, 0.5f);
+        imageRect.pivot = new Vector2(0.5f, 0.5f);
+
+        var image = imageObject.GetComponent<Image>();
+        image.sprite = mTearGuideCircleSprite;
+        image.color = color;
+        image.raycastTarget = false;
+        return imageRect;
     }
 
     private static Sprite CreateRuntimeCircleSprite(out Texture2D texture)
@@ -3444,9 +3503,14 @@ public class MainScene : MonoBehaviour
             ? selectedEntry.Image.rectTransform
             : selectedEntry?.RectTransform;
 
+        var tearFlashCoroutine = StartCoroutine(PlayTearFlashLine(TearTrailTravelDuration));
         yield return GameAnimationUtility.PlayPreparedCardPackTearTrailEffect(
             TearGuideSortingOrder + 20,
             TearTrailTravelDuration);
+        if (tearFlashCoroutine != null)
+        {
+            yield return tearFlashCoroutine;
+        }
 
         if (GameAnimationUtility.PlayPreparedCardPackAnimation())
         {
@@ -3599,11 +3663,70 @@ public class MainScene : MonoBehaviour
         }
     }
 
+    private IEnumerator PlayTearFlashLine(float duration)
+    {
+        if (mTearFlashRect == null
+            || mTearFlashHaloRect == null
+            || mTearFlashCoreRect == null
+            || mTearFlashHeadRect == null
+            || !TryRefreshTearSwipeGeometry(out var tearSeamScreenY))
+        {
+            yield break;
+        }
+
+        var startScreen = new Vector2(
+            Mathf.Lerp(mTearSwipeScreenRect.xMin, mTearSwipeScreenRect.xMax, 0.04f),
+            tearSeamScreenY);
+        var endScreen = new Vector2(
+            Mathf.Lerp(mTearSwipeScreenRect.xMin, mTearSwipeScreenRect.xMax, 0.96f),
+            startScreen.y);
+        if (!TryScreenPointToTearGuideLocal(startScreen, out var startLocal)
+            || !TryScreenPointToTearGuideLocal(endScreen, out var endLocal))
+        {
+            yield break;
+        }
+
+        mTearFlashRect.gameObject.SetActive(true);
+        var animationDuration = Mathf.Max(0.05f, duration);
+        var elapsed = 0f;
+        while (elapsed < animationDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            var normalized = Mathf.Clamp01(elapsed / animationDuration);
+            var headProgress = Mathf.SmoothStep(0f, 1f, normalized);
+            var tailProgress = normalized <= 0.34f
+                ? 0f
+                : Mathf.SmoothStep(0f, 1f, (normalized - 0.34f) / 0.66f);
+            var head = Vector2.LerpUnclamped(startLocal, endLocal, headProgress);
+            var tail = Vector2.LerpUnclamped(startLocal, endLocal, tailProgress);
+            var center = (head + tail) * 0.5f;
+            var lineWidth = Mathf.Max(34f, head.x - tail.x + 34f);
+
+            mTearFlashHaloRect.anchoredPosition = center;
+            mTearFlashHaloRect.sizeDelta = new Vector2(lineWidth + 58f, 72f);
+            mTearFlashCoreRect.anchoredPosition = center;
+            mTearFlashCoreRect.sizeDelta = new Vector2(lineWidth + 12f, 26f);
+            mTearFlashHeadRect.anchoredPosition = head;
+            mTearFlashHeadRect.sizeDelta = new Vector2(82f, 82f);
+            if (mTearFlashCanvasGroup != null)
+            {
+                var fadeIn = Mathf.Clamp01(normalized / 0.04f);
+                var fadeOut = Mathf.Clamp01((1f - normalized) / 0.08f);
+                mTearFlashCanvasGroup.alpha = Mathf.Min(fadeIn, fadeOut);
+            }
+
+            yield return null;
+        }
+
+        mTearFlashRect.gameObject.SetActive(false);
+    }
+
     private IEnumerator AnimateTearGuide()
     {
         while (mIsAwaitingTearSwipe)
         {
-            if (mIsTrackingTearSwipe || !TryRefreshTearSwipeScreenRect())
+            if (mIsTrackingTearSwipe
+                || !TryRefreshTearSwipeGeometry(out var tearSeamScreenY))
             {
                 if (mTearGuideRect != null)
                 {
@@ -3616,7 +3739,7 @@ public class MainScene : MonoBehaviour
 
             var startScreen = new Vector2(
                 Mathf.Lerp(mTearSwipeScreenRect.xMin, mTearSwipeScreenRect.xMax, 0.14f),
-                Mathf.Lerp(mTearSwipeScreenRect.yMin, mTearSwipeScreenRect.yMax, TearGuideVerticalPositionRatio));
+                tearSeamScreenY);
             var endScreen = new Vector2(
                 Mathf.Lerp(mTearSwipeScreenRect.xMin, mTearSwipeScreenRect.xMax, 0.86f),
                 startScreen.y);
@@ -3705,23 +3828,44 @@ public class MainScene : MonoBehaviour
         return true;
     }
 
+    private bool TryRefreshTearSwipeGeometry(out float tearSeamScreenY)
+    {
+        tearSeamScreenY = 0f;
+        var camera = Camera.main;
+        if (camera == null
+            || !TryRefreshTearSwipeScreenRect()
+            || !GameAnimationUtility.TryGetPreparedCardPackTearSeamWorldPosition(
+                out var seamWorldPosition))
+        {
+            return false;
+        }
+
+        tearSeamScreenY = camera.WorldToScreenPoint(seamWorldPosition).y;
+        return true;
+    }
+
     private bool TryScreenPointToTearGuideLocal(Vector2 screenPoint, out Vector2 localPoint)
     {
         localPoint = default;
         var canvasRect = mTearGuideCanvas != null
             ? mTearGuideCanvas.transform as RectTransform
             : null;
+        var eventCamera = mTearGuideCanvas != null
+            && mTearGuideCanvas.renderMode != RenderMode.ScreenSpaceOverlay
+                ? mTearGuideCanvas.worldCamera
+                : null;
         return canvasRect != null
             && RectTransformUtility.ScreenPointToLocalPointInRectangle(
                 canvasRect,
                 screenPoint,
-                mTearGuideCanvas.worldCamera,
+                eventCamera,
                 out localPoint);
     }
 
     private void OnTearSwipeBegin(Vector2 screenPosition)
     {
-        if (!mIsAwaitingTearSwipe || !TryRefreshTearSwipeScreenRect())
+        if (!mIsAwaitingTearSwipe
+            || !TryRefreshTearSwipeGeometry(out var tearSeamScreenY))
         {
             return;
         }
@@ -3735,10 +3879,7 @@ public class MainScene : MonoBehaviour
         mTearSwipeStartScreenPosition = screenPosition;
 
         var bandHalfHeight = mTearSwipeScreenRect.height * TearGuideBandHeightRatio * 0.5f;
-        var bandCenterY = Mathf.Lerp(
-            mTearSwipeScreenRect.yMin,
-            mTearSwipeScreenRect.yMax,
-            TearGuideVerticalPositionRatio);
+        var bandCenterY = tearSeamScreenY;
         var maximumStartX = Mathf.Lerp(
             mTearSwipeScreenRect.xMin,
             mTearSwipeScreenRect.xMax,

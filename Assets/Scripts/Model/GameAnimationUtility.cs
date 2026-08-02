@@ -19,11 +19,12 @@ public static class GameAnimationUtility
         GameDefine.CardPackTearTrailResourcesPath;
     private const string RuntimeDismantleObjectName = "CardPackDismantleRuntime";
     private const string RuntimeTearTrailObjectName = "CardPackTearTrailRuntime";
+    private const string CardPackBodyBoneName = "Dummy001";
+    private const float MeasuredTearSeamNormalizedHeight = 0.9471f;
     private const float DismantleReferenceCardWidth = 0.96f;
     private const float DismantleWorldDepthOffset = -0.1f;
     private const float DismantleLifetime = 2.8f;
     private const float TearTrailHorizontalInsetRatio = 0.04f;
-    private const float TearTrailVerticalPositionRatio = 0.82f;
     private const float TearTrailFadeLifetime = 1.2f;
     private const float CardPackAuthoredYaw = 180f;
     private static readonly string[] CardPackAnimatedPrefabNames =
@@ -72,6 +73,9 @@ public static class GameAnimationUtility
         public GameObject Root;
         public Animator[] Animators;
         public Renderer[] CardRenderers;
+        public Vector3 TearSeamRootLocalPosition;
+        public bool HasTearSeamRootLocalPosition;
+        public bool HasLoggedMissingTearSeam;
         public Vector3 BaseRootPosition;
         public Vector3 BaseRootScale;
         public Vector3 ScaleCenter;
@@ -399,6 +403,7 @@ public static class GameAnimationUtility
         {
             ApplyCardPackClip(effect.CardRenderers, default, false);
         }
+        CacheCardPackTearSeam(effect);
         SetPreparedCardPackScale(scaleMultiplier);
         return true;
     }
@@ -483,12 +488,60 @@ public static class GameAnimationUtility
         return true;
     }
 
+    public static bool TryGetPreparedCardPackTearSeamWorldPosition(out Vector3 position)
+    {
+        position = default;
+        if (!TryGetSpawnedCardPackEffect(out var effect)
+            || !effect.HasPreparedPose
+            || !TryGetCurrentPoseBounds(effect.CardRenderers, out var cardBounds)
+            || cardBounds.size.y <= 0.001f)
+        {
+            return false;
+        }
+
+        if (!effect.HasTearSeamRootLocalPosition)
+        {
+            CacheCardPackTearSeam(effect);
+        }
+
+        var hasValidSkinBoundary = false;
+        if (effect.HasTearSeamRootLocalPosition)
+        {
+            position = effect.Root.transform.TransformPoint(effect.TearSeamRootLocalPosition);
+            hasValidSkinBoundary = !float.IsNaN(position.y)
+                && !float.IsInfinity(position.y)
+                && position.y >= cardBounds.min.y
+                && position.y <= cardBounds.max.y;
+        }
+
+        if (!hasValidSkinBoundary)
+        {
+            position = new Vector3(
+                cardBounds.center.x,
+                Mathf.Lerp(
+                    cardBounds.min.y,
+                    cardBounds.max.y,
+                    MeasuredTearSeamNormalizedHeight),
+                cardBounds.center.z);
+            if (!effect.HasLoggedMissingTearSeam)
+            {
+                Debug.LogWarning(
+                    $"Card-pack body skin bone '{CardPackBodyBoneName}' weighted boundary is "
+                    + "missing or outside the rendered card; using the measured model fallback position.");
+                effect.HasLoggedMissingTearSeam = true;
+            }
+        }
+
+        return true;
+    }
+
     public static bool PlayPreparedCardPackDismantleEffect(int sortingOrder)
     {
         if (!TryGetSpawnedCardPackEffect(out var effect)
             || !effect.HasPreparedPose
             || !TryGetCurrentPoseBounds(effect.CardRenderers, out var cardBounds)
-            || cardBounds.size.x <= 0.001f)
+            || cardBounds.size.x <= 0.001f
+            || !TryGetPreparedCardPackTearSeamWorldPosition(out var seamPosition))
         {
             return false;
         }
@@ -505,8 +558,8 @@ public static class GameAnimationUtility
         root.name = RuntimeDismantleObjectName;
         root.transform.position = new Vector3(
             cardBounds.center.x,
-            cardBounds.center.y,
-            cardBounds.center.z + DismantleWorldDepthOffset);
+            seamPosition.y,
+            seamPosition.z + DismantleWorldDepthOffset);
         root.transform.rotation = Quaternion.identity;
         var worldScale = cardBounds.size.x / DismantleReferenceCardWidth;
         var sortingLayerId = effect.CardRenderers != null
@@ -531,7 +584,8 @@ public static class GameAnimationUtility
         if (!TryGetSpawnedCardPackEffect(out var effect)
             || !effect.HasPreparedPose
             || !TryGetCurrentPoseBounds(effect.CardRenderers, out var cardBounds)
-            || cardBounds.size.x <= 0.001f)
+            || cardBounds.size.x <= 0.001f
+            || !TryGetPreparedCardPackTearSeamWorldPosition(out var seamPosition))
         {
             yield break;
         }
@@ -548,17 +602,13 @@ public static class GameAnimationUtility
         root.name = RuntimeTearTrailObjectName;
         root.transform.rotation = Quaternion.identity;
 
-        var seamY = Mathf.Lerp(
-            cardBounds.min.y,
-            cardBounds.max.y,
-            TearTrailVerticalPositionRatio);
         var startPosition = new Vector3(
             Mathf.Lerp(cardBounds.min.x, cardBounds.max.x, TearTrailHorizontalInsetRatio),
-            seamY,
-            cardBounds.center.z + DismantleWorldDepthOffset);
+            seamPosition.y,
+            seamPosition.z + DismantleWorldDepthOffset);
         var endPosition = new Vector3(
             Mathf.Lerp(cardBounds.min.x, cardBounds.max.x, 1f - TearTrailHorizontalInsetRatio),
-            seamY,
+            seamPosition.y,
             startPosition.z);
         root.transform.position = startPosition;
 
@@ -852,6 +902,193 @@ public static class GameAnimationUtility
             CardRenderers = renderers,
             PreserveAuthoredAppearance = preserveAuthoredAppearance
         };
+    }
+
+    private static void CacheCardPackTearSeam(CardPackEffectInstance effect)
+    {
+        if (effect == null
+            || effect.Root == null
+            || effect.HasTearSeamRootLocalPosition)
+        {
+            return;
+        }
+
+        var skinnedRenderers = effect.Root.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+        for (var rendererIndex = 0; rendererIndex < skinnedRenderers.Length; rendererIndex++)
+        {
+            var renderer = skinnedRenderers[rendererIndex];
+            var sourceMesh = renderer != null ? renderer.sharedMesh : null;
+            var bones = renderer != null ? renderer.bones : null;
+            if (sourceMesh == null || bones == null || bones.Length == 0)
+            {
+                continue;
+            }
+
+            var bodyBoneIndex = -1;
+            for (var boneIndex = 0; boneIndex < bones.Length; boneIndex++)
+            {
+                if (bones[boneIndex] != null
+                    && string.Equals(
+                        bones[boneIndex].name,
+                        CardPackBodyBoneName,
+                        StringComparison.Ordinal))
+                {
+                    bodyBoneIndex = boneIndex;
+                    break;
+                }
+            }
+
+            var weights = sourceMesh.boneWeights;
+            var sourceVertices = sourceMesh.vertices;
+            var bindPoses = sourceMesh.bindposes;
+            if (bodyBoneIndex < 0
+                || weights == null
+                || weights.Length == 0
+                || sourceVertices.Length != weights.Length
+                || bindPoses == null
+                || bindPoses.Length != bones.Length)
+            {
+                continue;
+            }
+
+            var rendererWorldToLocal = renderer.transform.worldToLocalMatrix;
+            var skinMatrices = new Matrix4x4[bones.Length];
+            var hasCompleteBones = true;
+            for (var boneIndex = 0; boneIndex < bones.Length; boneIndex++)
+            {
+                if (bones[boneIndex] == null)
+                {
+                    hasCompleteBones = false;
+                    break;
+                }
+
+                skinMatrices[boneIndex] = rendererWorldToLocal
+                    * bones[boneIndex].localToWorldMatrix
+                    * bindPoses[boneIndex];
+            }
+
+            if (!hasCompleteBones)
+            {
+                continue;
+            }
+
+            var posedVertices = new Vector3[sourceVertices.Length];
+            var seamLocalY = float.NegativeInfinity;
+            for (var vertexIndex = 0; vertexIndex < sourceVertices.Length; vertexIndex++)
+            {
+                posedVertices[vertexIndex] = SkinVertex(
+                    sourceVertices[vertexIndex],
+                    weights[vertexIndex],
+                    skinMatrices);
+                if (GetDominantBoneIndex(weights[vertexIndex]) == bodyBoneIndex)
+                {
+                    seamLocalY = Mathf.Max(seamLocalY, posedVertices[vertexIndex].y);
+                }
+            }
+
+            if (float.IsNegativeInfinity(seamLocalY))
+            {
+                continue;
+            }
+
+            var rowTolerance = Mathf.Max(0.00001f, sourceMesh.bounds.size.y * 0.001f);
+            var seamLocalPosition = Vector3.zero;
+            var seamVertexCount = 0;
+            for (var vertexIndex = 0; vertexIndex < posedVertices.Length; vertexIndex++)
+            {
+                if (GetDominantBoneIndex(weights[vertexIndex]) != bodyBoneIndex
+                    || Mathf.Abs(posedVertices[vertexIndex].y - seamLocalY) > rowTolerance)
+                {
+                    continue;
+                }
+
+                seamLocalPosition += posedVertices[vertexIndex];
+                seamVertexCount++;
+            }
+
+            if (seamVertexCount > 0)
+            {
+                seamLocalPosition /= seamVertexCount;
+                var seamWorldPosition = renderer.transform.TransformPoint(seamLocalPosition);
+                effect.TearSeamRootLocalPosition = effect.Root.transform.InverseTransformPoint(
+                    seamWorldPosition);
+                effect.HasTearSeamRootLocalPosition = true;
+            }
+
+            if (effect.HasTearSeamRootLocalPosition)
+            {
+                return;
+            }
+        }
+    }
+
+    private static Vector3 SkinVertex(
+        Vector3 sourceVertex,
+        BoneWeight weight,
+        Matrix4x4[] skinMatrices)
+    {
+        var result = Vector3.zero;
+        AddBoneContribution(
+            ref result,
+            sourceVertex,
+            weight.boneIndex0,
+            weight.weight0,
+            skinMatrices);
+        AddBoneContribution(
+            ref result,
+            sourceVertex,
+            weight.boneIndex1,
+            weight.weight1,
+            skinMatrices);
+        AddBoneContribution(
+            ref result,
+            sourceVertex,
+            weight.boneIndex2,
+            weight.weight2,
+            skinMatrices);
+        AddBoneContribution(
+            ref result,
+            sourceVertex,
+            weight.boneIndex3,
+            weight.weight3,
+            skinMatrices);
+        return result;
+    }
+
+    private static void AddBoneContribution(
+        ref Vector3 result,
+        Vector3 sourceVertex,
+        int boneIndex,
+        float weight,
+        Matrix4x4[] skinMatrices)
+    {
+        if (weight <= 0f || boneIndex < 0 || boneIndex >= skinMatrices.Length)
+        {
+            return;
+        }
+
+        result += skinMatrices[boneIndex].MultiplyPoint3x4(sourceVertex) * weight;
+    }
+
+    private static int GetDominantBoneIndex(BoneWeight weight)
+    {
+        var boneIndex = weight.boneIndex0;
+        var maximumWeight = weight.weight0;
+        if (weight.weight1 > maximumWeight)
+        {
+            boneIndex = weight.boneIndex1;
+            maximumWeight = weight.weight1;
+        }
+        if (weight.weight2 > maximumWeight)
+        {
+            boneIndex = weight.boneIndex2;
+            maximumWeight = weight.weight2;
+        }
+        if (weight.weight3 > maximumWeight)
+        {
+            boneIndex = weight.boneIndex3;
+        }
+        return boneIndex;
     }
 
     private static bool TryInstantiateAuthoredCardPackPrefab(int packId, out GameObject instance)
