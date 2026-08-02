@@ -90,6 +90,8 @@ public static class GameAnimationUtility
         internal CardPackEffectInstance Effect;
         internal Bounds ReferenceBounds;
         internal int SortingOrder;
+        public bool UsesAuthoredAppearance => Effect != null
+            && Effect.PreserveAuthoredAppearance;
         public bool IsValid => Effect != null
             && Effect.Root != null
             && Effect.CardRenderers != null
@@ -241,7 +243,14 @@ public static class GameAnimationUtility
         }
 
         effect.Root.SetActive(true);
-        ResetCardPackAnimators(effect, pause: true);
+        if (effect.PreserveAuthoredAppearance)
+        {
+            PauseCardPackAnimators(effect);
+        }
+        else
+        {
+            ResetCardPackAnimators(effect, pause: true);
+        }
         effect.Root.transform.position = Vector3.zero;
         effect.Root.transform.rotation = Quaternion.identity;
         effect.Root.transform.localScale = Vector3.one;
@@ -253,9 +262,9 @@ public static class GameAnimationUtility
                 continue;
             }
 
-            renderer.sortingOrder = sortingOrder;
             if (!effect.PreserveAuthoredAppearance)
             {
+                renderer.sortingOrder = sortingOrder;
                 ApplyCardPackAppearance(
                     renderer,
                     coverSprite,
@@ -292,10 +301,18 @@ public static class GameAnimationUtility
             return;
         }
 
+        var effect = display.Effect;
         var camera = Camera.main;
         if (!visible || anchor == null || camera == null)
         {
-            SetRenderersEnabled(display.Effect.CardRenderers, false);
+            if (effect.PreserveAuthoredAppearance)
+            {
+                effect.Root.SetActive(false);
+            }
+            else
+            {
+                SetRenderersEnabled(effect.CardRenderers, false);
+            }
             return;
         }
 
@@ -306,7 +323,24 @@ public static class GameAnimationUtility
             || meshBounds.size.x <= 0.001f
             || meshBounds.size.y <= 0.001f)
         {
-            SetRenderersEnabled(display.Effect.CardRenderers, false);
+            if (effect.PreserveAuthoredAppearance)
+            {
+                effect.Root.SetActive(false);
+            }
+            else
+            {
+                SetRenderersEnabled(effect.CardRenderers, false);
+            }
+            return;
+        }
+
+        var rootTransform = effect.Root.transform;
+        effect.Root.SetActive(true);
+        rootTransform.rotation = Quaternion.identity;
+        if (effect.PreserveAuthoredAppearance)
+        {
+            rootTransform.localScale = Vector3.one;
+            rootTransform.position = anchorBounds.center - meshBounds.center;
             return;
         }
 
@@ -314,17 +348,11 @@ public static class GameAnimationUtility
             anchorBounds.size.x / meshBounds.size.x,
             anchorBounds.size.y / meshBounds.size.y);
         var finalScale = Mathf.Max(0.001f, baseScale * Mathf.Max(0.001f, scaleMultiplier));
-        var rootTransform = display.Effect.Root.transform;
-        display.Effect.Root.SetActive(true);
-        rootTransform.rotation = Quaternion.identity;
         rootTransform.localScale = Vector3.one * finalScale;
         rootTransform.position = anchorBounds.center - meshBounds.center * finalScale;
-        SetRendererSortingOrder(display.Effect.CardRenderers, display.SortingOrder);
-        if (!display.Effect.PreserveAuthoredAppearance)
-        {
-            ApplyCardPackClip(display.Effect.CardRenderers, screenClipRect, true);
-        }
-        SetRenderersEnabled(display.Effect.CardRenderers, true);
+        SetRendererSortingOrder(effect.CardRenderers, display.SortingOrder);
+        ApplyCardPackClip(effect.CardRenderers, screenClipRect, true);
+        SetRenderersEnabled(effect.CardRenderers, true);
     }
 
     public static void SetCardPackIdleDisplayVisible(CardPackIdleDisplay display, bool visible)
@@ -332,6 +360,11 @@ public static class GameAnimationUtility
         if (display != null && display.IsValid)
         {
             display.Effect.Root.SetActive(visible);
+            if (display.Effect.PreserveAuthoredAppearance)
+            {
+                return;
+            }
+
             if (visible)
             {
                 ResetCardPackAnimators(display.Effect, pause: true);
@@ -468,6 +501,11 @@ public static class GameAnimationUtility
     public static void SetPreparedCardPackSortingOrder(int sortingOrder)
     {
         if (!TryGetSpawnedCardPackEffect(out var effect) || effect.CardRenderers == null)
+        {
+            return;
+        }
+
+        if (effect.PreserveAuthoredAppearance)
         {
             return;
         }
@@ -905,6 +943,23 @@ public static class GameAnimationUtility
         }
     }
 
+    private static void PauseCardPackAnimators(CardPackEffectInstance effect)
+    {
+        if (effect == null || effect.Animators == null)
+        {
+            return;
+        }
+
+        for (var i = 0; i < effect.Animators.Length; i++)
+        {
+            var animator = effect.Animators[i];
+            if (animator != null)
+            {
+                animator.speed = 0f;
+            }
+        }
+    }
+
     private static CardPackEffectInstance GetOrSpawnCardPackEffect(Transform anchor)
     {
         if (sSpawnedEffects.TryGetValue(FullCardPackObjectName, out var cachedEffect)
@@ -1280,6 +1335,20 @@ public static class GameAnimationUtility
         targetTransform.rotation = Quaternion.identity;
         targetTransform.localScale = Vector3.one;
         targetTransform.gameObject.SetActive(true);
+
+        if (effect.PreserveAuthoredAppearance)
+        {
+            if (TryGetCurrentPoseBounds(effect.CardRenderers, out var authoredBounds))
+            {
+                targetTransform.position += targetPosition - authoredBounds.center;
+            }
+
+            effect.BaseRootPosition = targetTransform.position;
+            effect.BaseRootScale = Vector3.one;
+            effect.ScaleCenter = targetPosition;
+            effect.HasPreparedPose = true;
+            return;
+        }
 
         SetRenderersEnabled(effect.CardRenderers, false);
         if (applyCover)

@@ -16,6 +16,7 @@ public class MainScene : MonoBehaviour
     private const float ReferenceHeight = GameDefine.DesignHeight;
     private const float PixelsPerUnit = GameDefine.PixelsPerUnit;
     private const float CardPackEffectOrthographicSize = 2.66f;
+    private const float CardPackEffectCanvasPlaneDistance = 100f;
     private const float PackageClickScaleRatio = 1.15f;
     private const float PackageClickAnimDuration = 0.12f;
     private const float PackageBreathMinScale = 0.98f;
@@ -383,6 +384,9 @@ public class MainScene : MonoBehaviour
         {
             targetCamera.orthographic = true;
             targetCamera.orthographicSize = CardPackEffectOrthographicSize;
+            targetCamera.clearFlags = CameraClearFlags.SolidColor;
+            targetCamera.backgroundColor = new Color(0.2924528f, 0.2924528f, 0.2924528f, 1f);
+            targetCamera.depth = 1f;
         }
         if (!TryResolvePackageList())
         {
@@ -1747,17 +1751,24 @@ public class MainScene : MonoBehaviour
 
             if (entry.IdleDisplay != null && entry != mSelectedPackageEntry)
             {
+                var displayScale = entry.IdleDisplay.UsesAuthoredAppearance
+                    ? 1f
+                    : GetPackageBreathScale(entry);
                 GameAnimationUtility.UpdateCardPackIdleDisplay(
                     entry.IdleDisplay,
                     anchor,
                     clipRect,
-                    GetPackageBreathScale(entry),
+                    displayScale,
                     shouldRender);
             }
 
             if (entry != mSelectedPackageEntry)
             {
-                UpdatePackageSizeImage(entry, GetPackageBreathScale(entry), shouldRender);
+                var sizeScale = entry.IdleDisplay != null
+                    && entry.IdleDisplay.UsesAuthoredAppearance
+                        ? 1f
+                        : GetPackageBreathScale(entry);
+                UpdatePackageSizeImage(entry, sizeScale, shouldRender);
             }
         }
     }
@@ -2819,6 +2830,8 @@ public class MainScene : MonoBehaviour
         if (canvas != null)
         {
             GameCommonUtility.ConfigureCanvasForWorldCardPack(canvas, targetCamera);
+            canvas.planeDistance = CardPackEffectCanvasPlaneDistance;
+            canvas.vertexColorAlwaysGammaSpace = true;
         }
     }
 
@@ -3325,7 +3338,10 @@ public class MainScene : MonoBehaviour
         mSelectedBagId = bagId;
         var anchor = entry.Image != null ? entry.Image.rectTransform : entry.RectTransform;
         var coverSprite = entry.Image != null ? entry.Image.sprite : null;
-        var idleScale = GetPackageBreathScale(entry);
+        var idleScale = entry.IdleDisplay != null
+            && entry.IdleDisplay.UsesAuthoredAppearance
+                ? 1f
+                : GetPackageBreathScale(entry);
         SetPackageVisualsVisible(entry, false);
         yield return CaptureBagSelectBackdrop();
         var prepared = GameAnimationUtility.PrepareCardPackAnimation(
