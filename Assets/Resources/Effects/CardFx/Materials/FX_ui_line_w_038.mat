@@ -26,7 +26,7 @@ Material:
   m_CustomRenderQueue: -1
   stringTagMap: {}
   disabledShaderPasses: []
-  m_LockedProperties:
+  m_LockedProperties: 
   m_SavedProperties:
     serializedVersion: 3
     m_TexEnvs:
@@ -122,7 +122,7 @@ Material:
     m_Floats:
     - _AddClipAsAlpha: 0
     - _AlphaClip: 0
-    - _AlphaScale: 3
+    - _AlphaScale: 5
     - _Blend: 0
     - _BlendMode: 1
     - _BumpScale: 1
@@ -153,9 +153,9 @@ Material:
     - _GlossMapScale: 0
     - _Glossiness: 0
     - _GlossyReflections: 0
-    - _GrayExp: 8.1
+    - _GrayExp: 1
     - _LayersUV: 0
-    - _LightExp: 6.881839
+    - _LightExp: 1
     - _MainTexBrightExp: 1
     - _MainTexDesaturate: 0
     - _MainTexSecUVSpeed: 0
@@ -249,6 +249,6 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: d0353a89b1f911e48b9e16bdc9f2e058, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
+  m_Name: 
+  m_EditorClassIdentifier: 
   version: 5

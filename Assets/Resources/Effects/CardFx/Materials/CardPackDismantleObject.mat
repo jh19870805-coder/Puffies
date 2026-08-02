@@ -8,7 +8,7 @@ Material:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: CardPackDismantleObject
-  m_Shader: {fileID: 4800000, guid: 8de052f048c1b1244bd9b9923a74fb03, type: 3}
+  m_Shader: {fileID: 4800000, guid: 5d5e2ecbb34f59941a1719513e80c509, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []
@@ -143,7 +143,7 @@ Material:
     - _DissolveUVAnination: {r: 0, g: 0, b: 0, a: 0}
     - _DistortTexUV: {r: 0, g: 0, b: 0, a: 0}
     - _Gray: {r: 0.49056596, g: 0.49056596, b: 0.49056596, a: 1}
-    - _Light: {r: 1, g: 1, b: 1, a: 1}
+    - _Light: {r: 2, g: 2, b: 2, a: 1}
     - _LineColor: {r: 0, g: 0, b: 0, a: 0}
     - _MainTexMove: {r: 0, g: 0, b: 0, a: 0}
     - _MainTexUVAni: {r: 0, g: 0, b: 0, a: 0}

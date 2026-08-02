@@ -32,16 +32,12 @@ Shader "Puffies/2_Sided"
 		[Header(Forward Rendering Options)]
 		[ToggleOff] _SpecularHighlights("Specular Highlights", Float) = 1.0
 		[ToggleOff] _GlossyReflections("Reflections", Float) = 1.0
-		[Enum(UnityEngine.Rendering.CompareFunction)] _DepthTest("Depth Test", Float) = 4
-		[HideInInspector] _UiClipRect("UI Clip Rect", Vector) = (0,0,0,0)
-		[HideInInspector] _UseUiClipRect("Use UI Clip Rect", Float) = 0
 	}
 
 	SubShader
 	{
 		Tags{ "RenderType" = "TransparentCutout"  "Queue" = "AlphaTest+0" "IsEmissive" = "true"  }
 		Cull Off
-		ZTest [_DepthTest]
 		Stencil
 		{
 			Ref 1
@@ -62,7 +58,6 @@ Shader "Puffies/2_Sided"
 			INTERNAL_DATA
 			float3 worldPos;
 			float3 worldRefl;
-			float4 screenPos;
 		};
 
 		uniform sampler2D _FrontFacesNormal;
@@ -99,18 +94,9 @@ Shader "Puffies/2_Sided"
 		SamplerState sampler_ClipTex;
 		uniform float4 _ClipTex_ST;
 		uniform float _Cutoff = 0.35;
-		uniform float4 _UiClipRect;
-		uniform float _UseUiClipRect;
 
 		void surf( Input i , inout SurfaceOutputStandard o )
 		{
-			if (_UseUiClipRect > 0.5)
-			{
-				float2 screenPixel = i.screenPos.xy / max(i.screenPos.w, 0.00001) * _ScreenParams.xy;
-				clip(screenPixel - _UiClipRect.xy);
-				clip(_UiClipRect.zw - screenPixel);
-			}
-
 			float2 uv_FrontFacesNormal = i.uv_texcoord * _FrontFacesNormal_ST.xy + _FrontFacesNormal_ST.zw;
 			float3 tex2DNode50 = UnpackNormal( tex2D( _FrontFacesNormal, uv_FrontFacesNormal ) );
 			float3 FrontFacesNormal51 = tex2DNode50;
