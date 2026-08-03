@@ -1686,7 +1686,6 @@ public class MainScene : MonoBehaviour
         }
 
         ApplyPackageSizeVisual(entry.SizeImage, packId);
-        ApplyPackageLifecycleVisual(entry, packId);
         if (CardPackRewardFlyTransition.IsPackPending(packId))
         {
             SetPackageVisualsVisible(entry, false);
@@ -1992,19 +1991,6 @@ public class MainScene : MonoBehaviour
 
         GameAnimationUtility.DestroyCardPackIdleDisplay(entry.IdleDisplay);
         entry.IdleDisplay = null;
-    }
-
-    private static void ApplyPackageLifecycleVisual(PackageEntry entry, int packId)
-    {
-        if (entry.Image != null)
-        {
-            entry.Image.color = Color.white;
-        }
-
-        if (entry.SizeImage != null)
-        {
-            entry.SizeImage.color = Color.white;
-        }
     }
 
     private static void ApplyPackageSizeVisual(Image sizeImage, int packId)

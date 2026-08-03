@@ -26,6 +26,7 @@
 - 复核到 MainScene 原先会强制重绑并采样 Animator，这会改写制作方 Prefab 保存的骨骼姿态；制作方专属 Prefab 不再覆盖 Renderer 参数，也不叠加代码呼吸，只通过外层布局节点按 UI 槽位做等比缩放和定位。
 - 制作方 `Puffies/2_Sided` Shader 使用 `unity_ObjectToWorld` 参与反射与高光计算，根节点缩放会直接改变亮度，是场景环境已经对齐后列表仍偏暗的主要差异。
 - 桌面卡包改为统一初始化流程：直接保留 `CardPackOpening` Prefab 保存的原始姿态并将 Animator 组件 `enabled=false`，不再执行 `Rebind`、`Play(0)` 或 `Update(0)`；列表按 `240 x 272` 槽位等比适配，不叠加代码呼吸。只有手指滑动拆包成立后才重新启用 Animator，并从第 0 帧正式播放。
+- 删除 MainScene 的 `ApplyPackageLifecycleVisual` 调用和方法；`Completed`、`InProgress` 与 `Unlocked` 卡包不再经过任何生命周期颜色处理，统一显示 EffectScene 制作方 Prefab 的原始样式。
 - 修正 MainScene 与 `EffectScene001` 的视角差异：MainScene 主相机运行时使用制作方示例的正交尺寸 `2.66`。制作方 `Puffies/2_Sided` Shader 会根据相机世界位置计算正反面、反射和高光，原先 MainScene 的正交尺寸 `5` 会让列表边缘卡包获得不同的视线方向，表现为整体偏暗且个别卡包过曝。
 - 继续逐项对齐 MainScene 与 `EffectScene001` 的渲染链路：主相机的 Clear Flags、背景色、Depth 和 Volume Layer Mask 已同步；Directional Light 补齐制作方场景携带的 Additional Light Data；主 Canvas 改为绑定主相机的 Screen Space Camera、`Plane Distance=100`、`Vertex Color Always Gamma Space=true`。原先运行时 Canvas 距离只有 `11`，与 `Z≈0` 的卡包几乎共面，会让背景 UI 与 3D 卡包发生错误覆盖并压暗列表卡包。
 - 清理临时解包目录 `Temp/CodexNewFxA` 和 `Temp/CodexNewFxB`。
@@ -68,6 +69,7 @@
 - 追加 PackId 22 映射后执行 `dotnet build Puffies.sln --no-restore`，通过，0 警告、0 错误。
 - 修复桌面卡包宽度、首包歪斜和 Animator 启用时机后执行 `dotnet build Puffies.sln --no-restore`，通过，0 警告、0 错误；相关代码差异检查通过。
 - 移除桌面卡包的 Animator 重绑和首帧采样后执行 `dotnet build Puffies.sln --no-restore`，通过，0 警告、0 错误；选中隔离层、背景虚化和原开包流程未修改。
+- 删除卡包生命周期置灰入口后执行 `dotnet build Puffies.sln --no-restore`，通过，0 警告、0 错误。
 - Unity BatchMode 导入验证因项目已在另一个 Unity Editor 实例中打开而未执行；未强制关闭用户编辑器。退出当前 Play Mode 后重新进入 LoadingScene，才能加载本轮 MainScene 场景序列化修改并做视觉验收。
 - `git diff --check` 通过，仅有仓库既有的 LF/CRLF 转换提示。
 

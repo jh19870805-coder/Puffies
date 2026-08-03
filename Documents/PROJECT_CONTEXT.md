@@ -56,7 +56,7 @@ Unity **2022.3** / Built-in Render Pipeline 项目，使用 Linear 色彩空间�
 - 卡包生命周期保存在 SQLite `CardPacks` 表中，状态为 `Locked`、`Unlocked`、`InProgress` 或 `Completed`。
 - 当前拼图会话保存在 SQLite `CardPackPuzzleProgress` 表中；记录存在表示该卡包有一局可继续，已正确放置的 Piece 编号即时保存，整包完成后删除记录。
 - MainScene 卡包排序：上次列表展示后新发放的卡包优先展示一次，且最新发放的在前；随后依次为 `InProgress`、按解锁时间升序的 `Unlocked`、按首次完成时间升序的 `Completed`。PackId 是确定性并列排序依据；每日挑战优先级暂缓实现。
-- MainScene 默认使用制作方 3D 卡包 Prefab；当前不对 `Completed` 卡包额外加代码置灰，卡包主体和尺寸图标保持制作方原始颜色，资源缺失时才使用 2D 封面回退。
+- MainScene 默认使用制作方 3D 卡包 Prefab；所有生命周期状态都不执行颜色、材质或置灰处理，卡包主体和尺寸图标保持 EffectScene 制作方原始样式，资源缺失时才使用 2D 封面回退。
 - 任务实例、当前进度、下一个实例号、上个模板和积分目标循环游标保存在 JSON 根对象 `TaskProgressData`。
 - 业务进度不得使用 `PlayerPrefs`。
 
