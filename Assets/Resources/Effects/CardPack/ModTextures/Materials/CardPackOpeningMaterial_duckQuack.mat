@@ -83,7 +83,7 @@ Material:
     - _MetallicScale: 0.7
     - _OcclutionValue: 1.41
     - _RampTexValue: 0.25
-    - _RampUVScale: -0.44
+    - _RampUVScale: -0.3
     - _SmoothnessParameters: 0.78
     - _SpecularHighlights: 1
     - _UnlitOverlay: 0
@@ -91,7 +91,7 @@ Material:
     - __dirty: 0
     m_Colors:
     - _BackFacesColor: {r: 1, g: 1, b: 1, a: 1}
-    - _CubeMapPosition: {r: 7.1, g: -0.67, b: 0, a: 0}
+    - _CubeMapPosition: {r: -0.42, g: 0, b: 0, a: 0}
     - _FrontFacesColor: {r: 0.7735849, g: 0.7735849, b: 0.7735849, a: 1}
     - _RampColor: {r: 1.9648324, g: 1.7386472, b: 1.5848411, a: 1}
     - _UiClipRect: {r: 0, g: 0, b: 0, a: 0}
