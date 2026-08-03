@@ -54,7 +54,8 @@ public static class GameAnimationUtility
         "Effects/CardPack/CardBagPrefab/CardBag_snappyCrab/CardPackOpening_snappyCrab_001",
         "Effects/CardPack/CardBagPrefab/CardBag_myLovelyHair/CardPackOpening_myLovelyHair_001",
         "Effects/CardPack/CardBagPrefab/CardBag_fairy/CardPackOpening_fairy_001",
-        "Effects/CardPack/CardBagPrefab/CardBag_oldGadgets/CardPackOpening_oldGadgets_001"
+        "Effects/CardPack/CardBagPrefab/CardBag_oldGadgets/CardPackOpening_oldGadgets_001",
+        "Effects/CardPack/CardBagPrefab/CardBag_littleKittens01/CardPackOpening_littleKittens_001"
     };
     private static readonly int BaseMapPropertyId = Shader.PropertyToID("_BaseMap");
     private static readonly int BaseMapTransformPropertyId = Shader.PropertyToID("_BaseMap_ST");
@@ -243,14 +244,7 @@ public static class GameAnimationUtility
         }
 
         effect.Root.SetActive(true);
-        if (effect.PreserveAuthoredAppearance)
-        {
-            PauseCardPackAnimators(effect);
-        }
-        else
-        {
-            ResetCardPackAnimators(effect, pause: true);
-        }
+        PrepareCardPackAnimatorsForDesktop(effect);
         effect.Root.transform.position = Vector3.zero;
         effect.Root.transform.rotation = Quaternion.identity;
         effect.Root.transform.localScale = Vector3.one;
@@ -339,8 +333,12 @@ public static class GameAnimationUtility
         rootTransform.rotation = Quaternion.identity;
         if (effect.PreserveAuthoredAppearance)
         {
-            rootTransform.localScale = Vector3.one;
-            rootTransform.position = anchorBounds.center - meshBounds.center;
+            var authoredScale = Mathf.Min(
+                anchorBounds.size.x / meshBounds.size.x,
+                anchorBounds.size.y / meshBounds.size.y);
+            authoredScale = Mathf.Max(authoredScale, 0.001f);
+            rootTransform.localScale = Vector3.one * authoredScale;
+            rootTransform.position = anchorBounds.center - meshBounds.center * authoredScale;
             return;
         }
 
@@ -360,6 +358,11 @@ public static class GameAnimationUtility
         if (display != null && display.IsValid)
         {
             display.Effect.Root.SetActive(visible);
+            if (visible)
+            {
+                PrepareCardPackAnimatorsForDesktop(display.Effect);
+            }
+
             if (display.Effect.PreserveAuthoredAppearance)
             {
                 return;
@@ -367,7 +370,6 @@ public static class GameAnimationUtility
 
             if (visible)
             {
-                ResetCardPackAnimators(display.Effect, pause: true);
                 SetRendererSortingOrder(display.Effect.CardRenderers, display.SortingOrder);
             }
             SetRenderersEnabled(display.Effect.CardRenderers, visible);
@@ -943,7 +945,7 @@ public static class GameAnimationUtility
         }
     }
 
-    private static void PauseCardPackAnimators(CardPackEffectInstance effect)
+    private static void PrepareCardPackAnimatorsForDesktop(CardPackEffectInstance effect)
     {
         if (effect == null || effect.Animators == null)
         {
@@ -955,7 +957,8 @@ public static class GameAnimationUtility
             var animator = effect.Animators[i];
             if (animator != null)
             {
-                animator.speed = 0f;
+                animator.speed = 1f;
+                animator.enabled = false;
             }
         }
     }
@@ -1340,11 +1343,28 @@ public static class GameAnimationUtility
         {
             if (TryGetCurrentPoseBounds(effect.CardRenderers, out var authoredBounds))
             {
-                targetTransform.position += targetPosition - authoredBounds.center;
+                if (hasAnchorBounds
+                    && authoredBounds.size.x > 0.001f
+                    && authoredBounds.size.y > 0.001f)
+                {
+                    var authoredScale = Mathf.Min(
+                        anchorBounds.size.x / authoredBounds.size.x,
+                        anchorBounds.size.y / authoredBounds.size.y);
+                    targetTransform.localScale = Vector3.one
+                        * Mathf.Max(authoredScale, 0.001f);
+                    if (TryGetCurrentPoseBounds(effect.CardRenderers, out var scaledBounds))
+                    {
+                        targetTransform.position += targetPosition - scaledBounds.center;
+                    }
+                }
+                else
+                {
+                    targetTransform.position += targetPosition - authoredBounds.center;
+                }
             }
 
             effect.BaseRootPosition = targetTransform.position;
-            effect.BaseRootScale = Vector3.one;
+            effect.BaseRootScale = targetTransform.localScale;
             effect.ScaleCenter = targetPosition;
             effect.HasPreparedPose = true;
             return;
