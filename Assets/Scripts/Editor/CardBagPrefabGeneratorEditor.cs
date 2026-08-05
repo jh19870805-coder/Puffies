@@ -246,20 +246,30 @@ public static class CardBagPrefabGeneratorEditor
         var result = new PackSizeUpdateResult();
         result.EmptySourceFolders.AddRange(emptySourceFolders);
         var outputHeaders = new List<string>(table.Headers);
-        var autoUpdateColumn = FindHeaderIndex(table.Headers, "AutoUpdate");
+        var stickerCountColumn = FindHeaderIndex(outputHeaders, "StickerCount");
+        if (stickerCountColumn < 0)
+        {
+            stickerCountColumn = packSizeColumn + 1;
+            outputHeaders.Insert(stickerCountColumn, "StickerCount");
+            result.AddedStickerCountColumn = true;
+        }
+
+        packSizeColumn = FindHeaderIndex(outputHeaders, "PackSize");
+        boardScaleColumn = FindHeaderIndex(outputHeaders, "BoardScale");
+        var autoUpdateColumn = FindHeaderIndex(outputHeaders, "AutoUpdate");
         if (autoUpdateColumn < 0)
         {
             autoUpdateColumn = outputHeaders.Count;
             outputHeaders.Add("AutoUpdate");
             result.AddedAutoUpdateColumn = true;
         }
-        else if (autoUpdateColumn != table.Headers.Count - 1)
+        else if (autoUpdateColumn != outputHeaders.Count - 1)
         {
             throw new InvalidDataException(
                 "Card pack size updater: AutoUpdate must be the last column in CardPacks.csv.");
         }
 
-        var configChanged = result.AddedAutoUpdateColumn;
+        var configChanged = result.AddedStickerCountColumn || result.AddedAutoUpdateColumn;
         var configuredPackIds = new HashSet<int>();
         var outputRows = new List<IReadOnlyList<string>>(table.Rows.Count + 1)
         {
@@ -281,6 +291,11 @@ public static class CardBagPrefabGeneratorEditor
             }
 
             var values = new List<string>(row.Values);
+            if (result.AddedStickerCountColumn)
+            {
+                values.Insert(stickerCountColumn, string.Empty);
+            }
+
             while (values.Count < outputHeaders.Count)
             {
                 values.Add(string.Empty);
@@ -319,24 +334,32 @@ public static class CardBagPrefabGeneratorEditor
                 var size = ResolvePackSize(pieceCount);
                 var boardScale = ResolveBoardScale(size);
                 var oldSizeValue = values[packSizeColumn];
+                var oldStickerCountValue = values[stickerCountColumn];
                 var oldBoardScaleValue = values[boardScaleColumn];
                 var newSizeValue = ((int)size).ToString(CultureInfo.InvariantCulture);
+                var newStickerCountValue = pieceCount.ToString(CultureInfo.InvariantCulture);
                 var newBoardScaleValue = boardScale.ToString("0.00", CultureInfo.InvariantCulture);
                 var sizeChanged = !string.Equals(
                     oldSizeValue?.Trim(),
                     newSizeValue,
                     StringComparison.Ordinal);
+                var stickerCountChanged = !string.Equals(
+                    oldStickerCountValue?.Trim(),
+                    newStickerCountValue,
+                    StringComparison.Ordinal);
                 var boardScaleChanged = !string.Equals(
                     oldBoardScaleValue?.Trim(),
                     newBoardScaleValue,
                     StringComparison.Ordinal);
-                if (sizeChanged || boardScaleChanged)
+                if (sizeChanged || stickerCountChanged || boardScaleChanged)
                 {
                     values[packSizeColumn] = newSizeValue;
+                    values[stickerCountColumn] = newStickerCountValue;
                     values[boardScaleColumn] = newBoardScaleValue;
                     result.Changes.Add(
                         $"CardBag{packId:D3}: {pieceCount} pieces, "
                         + $"PackSize {oldSizeValue} -> {newSizeValue} ({size}), "
+                        + $"StickerCount {oldStickerCountValue} -> {newStickerCountValue}, "
                         + $"BoardScale {oldBoardScaleValue} -> {newBoardScaleValue}");
                     configChanged = true;
                 }
@@ -1621,6 +1644,7 @@ public static class CardBagPrefabGeneratorEditor
         public int ScannedPackCount { get; set; }
         public int DefaultedAutoUpdateCount { get; set; }
         public bool AddedAutoUpdateColumn { get; set; }
+        public bool AddedStickerCountColumn { get; set; }
         public List<string> Changes { get; } = new List<string>();
         public List<int> SkippedPackIds { get; } = new List<int>();
         public List<int> ConfigsWithoutSource { get; } = new List<int>();
@@ -1636,6 +1660,11 @@ public static class CardBagPrefabGeneratorEditor
             if (AddedAutoUpdateColumn)
             {
                 builder.AppendLine("Added AutoUpdate column with default value 1.");
+            }
+
+            if (AddedStickerCountColumn)
+            {
+                builder.AppendLine("Added StickerCount column after PackSize.");
             }
 
             if (Changes.Count > 0)
@@ -1667,6 +1696,11 @@ public static class CardBagPrefabGeneratorEditor
             {
                 builder.AppendLine(
                     $"Added AutoUpdate column; defaulted rows={DefaultedAutoUpdateCount}.");
+            }
+
+            if (AddedStickerCountColumn)
+            {
+                builder.AppendLine("Added StickerCount column after PackSize.");
             }
 
             for (var i = 0; i < Changes.Count; i++)

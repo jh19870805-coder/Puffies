@@ -11,6 +11,7 @@ public struct CardPackConfigData
     public int Index;
     public int PackId;
     public CardPackSize PackSize;
+    public int StickerCount;
     public int ChapterId;
     public float BoardScale;
     public bool AutoUpdate;
@@ -361,7 +362,9 @@ public static class GameConfigRepository
             chapterId = ((Math.Max(1, index) - 1) / 18) + 1;
         }
 
-        if (!row.TryGetFloat("BoardScale", out var boardScale)
+        if (!row.TryGetInt("StickerCount", out var stickerCount)
+            || stickerCount <= 0
+            || !row.TryGetFloat("BoardScale", out var boardScale)
             || boardScale <= 0f
             || !row.TryGetInt("AutoUpdate", out var autoUpdate)
             || autoUpdate < 0
@@ -375,6 +378,7 @@ public static class GameConfigRepository
             Index = index,
             PackId = packId,
             PackSize = (CardPackSize)GetOptionalInt(row, "PackSize"),
+            StickerCount = stickerCount,
             ChapterId = chapterId,
             BoardScale = boardScale,
             AutoUpdate = autoUpdate != 0
