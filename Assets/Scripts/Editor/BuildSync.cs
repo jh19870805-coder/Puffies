@@ -5,7 +5,7 @@ using UnityEditor.Build.Reporting;
 using UnityEngine;
 
 /// <summary>
-/// 用途：构建前与菜单统一同步 StreamingAssets。3D 特效资源统一在 Assets/Resources/Effects。返回：无。
+/// 构建前与编辑器菜单共用的 StreamingAssets 同步入口。
 /// </summary>
 public class BuildSync : IPreprocessBuildWithReport
 {

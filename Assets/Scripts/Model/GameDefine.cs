@@ -42,12 +42,6 @@ public static class GameDefine
     public const string SceneGame = "GameScene";
     public const string SceneRank = "RankScene";
     public const string SceneAchieve = "AchieveScene";
-    public const string SceneEffect = "EffectScene001";
-
-    public const string EffectsRoot = "Assets/Resources/Effects";
-    public const string CardPackFolder = "CardPack";
-    public const string PlaneGroupFolder = "PlaneGroup";
-    public const string CardFxFolder = "CardFx";
 
     public const string PlaneGroupPrefabEditorPath = "Assets/Resources/Effects/PlaneGroup/PlaneGroup_001.prefab";
     public const string PlaneGroupMaterialEditorPath =

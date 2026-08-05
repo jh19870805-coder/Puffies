@@ -14,7 +14,7 @@ Unity **2022.3** / Built-in Render Pipeline 项目，使用 Linear 色彩空间�
 
 1. `LoadingScene` 初始化本地数据、任务配置、卡包配置和持久化存储。
 2. `MainScene` 根据解锁状态显示可玩的卡包。
-3. 点击已解锁卡包进入选择页，确认后轻点放大卡包或沿卡包顶部横划拆包，再进入 `GameScene`。
+3. 点击已解锁卡包进入选择页；确认后进入开包舞台，再次轻点卡包或横划后进入 `GameScene`。
 4. 玩家拖动拼图碎片，完成选中卡包对应的拼图。
 5. 拼图完成后显示 `RewardPanel`，结算任务进度并保存卡包状态。
 6. `BtnFinish` 返回 `MainScene`，卡包列表按最新解锁状态刷新。
@@ -29,7 +29,7 @@ Unity **2022.3** / Built-in Render Pipeline 项目，使用 Linear 色彩空间�
 | 场景 | 需求 |
 |------|------|
 | LoadingScene | 初始化 JSON、SQLite、任务数据和卡包数据；加载结束后进入 MainScene |
-| MainScene | 根据 `CardPacks.csv` 与 SQLite 解锁状态刷新卡包列表；每页按 6 列 x 3 行显示 18 个制作方卡包实例。卡包加载后直接保留 `CardPackOpening` Prefab 的序列化姿态并禁用 Animator，不执行重绑或首帧采样；列表按 `240 x 272` 槽位等比适配且不执行 Transform 呼吸。桌面停留、选中移动和等待滑动期间 Animator 保持禁用，只有手指滑动拆包成立后才启用并从第 0 帧播放；`PackItem.prefab` 直接嵌套制作方卡包 Prefab，场景中的 `MainSceneController` 序列化引用该列表项模板，运行时不创建卡包主体或列表项 UI；Prefab 内配置的 `PackSize` Image 运行时迁入共享根级尺寸 Canvas，并按对应卡包屏幕位置同步；尺寸图标使用不参与 3D 深度测试的专用 UI 材质实例，尺寸 Canvas 排序为 `15000`，覆盖普通卡包；点击后复用同一实例从列表实际尺寸移动并放大到屏幕中心，列表背景通过半分辨率三级降采样/回采样生成平滑虚化图，并由排序 `20000` 的 Screen Space Overlay `PanelBagSelectCanvas` 覆盖所有列表 UI 和 3D 内容；展开卡包及子粒子临时切到 Layer 29 `SelectedCardPack`，隔离相机将其输出到透明 RenderTexture，再由排序 `30000` 的 `SelectedCardPackCanvas` Overlay 合成；返回时按具体卡包实例恢复原 Layer 与主相机 Culling Mask；选中卡包保持清晰且不出现在原列表位置；玩/重玩进入 `BgGame` 开包舞台，玩家轻点放大卡包或沿卡包顶部横划后重置并播放原 Animator 开包动画；Back 取消并复原；提供 Rank、Achieve 和 Menu 入口 |
+| MainScene | 根据 `CardPacks.csv` 与 SQLite 解锁状态刷新卡包列表；每页按 6 列 x 3 行显示 18 个静态卡包封面。`PackItem.prefab` 保留 `PackCover`、`PackShadow` 和 `PackSize`，运行时将 `PackCover` 替换为对应 `PackIconNNN.png`；列表不创建 3D 模型、粒子或 Animator。点击后在顶层 Overlay 中使用同一静态封面，从列表实际位置等比放大到屏幕中心 `600 x 680`，并显示 `PanelBagSelect` 和既有背景虚化；Back 将静态封面返回原列表位置。点击玩/确认重玩后进入 `BgGame` 开包舞台，等待玩家再次轻点卡包或横划；正式撕包动画暂未接入，有效操作当前直接进入 `GameScene`。保留拍照、重玩确认、Rank、Achieve 和 Menu 入口。 |
 | GameScene | 根据选中 PackId 加载 `CardBagNNN` Prefab，并读取 `CardPacks.csv/BoardScale` 缩放棋盘；按照 `PieceNN` 数字命名组织拼图分组；从正常开包流程进入时播放棋盘、托盘和当前组 Piece 入场；每次正确放置 Piece 后立即持久化，重新进入时恢复已放置 Piece 并从首个未完成分组继续；全部完成后显示 RewardPanel；Editor 和 Development Build 在 `BtnTips` 左侧提供“一键完成”测试按钮 |
 | RankScene | 仅占位；首个 Demo 不包含排行榜后端功能。当前模拟列表前三名的 `RankBg` 分别使用原生 `1646 x 148` 的 `RankCellBg_1.png`、`RankCellBg_2.png`、`RankCellBg_3.png`，第四名以后使用 `1636 x 136` 的 `RankCellBg.png`；`RankItem` 根高度为 `148`，列表纵向间距为 `5`，条目中心步距为 `153` |
 | AchieveScene | 当前显示 20 条模拟成就，前 5 条已达成、后 15 条未达成；接入 Steam 后替换数据源。成就网格固定为 6 列，单元尺寸 `240 x 332`，横纵间距均为 `40` |
@@ -56,7 +56,7 @@ Unity **2022.3** / Built-in Render Pipeline 项目，使用 Linear 色彩空间�
 - 卡包生命周期保存在 SQLite `CardPacks` 表中，状态为 `Locked`、`Unlocked`、`InProgress` 或 `Completed`。
 - 当前拼图会话保存在 SQLite `CardPackPuzzleProgress` 表中；记录存在表示该卡包有一局可继续，已正确放置的 Piece 编号即时保存，整包完成后删除记录。
 - MainScene 卡包排序：上次列表展示后新发放的卡包优先展示一次，且最新发放的在前；随后依次为 `InProgress`、按解锁时间升序的 `Unlocked`、按首次完成时间升序的 `Completed`。PackId 是确定性并列排序依据；每日挑战优先级暂缓实现。
-- MainScene 默认使用制作方 3D 卡包 Prefab；所有生命周期状态都不执行颜色、材质或置灰处理，卡包主体和尺寸图标保持 EffectScene 制作方原始样式，资源缺失时才使用 2D 封面回退。
+- MainScene 所有生命周期状态统一显示 `UI/PackImages/PackIconNNN.png` 静态封面，不执行颜色、材质或置灰处理。
 - 任务实例、当前进度、下一个实例号、上个模板和积分目标循环游标保存在 JSON 根对象 `TaskProgressData`。
 - 业务进度不得使用 `PlayerPrefs`。
 
@@ -65,7 +65,7 @@ Unity **2022.3** / Built-in Render Pipeline 项目，使用 Linear 色彩空间�
 - 新卡包沿用唯一 `Package001` 模板；`MainScene` 在运行时动态创建列表项。
 - 新拼图通过在 `Resources/CardBagPrefabs/` 下新增 `CardBagNNN` Prefab 实现；每个 Prefab 包含 `GameBoard` 和 `Piece01`...`PieceNN`，不创建 Package JSON。
 - 编辑器批量生成器可扫描 `CardBagNNN` 资源目录，使用完整的 `Previews/CardBagNNN.png` 与透明 Piece PNG 进行像素匹配，并以 `GameBoard.png` 作为运行时棋盘底图批量创建 Prefab，不依赖 Package JSON 或 `unity_layout.json`。生成器优先使用精确 RGB 锚点；切图与预览几何一致但存在导出色差时，回退到分阶段感知颜色匹配，并且只有最低相似度和远距离第二候选分差同时达标才接受，避免相似贴纸误定位。每个源目录除 `BoardTitle.png`、`GameBoard.png` 外的碎片统一命名为小写三位编号 `piece_001.png`、`piece_002.png`……；已有 `.meta` 必须随 PNG 一起移动以保持 Prefab Sprite GUID 引用。
-- 新特效已从项目根目录 `特效资源/` 导入；后续更新继续保留包内原始路径，不额外重命名或重组。
+- 卡包开包特效已移除；后续重新接入前不得恢复旧 `Resources/Effects` 运行时路径。
 - 构建前执行 `Puffies -> Sync Build Resources`，将运行时磁盘加载的 UI 目录同步到 `StreamingAssets/UI`。
 
 ### 待完成需求
@@ -97,17 +97,15 @@ Assets/
   Plugins/SQLite/   sqlite-net
 ```
 
-| 阶段 | 2D UI | 3D / FX |
-|------|-------|---------|
-| Editor | `Assets/UI`，场景 Image 直接引用 | `Assets/Resources/Effects`，按制作方 Prefab 路径加载 |
-| Build | `StreamingAssets/UI` 中运行时磁盘加载的目录（`ToDiskPath`） | `Resources/Effects` 随构建进入 Player，资源缺失时使用 2D 回退 |
+| 阶段 | 2D UI |
+|------|-------|
+| Editor | `Assets/UI`，场景 Image 直接引用 |
+| Build | `StreamingAssets/UI` 中运行时磁盘加载的目录（`ToDiskPath`） |
 
 - 不要重命名 `Resources`；代码中存在硬编码资源路径。
 - GameScene 根据选中 PackId 动态加载 `Resources/CardBagPrefabs/CardBagNNN.prefab`。源贴图位于 `UI/CardBags/CardBagNNN/`，通过 Prefab 的 Sprite 引用进入构建，不放入 StreamingAssets。
-- `特效资源/effect文件夹.unitypackage` 是正式资产包，`特效资源/场景卡包和特效展示.unitypackage` 提供正式预览场景；重复 Effects 不需要覆盖导入。
-- 正式运行时入口为 `Assets/Resources/Effects/`，预览入口为 `Assets/Scenes/EffectScene001.unity`，列表模板入口为 `PackItem.prefab/CardPackEffect`。
-- 特效通过 `Resources.Load("Effects/...")` 加载，MainScene 在资源缺失时使用 2D 卡包回退。制作方 3D/粒子资源不复制到 StreamingAssets。
-- 更新包中的项目 UI、字体、共享 Prefab 等重复内容不能直接覆盖正式工程资源；导入前先核对包清单和 GUID。
+- `Assets/Resources/Effects/`、`Assets/Scenes/EffectScene001.unity` 和 `PackItem.prefab/CardPackEffect` 已删除。
+- 当前卡包列表、选中放大与开包等待阶段只使用静态封面，不加载 3D 或粒子资源。
 
 ---
 
@@ -124,7 +122,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
                     -> BtnData       -> PanelSave -> BtnClose / BtnReturn -> 关闭存档面板
       -> 已解锁卡包运行时列表项 -> 居中放大 + 半透明压暗背景 + PanelBagSelect
                                       -> BtnPlay/重玩 -> BgGame 开包舞台
-                                                         -> 轻点卡包 / 顶部向右横划 -> 开包动画 + 拆包粒子 -> GameScene 入场
+                                                         -> 轻点卡包 / 横划 -> 预留撕包动画（当前直接完成）-> GameScene 入场
                                       -> BtnBack -> 卡包返回列表并关闭面板
           -> BtnReturn -> Main
           -> RewardPanel / BtnFinish -> Main
@@ -259,7 +257,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 2. 在 `CardPacks.csv` 增加一行（`PackId`、临时 `PackSize`、临时 `StickerCount`、`ChapterId`、正数 `BoardScale`、`AutoUpdate=1`），随后执行配置更新工具按实际片数同步 `PackSize`、`StickerCount` 和 `BoardScale`。需要手工固定这三个值时将该行 `AutoUpdate` 改为 `0`。
 3. 在 `UI/PackImages/` 下按 `PackIconNNN.png` 命名增加对应封面。`GameDefine.FormatPackImagePath` 将 PackId `1` 映射到 `UI/PackImages/PackIcon001.png`。
 4. 通过 `CardPackDataUtility` 将生命周期写入 SQLite `CardPacks` 表。
-5. 不为每个卡包另行制作项目侧 3D 资源。优先使用制作方提供的 PackId 1-21 专属 Prefab；没有专属 Prefab 的卡包使用 `PackItem/CardPackEffect` 共享模型并动态替换封面，加载失败时再回退到 2D。
+5. 卡包列表和选中态直接使用对应静态封面；不为每个卡包创建 3D 展示资源。
 
 ### 拼图
 
@@ -301,26 +299,19 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 - 项目没有运行时描边 Shader、Renderer Feature 或第三方描边包。
 - 描边加载与拼图交互保持隔离；缺少描边不得阻止可拖拽碎片创建。
 
-### 特效资源
+### 卡包展示与开包表现
 
-2026-08-02 已从干净状态重新导入并接入新特效：
-
-- `特效资源/effect文件夹.unitypackage` 是正式特效资产来源，完整导入到 `Assets/Resources/Effects/`；资源名、目录和 GUID 保持制作方原样。
-- `特效资源/场景卡包和特效展示.unitypackage` 提供正式预览场景 `Assets/Scenes/EffectScene001.unity`。包内重复 Effects 与正式特效包一致；重复携带的项目 UI、字体和 `TaskItem` 不覆盖工程现有资源。
-- `PackItem.prefab/CardPackEffect` 直接嵌套制作方 `CardBag_tutorial/CardPackOpening_springOuting_001`，作为没有专属制作方 Prefab 时的共享回退。运行时对 PackId 1-22 优先实例化各自的 `CardBagPrefab/*/CardPackOpening_*_001` 并保持制作方外观；PackId 22 使用 `CardBag_littleKittens01/CardPackOpening_littleKittens_001`，不要与 PackId 3 的 `CardBag_littleKittens` 混用。
-- PackId 8 使用 `CardBag_springOuting/CardPackOpening_springOuting_001`。虽然名称不同，该 Prefab 原生引用 `CardPackOpeningMaterial_caPiBaLa.mat`，不得据名称擅自替换材质。
-- 2026-08-03 制作方更新了 `Packaging_001..022`、`littleKittens`/`puppy`/`oldGadgets` 材质，并新增 PackId 22 的 `CardBag_littleKittens01` 开包与静态 Prefab；这些资源通过原 GUID 和 Prefab 引用直接生效，不增加运行时颜色、饱和度或明度调整。
-- MainScene 环境与 `EffectScene001` 对齐：Ambient Mode 为 Trilight，Sky/Equator/Ground 分别为 `(0.51936734,0.5959181,0.7490196)`、`(0.50146854,0.53454965,0.5566038)`、`(0.2735849,0.25594813,0.22067462)`；使用制作方 Skybox，Directional Light 强度为 `1.3`、带制作方 Additional Light Data 并作为 Sun Source；主相机使用与示例一致的 Solid Color、背景色、Depth、Volume Layer Mask 和正交尺寸 `2.66`；主 Canvas 使用绑定主相机的 Screen Space Camera、`Plane Distance=100` 和 Gamma 顶点色，确保 UI 背景位于 `Z≈0` 的 3D 卡包之后，并保持依赖相机世界位置的 `Puffies/2_Sided` 反射和高光计算一致。
-- MainScene 桌面卡包加载时直接设置 `Animator.enabled=false`，保留制作方 `CardPackOpening` Prefab 保存的原始骨骼姿态，不调用 `Rebind`、`Play` 或 `Update`。手指滑动拆包成立后才重新启用 Animator，并从 `CardPackOpening` 第 0 帧开始正式播放。
-- 制作方 `Puffies/2_Sided` Shader 将 `unity_ObjectToWorld` 用于反射与高光计算，Transform 缩放会改变亮度。列表只允许为了匹配 `240 x 272` 槽位执行一次统一等比尺寸适配，不得叠加 Transform 呼吸或亮度补偿；选中放大从列表实际缩放值连续过渡。
-- 首页列表、选中放大和开包流程不得对制作方 Prefab、材质、Shader、纹理、粒子、Animator、颜色、亮度或灯光增加参数补偿；只允许按照现有 UI 锚点做尺寸和位置适配。
-- 源包包含 6 个没有随包导出的旧序列化 GUID，位于 PlaneGroup 材质兼容属性、未使用的 `CardPackPlane.prefab` 和两个 CardFx 材质属性中。当前 `EffectScene001`、MainScene、`PackItem` 以及首页/开包使用的 22 个制作方 Prefab 依赖完整；不得用相似资源猜测替换这些缺失 GUID。
+- 首页列表的卡包主体使用 `Assets/UI/PackImages/PackIconNNN.png` 静态图，`PackItem.prefab` 不嵌套卡包特效 Prefab。
+- 选中态使用独立 Screen Space Overlay `Image` 显示同一张静态图，目标尺寸为 `600 x 680`；选择面板、背景虚化、返回、拍照和重玩确认继续沿用现有流程。
+- 点击玩后切换到 `BgGame` 开包舞台并等待玩家轻点或横划。撕开的动画接口保留为后续需求，当前有效操作不播放特效，下一帧直接进入 `GameScene`。
+- `Assets/Resources/Effects/`、`Assets/Scenes/EffectScene001.unity`、专用 `CardPackListUnlit.shader` 以及 MainScene 的特效 Skybox/Directional Light 已删除。
+- `Assets/Resources/CardBagPrefabs/` 是 GameScene 拼图关卡资源，不属于卡包展示特效，必须保留。
 
 ---
 
 ## 7. 命名
 
-特效资源名和目录遵循新 `.unitypackage` 的原始定义，不额外重命名。运行时代码需要适配资源实际路径，不通过搬移资源维持旧路径。
+卡包静态封面继续使用 `PackIconNNN.png`；GameScene 拼图 Prefab 继续使用 `CardBagNNN.prefab`。
 
 ---
 
