@@ -28,6 +28,7 @@ public static class CardBagPrefabGeneratorEditor
     private const float MinimumPerceptualMatch = 0.78f;
     private const float MinimumPerceptualMatchGap = 0.015f;
     private const int PerceptualCoarseStride = 6;
+    private const int PerceptualFallbackStride = 3;
     private const int PerceptualRefineRadius = 7;
     private const int PerceptualCoarseSampleCount = 12;
     private const int PerceptualVerificationSampleCount = 128;
@@ -910,14 +911,18 @@ public static class CardBagPrefabGeneratorEditor
         string piecePath,
         string referenceName)
     {
-        var placement = FindPlacementPass(board, piece, boardColorIndex, true);
-        if (placement.Score >= 0.995f && placement.EquivalentBestCount == 1)
+        var transparentPlacement = FindPlacementPass(board, piece, boardColorIndex, true);
+        if (transparentPlacement.Score >= 0.995f && transparentPlacement.EquivalentBestCount == 1)
         {
-            return placement;
+            return transparentPlacement;
         }
 
-        placement = FindPlacementPass(board, piece, boardColorIndex, false);
-        var perceptualPlacement = FindPerceptualPlacement(board, piece);
+        var placement = FindPlacementPass(board, piece, boardColorIndex, false);
+        var perceptualPlacement = FindPerceptualPlacement(
+            board,
+            piece,
+            transparentPlacement,
+            placement);
         if (perceptualPlacement.Score >= MinimumPerceptualMatch
             && perceptualPlacement.EquivalentBestCount == 1)
         {
@@ -956,7 +961,10 @@ public static class CardBagPrefabGeneratorEditor
         return placement;
     }
 
-    private static PiecePlacement FindPerceptualPlacement(RawTexture board, RawTexture piece)
+    private static PiecePlacement FindPerceptualPlacement(
+        RawTexture board,
+        RawTexture piece,
+        params PiecePlacement[] exactCandidates)
     {
         if (piece.Width > board.Width || piece.Height > board.Height)
         {
@@ -986,12 +994,45 @@ public static class CardBagPrefabGeneratorEditor
             return PiecePlacement.Invalid;
         }
 
+        var placement = FindPerceptualPlacementPass(
+            board,
+            piece,
+            allSamples,
+            verificationSamples,
+            coarseSamples,
+            exactCandidates,
+            PerceptualCoarseStride);
+        if (placement.Score >= MinimumPerceptualMatch
+            && placement.EquivalentBestCount == 1)
+        {
+            return placement;
+        }
+
+        return FindPerceptualPlacementPass(
+            board,
+            piece,
+            allSamples,
+            verificationSamples,
+            coarseSamples,
+            exactCandidates,
+            PerceptualFallbackStride);
+    }
+
+    private static PiecePlacement FindPerceptualPlacementPass(
+        RawTexture board,
+        RawTexture piece,
+        IReadOnlyList<PixelSample> allSamples,
+        IReadOnlyList<PixelSample> verificationSamples,
+        IReadOnlyList<PixelSample> coarseSamples,
+        IReadOnlyList<PiecePlacement> exactCandidates,
+        int coarseStride)
+    {
         var maxOriginX = board.Width - piece.Width;
         var maxOriginY = board.Height - piece.Height;
         var coarseCandidates = new List<PerceptualCandidate>(PerceptualCandidateCount);
-        for (var originY = 0; originY <= maxOriginY; originY += PerceptualCoarseStride)
+        for (var originY = 0; originY <= maxOriginY; originY += coarseStride)
         {
-            for (var originX = 0; originX <= maxOriginX; originX += PerceptualCoarseStride)
+            for (var originX = 0; originX <= maxOriginX; originX += coarseStride)
             {
                 AddPerceptualCandidate(
                     coarseCandidates,
@@ -1002,6 +1043,14 @@ public static class CardBagPrefabGeneratorEditor
                     PerceptualCandidateCount);
             }
         }
+
+        AddExactCandidateSeeds(
+            board,
+            coarseSamples,
+            exactCandidates,
+            maxOriginX,
+            maxOriginY,
+            coarseCandidates);
 
         if (coarseCandidates.Count == 0)
         {
@@ -1092,6 +1141,48 @@ public static class CardBagPrefabGeneratorEditor
             AnchorBoardOccurrenceCount = 0,
             SecondBestScore = Mathf.Max(0f, secondBestScore)
         };
+    }
+
+    private static void AddExactCandidateSeeds(
+        RawTexture board,
+        IReadOnlyList<PixelSample> coarseSamples,
+        IReadOnlyList<PiecePlacement> exactCandidates,
+        int maxOriginX,
+        int maxOriginY,
+        List<PerceptualCandidate> candidates)
+    {
+        for (var i = 0; i < exactCandidates.Count; i++)
+        {
+            var candidate = exactCandidates[i];
+            if (candidate == null
+                || candidate.Score < 0f
+                || candidate.AnchorBoardOccurrenceCount != 1
+                || candidate.OriginX < 0
+                || candidate.OriginY < 0
+                || candidate.OriginX > maxOriginX
+                || candidate.OriginY > maxOriginY)
+            {
+                continue;
+            }
+
+            if (candidates.Any(item => item.OriginX == candidate.OriginX
+                                       && item.OriginY == candidate.OriginY))
+            {
+                continue;
+            }
+
+            AddPerceptualCandidate(
+                candidates,
+                new PerceptualCandidate(
+                    candidate.OriginX,
+                    candidate.OriginY,
+                    ScorePerceptualPlacement(
+                        board,
+                        coarseSamples,
+                        candidate.OriginX,
+                        candidate.OriginY)),
+                PerceptualCandidateCount);
+        }
     }
 
     private static List<PixelSample> ReduceSamples(List<PixelSample> samples, int maximumCount)
