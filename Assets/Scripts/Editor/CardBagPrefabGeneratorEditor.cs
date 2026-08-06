@@ -30,6 +30,8 @@ public static class CardBagPrefabGeneratorEditor
     private const float MinimumStructuralColorMatch = 0.65f;
     private const float MinimumStructuralMatch = 0.85f;
     private const float MinimumStructuralMatchGap = 0.03f;
+    private const float MinimumOutlineMatch = 0.75f;
+    private const float MinimumOutlineMatchGap = 0.08f;
     private const int PerceptualCoarseStride = 6;
     private const int PerceptualFallbackStride = 1;
     private const int PerceptualRefineRadius = 7;
@@ -38,6 +40,9 @@ public static class CardBagPrefabGeneratorEditor
     private const int PerceptualCandidateCount = 48;
     private const int PerceptualFinalistCount = 24;
     private const int PerceptualColorDistanceScale = 64;
+    private const int OutlineCoarseStride = 3;
+    private const int OutlineProximityRadius = 2;
+    private const int OutlineBoundarySampleCount = 256;
     private static readonly Regex NumberedPieceRegex = new Regex(
         @"^piece_(\d+)$",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
@@ -690,6 +695,7 @@ public static class CardBagPrefabGeneratorEditor
         {
             ValidatePreviewSize(preview, board.Width, board.Height);
             var previewColorIndex = BuildColorIndex(preview.Pixels);
+            var previewOutlineMap = BuildPreviewOutlineProximityMap(preview);
             Dictionary<int, ColorOccurrence> gameBoardColorIndex = null;
             var useGameBoardReference = false;
             var placements = new List<PiecePlacement>(piecePaths.Count);
@@ -706,7 +712,8 @@ public static class CardBagPrefabGeneratorEditor
                             piece,
                             gameBoardColorIndex,
                             piecePaths[i],
-                            "GameBoard fallback");
+                            "GameBoard fallback",
+                            null);
                         referenceName = "GameBoard fallback";
                     }
                     else
@@ -718,7 +725,8 @@ public static class CardBagPrefabGeneratorEditor
                                 piece,
                                 previewColorIndex,
                                 piecePaths[i],
-                                "Preview");
+                                "Preview",
+                                previewOutlineMap);
                             referenceName = "Preview";
                         }
                         catch (InvalidOperationException previewError)
@@ -735,7 +743,8 @@ public static class CardBagPrefabGeneratorEditor
                                     piece,
                                     gameBoardColorIndex,
                                     piecePaths[i],
-                                    "GameBoard fallback");
+                                    "GameBoard fallback",
+                                    null);
                                 referenceName = "GameBoard fallback";
                                 if (placement.Score >= 0.995f
                                     && placement.EquivalentBestCount == 1)
@@ -912,7 +921,8 @@ public static class CardBagPrefabGeneratorEditor
         RawTexture piece,
         Dictionary<int, ColorOccurrence> boardColorIndex,
         string piecePath,
-        string referenceName)
+        string referenceName,
+        bool[] outlineProximityMap)
     {
         var transparentPlacement = FindPlacementPass(board, piece, boardColorIndex, true);
         if (transparentPlacement.Score >= 0.995f && transparentPlacement.EquivalentBestCount == 1)
@@ -950,6 +960,21 @@ public static class CardBagPrefabGeneratorEditor
             return perceptualPlacement;
         }
 
+        var outlinePlacement = FindOutlinePlacement(
+            board,
+            piece,
+            outlineProximityMap);
+        if (outlinePlacement.Score >= MinimumOutlineMatch
+            && outlinePlacement.EquivalentBestCount == 1)
+        {
+            Debug.LogWarning(
+                $"CardBag generator: accepted {piecePath} by matching its Alpha boundary to the " +
+                $"preview outline. outline match={outlinePlacement.Score:P2}, " +
+                $"next distinct candidate={outlinePlacement.SecondBestScore:P2}. " +
+                "Color matching was rejected because the preview segmentation line or background differs.");
+            return outlinePlacement;
+        }
+
         if (placement.EquivalentBestCount > 1)
         {
             throw new InvalidOperationException(
@@ -965,6 +990,7 @@ public static class CardBagPrefabGeneratorEditor
                 $"anchor occurrences={placement.AnchorBoardOccurrenceCount}, " +
                 $"perceptual match={perceptualPlacement.ColorScore:P2}, " +
                 $"structural match={perceptualPlacement.StructuralScore:P2}, " +
+                $"outline match={outlinePlacement.Score:P2}, " +
                 $"next distinct candidate={perceptualPlacement.SecondBestScore:P2}.");
         }
 
@@ -1378,6 +1404,228 @@ public static class CardBagPrefabGeneratorEditor
                        + Mathf.Abs(
                            pieceNeighbor.b - pieceColor.b - (boardNeighbor.b - boardColor.b));
         return 1f - Mathf.Min(distance, maximumDistance) / (float)maximumDistance;
+    }
+
+    private static bool[] BuildPreviewOutlineProximityMap(RawTexture preview)
+    {
+        var result = new bool[preview.Pixels.Length];
+        for (var y = 0; y < preview.Height; y++)
+        {
+            for (var x = 0; x < preview.Width; x++)
+            {
+                if (!IsPreviewOutlineColor(preview.Pixels[y * preview.Width + x]))
+                {
+                    continue;
+                }
+
+                var minimumY = Mathf.Max(0, y - OutlineProximityRadius);
+                var maximumY = Mathf.Min(preview.Height - 1, y + OutlineProximityRadius);
+                var minimumX = Mathf.Max(0, x - OutlineProximityRadius);
+                var maximumX = Mathf.Min(preview.Width - 1, x + OutlineProximityRadius);
+                for (var nearbyY = minimumY; nearbyY <= maximumY; nearbyY++)
+                {
+                    for (var nearbyX = minimumX; nearbyX <= maximumX; nearbyX++)
+                    {
+                        result[nearbyY * preview.Width + nearbyX] = true;
+                    }
+                }
+            }
+        }
+
+        return result;
+    }
+
+    private static bool IsPreviewOutlineColor(Color32 color)
+    {
+        return color.g >= 110
+               && color.b >= 110
+               && color.g - color.r >= 28
+               && color.b - color.r >= 24;
+    }
+
+    private static PiecePlacement FindOutlinePlacement(
+        RawTexture preview,
+        RawTexture piece,
+        bool[] outlineProximityMap)
+    {
+        if (outlineProximityMap == null
+            || outlineProximityMap.Length != preview.Pixels.Length
+            || piece.Width > preview.Width
+            || piece.Height > preview.Height)
+        {
+            return PiecePlacement.Invalid;
+        }
+
+        var boundarySamples = BuildAlphaBoundarySamples(piece);
+        if (boundarySamples.Count == 0)
+        {
+            return PiecePlacement.Invalid;
+        }
+
+        boundarySamples = ReduceSamples(boundarySamples, OutlineBoundarySampleCount);
+        var maximumOriginX = preview.Width - piece.Width;
+        var maximumOriginY = preview.Height - piece.Height;
+        var coarseCandidates = new List<PerceptualCandidate>(PerceptualCandidateCount);
+        for (var originY = 0; originY <= maximumOriginY; originY += OutlineCoarseStride)
+        {
+            for (var originX = 0; originX <= maximumOriginX; originX += OutlineCoarseStride)
+            {
+                AddPerceptualCandidate(
+                    coarseCandidates,
+                    new PerceptualCandidate(
+                        originX,
+                        originY,
+                        ScoreOutlinePlacement(
+                            preview,
+                            boundarySamples,
+                            outlineProximityMap,
+                            originX,
+                            originY)),
+                    PerceptualCandidateCount);
+            }
+        }
+
+        var refinedCandidates = new List<PerceptualCandidate>(PerceptualCandidateCount);
+        var visitedOrigins = new HashSet<int>();
+        for (var i = 0; i < coarseCandidates.Count; i++)
+        {
+            var coarse = coarseCandidates[i];
+            var minimumY = Mathf.Max(0, coarse.OriginY - PerceptualRefineRadius);
+            var maximumY = Mathf.Min(maximumOriginY, coarse.OriginY + PerceptualRefineRadius);
+            var minimumX = Mathf.Max(0, coarse.OriginX - PerceptualRefineRadius);
+            var maximumX = Mathf.Min(maximumOriginX, coarse.OriginX + PerceptualRefineRadius);
+            for (var originY = minimumY; originY <= maximumY; originY++)
+            {
+                for (var originX = minimumX; originX <= maximumX; originX++)
+                {
+                    var originKey = originY * (maximumOriginX + 1) + originX;
+                    if (!visitedOrigins.Add(originKey))
+                    {
+                        continue;
+                    }
+
+                    AddPerceptualCandidate(
+                        refinedCandidates,
+                        new PerceptualCandidate(
+                            originX,
+                            originY,
+                            ScoreOutlinePlacement(
+                                preview,
+                                boundarySamples,
+                                outlineProximityMap,
+                                originX,
+                                originY)),
+                        PerceptualCandidateCount);
+                }
+            }
+        }
+
+        if (refinedCandidates.Count == 0)
+        {
+            return PiecePlacement.Invalid;
+        }
+
+        var best = refinedCandidates[0];
+        var secondBestScore = -1f;
+        var visitedDistantOrigins = new HashSet<int>();
+        for (var i = 0; i < coarseCandidates.Count; i++)
+        {
+            var coarse = coarseCandidates[i];
+            var minimumY = Mathf.Max(0, coarse.OriginY - PerceptualRefineRadius);
+            var maximumY = Mathf.Min(maximumOriginY, coarse.OriginY + PerceptualRefineRadius);
+            var minimumX = Mathf.Max(0, coarse.OriginX - PerceptualRefineRadius);
+            var maximumX = Mathf.Min(maximumOriginX, coarse.OriginX + PerceptualRefineRadius);
+            for (var originY = minimumY; originY <= maximumY; originY++)
+            {
+                for (var originX = minimumX; originX <= maximumX; originX++)
+                {
+                    if (Mathf.Abs(originX - best.OriginX) <= PerceptualRefineRadius
+                        && Mathf.Abs(originY - best.OriginY) <= PerceptualRefineRadius)
+                    {
+                        continue;
+                    }
+
+                    var originKey = originY * (maximumOriginX + 1) + originX;
+                    if (!visitedDistantOrigins.Add(originKey))
+                    {
+                        continue;
+                    }
+
+                    secondBestScore = Mathf.Max(
+                        secondBestScore,
+                        ScoreOutlinePlacement(
+                            preview,
+                            boundarySamples,
+                            outlineProximityMap,
+                            originX,
+                            originY));
+                }
+            }
+        }
+
+        var isDistinct = secondBestScore < 0f
+                         || best.Score - secondBestScore >= MinimumOutlineMatchGap;
+        return new PiecePlacement
+        {
+            OriginX = best.OriginX,
+            OriginY = best.OriginY,
+            Width = piece.Width,
+            Height = piece.Height,
+            Score = best.Score,
+            ColorScore = -1f,
+            StructuralScore = -1f,
+            UsedOutlineMatch = true,
+            EquivalentBestCount = isDistinct ? 1 : 2,
+            AnchorBoardOccurrenceCount = 0,
+            SecondBestScore = Mathf.Max(0f, secondBestScore)
+        };
+    }
+
+    private static List<PixelSample> BuildAlphaBoundarySamples(RawTexture piece)
+    {
+        var result = new List<PixelSample>();
+        for (var y = 1; y < piece.Height - 1; y++)
+        {
+            for (var x = 1; x < piece.Width - 1; x++)
+            {
+                var color = piece.Pixels[y * piece.Width + x];
+                if (color.a < OpaqueThreshold)
+                {
+                    continue;
+                }
+
+                if (piece.Pixels[y * piece.Width + x - 1].a < OpaqueThreshold
+                    || piece.Pixels[y * piece.Width + x + 1].a < OpaqueThreshold
+                    || piece.Pixels[(y - 1) * piece.Width + x].a < OpaqueThreshold
+                    || piece.Pixels[(y + 1) * piece.Width + x].a < OpaqueThreshold)
+                {
+                    result.Add(new PixelSample(x, y, color));
+                }
+            }
+        }
+
+        return result;
+    }
+
+    private static float ScoreOutlinePlacement(
+        RawTexture preview,
+        IReadOnlyList<PixelSample> boundarySamples,
+        bool[] outlineProximityMap,
+        int originX,
+        int originY)
+    {
+        var matches = 0;
+        for (var i = 0; i < boundarySamples.Count; i++)
+        {
+            var sample = boundarySamples[i];
+            if (outlineProximityMap[
+                    (originY + sample.Y) * preview.Width + originX + sample.X])
+            {
+                matches++;
+            }
+        }
+
+        return matches / (float)boundarySamples.Count;
     }
 
     private static void AddPerceptualCandidate(
@@ -2075,6 +2323,7 @@ public static class CardBagPrefabGeneratorEditor
         public float ColorScore;
         public float StructuralScore;
         public bool UsedStructuralMatch;
+        public bool UsedOutlineMatch;
         public int EquivalentBestCount;
         public int AnchorBoardOccurrenceCount;
         public float SecondBestScore;
