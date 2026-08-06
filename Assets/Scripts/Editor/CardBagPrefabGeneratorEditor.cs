@@ -28,7 +28,7 @@ public static class CardBagPrefabGeneratorEditor
     private const float MinimumPerceptualMatch = 0.78f;
     private const float MinimumPerceptualMatchGap = 0.015f;
     private const int PerceptualCoarseStride = 6;
-    private const int PerceptualFallbackStride = 3;
+    private const int PerceptualFallbackStride = 1;
     private const int PerceptualRefineRadius = 7;
     private const int PerceptualCoarseSampleCount = 12;
     private const int PerceptualVerificationSampleCount = 128;
@@ -1046,7 +1046,7 @@ public static class CardBagPrefabGeneratorEditor
 
         AddExactCandidateSeeds(
             board,
-            coarseSamples,
+            verificationSamples,
             exactCandidates,
             maxOriginX,
             maxOriginY,
@@ -1145,7 +1145,7 @@ public static class CardBagPrefabGeneratorEditor
 
     private static void AddExactCandidateSeeds(
         RawTexture board,
-        IReadOnlyList<PixelSample> coarseSamples,
+        IReadOnlyList<PixelSample> verificationSamples,
         IReadOnlyList<PiecePlacement> exactCandidates,
         int maxOriginX,
         int maxOriginY,
@@ -1165,6 +1165,16 @@ public static class CardBagPrefabGeneratorEditor
                 continue;
             }
 
+            var perceptualScore = ScorePerceptualPlacement(
+                board,
+                verificationSamples,
+                candidate.OriginX,
+                candidate.OriginY);
+            if (perceptualScore < MinimumPerceptualMatch)
+            {
+                continue;
+            }
+
             if (candidates.Any(item => item.OriginX == candidate.OriginX
                                        && item.OriginY == candidate.OriginY))
             {
@@ -1176,11 +1186,7 @@ public static class CardBagPrefabGeneratorEditor
                 new PerceptualCandidate(
                     candidate.OriginX,
                     candidate.OriginY,
-                    ScorePerceptualPlacement(
-                        board,
-                        coarseSamples,
-                        candidate.OriginX,
-                        candidate.OriginY)),
+                    perceptualScore),
                 PerceptualCandidateCount);
         }
     }
