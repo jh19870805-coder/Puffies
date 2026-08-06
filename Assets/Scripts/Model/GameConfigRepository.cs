@@ -13,8 +13,118 @@ public struct CardPackConfigData
     public CardPackSize PackSize;
     public int StickerCount;
     public int ChapterId;
+    public string Series;
+    public int[] SeriesPackIds;
     public float BoardScale;
     public bool AutoUpdate;
+}
+
+public static class CardPackSeriesRules
+{
+    public static bool TryBuildPrerequisites(
+        IReadOnlyList<CardPackConfigData> configs,
+        out Dictionary<int, int> prerequisiteByPackId,
+        out string error)
+    {
+        prerequisiteByPackId = new Dictionary<int, int>();
+        error = string.Empty;
+        if (configs == null)
+        {
+            error = "card pack config list is null";
+            return false;
+        }
+
+        var configuredPackIds = new HashSet<int>();
+        for (var i = 0; i < configs.Count; i++)
+        {
+            if (configs[i].PackId <= 0 || !configuredPackIds.Add(configs[i].PackId))
+            {
+                error = $"duplicate or invalid PackId {configs[i].PackId}";
+                return false;
+            }
+        }
+
+        for (var i = 0; i < configs.Count; i++)
+        {
+            var previousPackId = configs[i].PackId;
+            var seriesPackIds = configs[i].SeriesPackIds ?? Array.Empty<int>();
+            for (var seriesIndex = 0; seriesIndex < seriesPackIds.Length; seriesIndex++)
+            {
+                var packId = seriesPackIds[seriesIndex];
+                if (!configuredPackIds.Contains(packId))
+                {
+                    error = $"PackId {previousPackId} series references missing PackId {packId}";
+                    return false;
+                }
+
+                if (packId == GameDefine.DefaultBagId)
+                {
+                    error = $"default PackId {packId} cannot have a series prerequisite";
+                    return false;
+                }
+
+                if (packId == previousPackId)
+                {
+                    error = $"PackId {packId} cannot depend on itself";
+                    return false;
+                }
+
+                if (prerequisiteByPackId.TryGetValue(packId, out var existingPrerequisite)
+                    && existingPrerequisite != previousPackId)
+                {
+                    error = $"PackId {packId} has conflicting prerequisites "
+                            + $"{existingPrerequisite} and {previousPackId}";
+                    return false;
+                }
+
+                prerequisiteByPackId[packId] = previousPackId;
+                previousPackId = packId;
+            }
+        }
+
+        foreach (var packId in prerequisiteByPackId.Keys)
+        {
+            var visited = new HashSet<int>();
+            var currentPackId = packId;
+            while (prerequisiteByPackId.TryGetValue(currentPackId, out var prerequisitePackId))
+            {
+                if (!visited.Add(currentPackId))
+                {
+                    error = $"series contains a cycle at PackId {currentPackId}";
+                    return false;
+                }
+
+                currentPackId = prerequisitePackId;
+            }
+        }
+
+        return true;
+    }
+
+    public static bool ArePrerequisitesCompleted(
+        int packId,
+        IReadOnlyDictionary<int, int> prerequisiteByPackId,
+        Func<int, bool> isPackCompleted)
+    {
+        if (packId <= 0 || prerequisiteByPackId == null || isPackCompleted == null)
+        {
+            return false;
+        }
+
+        var visited = new HashSet<int>();
+        var currentPackId = packId;
+        while (prerequisiteByPackId.TryGetValue(currentPackId, out var prerequisitePackId))
+        {
+            if (!visited.Add(currentPackId) || !isPackCompleted(prerequisitePackId))
+            {
+                return false;
+            }
+
+            currentPackId = prerequisitePackId;
+        }
+
+        return true;
+    }
 }
 
 public readonly struct GameConfigAssetDefinition
@@ -219,6 +329,18 @@ public static class GameConfigRepository
             sCardPackConfigs.Add(config);
         }
 
+        if (!CardPackSeriesRules.TryBuildPrerequisites(
+                sCardPackConfigs,
+                out _,
+                out var seriesError))
+        {
+            Debug.LogError($"{CardPackConfigAsset.DisplayName}: invalid series config: {seriesError}.");
+            sCardPackConfigs.Clear();
+            sCardPackConfigsLoadSucceeded = false;
+            sCardPackConfigsLoaded = true;
+            return;
+        }
+
         sCardPackConfigsLoadSucceeded = true;
         sCardPackConfigsLoaded = true;
     }
@@ -368,7 +490,8 @@ public static class GameConfigRepository
             || boardScale <= 0f
             || !row.TryGetInt("AutoUpdate", out var autoUpdate)
             || autoUpdate < 0
-            || autoUpdate > 1)
+            || autoUpdate > 1
+            || !TryParseCardPackSeries(row, out var series, out var seriesPackIds))
         {
             return false;
         }
@@ -380,9 +503,47 @@ public static class GameConfigRepository
             PackSize = (CardPackSize)GetOptionalInt(row, "PackSize"),
             StickerCount = stickerCount,
             ChapterId = chapterId,
+            Series = series,
+            SeriesPackIds = seriesPackIds,
             BoardScale = boardScale,
             AutoUpdate = autoUpdate != 0
         };
+        return true;
+    }
+
+    private static bool TryParseCardPackSeries(
+        CsvRow row,
+        out string series,
+        out int[] seriesPackIds)
+    {
+        series = string.Empty;
+        seriesPackIds = Array.Empty<int>();
+        if (!row.TryGetString("Series", out var text) || string.IsNullOrWhiteSpace(text))
+        {
+            return true;
+        }
+
+        var tokens = text.Split('|');
+        var parsed = new List<int>(tokens.Length);
+        var uniquePackIds = new HashSet<int>();
+        for (var i = 0; i < tokens.Length; i++)
+        {
+            if (!int.TryParse(
+                    tokens[i].Trim(),
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out var packId)
+                || packId <= 0
+                || !uniquePackIds.Add(packId))
+            {
+                return false;
+            }
+
+            parsed.Add(packId);
+        }
+
+        seriesPackIds = parsed.ToArray();
+        series = string.Join("|", seriesPackIds);
         return true;
     }
 

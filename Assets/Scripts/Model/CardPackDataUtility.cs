@@ -235,6 +235,14 @@ public static class CardPackDataUtility
             return false;
         }
 
+        if (packId != GameDefine.DefaultBagId
+            && !CardPackDistributionUtility.IsPackSeriesEligible(packId))
+        {
+            Debug.LogWarning(
+                $"CardPackDataUtility.TryUnlockPack blocked by series prerequisite. packId={packId}");
+            return false;
+        }
+
         if (!TryGetPack(packId, out var record))
         {
             if (!TryGetPackConfig(packId, out var packSize))
@@ -278,6 +286,14 @@ public static class CardPackDataUtility
         EnsureInitialized();
         if (packId <= 0)
         {
+            return false;
+        }
+
+        if (packId != GameDefine.DefaultBagId
+            && !CardPackDistributionUtility.IsPackSeriesEligible(packId))
+        {
+            Debug.LogWarning(
+                $"CardPackDataUtility.TryUnlockPackFromTaskReward blocked by series prerequisite. packId={packId}");
             return false;
         }
 
@@ -915,7 +931,10 @@ public static class CardPackDistributionUtility
         decision = default;
         var progress = LoadProgress();
         if (progress.PendingTaskRewards.Count == 0
-            || !TryBuildState(out var configs, out var states))
+            || !TryBuildState(
+                out var configs,
+                out var states,
+                out var prerequisiteByPackId))
         {
             return false;
         }
@@ -935,7 +954,12 @@ public static class CardPackDistributionUtility
         }
 
         var preferredPackId = progress.PendingTaskRewards[0].PreferredPackId;
-        var candidate = FindLockedCandidate(configs, states, chapterId, preferredPackId);
+        var candidate = FindLockedCandidate(
+            configs,
+            states,
+            prerequisiteByPackId,
+            chapterId,
+            preferredPackId);
         if (candidate.PackId <= 0 || !CardPackDataUtility.TryUnlockPack(candidate.PackId))
         {
             return false;
@@ -961,7 +985,10 @@ public static class CardPackDistributionUtility
         grantedPackId = 0;
         chapterId = 0;
         decision = default;
-        if (!TryBuildState(out var configs, out var states)
+        if (!TryBuildState(
+                out var configs,
+                out var states,
+                out var prerequisiteByPackId)
             || !TryFindConfig(configs, completedPackId, out var completedConfig))
         {
             return false;
@@ -981,7 +1008,12 @@ public static class CardPackDistributionUtility
             return false;
         }
 
-        var candidate = FindLockedCandidate(configs, states, chapterId, 0);
+        var candidate = FindLockedCandidate(
+            configs,
+            states,
+            prerequisiteByPackId,
+            chapterId,
+            0);
         if (candidate.PackId <= 0 || !CardPackDataUtility.TryUnlockPack(candidate.PackId))
         {
             return false;
@@ -989,6 +1021,24 @@ public static class CardPackDistributionUtility
 
         grantedPackId = candidate.PackId;
         return true;
+    }
+
+    public static bool IsPackSeriesEligible(int packId)
+    {
+        if (packId <= 0
+            || !TryBuildState(
+                out _,
+                out var states,
+                out var prerequisiteByPackId))
+        {
+            return false;
+        }
+
+        return CardPackSeriesRules.ArePrerequisitesCompleted(
+            packId,
+            prerequisiteByPackId,
+            prerequisitePackId => GetState(states, prerequisitePackId)
+                                  == CardPackLifecycleState.Completed);
     }
 
     public static CardPackGrantDecision EvaluateGrant(int remainingLockedCount, int heldPlayableCount)
@@ -1084,11 +1134,23 @@ public static class CardPackDistributionUtility
 
     private static bool TryBuildState(
         out IReadOnlyList<CardPackConfigData> configs,
-        out Dictionary<int, CardPackLifecycleState> states)
+        out Dictionary<int, CardPackLifecycleState> states,
+        out Dictionary<int, int> prerequisiteByPackId)
     {
         states = new Dictionary<int, CardPackLifecycleState>();
+        prerequisiteByPackId = new Dictionary<int, int>();
         if (!GameConfigRepository.TryGetCardPackConfigs(out configs))
         {
+            return false;
+        }
+
+        if (!CardPackSeriesRules.TryBuildPrerequisites(
+                configs,
+                out prerequisiteByPackId,
+                out var seriesError))
+        {
+            Debug.LogError(
+                $"CardPackDistributionUtility: invalid series config: {seriesError}.");
             return false;
         }
 
@@ -1163,6 +1225,7 @@ public static class CardPackDistributionUtility
     private static CardPackConfigData FindLockedCandidate(
         IReadOnlyList<CardPackConfigData> configs,
         Dictionary<int, CardPackLifecycleState> states,
+        Dictionary<int, int> prerequisiteByPackId,
         int chapterId,
         int preferredPackId)
     {
@@ -1171,7 +1234,12 @@ public static class CardPackDistributionUtility
         {
             var config = configs[i];
             if (config.ChapterId != chapterId
-                || GetState(states, config.PackId) != CardPackLifecycleState.Locked)
+                || GetState(states, config.PackId) != CardPackLifecycleState.Locked
+                || !CardPackSeriesRules.ArePrerequisitesCompleted(
+                    config.PackId,
+                    prerequisiteByPackId,
+                    prerequisitePackId => GetState(states, prerequisitePackId)
+                                          == CardPackLifecycleState.Completed))
             {
                 continue;
             }
