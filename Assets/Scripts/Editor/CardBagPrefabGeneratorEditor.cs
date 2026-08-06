@@ -2161,7 +2161,7 @@ public static class CardBagPrefabGeneratorEditor
             var builder = new StringBuilder();
             builder.AppendLine($"Scanned: {ScannedPackCount}");
             builder.AppendLine($"Updated: {Changes.Count}");
-            builder.AppendLine($"Skipped by AutoUpdate: {SkippedPackIds.Count}");
+            builder.AppendLine($"Skipped (AutoUpdate=0): {SkippedPackIds.Count}");
             if (AddedAutoUpdateColumn)
             {
                 builder.AppendLine("Added AutoUpdate column with default value 1.");

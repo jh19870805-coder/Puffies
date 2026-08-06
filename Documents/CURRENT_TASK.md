@@ -18,6 +18,7 @@
 - 发包候选要求完整前置链全部为 `Completed`；任务必得奖励和首次完成奖励共用该过滤。
 - `TryUnlockPack` 与 `TryUnlockPackFromTaskReward` 增加二次系列校验，防止未来新增调用入口绕过候选过滤。
 - 自动更新工具缺少 `Series` 时会在 `AutoUpdate` 前补空列；列已存在时只原样写回，不读取或修改内容。
+- 自动更新结果窗口使用 `Skipped (AutoUpdate=0)` 显示跳过行数，避免把数量 `0` 误读为配置值。
 
 ## 修改文件
 
