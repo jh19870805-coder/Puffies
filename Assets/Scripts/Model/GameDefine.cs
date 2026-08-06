@@ -43,36 +43,6 @@ public static class GameDefine
     public const string SceneRank = "RankScene";
     public const string SceneAchieve = "AchieveScene";
 
-    public const string PlaneGroupPrefabEditorPath = "Assets/Resources/Effects/PlaneGroup/PlaneGroup_001.prefab";
-    public const string PlaneGroupMaterialEditorPath =
-        "Assets/Resources/Effects/PlaneGroup/Materials/PlaneGroupLit04.mat";
-    public const string PlaneGroupPrefabResourcesPath = "Effects/PlaneGroup/PlaneGroup_001";
-    public const string PlaneGroupMaterialResourcesPath =
-        "Effects/PlaneGroup/Materials/PlaneGroupLit04";
-    public const string PlaneGroupFbxEditorFolder = "Assets/Resources/Effects/CardPack/Models";
-
-    public const string CardPackPrefabResourcesFolder =
-        "Effects/CardPack/CardBagPrefab/CardBag_springOuting/";
-    public const string CardPackOpeningPrefabName = "CardPackOpening_springOuting_001";
-    public const string CardPackMaterialResourcesPath =
-        "Effects/CardPack/ModTextures/Materials/CardPackOpeningMaterial_caPiBaLa";
-    public const string CardPackPrefabEditorFolder =
-        "Assets/Resources/Effects/CardPack/CardBagPrefab/CardBag_springOuting";
-    public const string CardPackMaterialEditorPath =
-        "Assets/Resources/Effects/CardPack/ModTextures/Materials/CardPackOpeningMaterial_caPiBaLa.mat";
-    public const string CardPackDismantleResourcesPath =
-        "Effects/CardFx/Profabs/fx_chai_w_001";
-    public const string CardPackTearTrailResourcesPath =
-        "Effects/CardFx/Profabs/FX_ui_tuowei_w_001";
-    public const string CardObtainPrefabName = "CardObtain_001";
-    public const string CardTrailPrefabName = "CardTrail_001";
-
-    public const string CardObtainPrefabEditorPath = "Assets/Resources/Effects/CardFx/CardObtain_001.prefab";
-    public const string CardTrailPrefabEditorPath = "Assets/Resources/Effects/CardFx/CardTrail_001.prefab";
-    public const string CardObtainPrefabResourcesPath = "Effects/CardFx/CardObtain_001";
-    public const string CardTrailPrefabResourcesPath = "Effects/CardFx/CardTrail_001";
-    public const string CardFxEditorFolder = "Assets/Resources/Effects/CardFx";
-
     public static string FormatCardBagPrefabResourcesPath(int bagId)
     {
         return $"{CardBagPrefabResourcesFolder}{CardBagPrefabPrefix}{bagId:D3}";

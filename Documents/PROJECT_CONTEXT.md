@@ -224,7 +224,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 - 不使用 `PlayerPrefs`。
 - `LoadingScene.Start` 初始化 `JsonLocalStore`、`SqliteLocalStore`、`GameTaskUtility` 和 `CardPackDataUtility`。
 - `Assets/Scripts/Model` 有意保持单层扁平目录。相关纯 C# 类型按以下方式合并：`GameManager` 位于 `GameDefine.cs`，CSV 解析类型位于 `GameConfigRepository.cs`，`JsonLocalStore`、`SqliteLocalStore`、`GameSettingsData` 和 `GameSettingsUtility` 位于 `LocalDataStore.cs`，积分类型和 `GameScoreUtility` 位于 `GameTaskUtility.cs`，`GameFontUtility` 位于 `GameCommonUtility.cs`。公开类型名和调用点保持不变。
-- Model 当前保留8个脚本。`GameAnimationUtility`、`CardPackDataUtility`、`GameTaskUtility`、`GameConfigRepository`、`CardFxRuntimeUtility` 和 `GameDefine` 属于大型或独立模块，不为减少文件数量继续互相合并。
+- Model 当前保留 7 个脚本。`CardPackDataUtility`、`GameTaskUtility`、`GameConfigRepository`、`CardPackRewardFlyTransition` 和 `GameDefine` 属于大型或独立模块，不为减少文件数量继续互相合并。旧 `GameAnimationUtility` 与 `CardFxRuntimeUtility` 已随开包特效一起删除。
 - MainScene 的卡包选择、居中放大、`PanelBagSelect`、开包输入和 2D 缺失资源回退逻辑保持不变。选中态在隐藏选中槽位后临时隐藏软件鼠标，生成不包含鼠标的四分之一分辨率背景截图并放大虚化，再立即恢复鼠标并叠加半透明 Panel 压暗；选中卡包使用更高排序层保持清晰。运行时保持动态封面、`600 x 680` 设计尺寸、选中复原和进入 GameScene 的现有交互节奏。
 - 只有通过正常拆包进入 GameScene 时才播放一次入场：CardBag/棋盘从上方进入，PieceBoard 从下方进入，当前组 Piece 从棋盘附近错峰落入托盘，返回和提示按钮淡入；入场完成前屏蔽拖拽。对象在起始姿态保留两个渲染帧后才推进动画，单帧动画时间最多推进 `1/30s`，场景加载或首帧资源初始化卡顿不得吞掉入场过程。直接在编辑器启动 GameScene 保持即时初始化。
 - 每组完成后先播放 `0.3s` 绿色正确放置反馈，再将 CardBag/棋盘位置、相机正交尺寸和托盘平滑切换到下一组布局；棋盘主体动画约 `0.72s`，新组 Piece 从棋盘区域用约 `0.38s` 错峰进入托盘。动画期间锁定拖拽、提示和“一键完成”，普通卡包同样使用该切组流程。
@@ -305,8 +305,9 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 
 - 首页列表的卡包主体使用 `Assets/UI/PackImages/PackIconNNN.png` 静态图，`PackItem.prefab` 不嵌套卡包特效 Prefab。
 - 选中态使用独立 Screen Space Overlay `Image` 显示同一张静态图，目标尺寸为 `600 x 680`；选择面板、背景虚化、返回、拍照和重玩确认继续沿用现有流程。
-- 点击玩后切换到 `BgGame` 开包舞台并等待玩家轻点或横划。撕开的动画接口保留为后续需求，当前有效操作不播放特效，下一帧直接进入 `GameScene`。
+- 点击玩后切换到 `BgGame` 开包舞台并等待玩家轻点或横划。MainScene 不创建撕包引导圆点、闪光线、粒子或 Animator；有效操作直接进入 `GameScene`。旧动画接口不再保留，后续制作新开包动画时按新资源重新接入。
 - `Assets/Resources/Effects/`、`Assets/Scenes/EffectScene001.unity`、专用 `CardPackListUnlit.shader` 以及 MainScene 的特效 Skybox/Directional Light 已删除。
+- `CardPackRewardFlyTransition` 仅负责结算后新卡包从 RewardPanel 飞到屏幕中央，再飞回 MainScene 对应列表位置，不属于开包特效，继续保留。
 - `Assets/Resources/CardBagPrefabs/` 是 GameScene 拼图关卡资源，不属于卡包展示特效，必须保留。
 
 ---
