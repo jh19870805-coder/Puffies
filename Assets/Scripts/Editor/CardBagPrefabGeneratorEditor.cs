@@ -27,6 +27,9 @@ public static class CardBagPrefabGeneratorEditor
     private const float MinimumUniqueAnchorMatch = 0.90f;
     private const float MinimumPerceptualMatch = 0.78f;
     private const float MinimumPerceptualMatchGap = 0.015f;
+    private const float MinimumStructuralColorMatch = 0.65f;
+    private const float MinimumStructuralMatch = 0.85f;
+    private const float MinimumStructuralMatchGap = 0.03f;
     private const int PerceptualCoarseStride = 6;
     private const int PerceptualFallbackStride = 1;
     private const int PerceptualRefineRadius = 7;
@@ -926,11 +929,24 @@ public static class CardBagPrefabGeneratorEditor
         if (perceptualPlacement.Score >= MinimumPerceptualMatch
             && perceptualPlacement.EquivalentBestCount == 1)
         {
-            Debug.LogWarning(
-                $"CardBag generator: accepted {piecePath} with perceptual color matching against " +
-                $"{referenceName}. match={perceptualPlacement.Score:P2}, " +
-                $"next distinct candidate={perceptualPlacement.SecondBestScore:P2}. " +
-                "The source piece and reference have matching geometry but different exported colors.");
+            if (perceptualPlacement.UsedStructuralMatch)
+            {
+                Debug.LogWarning(
+                    $"CardBag generator: accepted {piecePath} with structural edge matching against " +
+                    $"{referenceName}. structural match={perceptualPlacement.Score:P2}, " +
+                    $"color match={perceptualPlacement.ColorScore:P2}, " +
+                    $"next distinct structural candidate={perceptualPlacement.SecondBestScore:P2}. " +
+                    "The source piece and reference have matching geometry but different exported colors.");
+            }
+            else
+            {
+                Debug.LogWarning(
+                    $"CardBag generator: accepted {piecePath} with perceptual color matching against " +
+                    $"{referenceName}. match={perceptualPlacement.Score:P2}, " +
+                    $"next distinct candidate={perceptualPlacement.SecondBestScore:P2}. " +
+                    "The source piece and reference have matching geometry but different exported colors.");
+            }
+
             return perceptualPlacement;
         }
 
@@ -947,7 +963,8 @@ public static class CardBagPrefabGeneratorEditor
             throw new InvalidOperationException(
                 $"CardBag generator: could not place {piecePath}. Best pixel match was {placement.Score:P2}, " +
                 $"anchor occurrences={placement.AnchorBoardOccurrenceCount}, " +
-                $"perceptual match={perceptualPlacement.Score:P2}, " +
+                $"perceptual match={perceptualPlacement.ColorScore:P2}, " +
+                $"structural match={perceptualPlacement.StructuralScore:P2}, " +
                 $"next distinct candidate={perceptualPlacement.SecondBestScore:P2}.");
         }
 
@@ -1130,16 +1147,77 @@ public static class CardBagPrefabGeneratorEditor
 
         var isDistinct = secondBestScore < 0f
                          || best.Score - secondBestScore >= MinimumPerceptualMatchGap;
+        if (best.Score >= MinimumPerceptualMatch && isDistinct)
+        {
+            return new PiecePlacement
+            {
+                OriginX = best.OriginX,
+                OriginY = best.OriginY,
+                Width = piece.Width,
+                Height = piece.Height,
+                Score = best.Score,
+                ColorScore = best.Score,
+                StructuralScore = -1f,
+                EquivalentBestCount = 1,
+                AnchorBoardOccurrenceCount = 0,
+                SecondBestScore = Mathf.Max(0f, secondBestScore)
+            };
+        }
+
+        var structuralScore = ScoreStructuralPlacement(
+            board,
+            piece,
+            allSamples,
+            best.OriginX,
+            best.OriginY);
+        var bestNearbyStructuralScore = structuralScore;
+        var bestDistantStructuralScore = -1f;
+        for (var i = 0; i < refinedCandidates.Count; i++)
+        {
+            var candidate = refinedCandidates[i];
+            var candidateStructuralScore = ScoreStructuralPlacement(
+                board,
+                piece,
+                allSamples,
+                candidate.OriginX,
+                candidate.OriginY);
+            if (Mathf.Abs(candidate.OriginX - best.OriginX) <= PerceptualRefineRadius
+                && Mathf.Abs(candidate.OriginY - best.OriginY) <= PerceptualRefineRadius)
+            {
+                bestNearbyStructuralScore = Mathf.Max(
+                    bestNearbyStructuralScore,
+                    candidateStructuralScore);
+            }
+            else
+            {
+                bestDistantStructuralScore = Mathf.Max(
+                    bestDistantStructuralScore,
+                    candidateStructuralScore);
+            }
+        }
+
+        var structuralIsDistinct = bestDistantStructuralScore < 0f
+                                   || bestNearbyStructuralScore - bestDistantStructuralScore
+                                   >= MinimumStructuralMatchGap;
+        var useStructuralMatch = coarseStride == PerceptualFallbackStride
+                                 && best.Score >= MinimumStructuralColorMatch
+                                 && structuralScore >= MinimumStructuralMatch
+                                 && structuralIsDistinct;
         return new PiecePlacement
         {
             OriginX = best.OriginX,
             OriginY = best.OriginY,
             Width = piece.Width,
             Height = piece.Height,
-            Score = best.Score,
-            EquivalentBestCount = isDistinct ? 1 : 2,
+            Score = useStructuralMatch ? structuralScore : best.Score,
+            ColorScore = best.Score,
+            StructuralScore = structuralScore,
+            UsedStructuralMatch = useStructuralMatch,
+            EquivalentBestCount = useStructuralMatch || isDistinct ? 1 : 2,
             AnchorBoardOccurrenceCount = 0,
-            SecondBestScore = Mathf.Max(0f, secondBestScore)
+            SecondBestScore = Mathf.Max(
+                0f,
+                useStructuralMatch ? bestDistantStructuralScore : secondBestScore)
         };
     }
 
@@ -1237,6 +1315,69 @@ public static class CardBagPrefabGeneratorEditor
         }
 
         return similarity / samples.Count;
+    }
+
+    private static float ScoreStructuralPlacement(
+        RawTexture board,
+        RawTexture piece,
+        IReadOnlyList<PixelSample> samples,
+        int originX,
+        int originY)
+    {
+        var similarity = 0f;
+        var comparisonCount = 0;
+        var maximumDistance = PerceptualColorDistanceScale * 3;
+        for (var i = 0; i < samples.Count; i++)
+        {
+            var sample = samples[i];
+            var boardColor = board.Pixels[
+                (originY + sample.Y) * board.Width + originX + sample.X];
+            if (sample.X + 1 < piece.Width)
+            {
+                var pieceNeighbor = piece.Pixels[sample.Y * piece.Width + sample.X + 1];
+                var boardNeighbor = board.Pixels[
+                    (originY + sample.Y) * board.Width + originX + sample.X + 1];
+                similarity += ScoreColorGradient(
+                    sample.Color,
+                    pieceNeighbor,
+                    boardColor,
+                    boardNeighbor,
+                    maximumDistance);
+                comparisonCount++;
+            }
+
+            if (sample.Y + 1 < piece.Height)
+            {
+                var pieceNeighbor = piece.Pixels[(sample.Y + 1) * piece.Width + sample.X];
+                var boardNeighbor = board.Pixels[
+                    (originY + sample.Y + 1) * board.Width + originX + sample.X];
+                similarity += ScoreColorGradient(
+                    sample.Color,
+                    pieceNeighbor,
+                    boardColor,
+                    boardNeighbor,
+                    maximumDistance);
+                comparisonCount++;
+            }
+        }
+
+        return comparisonCount > 0 ? similarity / comparisonCount : -1f;
+    }
+
+    private static float ScoreColorGradient(
+        Color32 pieceColor,
+        Color32 pieceNeighbor,
+        Color32 boardColor,
+        Color32 boardNeighbor,
+        int maximumDistance)
+    {
+        var distance = Mathf.Abs(
+                           pieceNeighbor.r - pieceColor.r - (boardNeighbor.r - boardColor.r))
+                       + Mathf.Abs(
+                           pieceNeighbor.g - pieceColor.g - (boardNeighbor.g - boardColor.g))
+                       + Mathf.Abs(
+                           pieceNeighbor.b - pieceColor.b - (boardNeighbor.b - boardColor.b));
+        return 1f - Mathf.Min(distance, maximumDistance) / (float)maximumDistance;
     }
 
     private static void AddPerceptualCandidate(
@@ -1917,7 +2058,12 @@ public static class CardBagPrefabGeneratorEditor
 
     private sealed class PiecePlacement
     {
-        public static PiecePlacement Invalid => new PiecePlacement { Score = -1f };
+        public static PiecePlacement Invalid => new PiecePlacement
+        {
+            Score = -1f,
+            ColorScore = -1f,
+            StructuralScore = -1f
+        };
 
         public string AssetPath;
         public string ObjectName;
@@ -1926,6 +2072,9 @@ public static class CardBagPrefabGeneratorEditor
         public int Width;
         public int Height;
         public float Score;
+        public float ColorScore;
+        public float StructuralScore;
+        public bool UsedStructuralMatch;
         public int EquivalentBestCount;
         public int AnchorBoardOccurrenceCount;
         public float SecondBestScore;
