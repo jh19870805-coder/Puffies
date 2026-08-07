@@ -4261,17 +4261,6 @@ public class GameScene : MonoBehaviour
         }
     }
 
-    private static GameObject GetOrCreatePlacedPiecesRoot()
-    {
-        var root = GameObject.Find(PlacedPiecesRootObjectName);
-        if (root != null)
-        {
-            return root;
-        }
-
-        return new GameObject(PlacedPiecesRootObjectName);
-    }
-
     private void FitCameraToActiveGroup(int activeGroupIndex)
     {
         var camera = Camera.main;
@@ -4820,11 +4809,6 @@ public class GameScene : MonoBehaviour
         {
             SlidePieceBgToOriginalPosition();
         }
-    }
-
-    private void SlidePieceTrayToOriginalPosition()
-    {
-        ResetPieceTrayPosition(instant: false);
     }
 
     private void SlidePieceBoardOutOfScreen()

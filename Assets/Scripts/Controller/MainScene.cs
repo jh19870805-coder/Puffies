@@ -23,8 +23,6 @@ public class MainScene : MonoBehaviour
     private const float PackageCoverHeight = 272f;
     private const float PackageShadowHorizontalPadding = 8f;
     private const float PackageShadowVerticalPadding = 36f;
-    private const float PackageShadowOffsetX = 0f;
-    private const float PackageShadowOffsetY = -20f;
     private const float PackageShadowAlpha = 0.52f;
     private const int PackageShadowBlurPassCount = 3;
     private const int PackageShadowHorizontalBlurRadius = 2;

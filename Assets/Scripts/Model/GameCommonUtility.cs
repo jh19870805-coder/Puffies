@@ -132,84 +132,6 @@ public static class GameCommonUtility
     }
 
     /// <summary>
-    /// 用途：根据一组渲染器的包围盒自动调整正交相机，确保页面内容完整可见。返回：无。
-    /// </summary>
-    /// <param name="camera">参数：需要调整的正交相机。</param>
-    /// <param name="padding">参数：在内容边界外额外保留的世界单位边距。</param>
-    /// <param name="renderers">参数：需要纳入可视范围计算的渲染器集合。</param>
-    public static void FitOrthographicCameraToRenderers(Camera camera, float padding, params Renderer[] renderers)
-    {
-        if (camera == null || !camera.orthographic || renderers == null || renderers.Length == 0)
-        {
-            return;
-        }
-
-        var hasBounds = false;
-        var combinedBounds = new Bounds(Vector3.zero, Vector3.zero);
-        for (var i = 0; i < renderers.Length; i++)
-        {
-            var renderer = renderers[i];
-            if (renderer == null)
-            {
-                continue;
-            }
-
-            if (!hasBounds)
-            {
-                combinedBounds = renderer.bounds;
-                hasBounds = true;
-                continue;
-            }
-
-            combinedBounds.Encapsulate(renderer.bounds);
-        }
-
-        if (!hasBounds)
-        {
-            return;
-        }
-
-        var targetPosition = camera.transform.position;
-        targetPosition.x = combinedBounds.center.x;
-        targetPosition.y = combinedBounds.center.y;
-        camera.transform.position = targetPosition;
-
-        var targetHalfHeight = combinedBounds.extents.y + padding;
-        var targetHalfWidth = combinedBounds.extents.x + padding;
-        if (camera.aspect > 0f)
-        {
-            targetHalfHeight = Mathf.Max(targetHalfHeight, targetHalfWidth / camera.aspect);
-        }
-
-        camera.orthographicSize = Mathf.Max(targetHalfHeight, 0.01f);
-    }
-
-    /// <summary>
-    /// 用途：根据世界空间包围盒自动调整正交相机，确保内容完整可见。返回：无。
-    /// </summary>
-    public static void FitOrthographicCameraToWorldBounds(Camera camera, float padding, Bounds bounds)
-    {
-        if (camera == null || !camera.orthographic || bounds.size.sqrMagnitude <= 0f)
-        {
-            return;
-        }
-
-        var targetPosition = camera.transform.position;
-        targetPosition.x = bounds.center.x;
-        targetPosition.y = bounds.center.y;
-        camera.transform.position = targetPosition;
-
-        var targetHalfHeight = bounds.extents.y + padding;
-        var targetHalfWidth = bounds.extents.x + padding;
-        if (camera.aspect > 0f)
-        {
-            targetHalfHeight = Mathf.Max(targetHalfHeight, targetHalfWidth / camera.aspect);
-        }
-
-        camera.orthographicSize = Mathf.Max(targetHalfHeight, 0.01f);
-    }
-
-    /// <summary>
     /// 用途：仅根据世界空间包围盒调整正交相机视野大小，不移动相机位置。返回：无。
     /// </summary>
     public static void FitOrthographicCameraSizeOnly(Camera camera, float padding, Bounds bounds)
@@ -276,33 +198,6 @@ public static class GameCommonUtility
         }
 
         return bounds;
-    }
-
-    /// <summary>
-    /// 用途：把相机世界坐标偏移转换为 Canvas anchoredPosition 偏移。返回：anchoredPosition 偏移量。
-    /// </summary>
-    public static Vector2 WorldDeltaToCanvasAnchoredDelta(
-        RectTransform referenceRect,
-        Camera camera,
-        Vector2 worldDelta,
-        float worldDepth = 0f)
-    {
-        if (referenceRect == null || camera == null)
-        {
-            return worldDelta;
-        }
-
-        var worldBounds = GetRectTransformCameraWorldBounds(referenceRect, camera, worldDepth);
-        var localWidth = Mathf.Max(0.01f, referenceRect.rect.width);
-        var localHeight = Mathf.Max(0.01f, referenceRect.rect.height);
-        if (worldBounds.size.x <= 0.001f || worldBounds.size.y <= 0.001f)
-        {
-            return worldDelta;
-        }
-
-        return new Vector2(
-            worldDelta.x * localWidth / worldBounds.size.x,
-            worldDelta.y * localHeight / worldBounds.size.y);
     }
 
     /// <summary>
@@ -423,44 +318,6 @@ public static class GameCommonUtility
     }
 
     /// <summary>
-    /// 用途：估算 UI 元素在相机世界空间中的可视高度。返回：世界单位高度。
-    /// </summary>
-    public static float GetRectTransformWorldHeight(RectTransform rectTransform, Camera camera, float worldDepth = 0f)
-    {
-        if (rectTransform == null || camera == null)
-        {
-            return 0f;
-        }
-
-        var screenPoint = RectTransformToScreenPoint(rectTransform);
-        var canvas = rectTransform.GetComponentInParent<Canvas>();
-        var halfHeight = rectTransform.rect.height * (canvas != null ? canvas.scaleFactor : 1f) * 0.5f;
-        var distance = Mathf.Abs(camera.transform.position.z - worldDepth);
-        var top = camera.ScreenToWorldPoint(new Vector3(screenPoint.x, screenPoint.y + halfHeight, distance));
-        var bottom = camera.ScreenToWorldPoint(new Vector3(screenPoint.x, screenPoint.y - halfHeight, distance));
-        return Vector3.Distance(top, bottom);
-    }
-
-    /// <summary>
-    /// 用途：让 Screen Space Overlay 的 Canvas 改为相机空间，使 3D 卡包动画能显示在 UI 前方。返回：无。
-    /// </summary>
-    public static void ConfigureCanvasForWorldCardPack(Canvas canvas, Camera camera, float worldDepth = 0f)
-    {
-        if (canvas == null || camera == null)
-        {
-            return;
-        }
-
-        if (canvas.renderMode != RenderMode.ScreenSpaceCamera || canvas.worldCamera != camera)
-        {
-            canvas.renderMode = RenderMode.ScreenSpaceCamera;
-            canvas.worldCamera = camera;
-        }
-
-        canvas.planeDistance = Mathf.Abs(camera.transform.position.z - worldDepth) + 1f;
-    }
-
-    /// <summary>
     /// 用途：配置游戏场景 Canvas，使 UI 像素尺寸与 PPU=100 的世界坐标拼图一致。返回：无。
     /// </summary>
     public static void ConfigureCanvasForGameplay(
@@ -494,29 +351,6 @@ public static class GameCommonUtility
         canvas.renderMode = RenderMode.ScreenSpaceCamera;
         canvas.worldCamera = camera;
         canvas.planeDistance = Mathf.Max(0.01f, Mathf.Abs(camera.transform.position.z - worldDepth));
-    }
-
-    /// <summary>
-    /// 用途：将 Sprite 在指定 PPU 下的世界尺寸转换为 Canvas 本地像素偏移。返回：Canvas 偏移量。
-    /// </summary>
-    public static Vector2 WorldSizeToCanvasDelta(RectTransform referenceRect, Vector2 worldDelta)
-    {
-        if (referenceRect == null)
-        {
-            return worldDelta;
-        }
-
-        var worldBounds = GetRectTransformWorldBounds(referenceRect);
-        var localWidth = Mathf.Max(0.01f, referenceRect.rect.width);
-        var localHeight = Mathf.Max(0.01f, referenceRect.rect.height);
-        if (worldBounds.size.x <= 0.001f || worldBounds.size.y <= 0.001f)
-        {
-            return worldDelta;
-        }
-
-        return new Vector2(
-            worldDelta.x * localWidth / worldBounds.size.x,
-            worldDelta.y * localHeight / worldBounds.size.y);
     }
 
     private static Vector2 RectTransformToScreenPoint(RectTransform rectTransform)
@@ -758,39 +592,6 @@ public static class GameCommonUtility
     }
 
     /// <summary>
-    /// 用途：判断文件路径是否为支持的图片扩展名。返回：是否支持。
-    /// </summary>
-    /// <param name="filePath">参数：待判断的文件路径。</param>
-    /// <returns>返回：true 表示为支持的图片格式。</returns>
-    public static bool IsSupportedImageFile(string filePath)
-    {
-        var extension = Path.GetExtension(filePath);
-        return extension == GameDefine.ImageExtPng
-            || extension == GameDefine.ImageExtJpg
-            || extension == GameDefine.ImageExtJpeg
-            || extension == GameDefine.ImageExtWebp;
-    }
-
-    /// <summary>
-    /// 用途：将精灵按相机可视范围等比缩放，保证完整显示。返回：无。
-    /// </summary>
-    /// <param name="spriteRenderer">参数：目标精灵渲染器。</param>
-    /// <param name="camera">参数：用于计算可视区域的相机。</param>
-    public static void FitSpriteToCamera(SpriteRenderer spriteRenderer, Camera camera)
-    {
-        if (spriteRenderer == null || spriteRenderer.sprite == null || camera == null)
-        {
-            return;
-        }
-
-        var spriteSize = spriteRenderer.sprite.bounds.size;
-        var cameraWorldHeight = 2f * camera.orthographicSize;
-        var cameraWorldWidth = cameraWorldHeight * camera.aspect;
-        var scale = Mathf.Min(cameraWorldWidth / spriteSize.x, cameraWorldHeight / spriteSize.y);
-        spriteRenderer.transform.localScale = new Vector3(scale, scale, 1f);
-    }
-
-    /// <summary>
     /// 用途：创建纯色占位精灵，常用于兜底显示。返回：纯色精灵。
     /// </summary>
     /// <param name="fillColor">参数：填充颜色。</param>
@@ -850,65 +651,6 @@ public static class GameCommonUtility
             0,
             SpriteMeshType.FullRect,
             new Vector4(borderSize, borderSize, borderSize, borderSize));
-    }
-
-    /// <summary>
-    /// 用途：将棋盘相对像素坐标转换为世界坐标。返回：世界坐标。
-    /// </summary>
-    /// <param name="boardWorldCenter">参数：棋盘中心世界坐标。</param>
-    /// <param name="boardTextureSize">参数：棋盘纹理尺寸（像素）。</param>
-    /// <param name="relativePixelPosition">参数：棋盘左下原点下的相对像素坐标。</param>
-    /// <param name="pixelsPerUnit">参数：每单位像素数。</param>
-    /// <returns>返回：转换后的世界坐标。</returns>
-    public static Vector3 ConvertBoardRelativeToWorldPosition(
-        Vector3 boardWorldCenter,
-        Vector2 boardTextureSize,
-        Vector2 relativePixelPosition,
-        float pixelsPerUnit)
-    {
-        var localX = (relativePixelPosition.x - boardTextureSize.x * 0.5f) / pixelsPerUnit;
-        var localY = (relativePixelPosition.y - boardTextureSize.y * 0.5f) / pixelsPerUnit;
-        return new Vector3(
-            boardWorldCenter.x + localX,
-            boardWorldCenter.y + localY,
-            0f);
-    }
-
-    /// <summary>
-    /// 用途：设置精灵渲染器透明度。返回：无。
-    /// </summary>
-    /// <param name="renderer">参数：目标渲染器。</param>
-    /// <param name="alpha">参数：透明度（0~1）。</param>
-    public static void SetRendererAlpha(SpriteRenderer renderer, float alpha)
-    {
-        if (renderer == null)
-        {
-            return;
-        }
-
-        var color = renderer.color;
-        color.a = Mathf.Clamp01(alpha);
-        renderer.color = color;
-    }
-
-    /// <summary>
-    /// 用途：根据托盘高度限制计算贴片缩放。返回：等比缩放向量。
-    /// </summary>
-    /// <param name="pieceRenderer">参数：贴片渲染器。</param>
-    /// <param name="trayBounds">参数：托盘范围。</param>
-    /// <param name="maxHeightRatio">参数：托盘可用最大高度比例。</param>
-    /// <returns>返回：贴片在托盘中的目标缩放。</returns>
-    public static Vector3 CalculateTrayScale(SpriteRenderer pieceRenderer, Bounds trayBounds, float maxHeightRatio)
-    {
-        if (pieceRenderer == null || pieceRenderer.sprite == null)
-        {
-            return Vector3.one;
-        }
-
-        var spriteHeight = Mathf.Max(0.0001f, pieceRenderer.sprite.bounds.size.y);
-        var maxHeight = Mathf.Max(0.0001f, trayBounds.size.y * maxHeightRatio);
-        var scale = Mathf.Min(1f, maxHeight / spriteHeight);
-        return new Vector3(scale, scale, 1f);
     }
 
     /// <summary>

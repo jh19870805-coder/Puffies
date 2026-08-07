@@ -124,12 +124,6 @@ public static class GameTaskUtility
 
     public static bool IsInitialized => sIsInitialized;
 
-    public static int GetCurrentTaskInstanceId()
-    {
-        EnsureInitialized();
-        return sProgress.CurrentTask.TaskInstanceId;
-    }
-
     /// <summary>
     /// 用途：当前任务完成后随机生成下一任务；连续且匹配同一卡包的积分任务结转超额分数。返回：是否成功。
     /// </summary>
@@ -256,15 +250,6 @@ public static class GameTaskUtility
         EnsureInitialized();
         task = sProgress.CurrentTask;
         return IsTaskInstanceValid(task);
-    }
-
-    /// <summary>
-    /// 用途：获取全部任务模板只读列表。返回：任务模板列表。
-    /// </summary>
-    public static IReadOnlyList<TaskTemplateConfigData> GetAllTaskTemplates()
-    {
-        EnsureInitialized();
-        return GameConfigRepository.GetTaskTemplates();
     }
 
     private static void EnsureInitialized()

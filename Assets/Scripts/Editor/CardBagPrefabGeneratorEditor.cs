@@ -84,11 +84,6 @@ public static class CardBagPrefabGeneratorEditor
         CardBagPrefabGeneratorWindow.Open();
     }
 
-    public static void GenerateCardBag017FromCommandLine()
-    {
-        Generate(17, true, false);
-    }
-
     public static void GenerateCardBagFromCommandLine()
     {
         var arguments = Environment.GetCommandLineArgs();
@@ -801,7 +796,7 @@ public static class CardBagPrefabGeneratorEditor
         }
         else if (!hasExplicitGameplayNames)
         {
-            DeleteStaleOutlines(packId);
+            PuzzleOutlineBakerEditor.DeleteStaleOutlines(packId);
             Debug.LogWarning(
                 $"CardBag generator: {bagName} uses sequential ungrouped Piece names. " +
                 "Rename the Prefab objects for gameplay groups, then run Bake Outline Masks.");
@@ -922,16 +917,6 @@ public static class CardBagPrefabGeneratorEditor
         }
 
         return $"Piece{index + 1:D3}";
-    }
-
-    private static void DeleteStaleOutlines(int packId)
-    {
-        var outputFolder = $"Assets/Resources/Generated/PuzzleOutlines/CardBag{packId:D3}";
-        if (AssetDatabase.IsValidFolder(outputFolder) && !AssetDatabase.DeleteAsset(outputFolder))
-        {
-            throw new InvalidOperationException(
-                $"CardBag generator: failed to delete stale outline folder {outputFolder}.");
-        }
     }
 
     private static PiecePlacement FindPlacement(

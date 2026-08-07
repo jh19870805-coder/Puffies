@@ -54,15 +54,6 @@ public static class SqliteLocalStore
     public static bool IsInitialized => sIsInitialized;
 
     /// <summary>
-    /// 用途：获取当前 SQLite 数据库文件的完整路径。返回：绝对路径字符串。
-    /// </summary>
-    public static string GetDatabasePath()
-    {
-        EnsureInitialized();
-        return sDatabasePath;
-    }
-
-    /// <summary>
     /// 用途：在指定集合中新增记录；同键已存在时返回 false。返回：是否新增成功。
     /// </summary>
     public static bool Create(string collection, string key, string value)
@@ -206,47 +197,6 @@ public static class SqliteLocalStore
     }
 
     /// <summary>
-    /// 用途：删除指定集合中的一条记录。返回：是否删除成功。
-    /// </summary>
-    public static bool Delete(string collection, string key)
-    {
-        if (!TryValidateCollectionAndKey(collection, key))
-        {
-            return false;
-        }
-
-        lock (sLock)
-        {
-            EnsureInitialized();
-            var affected = sConnection.Execute(
-                $"DELETE FROM {GameDefine.LocalSqliteCollectionTable} WHERE Collection = ? AND RecordKey = ?",
-                collection,
-                key);
-            return affected > 0;
-        }
-    }
-
-    /// <summary>
-    /// 用途：删除指定集合下的全部记录。返回：删除条数。
-    /// </summary>
-    public static int DeleteCollection(string collection)
-    {
-        if (string.IsNullOrWhiteSpace(collection))
-        {
-            Debug.LogWarning("SqliteLocalStore.DeleteCollection: collection is null or empty.");
-            return 0;
-        }
-
-        lock (sLock)
-        {
-            EnsureInitialized();
-            return sConnection.Execute(
-                $"DELETE FROM {GameDefine.LocalSqliteCollectionTable} WHERE Collection = ?",
-                collection);
-        }
-    }
-
-    /// <summary>
     /// 用途：判断指定集合中是否存在某键。返回：存在为 true。
     /// </summary>
     public static bool Exists(string collection, string key)
@@ -265,35 +215,6 @@ public static class SqliteLocalStore
                 key);
             return count > 0;
         }
-    }
-
-    /// <summary>
-    /// 用途：列出指定集合下的全部键名。返回：键名列表。
-    /// </summary>
-    public static List<string> ListKeys(string collection)
-    {
-        var keys = new List<string>();
-        if (string.IsNullOrWhiteSpace(collection))
-        {
-            return keys;
-        }
-
-        lock (sLock)
-        {
-            EnsureInitialized();
-            var rows = sConnection.Query<RecordKeyRow>(
-                $"SELECT RecordKey FROM {GameDefine.LocalSqliteCollectionTable} WHERE Collection = ? ORDER BY RecordKey",
-                collection);
-            for (var i = 0; i < rows.Count; i++)
-            {
-                if (!string.IsNullOrWhiteSpace(rows[i].RecordKey))
-                {
-                    keys.Add(rows[i].RecordKey);
-                }
-            }
-        }
-
-        return keys;
     }
 
     /// <summary>
@@ -347,26 +268,6 @@ public static class SqliteLocalStore
         {
             EnsureInitialized();
             return sConnection.ExecuteScalar<T>(sql, args);
-        }
-    }
-
-    /// <summary>
-    /// 用途：关闭数据库连接（如切场景或退出前）。返回：无。
-    /// </summary>
-    public static void Close()
-    {
-        lock (sLock)
-        {
-            if (sConnection == null)
-            {
-                sIsInitialized = false;
-                return;
-            }
-
-            sConnection.Close();
-            sConnection.Dispose();
-            sConnection = null;
-            sIsInitialized = false;
         }
     }
 
@@ -435,10 +336,6 @@ public static class SqliteLocalStore
         return false;
     }
 
-    private sealed class RecordKeyRow
-    {
-        public string RecordKey { get; set; }
-    }
 }
 
 public static class JsonLocalStore
@@ -468,12 +365,6 @@ public static class JsonLocalStore
     }
 
     public static bool IsInitialized => sIsLoaded;
-
-    public static string GetFilePath()
-    {
-        EnsureLoaded();
-        return sFilePath;
-    }
 
     public static bool TryReadRoot<T>(out T value)
     {
@@ -511,31 +402,6 @@ public static class JsonLocalStore
         {
             EnsureLoaded();
             return TryPersist(JsonUtility.ToJson(value, prettyPrint: true));
-        }
-    }
-
-    public static bool ClearAll()
-    {
-        lock (sLock)
-        {
-            sIsLoaded = true;
-            sFilePath = Path.Combine(Application.persistentDataPath, GameDefine.LocalJsonFileName);
-
-            if (!File.Exists(sFilePath))
-            {
-                return true;
-            }
-
-            try
-            {
-                File.Delete(sFilePath);
-                return true;
-            }
-            catch (Exception exception)
-            {
-                Debug.LogError($"JsonLocalStore.ClearAll failed: {sFilePath}\n{exception}");
-                return false;
-            }
         }
     }
 

@@ -318,7 +318,7 @@ public static class PuzzleOutlineBakerEditor
                && pieceNumber > 0;
     }
 
-    private static void DeleteStaleOutlines(int bagId)
+    internal static void DeleteStaleOutlines(int bagId)
     {
         var outputFolder = $"{OutputRoot}/{GameDefine.CardBagPrefabPrefix}{bagId:D3}";
         if (AssetDatabase.IsValidFolder(outputFolder) && !AssetDatabase.DeleteAsset(outputFolder))

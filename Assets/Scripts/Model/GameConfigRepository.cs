@@ -205,39 +205,11 @@ public static class GameConfigRepository
         sCardPackConfigs.Clear();
     }
 
-    public static IReadOnlyList<TaskTemplateConfigData> GetTaskTemplates()
-    {
-        EnsureTaskConfigsLoaded();
-        return sTaskTemplates;
-    }
-
     public static bool TryGetTaskTemplates(out IReadOnlyList<TaskTemplateConfigData> templates)
     {
         EnsureTaskConfigsLoaded();
         templates = sTaskTemplates;
         return sTaskConfigsLoadSucceeded;
-    }
-
-    public static bool TryGetTaskTemplate(int templateId, out TaskTemplateConfigData template)
-    {
-        EnsureTaskConfigsLoaded();
-        for (var i = 0; i < sTaskTemplates.Count; i++)
-        {
-            if (sTaskTemplates[i].TemplateId == templateId)
-            {
-                template = sTaskTemplates[i];
-                return true;
-            }
-        }
-
-        template = default;
-        return false;
-    }
-
-    public static IReadOnlyList<CardPackConfigData> GetCardPackConfigs()
-    {
-        EnsureCardPackConfigsLoaded();
-        return sCardPackConfigs;
     }
 
     public static bool TryGetCardPackConfigs(out IReadOnlyList<CardPackConfigData> configs)

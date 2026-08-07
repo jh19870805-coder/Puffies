@@ -169,29 +169,6 @@ public static class CardPackDataUtility
     }
 
     /// <summary>
-    /// 用途：获取已解锁卡包 Id 列表（含默认卡包）。返回：按 PackId 升序。
-    /// </summary>
-    public static List<int> GetUnlockedPackIds()
-    {
-        EnsureInitialized();
-        EnsureDefaultPackUnlocked();
-
-        var rows = SqliteLocalStore.Query<CardPackIdRow>(
-            $@"SELECT PackId
-               FROM {GameDefine.LocalSqliteCardPackTable}
-               WHERE LifecycleState <> ?
-               ORDER BY PackId",
-            (int)CardPackLifecycleState.Locked);
-        var packIds = new List<int>(rows.Count);
-        for (var i = 0; i < rows.Count; i++)
-        {
-            packIds.Add(rows[i].PackId);
-        }
-
-        return packIds;
-    }
-
-    /// <summary>
     /// 用途：获取已完成卡包数量。返回：生命周期为 Completed 的卡包记录数。
     /// </summary>
     public static int GetCompletedPackCount()
@@ -279,58 +256,6 @@ public static class CardPackDataUtility
     }
 
     /// <summary>
-    /// 用途：任务奖励解锁卡包（已解锁、未玩过）。返回：是否成功。
-    /// </summary>
-    public static bool TryUnlockPackFromTaskReward(int packId)
-    {
-        EnsureInitialized();
-        if (packId <= 0)
-        {
-            return false;
-        }
-
-        if (packId != GameDefine.DefaultBagId
-            && !CardPackDistributionUtility.IsPackSeriesEligible(packId))
-        {
-            Debug.LogWarning(
-                $"CardPackDataUtility.TryUnlockPackFromTaskReward blocked by series prerequisite. packId={packId}");
-            return false;
-        }
-
-        if (!TryGetPackConfig(packId, out var packSize))
-        {
-            Debug.LogWarning($"CardPackDataUtility.TryUnlockPackFromTaskReward skipped, config not found: {packId}");
-            return false;
-        }
-
-        var recordExists = TryGetPack(packId, out var record);
-        if (!recordExists)
-        {
-            record = new CardPackRecord
-            {
-                PackId = packId
-            };
-        }
-        else if (record.LifecycleState != CardPackLifecycleState.Locked)
-        {
-            return false;
-        }
-
-        record.PackSize = packSize;
-        var newlyUnlocked = !recordExists || record.LifecycleState == CardPackLifecycleState.Locked;
-        record.LifecycleState = CardPackLifecycleState.Unlocked;
-        record.UnlockTime = FormatUnlockTime(DateTime.Now);
-        record.CompletionTime = string.Empty;
-        var saved = UpsertPack(record);
-        if (saved && newlyUnlocked)
-        {
-            sNewlyUnlockedPackIds.Add(packId);
-        }
-
-        return saved;
-    }
-
-    /// <summary>
     /// 用途：写入或覆盖卡包记录。返回：是否保存成功。
     /// </summary>
     public static bool UpsertPack(CardPackRecord record)
@@ -345,18 +270,6 @@ public static class CardPackDataUtility
     public static bool IsPackUnlocked(int packId)
     {
         return TryGetPack(packId, out var record) && record.IsUnlocked;
-    }
-
-    public static bool TryGetPackLifecycleState(int packId, out CardPackLifecycleState lifecycleState)
-    {
-        lifecycleState = CardPackLifecycleState.Locked;
-        if (!TryGetPack(packId, out var record))
-        {
-            return false;
-        }
-
-        lifecycleState = record.LifecycleState;
-        return true;
     }
 
     public static bool TryMarkPackInProgress(int packId)
@@ -436,22 +349,6 @@ public static class CardPackDataUtility
         }
 
         return UpsertPack(record);
-    }
-
-    /// <summary>
-    /// 用途：标记卡包已玩过；无记录时按配置创建后标记。返回：是否成功。
-    /// </summary>
-    public static bool TryMarkPackPlayed(int packId)
-    {
-        return TryMarkPackInProgress(packId);
-    }
-
-    /// <summary>
-    /// 用途：判断卡包是否已玩过。返回：已玩过为 true；记录不存在为 false。
-    /// </summary>
-    public static bool IsPackPlayed(int packId)
-    {
-        return TryGetPack(packId, out var record) && record.IsPlayed;
     }
 
     public static bool IsPackCompleted(int packId)
@@ -818,11 +715,6 @@ public static class CardPackDataUtility
         public int LifecycleState { get; set; }
         public string UnlockTime { get; set; }
         public string CompletionTime { get; set; }
-    }
-
-    private sealed class CardPackIdRow
-    {
-        public int PackId { get; set; }
     }
 
     [Serializable]
