@@ -18,7 +18,7 @@ public static class DefaultChineseFontEditor
     private const int AtlasPadding = 5;
     private const int AtlasSize = 4096;
 
-    [MenuItem("Puffies/Fonts/Setup Default Chinese Font")]
+    [MenuItem("Puffies/Setup Default Chinese Font", false, 50)]
     public static void SetupDefaultChineseFont()
     {
         var sourceFont = AssetDatabase.LoadAssetAtPath<Font>(GameDefine.DefaultChineseFontEditorPath);

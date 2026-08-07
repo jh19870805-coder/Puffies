@@ -28,7 +28,7 @@ public static class PuzzleOutlineBakerEditor
         new Vector2Int(-1, 1),  new Vector2Int(0, 1),  new Vector2Int(1, 1)
     };
 
-    [MenuItem("Puffies/Puzzles/Bake Outline Masks")]
+    [MenuItem("Puffies/Bake Outline Masks", false, 21)]
     public static void BakeAllMenu()
     {
         BakeAll();

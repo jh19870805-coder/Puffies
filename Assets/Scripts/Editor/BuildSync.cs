@@ -53,7 +53,7 @@ public class BuildSync : IPreprocessBuildWithReport
         EditorApplication.delayCall += () => RunAll(false);
     }
 
-    [MenuItem("Puffies/Sync Build Resources")]
+    [MenuItem("Puffies/Sync Build Resources", false, 10)]
     public static void SyncFromMenu()
     {
         RunAll(true);

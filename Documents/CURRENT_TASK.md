@@ -1,56 +1,49 @@
 # 当前任务
 
-- 任务：清理无引用代码并合并重复编辑器逻辑
+- 任务：扁平化 Unity 编辑器工具菜单
 - 状态：已完成
 - 更新时间：2026-08-07
 
 ## 用户意图
 
-- 检查当前工程中可以合并或删除的冗余代码，并执行安全清理。
-- 保持现有游戏流程、资源结构和持久化数据行为不变。
+- 将项目自定义编辑器工具集中到一个 `Puffies` 菜单。
+- 删除 `Canvas`、`Fonts`、`Puzzles`、`Card Packs` 等多层子菜单，减少查找路径。
 
 ## 工作记录
 
-- 删除 `GameCommonUtility` 中旧 3D 卡包流程遗留的相机适配、世界/UI 坐标换算、图片扩展名判断、Renderer 透明度和旧托盘缩放接口。
-- 删除 `GameScene` 中两个无调用私有方法，以及 `MainScene` 中两个未使用阴影偏移常量。
-- 删除卡包生成器早期仅支持 CardBag017 的命令行入口。
-- 删除卡包生命周期、任务配置、任务实例和本地存储中没有调用方的旧公开接口及其专用数据行类型。
-- 卡包生成器不再维护重复的描边目录删除实现，改为复用 `PuzzleOutlineBakerEditor.DeleteStaleOutlines`。
-- 保留配置文本源注入、排行榜与成就 Demo、任务进度 UI、运行时动态挂载组件、构建同步和所有当前业务入口。
+- 7 个有效编辑器工具现在全部直接显示在 Unity 顶层 `Puffies` 菜单中。
+- 使用 `MenuItem` 优先级保持构建同步、卡包工具、Canvas 工具和字体工具的稳定显示顺序。
+- 同步修改 GameScene 的描边缺失提示，以及项目上下文和拼图描边文档中的旧菜单路径。
 
 ## 修改文件
 
 - `Assets/Scripts/Controller/GameScene.cs`
-- `Assets/Scripts/Controller/MainScene.cs`
+- `Assets/Scripts/Editor/BuildSync.cs`
+- `Assets/Scripts/Editor/CanvasDesignResolutionEditor.cs`
 - `Assets/Scripts/Editor/CardBagPrefabGeneratorEditor.cs`
+- `Assets/Scripts/Editor/DefaultChineseFontEditor.cs`
 - `Assets/Scripts/Editor/PuzzleOutlineBakerEditor.cs`
-- `Assets/Scripts/Model/CardPackDataUtility.cs`
-- `Assets/Scripts/Model/GameCommonUtility.cs`
-- `Assets/Scripts/Model/GameConfigRepository.cs`
-- `Assets/Scripts/Model/GameTaskUtility.cs`
-- `Assets/Scripts/Model/LocalDataStore.cs`
+- `Documents/PROJECT_CONTEXT.md`
 - `Documents/CURRENT_TASK.md`
+- `specs/puzzle-outline.md`
 
 ## 决策
 
-- 只删除全工程无源码引用、无 Unity 序列化引用且没有当前工具入口的代码。
-- 不把 `MainScene`、`GameScene` 或多个 MonoBehaviour 合并成更大的文件。
-- 暂不抽取场景中少量重复的 `FindChild` 和返回按钮绑定逻辑，避免扩大公共万能工具类。
-- 本次不修改数据库结构、JSON 格式或任何持久化数据，不需要清除本地数据。
+- 保留各工具原有英文名称和功能，只移除菜单路径中的中间层级。
+- 不新增统一工具窗口；所有命令仍直接调用原实现。
+- 历史上已删除的开包特效预览菜单不恢复。
 
 ## 验证
 
-- 全工程复查已删除符号，无残留调用或场景/Prefab/Asset 序列化引用。
-- 新一轮私有方法频次扫描只剩 Unity 生命周期函数与 Editor 特性回调，没有新增死方法。
+- 搜索确认 7 个有效 `MenuItem` 均为 `Puffies/<工具名>`，不存在 `Puffies/Canvas`、`Puffies/Fonts`、`Puffies/Puzzles` 或 `Puffies/Card Packs` 代码入口。
 - `git diff --check` 通过。
-- 使用 Unity `2022.3.62f2c1` 无界面模式完成 AssetDatabase 刷新与正式脚本编译；日志无 C# 错误或警告，并以返回码 `0` 正常退出。
-- 本次净删除 578 行代码；Unity 未修改场景、Prefab、资源或配置文件。
+- 使用 Unity `2022.3.62f2c1` 无界面模式完成脚本编译，返回码为 `0`，日志无 C# 错误或警告。
+- Unity 未修改场景、Prefab、资源或配置文件。
 
 ## 下一步
 
-1. 在 Unity 中按正常流程测试 MainScene 卡包选择、进入 GameScene、完成结算和返回首页。
-2. 使用卡包生成器覆盖生成一个测试卡包，确认未分组卡包仍会清理旧描边目录，正式分组卡包仍可正常烘焙描边。
+1. 打开 Unity，确认顶层 `Puffies` 菜单直接显示 7 个工具入口且点击正常。
 
 ## 恢复提示
 
-无引用代码清理已完成并通过 Unity 编译。下一步仅需执行 MainScene、GameScene 和卡包生成器的 Play Mode/Editor 冒烟测试。
+Unity 编辑器工具菜单已扁平化并通过编译。下一步仅需在编辑器中目视确认菜单顺序和入口显示。

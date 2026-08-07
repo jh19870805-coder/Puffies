@@ -56,7 +56,7 @@ public static class CardBagPrefabGeneratorEditor
         @"^piece_\d{3}$",
         RegexOptions.CultureInvariant);
 
-    [MenuItem("Puffies/Card Packs/Update Pack Sizes From Piece Counts")]
+    [MenuItem("Puffies/Update Pack Sizes From Piece Counts", false, 22)]
     public static void UpdatePackSizesFromPieceCounts()
     {
         try
@@ -78,7 +78,7 @@ public static class CardBagPrefabGeneratorEditor
         }
     }
 
-    [MenuItem("Puffies/Puzzles/Generate CardBag Prefabs From Images")]
+    [MenuItem("Puffies/Generate CardBag Prefabs From Images", false, 20)]
     public static void OpenGeneratorWindow()
     {
         CardBagPrefabGeneratorWindow.Open();

@@ -39,14 +39,14 @@
 
 ## 内容制作流程
 
-- 新增或修改 CardBag Prefab 或 Piece 贴图后，执行 **Puffies -> Puzzles -> Bake Outline Masks**。
-- 执行 **Puffies -> Puzzles -> Generate CardBag Prefabs From Images** 打开批量窗口；窗口会发现所有符合命名规则且资源完整的 `CardBagNNN` 目录。
+- 新增或修改 CardBag Prefab 或 Piece 贴图后，执行 **Puffies -> Bake Outline Masks**。
+- 执行 **Puffies -> Generate CardBag Prefabs From Images** 打开批量窗口；窗口会发现所有符合命名规则且资源完整的 `CardBagNNN` 目录。
 - 生成器要求 `GameBoard.png` 与 `Previews/CardBagNNN.png` 尺寸一致。效果图只用于校验，不进入运行时 Prefab 引用。
 - 兼容旧资源：扫描到 `background_base.png` 且同目录没有 `GameBoard.png` 时自动改名；两者同时存在时以 `GameBoard.png` 为准，不覆盖已有文件。
 - `BoardTitle.png` 应随卡包提供；缺失时窗口显示警告，但仍允许生成不含 `BoardTitle` 节点的 Prefab。
 - 使用 `PieceNN.png` 或 `PiecesNN.png` 时，文件名直接定义游戏分组；使用 `piece_###.png` 时生成器只创建 `Piece001` 开始的顺序节点，不推断分组，也不烘焙该卡包描边。
 - 默认使用 **Select New** 只选择尚未生成 Prefab 的卡包。使用 **Select All Ready** 并覆盖已有 Prefab 会丢失 Prefab 内手工修改的分组，执行前必须确认。
-- 批量 Prefab 生成完成后，先手工完成顺序节点分组，再执行 **Puffies -> Puzzles -> Bake Outline Masks**。
+- 批量 Prefab 生成完成后，先手工完成顺序节点分组，再执行 **Puffies -> Bake Outline Masks**。
 - 当前有效生成内容包括 CardBag001、002、003、008、009 和 017 的 24 张分组蒙版。CardBag022 等待手工分组后加入。
 
 ## 验证

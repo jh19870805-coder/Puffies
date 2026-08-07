@@ -182,8 +182,8 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 
 | 菜单 | 用途 |
 |------|------|
-| **Puffies -> Canvas -> Apply Design Resolution** | 批量应用 2560 x 1440 |
-| **Puffies -> Fonts -> Setup Default Chinese Font** | Noto Sans SC TMP + UI Text |
+| **Puffies -> Apply Design Resolution** | 批量应用 2560 x 1440 |
+| **Puffies -> Setup Default Chinese Font** | Noto Sans SC TMP + UI Text |
 
 新的 `CanvasScaler` 值由 `CanvasDesignResolutionEditor.cs` 写入。代码中使用 `GameFontUtility`，不要硬编码字体路径。
 
@@ -268,14 +268,14 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 4. 源贴图放在 `Assets/UI/CardBags/CardBagNNN/`，按分组命名，例如 `Pieces11`...`Pieces14` 和 `Pieces21`...`Pieces25`。
 5. 不使用 `PieceGroup` 父节点；分组只读取 `Piece` 后面的数字。
 6. 不创建 Package JSON；运行时数据来自已加载 Prefab 的 Image。
-7. 新增或修改 CardBag 后，执行 **Puffies -> Puzzles -> Bake Outline Masks**。烘焙器优先使用 `GameBoard.png` 的透明挖空 Alpha 作为最终拼图外边界，并使用已完成 Piece 的 Alpha 作为后续组接触边；GameBoard 没有有效挖空时回退到全部 Piece Alpha 并集。每组生成三张同尺寸资源：`GroupNN.png` 是默认连接区域；`GroupNN_Level.png` 是当前组 Piece Alpha 并集的完整外边界；`GroupNN_Stickers.png` 是当前组每块 Piece Alpha 边界的并集。默认连接图第 1 组只包含自身最终拼图外边界，后续图只包含当前组最终外边界及其与低编号已完成组的接触边；同一描边像素按组顺序只由最早需要它的阶段认领。接触边和最终外轮廓均使用圆形最近距离与局部边界法线判定归属，切线方向的邻近不得延长端点；两类线在交汇处分别于对方边界 `24px` 范围外结束。
+7. 新增或修改 CardBag 后，执行 **Puffies -> Bake Outline Masks**。烘焙器优先使用 `GameBoard.png` 的透明挖空 Alpha 作为最终拼图外边界，并使用已完成 Piece 的 Alpha 作为后续组接触边；GameBoard 没有有效挖空时回退到全部 Piece Alpha 并集。每组生成三张同尺寸资源：`GroupNN.png` 是默认连接区域；`GroupNN_Level.png` 是当前组 Piece Alpha 并集的完整外边界；`GroupNN_Stickers.png` 是当前组每块 Piece Alpha 边界的并集。默认连接图第 1 组只包含自身最终拼图外边界，后续图只包含当前组最终外边界及其与低编号已完成组的接触边；同一描边像素按组顺序只由最早需要它的阶段认领。接触边和最终外轮廓均使用圆形最近距离与局部边界法线判定归属，切线方向的邻近不得延长端点；两类线在交汇处分别于对方边界 `24px` 范围外结束。
 8. `GameScene` 将烘焙的 `#3f423e` Sprite 作为不可交互的 `GameBoard` 子 Image 显示。关卡描边关闭时加载 `GroupNN.png`，打开时替换为 `GroupNN_Level.png`；贴纸描边打开时额外叠加 `GroupNN_Stickers.png`。不要在 Prefab 中手工制作描边对象。
 9. 缺少生成 Sprite 时，运行时记录制作警告，并在无描边情况下继续游戏。交付前重新运行烘焙器。
 - 创建一组碎片时按编号从左向右排列。Piece 首次离开托盘时只允许仍在托盘且编号靠后的 Piece 沿 X 前移，不得刷新前序 Piece、桌面 Piece 或任何剩余 Piece 的 Y/缩放；先拿队尾 Piece 时其余 Piece 不移动。未吸附 Piece 仅可停留在 CardBag 棋盘范围外的桌面；与棋盘相交但未命中自身凹槽时恢复到本次拖拽起点。桌面 Piece 与黑色托盘水平相交且垂直重叠达到自身当前高度 `50%` 时，松手后恢复托盘尺寸并按编号自动重排。未吸附松手时空托盘恢复为回收目标，最后一块正确吸附后仍进入切组或结算。
 
 #### 无 JSON Prefab 批量生成
 
-- 菜单 **Puffies -> Puzzles -> Generate CardBag Prefabs From Images** 打开批量窗口，扫描 `UI/CardBags/` 下严格匹配 `CardBagNNN` 的一级目录。
+- 菜单 **Puffies -> Generate CardBag Prefabs From Images** 打开批量窗口，扫描 `UI/CardBags/` 下严格匹配 `CardBagNNN` 的一级目录。
 - 每个卡包硬性需要 `CardBagNNN/GameBoard.png`、`Previews/CardBagNNN.png` 和至少一张合法 Piece PNG；缺失项会显示在列表中并禁止选择。
 - 旧 `background_base.png` 仅用于兼容迁移：当 `GameBoard.png` 不存在时，扫描器通过 `AssetDatabase.MoveAsset` 自动改名并保留 Meta/GUID；两者同时存在时不覆盖目标文件。
 - `BoardTitle.png` 是标准资源但采用软校验。缺失时列表显示警告，仍允许生成不含 `BoardTitle` 节点的 Prefab。
@@ -339,11 +339,12 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 | 菜单 | 用途 |
 |------|------|
 | Puffies -> Sync Build Resources | 将运行时磁盘加载的 UI 目录复制到 StreamingAssets |
-| Puffies -> Canvas -> Apply Design Resolution | 应用 Canvas 设计分辨率 |
-| Puffies -> Fonts -> Setup Default Chinese Font | 设置中文字体 |
-| Puffies -> Puzzles -> Bake Outline Masks | 为每个 CardBag Prefab 重建各分组外边界描边 |
-| Puffies -> Puzzles -> Generate CardBag Prefabs From Images | 扫描完整背景和透明碎图，选择并批量生成 CardBag Prefab |
-| Puffies -> Card Packs -> Update Pack Sizes From Piece Counts | 扫描 CardBag 源资源的碎片 PNG 数量并同步更新 `CardPacks.csv/PackSize`、`StickerCount` 与 `BoardScale`；跳过 `AutoUpdate=0` 的行，并始终保留手工 `Series` 内容 |
+| Puffies -> Apply Design Resolution (Current Scene) | 为当前场景应用 Canvas 设计分辨率 |
+| Puffies -> Apply Design Resolution (All Scenes & Prefabs) | 为全部场景和 Prefab 应用 Canvas 设计分辨率 |
+| Puffies -> Setup Default Chinese Font | 设置中文字体 |
+| Puffies -> Bake Outline Masks | 为每个 CardBag Prefab 重建各分组外边界描边 |
+| Puffies -> Generate CardBag Prefabs From Images | 扫描完整背景和透明碎图，选择并批量生成 CardBag Prefab |
+| Puffies -> Update Pack Sizes From Piece Counts | 扫描 CardBag 源资源的碎片 PNG 数量并同步更新 `CardPacks.csv/PackSize`、`StickerCount` 与 `BoardScale`；跳过 `AutoUpdate=0` 的行，并始终保留手工 `Series` 内容 |
 
 ---
 

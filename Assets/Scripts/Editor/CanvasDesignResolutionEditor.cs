@@ -21,14 +21,14 @@ public static class CanvasDesignResolutionEditor
         ObjectFactory.componentWasAdded += OnComponentWasAdded;
     }
 
-    [MenuItem("Puffies/Canvas/Apply Design Resolution (Current Scene)")]
+    [MenuItem("Puffies/Apply Design Resolution (Current Scene)", false, 40)]
     public static void ApplyToCurrentSceneMenu()
     {
         var changed = ApplyToScene(SceneManager.GetActiveScene());
         Debug.Log($"Canvas design resolution: current scene updated {changed} CanvasScaler(s).");
     }
 
-    [MenuItem("Puffies/Canvas/Apply Design Resolution (All Scenes & Prefabs)")]
+    [MenuItem("Puffies/Apply Design Resolution (All Scenes & Prefabs)", false, 41)]
     public static void ApplyToAllAssetsMenu()
     {
         if (!EditorUtility.DisplayDialog(
