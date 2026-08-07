@@ -423,32 +423,32 @@ public static class CardBagPrefabGeneratorEditor
             throw new ArgumentOutOfRangeException(nameof(pieceCount));
         }
 
-        if (pieceCount < 30)
+        if (pieceCount < 20)
         {
             return CardPackSize.XS;
         }
 
-        if (pieceCount < 38)
+        if (pieceCount < 31)
         {
             return CardPackSize.S;
         }
 
-        if (pieceCount < 50)
+        if (pieceCount < 56)
         {
             return CardPackSize.M;
         }
 
-        if (pieceCount < 70)
+        if (pieceCount < 86)
         {
             return CardPackSize.L;
         }
 
-        if (pieceCount < 85)
+        if (pieceCount < 126)
         {
             return CardPackSize.XL;
         }
 
-        if (pieceCount < 100)
+        if (pieceCount < 171)
         {
             return CardPackSize.XXL;
         }

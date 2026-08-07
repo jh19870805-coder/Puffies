@@ -112,17 +112,14 @@ public static class TaskProgressUIUtility
 
     private static string BuildTaskDescription(TaskInstanceData task)
     {
-        var sizeText = task.RequiredPackSize == CardPackSize.None
-            ? "任意尺寸"
-            : task.RequiredPackSize.ToString();
         switch (task.TaskType)
         {
             case TaskType.AccumulateScore:
-                return $"从{sizeText}拼图包中累计获得 {task.CompleteValue} 分";
+                return $"完成任意拼图包，收集 {task.CompleteValue} 分";
             case TaskType.CollectStickers:
-                return $"从{sizeText}拼图包中收集 {task.CompleteValue} 个贴纸";
+                return $"从任意拼图包中收集 {task.CompleteValue} 个贴纸";
             case TaskType.CompleteCardPacks:
-                return $"完成 {task.CompleteValue} 个{sizeText}拼图包";
+                return $"完成 {task.CompleteValue} 个 {task.RequiredPackSize} 尺寸的拼图包";
             default:
                 return "";
         }

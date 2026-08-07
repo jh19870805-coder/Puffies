@@ -70,8 +70,9 @@ public struct TaskProgressData
     public TaskInstanceData CurrentTask;
     public int CurrentCompleteValue;
     public int NextTaskInstanceId;
-    public int LastTemplateId;
     public int ScoreTargetCycleIndex;
+    public int StickerTargetCycleIndex;
+    public int PendingScoreCarryOver;
 }
 
 /// <summary>
@@ -125,7 +126,7 @@ public static class GameTaskUtility
     public static bool IsInitialized => sIsInitialized;
 
     /// <summary>
-    /// 用途：当前任务完成后随机生成下一任务；连续且匹配同一卡包的积分任务结转超额分数。返回：是否成功。
+    /// 用途：当前任务完成后随机生成下一任务；积分任务的超额分数保留到下一个积分任务。返回：是否成功。
     /// </summary>
     public static bool TryCompleteAndAdvanceTask(int completedPackId, bool isReplay)
     {
@@ -145,12 +146,18 @@ public static class GameTaskUtility
             return false;
         }
 
-        var carryOverValue = 0;
-        if (currentTask.TaskType == TaskType.AccumulateScore
-            && nextTask.TaskType == TaskType.AccumulateScore
-            && IsPackEligible(nextTask, completedPackConfig.PackSize, isReplay))
+        if (currentTask.TaskType == TaskType.AccumulateScore && overflow > 0)
         {
-            carryOverValue = overflow;
+            sProgress.PendingScoreCarryOver = (int)Math.Min(
+                int.MaxValue,
+                (long)sProgress.PendingScoreCarryOver + overflow);
+        }
+
+        var carryOverValue = 0;
+        if (nextTask.TaskType == TaskType.AccumulateScore)
+        {
+            carryOverValue = sProgress.PendingScoreCarryOver;
+            sProgress.PendingScoreCarryOver = 0;
         }
 
         sProgress.CurrentTask = nextTask;
@@ -159,7 +166,8 @@ public static class GameTaskUtility
             $"GameTaskUtility: task advanced. taskInstanceId={nextTask.TaskInstanceId}, " +
             $"templateId={nextTask.TemplateId}, taskType={nextTask.TaskType}, " +
             $"requiredPackSize={nextTask.RequiredPackSize}, target={nextTask.CompleteValue}, " +
-            $"carryOverValue={carryOverValue}");
+            $"carryOverValue={carryOverValue}, " +
+            $"pendingScoreCarryOver={sProgress.PendingScoreCarryOver}");
         if (SaveTaskProgress())
         {
             return true;
@@ -271,6 +279,8 @@ public static class GameTaskUtility
                 sProgress.CurrentTask.TaskInstanceId + 1,
                 sProgress.NextTaskInstanceId);
             sProgress.ScoreTargetCycleIndex = Math.Max(0, sProgress.ScoreTargetCycleIndex);
+            sProgress.StickerTargetCycleIndex = Math.Max(0, sProgress.StickerTargetCycleIndex);
+            sProgress.PendingScoreCarryOver = Math.Max(0, sProgress.PendingScoreCarryOver);
             return true;
         }
 
@@ -307,9 +317,10 @@ public static class GameTaskUtility
             }
         }
 
-        if (candidates.Count > 1)
+        var currentTaskType = sProgress.CurrentTask.TaskType;
+        if (currentTaskType != TaskType.None)
         {
-            candidates.RemoveAll(item => item.TemplateId == sProgress.LastTemplateId);
+            candidates.RemoveAll(item => item.TaskType == currentTaskType);
         }
 
         if (!TryChooseWeightedTemplate(candidates, out var template))
@@ -332,7 +343,6 @@ public static class GameTaskUtility
 
         var instanceId = Math.Max(1, sProgress.NextTaskInstanceId);
         sProgress.NextTaskInstanceId = instanceId == int.MaxValue ? 1 : instanceId + 1;
-        sProgress.LastTemplateId = template.TemplateId;
         task = new TaskInstanceData
         {
             TaskInstanceId = instanceId,
@@ -406,12 +416,31 @@ public static class GameTaskUtility
 
         if (template.TaskType == TaskType.AccumulateScore)
         {
-            var index = sProgress.ScoreTargetCycleIndex % template.TargetPool.Length;
-            sProgress.ScoreTargetCycleIndex++;
-            return template.TargetPool[index];
+            return TakeNextCycleValue(
+                template.TargetPool,
+                ref sProgress.ScoreTargetCycleIndex);
+        }
+
+        if (template.TaskType == TaskType.CollectStickers)
+        {
+            return TakeNextCycleValue(
+                template.TargetPool,
+                ref sProgress.StickerTargetCycleIndex);
         }
 
         return template.TargetPool[UnityEngine.Random.Range(0, template.TargetPool.Length)];
+    }
+
+    private static int TakeNextCycleValue(int[] values, ref int cycleIndex)
+    {
+        if (values == null || values.Length == 0)
+        {
+            return 0;
+        }
+
+        var index = Math.Max(0, cycleIndex) % values.Length;
+        cycleIndex = (index + 1) % values.Length;
+        return values[index];
     }
 
     private static bool TryChooseEligiblePackSize(

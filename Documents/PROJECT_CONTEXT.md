@@ -40,12 +40,12 @@ Unity **2022.3** / Built-in Render Pipeline 项目，使用 Linear 色彩空间�
 
 - 任务配置来自 `Resources/Configs/TaskConfig.csv`。
 - 卡包配置来自 `Resources/Configs/CardPacks.csv`。
-- `CardPacks.csv/StickerCount` 紧跟在 `PackSize` 后面，记录卡包贴纸数量。`PackSize` 按该数量确定：`<30=XS`、`30..37=S`、`38..49=M`、`50..69=L`、`70..84=XL`、`85..99=XXL`、`>=100=XXXL`。配置更新工具同时将 `BoardScale` 更新为：`XS=0.75`、`S=0.78`、`M=1.10`、`L=1.30`、`XL=1.00`、`XXL=1.15`、`XXXL=1.30`。工具只统计 `Assets/UI/CardBags/CardBagNNN` 顶层的标准碎片名 `piece_NNN.png`，不统计 `BoardTitle.png`、`GameBoard.png` 或其他 PNG。
+- `CardPacks.csv/StickerCount` 紧跟在 `PackSize` 后面，记录卡包贴纸数量。`PackSize` 按该数量确定：`<20=XS`、`20..30=S`、`31..55=M`、`56..85=L`、`86..125=XL`、`126..170=XXL`、`>170=XXXL`。配置更新工具同时将 `BoardScale` 更新为：`XS=0.75`、`S=0.78`、`M=1.10`、`L=1.30`、`XL=1.00`、`XXL=1.15`、`XXXL=1.30`。工具只统计 `Assets/UI/CardBags/CardBagNNN` 顶层的标准碎片名 `piece_NNN.png`，不统计 `BoardTitle.png`、`GameBoard.png` 或其他 PNG。
 - `CardPacks.csv` 的字符串列 `Series` 位于 `BoardScale` 与 `AutoUpdate` 之间，默认留空并且只能手工维护。某行填写 `15|18` 时，以该行 `PackId` 为链首建立 `当前包 -> 15 -> 18`；后续包只有在完整前置链都为 `Completed` 后才进入现有发包候选池，仍继续受章节、持有数量和其他常规发包规则限制。系列同时限制任务奖励、首次完成奖励和直接解锁 API，不会自动发包。不存在的 PackId、默认首包作为后续包、冲突前置、重复或循环链会使卡包配置加载失败。
 - `CardPacks.csv` 最后一列 `AutoUpdate` 只允许 `0` 或 `1`，默认值为 `1`。配置更新工具遇到空值会补为 `1`；设为 `0` 的配置行会保留手工填写的 `PackSize`、`StickerCount` 和 `BoardScale`，不进行自动更新。无论 `AutoUpdate` 取值如何，工具都不修改已有 `Series` 内容；缺少该列时只在 `AutoUpdate` 前补一列空值。
-- 任务使用随机模板池：`TaskType=1` 累计结算分数、`TaskType=2` 收集贴纸数量、`TaskType=3` 完成卡包数量。三类任务都只在完整完成一个符合尺寸要求的卡包后结算一次；贴纸任务按该卡包的全部 Piece 数量累计。
-- `SizeMode=0` 表示任意尺寸；`SizeMode=1` 从模板 `SizePool` 与玩家当前可玩卡包尺寸的交集中随机指定一个尺寸。任务模板按 `Weight` 加权随机，并在存在其他候选时避免连续使用同一个 `TemplateId`。
-- 积分任务目标不随机，按 `TargetPool` 的 `200 -> 400 -> 600 -> 800 -> 1000 -> 1200` 顺序循环并持久化循环游标。贴纸任务目标从 `60|80|100` 随机，完成卡包任务目标从 `1|2|3` 随机。
+- 任务配置固定为三个模板：`TaskType=1` 完成任意拼图包并累计结算分数，`TaskType=2` 从任意拼图包中收集贴纸数量，`TaskType=3` 完成指定尺寸的卡包数量。三类任务都只在完整完成一个符合尺寸要求的卡包后结算一次；贴纸任务按该卡包的全部 Piece 数量累计。
+- `SizeMode=0` 表示任意尺寸；`SizeMode=1` 从模板 `SizePool` 与玩家当前可玩卡包尺寸的交集中随机指定一个尺寸。三个模板按 `Weight` 加权随机，生成下一任务时严格排除与当前任务相同的 `TaskType`；任务 3没有可玩的 S/M 卡包时不进入候选池。
+- 积分任务目标按 `150 -> 200 -> 250 -> 300` 顺序循环，贴纸任务目标按 `45 -> 60 -> 80` 顺序循环，两类任务使用互不影响的持久化游标。完成卡包任务的目标数量从 `2|3` 随机，指定尺寸从 `S|M` 随机，两项独立选择。
 - 结算以卡包基础分开始（XS 60、S 80、M 100、L 120、XL 140、XXL 160、XXXL 200），将所有符合条件的百分比加成相加后统一相乘，并向上取整。
 - 分数加成为：未点击 `BtnTips` +5%；关闭 MainScene `Toggle1` 关卡描边 +2%；关闭 `Toggle2` 贴纸描边 +5%；完成时间 <=15 / <=30 / <=60 秒分别 +3% / +2% / +1%。
 - 完成任务后发放奖励并随机生成下一个任务实例。每个任务实例使用独立递增的 `TaskInstanceId`，同一个模板可以在后续再次出现。
@@ -53,12 +53,12 @@ Unity **2022.3** / Built-in Render Pipeline 项目，使用 Linear 色彩空间�
 - 卡包发放使用 8 个玩家不可见的内部章节，总量约 150 个卡包，平均每章 18.75 个。章节限制可选的锁定卡包奖励池，但不显示在 MainScene 或其他玩家界面。准确 PackId 分配和章节推进规则仍待确认。
 - 内部章节阶段使用 `R` 表示当前章节仍为 `Locked` 的卡包数：初期 `17..9`、中期后段 `8..3`、末期 `2..1`。持有可玩数量为 `Unlocked + InProgress`，各阶段目标约为 `5-6`、`2-3` 和 `1`。章节超过 18 个卡包时，`R>17` 的额外范围同样属于初期。
 - 当前发包门槛：`R>=9` 时允许 `H<=5`；`R=8` 时允许 `H<=3`；`R=7..3` 时允许 `H<=2`；`R=2..1` 时允许 `H<=1`。被拦截的首次完成发包直接跳过；被拦截的任务奖励保持待发。两个来源可在同一轮结算中同时发包。RewardPanel 保留默认 `ImgBag` Sprite；点击 `BtnFinish` 后，本次发放的全部卡包从 `ImgBag` 飞到屏幕居中行，停顿后跨越 MainScene 加载，再分别飞到对应列表位置。
-- 当前任务和下一随机任务都是积分任务，并且本局卡包同时符合两者尺寸及重玩条件时，超过已完成目标的积分向后结转。
+- 积分任务超过目标的分数保存为待结转值；即使中间出现贴纸或完成卡包任务，也会在下一个积分任务生成时恢复为该任务的初始进度。
 - 卡包生命周期保存在 SQLite `CardPacks` 表中，状态为 `Locked`、`Unlocked`、`InProgress` 或 `Completed`。
 - 当前拼图会话保存在 SQLite `CardPackPuzzleProgress` 表中；记录存在表示该卡包有一局可继续，已正确放置的 Piece 编号即时保存，整包完成后删除记录。
 - MainScene 卡包排序：上次列表展示后新发放的卡包优先展示一次，且最新发放的在前；随后依次为 `InProgress`、按解锁时间升序的 `Unlocked`、按首次完成时间升序的 `Completed`。PackId 是确定性并列排序依据；每日挑战优先级暂缓实现。
 - MainScene 所有生命周期状态统一显示 `UI/PackImages/PackIconNNN.png` 静态封面，不执行颜色、材质或置灰处理。
-- 任务实例、当前进度、下一个实例号、上个模板和积分目标循环游标保存在 JSON 根对象 `TaskProgressData`。
+- 任务实例、当前进度、下一个实例号、积分目标循环游标、贴纸目标循环游标和待结转积分保存在 JSON 根对象 `TaskProgressData`。
 - 业务进度不得使用 `PlayerPrefs`。
 
 ### 内容扩展需求
@@ -216,7 +216,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 - `UsableOption1` 是关卡描边开关，`UsableOption2` 是贴纸描边开关，两者新建设置时都默认关闭；`UsableOption3` 是高对比度并默认关闭。已持久化的用户选择优先。关卡描边关闭时 GameScene 保留现有当前阶段连接区域，打开时改为显示当前待拼组的完整合并外边界；贴纸描边关闭时不显示单块轮廓，打开时叠加当前组每块凹槽的独立轮廓。PanelUsable 的 `ImgContentBg` 按高对比度状态显示 `MainSetHigh1/2.png`；`ImgContentLine` 在描边全关、仅关卡描边、贴纸描边打开时分别显示 `MainSetLine1/2/3.png`，两项同时打开使用信息更完整的 `MainSetLine3.png`。GameScene 的 CardBag 根背景在高对比度关闭时使用 `UI/BasicUI/BgCardBoard1.png`，打开时使用 `BgCardBoard2.png`；运行时只替换根 `Image.sprite`，不改变 Prefab 布局。
 - MainScene 和 GameScene 引用相同 `TaskItem.prefab` GUID。场景 Override 只定位根节点（`MainScene`：`10,508`；`GameScene`：`-6,455`）；子节点布局和视觉必须在共享 Prefab 中修改。
 - 共享 TaskItem 子节点名称为 `TaskContent`、`TextProgress`、`ProgressMask`、`BagIcon` 和 `BagBg`。任务 UI 绑定代码应相对 TaskItem 实例解析这些名称，不得使用场景专属后缀。
-- `TaskProgressUIUtility` 是两个 TaskItem 实例共用的运行时绑定。任务文案按任务类型和实际指定尺寸生成；`TextProgress` 显示当前值与任务实例目标值，可见 `ProgressMask` 宽度使用两者比值并限制在有效范围。`BagIcon` 始终使用共享 Prefab 中配置的固定 Sprite，运行时不得按任务奖励或卡包编号替换。
+- `TaskProgressUIUtility` 是两个 TaskItem 实例共用的运行时绑定。三类任务文案分别为“完成任意拼图包，收集 N 分”“从任意拼图包中收集 N 个贴纸”和“完成 N 个 S/M 尺寸的拼图包”；`TextProgress` 显示当前值与任务实例目标值，可见 `ProgressMask` 宽度使用两者比值并限制在有效范围。`BagIcon` 始终使用共享 Prefab 中配置的固定 Sprite，运行时不得按任务奖励或卡包编号替换。
 - MainScene 在 `Start` 时从持久化任务实例刷新 TaskItem。GameScene 结算使用不受 TimeScale 影响的时间：积分任务与结算分数同步滚动，贴纸和完成卡包任务在最终得分后单独滚动进度；任务奖励和下一任务生成在动画前持久化。
 - GameScene 结算摘要将 `TaskBg2/TaskScore` 绑定到当局结算分数，将 `TaskBg2/TaskBagNum` 绑定到 SQLite 中生命周期为 `Completed` 的卡包数量；未完成的已解锁卡包和进行中卡包不计入，重玩不会重复计数。
 - GameScene 进入时记录描边设置快照，点击 `BtnTips` 时记录提示使用，首个 Piece 成功放置时开始不受 TimeScale 影响的积分计时，RewardPanel 结算开始时冻结。
