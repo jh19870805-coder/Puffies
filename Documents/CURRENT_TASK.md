@@ -1,49 +1,37 @@
 # 当前任务
 
-- 任务：修复多关卡默认描边断裂
+- 任务：批量替换 CardBag 游戏内包头
 - 状态：已完成
 - 更新时间：2026-08-08
 
 ## 用户意图
 
-- 修复当前组外边界与已完成组接触边在交汇处断裂的问题。
-- 问题存在于多个关卡，应修复通用烘焙算法并批量更新蒙版，而不是单独修改某一关。
+- 将 `美术切图/游戏内包头/PackTitleXXX.png` 复制到编号对应的 `Assets/UI/CardBags/CardBagXXX`。
+- 删除并替换原有 `BoardTitle.png`，新图片统一使用 `BoardTitle.png` 文件名。
 
 ## 工作记录
 
-- 截图对应 `CardBag008/Group02.png`，断点位于已完成组接触边与当前组最终外边界的交汇处。
-- 移除了交汇双方各自 `24px` 的双向裁剪，以及跨分组删除已认领描边像素的逻辑。
-- 当前组外边界继续使用距离和局部法线方向过滤；相邻组允许在真实交点共享少量外边界像素。
-- 增加交汇端点桥接：只沿最终外边界与已完成区域边界组成的走廊寻找真实路径，最大路径 `64px`，走廊容差 `8px`，不使用跨空白直线。
-- 通过当前 Unity 编辑器全量重烘焙 22 个 CardBag Prefab，生成 96 个有效分组；其中 87 张默认 `GroupNN.png` 发生变化。
-- `CardBag020` 和 `CardBag022` 仍因 Piece 尚未正式分组而跳过；`GroupNN_Level.png` 与 `GroupNN_Stickers.png` 未发生变化。
-- 上一项错误放置红色回弹修改保持原样，没有回退或覆盖。
+- 已按 `001` 至 `022` 的编号一一对应，覆盖 22 个 CardBag 目录中的 `BoardTitle.png`。
+- 保留每个目标文件原有的 `BoardTitle.png.meta`，确保 Unity Sprite GUID 和现有 Prefab 引用不变。
+- 源目录中的 `PackTitleXXX.png` 保持不变。
+- `CardBag001` 至 `CardBag006` 的原图与新图内容已经一致；Git 实际记录 `CardBag007` 至 `CardBag022` 的 16 张图片发生变化。
+- 未修改或覆盖工作区中已有的游戏逻辑、描边算法及烘焙资源变更。
 
 ## 修改文件
 
-- `Assets/Scripts/Editor/PuzzleOutlineBakerEditor.cs`
-- `Assets/Resources/Generated/PuzzleOutlines/CardBag002` 至 `CardBag019`、`CardBag021` 中发生变化的默认 `GroupNN.png`
-- `Documents/PROJECT_CONTEXT.md`
+- `Assets/UI/CardBags/CardBag007/BoardTitle.png` 至 `Assets/UI/CardBags/CardBag022/BoardTitle.png`
 - `Documents/CURRENT_TASK.md`
-
-## 决策
-
-- 不再通过预留空隙避免交点多画；运行时只显示当前阶段蒙版，因此相邻阶段共享交点像素是正确行为。
-- 保留法线方向过滤以阻止切线方向误判；桥接只修复存在真实边界路径的邻近端点。
-- 本次没有修改 SQLite 或 JSON 数据结构，不需要重置本地持久化文件。
 
 ## 验证
 
-- `CardBag008/Group02.png` 烘焙前为分离的两段线，烘焙后接触边与顶部外边界连续闭合。
-- 抽查 `CardBag008/Group03` 至 `Group06`，不存在真实边界路径的独立线段未被强行连接。
-- Unity 日志记录 `Puzzle outline baker: baked 96 group mask(s) from 22 card bag(s).`。
-- `dotnet build Assembly-CSharp-Editor.csproj --no-restore --nologo` 通过，0 警告、0 错误。
-- `git diff --check` 通过；尚需在 Unity Play Mode 中目视复查实际缩放和 Bilinear 过滤后的显示效果。
+- 22 个目标 `BoardTitle.png` 与对应源 `PackTitleXXX.png` 的 SHA-256 哈希全部一致。
+- 22 个 `BoardTitle.png.meta` 均存在且替换前后哈希一致。
+- Git 未报告任何 `BoardTitle.png.meta` 修改。
 
 ## 下一步
 
-1. 在 Unity 中复测 `CardBag008` 第 2 组，并随机抽查其他卡包的后续分组交汇处。
+1. 让 Unity 刷新资源，并在 CardBag Prefab 或游戏内抽查包头显示与裁切效果。
 
 ## 恢复提示
 
-多关卡默认描边断裂已从通用烘焙算法修复，96 个有效分组已全量重烘焙。下一步在 Play Mode 中复测 CardBag008 第 2 组并抽查其他卡包。
+22 个 CardBag 包头已按编号完成替换，Unity GUID 未变化。下一步只需在 Unity 中刷新并目视确认显示效果。
