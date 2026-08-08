@@ -29,7 +29,7 @@ Unity **2022.3** / Built-in Render Pipeline 项目，使用 Linear 色彩空间�
 | 场景 | 需求 |
 |------|------|
 | LoadingScene | 初始化 JSON、SQLite、任务数据和卡包数据；加载结束后进入 MainScene |
-| MainScene | 根据 `CardPacks.csv` 与 SQLite 解锁状态刷新卡包列表；每页按 6 列 x 3 行显示 18 个静态卡包封面。`PackItem.prefab` 保留 `PackCover`、`PackShadow` 和 `PackSize`，运行时将 `PackCover` 替换为对应 `PackIconNNN.png`；列表不创建 3D 模型、粒子或 Animator。点击后在顶层 Overlay 中使用同一静态封面，从列表实际位置等比放大到屏幕中心 `600 x 680`，并显示 `PanelBagSelect` 和既有背景虚化；Back 将静态封面返回原列表位置。点击玩/确认重玩后进入 `BgGame` 开包舞台，等待玩家再次轻点卡包或横划；正式撕包动画暂未接入，有效操作当前直接进入 `GameScene`。保留拍照、重玩确认、Rank、Achieve 和 Menu 入口。 |
+| MainScene | 根据 `CardPacks.csv` 与 SQLite 解锁状态刷新卡包列表；每页按 6 列 x 3 行显示 18 个静态卡包封面。`PackItem.prefab` 保留 `PackCover`、`PackShadow` 和 `PackSize`，运行时将 `PackCover` 替换为对应 `PackIconNNN.png`；列表不创建 3D 模型、粒子或 Animator。点击后在顶层 Overlay 中使用同一静态封面，从列表实际位置等比放大到屏幕中心 `600 x 680`，并显示 `PanelBagSelect` 和既有背景虚化；Back 将静态封面返回原列表位置。点击玩/确认重玩后进入 `BgGame` 开包舞台，等待玩家再次轻点卡包或横划；有效操作随机加载一套 `CardPackOpeningModel_001-006`，使用当前 `PackIconNNN` 作为正面纹理，播放制作方骨骼撕裂动画及 `fx_chai_w_001` 横向光效，完成后进入 `GameScene`。保留拍照、重玩确认、Rank、Achieve 和 Menu 入口。 |
 | GameScene | 根据选中 PackId 加载 `CardBagNNN` Prefab，并读取 `CardPacks.csv/BoardScale` 缩放棋盘；按照 `PieceNN` 数字命名组织拼图分组；从正常开包流程进入时播放棋盘、托盘和当前组 Piece 入场；每次正确放置 Piece 后立即持久化，重新进入时恢复已放置 Piece 并从首个未完成分组继续；全部完成后显示 RewardPanel；Editor 和 Development Build 在 `BtnTips` 左侧提供“一键完成”测试按钮 |
 | RankScene | 仅占位；首个 Demo 不包含排行榜后端功能。当前模拟列表前三名的 `RankBg` 分别使用原生 `1646 x 148` 的 `RankCellBg_1.png`、`RankCellBg_2.png`、`RankCellBg_3.png`，第四名以后使用 `1636 x 136` 的 `RankCellBg.png`；`RankItem` 根高度为 `148`，列表纵向间距为 `5`，条目中心步距为 `153` |
 | AchieveScene | 当前显示 20 条模拟成就，前 5 条已达成、后 15 条未达成；接入 Steam 后替换数据源。成就网格固定为 6 列，单元尺寸 `240 x 332`，横纵间距均为 `40` |
@@ -66,7 +66,7 @@ Unity **2022.3** / Built-in Render Pipeline 项目，使用 Linear 色彩空间�
 - 新卡包沿用唯一 `Package001` 模板；`MainScene` 在运行时动态创建列表项。
 - 新拼图通过在 `Resources/CardBagPrefabs/` 下新增 `CardBagNNN` Prefab 实现；每个 Prefab 包含 `GameBoard` 和 `Piece01`...`PieceNN`，不创建 Package JSON。
 - 编辑器批量生成器可扫描 `CardBagNNN` 资源目录，使用完整的 `Previews/CardBagNNN.png` 与透明 Piece PNG 进行像素匹配，并以 `GameBoard.png` 作为运行时棋盘底图批量创建 Prefab，不依赖 Package JSON 或 `unity_layout.json`。生成器优先使用精确 RGB 锚点；切图与预览几何一致但存在导出色差时，回退到分阶段感知颜色匹配，并且只有最低相似度和远距离第二候选分差同时达标才接受，避免相似贴纸误定位。每个源目录除 `BoardTitle.png`、`GameBoard.png` 外的碎片统一命名为小写三位编号 `piece_001.png`、`piece_002.png`……；已有 `.meta` 必须随 PNG 一起移动以保持 Prefab Sprite GUID 引用。
-- 卡包开包特效已移除；后续重新接入前不得恢复旧 `Resources/Effects` 运行时路径。
+- 新卡包撕包特效位于 `Resources/Effects`：六套 `CardPackOpeningModel_001-006` 共用 `CardPackAnimation.controller`，`fx_chai_w_001` 提供撕口横向光效。列表和选中放大仍使用静态图，只有 `BgGame` 内收到轻点或有效横划后才加载并播放这些资源。
 - 构建前执行 `Puffies -> Sync Build Resources`，将运行时磁盘加载的 UI 目录同步到 `StreamingAssets/UI`。
 
 ### 待完成需求
@@ -105,8 +105,8 @@ Assets/
 
 - 不要重命名 `Resources`；代码中存在硬编码资源路径。
 - GameScene 根据选中 PackId 动态加载 `Resources/CardBagPrefabs/CardBagNNN.prefab`。源贴图位于 `UI/CardBags/CardBagNNN/`，通过 Prefab 的 Sprite 引用进入构建，不放入 StreamingAssets。
-- `Assets/Resources/Effects/`、`Assets/Scenes/EffectScene001.unity` 和 `PackItem.prefab/CardPackEffect` 已删除。
-- 当前卡包列表、选中放大与开包等待阶段只使用静态封面，不加载 3D 或粒子资源。
+- `Assets/Resources/Effects/` 保存制作方的新撕包模型、Animator、材质、Shader 和粒子 Prefab；`Assets/Scenes/EffectScene001.unity` 是制作方效果与时间轴参考场景，不作为游戏入口。
+- 当前卡包列表、选中放大与 `BgGame` 等待输入阶段只使用静态封面；收到开包输入后才创建 3D 撕裂模型和粒子资源。
 
 ---
 
@@ -123,7 +123,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
                     -> BtnData       -> PanelSave -> BtnClose / BtnReturn -> 关闭存档面板
       -> 已解锁卡包运行时列表项 -> 居中放大 + 半透明压暗背景 + PanelBagSelect
                                       -> BtnPlay/重玩 -> BgGame 开包舞台
-                                                         -> 轻点卡包 / 横划 -> 预留撕包动画（当前直接完成）-> GameScene 入场
+                                                         -> 轻点卡包 / 横划 -> 真实卡包撕裂 + 横向光效 -> GameScene 入场
                                       -> BtnBack -> 卡包返回列表并关闭面板
           -> BtnReturn -> Main
           -> RewardPanel / BtnFinish -> Main
@@ -305,8 +305,10 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 
 - 首页列表的卡包主体使用 `Assets/UI/PackImages/PackIconNNN.png` 静态图，`PackItem.prefab` 不嵌套卡包特效 Prefab。
 - 选中态使用独立 Screen Space Overlay `Image` 显示同一张静态图，目标尺寸为 `600 x 680`；选择面板、背景虚化、返回、拍照和重玩确认继续沿用现有流程。
-- 点击玩后切换到 `BgGame` 开包舞台并等待玩家轻点或横划。MainScene 不创建撕包引导圆点、闪光线、粒子或 Animator；有效操作直接进入 `GameScene`。旧动画接口不再保留，后续制作新开包动画时按新资源重新接入。
-- `Assets/Resources/Effects/`、`Assets/Scenes/EffectScene001.unity`、专用 `CardPackListUnlit.shader` 以及 MainScene 的特效 Skybox/Directional Light 已删除。
+- 点击玩后切换到 `BgGame` 开包舞台并等待玩家轻点或横划。有效操作随机选择 `CardPackOpeningModel_001-006`，共用制作方 `CardPackAnimation.controller`；模型正面材质只把 `_MainTex` 替换为当前 `PackIconNNN`，背面继续使用制作方 `test01/Bg01`，其他材质、Shader、骨骼和粒子参数不修改。
+- 制作方 Timeline 中骨骼动画先启动，`fx_chai_w_001` 在 `0.5s` 后启动；运行时沿用这一相对时序，并读取 Animator Clip 的约 `1.833s` 总时长后进入 `GameScene`。
+- 撕包模型和光效通过隔离相机渲染到透明 RenderTexture，再作为顶层 RawImage 合成到 `BgGame`；相机沿用参考场景的正交尺寸 `2.66` 和位置 `z=-29.28`。模型保持参考场景的 `Y=180`、动画阶段缩放 `550` 与 `z=164.02565`，只根据当前居中静态卡包的屏幕高度做统一尺寸适配。
+- `Assets/Scenes/EffectScene001.unity` 仅用于核对制作方配置和 Timeline，不加入正常场景导航。列表继续不加载 3D 模型，不恢复旧卡包常驻特效、特效 Skybox、Directional Light 或 `CardPackListUnlit.shader`。
 - `CardPackRewardFlyTransition` 仅负责结算后新卡包从 RewardPanel 飞到屏幕中央，再飞回 MainScene 对应列表位置，不属于开包特效，继续保留。
 - `Assets/Resources/CardBagPrefabs/` 是 GameScene 拼图关卡资源，不属于卡包展示特效，必须保留。
 

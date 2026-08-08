@@ -1,0 +1,178 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!21 &2100000
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: test
+  m_Shader: {fileID: 10750, guid: 0000000000000000f000000000000000, type: 0}
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
+  m_ValidKeywords: []
+  m_InvalidKeywords:
+  - _NOISEMASKSWITCH_ON
+  - _NOISIMASKUSERPOLAR_ON
+  - _OPENCLIP_ON
+  - _USERNOISETEXSECUV_ON
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 0
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: -1
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_LockedProperties: 
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs:
+    - _BumpMap:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _DetailAlbedoMap:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _DetailMask:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _DetailNormalMap:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _EmissionMap:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _MainTex:
+        m_Texture: {fileID: 2800000, guid: 2429d90fbff392c49b1b391741f171bf, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _MaskTex:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _MetallicGlossMap:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _NoiseMask:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _NoiseTex:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _OcclusionMap:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _ParallaxMap:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _SubMaskTex:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _SubTexture:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    m_Ints: []
+    m_Floats:
+    - _AddClipAsAlpha: 0
+    - _AlphaScale: 1
+    - _BlurIterations: 4.19
+    - _BlurRadius: 15
+    - _BlurSize: 6.1
+    - _BoxBlurIterations: 2.86
+    - _BoxBlurSize: 10
+    - _BumpScale: 1
+    - _ClipValue: 0
+    - _ClipWideValue: 0.01
+    - _ColorMask: 15
+    - _Cutoff: 0.5
+    - _DetailNormalMapScale: 1
+    - _DstBlend: 0
+    - _FresnelExp: 1
+    - _FresnelRange0: 0.8234634
+    - _FresnelRange1: 1
+    - _GaussianRadius: 7
+    - _GlossMapScale: 1
+    - _Glossiness: 0.5
+    - _GlossyReflections: 1
+    - _GrayExp: 4.982912
+    - _LightExp: 6.881839
+    - _MainTexBrightExp: 1
+    - _MainTexDesaturate: 0
+    - _MainTexSecUVSpeed: 0
+    - _MainTexUVScale: 1
+    - _MaskExp: 0.6939077
+    - _MaskTexSecUVSpeed: 0
+    - _MeanRadius: 8
+    - _Metallic: 0
+    - _Mode: 0
+    - _Negate: 0
+    - _Noise: 0
+    - _NoiseAsSubTex: 0.06930693
+    - _NoiseExp: 1
+    - _NoiseExpAsSubTex: 1
+    - _NoiseMaskSwitch: 1
+    - _NoiseTexSecUVspeed: 0
+    - _NoisiMaskPro: 1
+    - _NoisiMaskUserPolar: 0.229402
+    - _OcclusionStrength: 1
+    - _OpenClip: 1
+    - _Parallax: 0.02
+    - _SmoothnessTextureChannel: 0
+    - _SpecularHighlights: 1
+    - _SrcBlend: 1
+    - _Stencil: 0
+    - _StencilComp: 8
+    - _StencilOp: 0
+    - _StencilReadMask: 255
+    - _StencilWriteMask: 255
+    - _SubMaskExp: 1
+    - _SubMaskTexSecUVSpeed: 0
+    - _SubTexBrightExp: 1
+    - _SubTexDesaturate: 0
+    - _SubTexSecUVSpeed: 0
+    - _UVSec: 0
+    - _UserColor: 0
+    - _UserMainTexAsClip: 0
+    - _UserMainTexSecUV: 0
+    - _UserMaskTexSecUV: 0
+    - _UserNoiseForMask: 0
+    - _UserNoiseForSubMask: 0
+    - _UserNoiseTexSecUV: 0.229402
+    - _UserParticleValueAsClip: 0
+    - _UserParticleValueAsSpeed: 0
+    - _UserSubMaskTexSecUV: 0
+    - _UserSubTexSecUV: 0
+    - _UserTexBrightAsAlpha: 0
+    - _VignetteIntensity: 0.91
+    - _VignetteOpacity: 0.211
+    - _VignetteRange: 0.972
+    - _VignetteSoftness: 1
+    - _ZWrite: 1
+    m_Colors:
+    - _Black: {r: 0, g: 0, b: 0, a: 1}
+    - _Color: {r: 1, g: 1, b: 1, a: 1}
+    - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
+    - _Gray: {r: 0.49056596, g: 0.49056596, b: 0.49056596, a: 1}
+    - _Light: {r: 1, g: 1, b: 1, a: 1}
+    - _LineColor: {r: 0, g: 0, b: 0, a: 0}
+    - _MainTexMove: {r: 0, g: 0, b: 0, a: 0}
+    - _MaskTeoxMove_xyz: {r: 0, g: 0, b: 0, a: 0}
+    - _NoiseMaskSpeed: {r: 0, g: 0, b: 0, a: 0}
+    - _NoiseSpeed: {r: 0, g: 0, b: 0, a: 0}
+    - _NoiseSpeedSubTex: {r: 0, g: 0, b: 0, a: 0}
+    - _SubMaskTeoxMove_xyz: {r: 0, g: 0, b: 0, a: 0}
+    - _SubTexMove_xyz_copy: {r: 0, g: 0, b: 0, a: 0}
+    - _VignetteColor: {r: 0.34509802, g: 0.5609685, b: 0.7529412, a: 1}
+  m_BuildTextureStacks: []

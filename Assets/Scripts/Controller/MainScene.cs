@@ -139,6 +139,7 @@ public class MainScene : MonoBehaviour
     private Canvas mSelectedPackageOverlayCanvas;
     private Image mSelectedPackageOverlayImage;
     private RectTransform mSelectedPackageOverlayRect;
+    private CardPackOpeningEffect mCardPackOpeningEffect;
     private CanvasGroup mMainCanvasGroup;
     private CanvasGroup mBagSelectPanelCanvasGroup;
     private RawImage mBagSelectBackdropImage;
@@ -3271,9 +3272,39 @@ public class MainScene : MonoBehaviour
         SetBagSelectButtonsInteractable(false);
         var selectedBagId = mSelectedBagId;
         var isReplaySession = mIsSelectedPackageReplay;
+
+        var openingEffectStarted = false;
+        var packTexture = mSelectedPackageOverlayImage != null
+            && mSelectedPackageOverlayImage.sprite != null
+            ? mSelectedPackageOverlayImage.sprite.texture
+            : null;
+        if (packTexture != null
+            && mSelectedPackageOverlayRect != null
+            && mBagSelectOverlayCanvas != null)
+        {
+            if (mCardPackOpeningEffect == null)
+            {
+                mCardPackOpeningEffect = CardPackOpeningEffect.Attach(
+                    mBagSelectOverlayCanvas.transform);
+            }
+
+            openingEffectStarted = mCardPackOpeningEffect != null
+                && mCardPackOpeningEffect.Begin(packTexture, mSelectedPackageOverlayRect);
+        }
+
         SetSelectedPackageImageVisible(false);
         SetBagSelectPanelVisible(false);
-        yield return null;
+        if (openingEffectStarted)
+        {
+            yield return mCardPackOpeningEffect.WaitForCompletion();
+        }
+        else
+        {
+            Debug.LogWarning(
+                $"MainScene: card pack opening effect unavailable; entering game directly. "
+                + $"packId={selectedBagId}");
+            yield return null;
+        }
 
         mPlayAnimationCoroutine = null;
         mHasSwitchedToGameScene = true;
@@ -3544,4 +3575,422 @@ public class MainScene : MonoBehaviour
         mSelectedPackageStageSize = default;
     }
 
+}
+
+public sealed class CardPackOpeningEffect : MonoBehaviour
+{
+    private const int EffectLayer = 31;
+    private const int ModelVariantCount = 6;
+    private const float DemoCameraOrthographicSize = 2.66f;
+    private const float DemoCameraZ = -29.28f;
+    private const float DemoModelScale = 550f;
+    private const float DemoModelZ = 164.02565f;
+    private const float LightEffectDelay = 0.5f;
+    private const float FallbackAnimationDuration = 1.8333334f;
+    private const float IsolatedWorldX = 1000f;
+    private const string ModelPathFormat = "Effects/CardPack/Models/CardPackOpeningModel_{0:D3}";
+    private const string AnimatorControllerPath = "Effects/CardPack/Animations/CardPackAnimation";
+    private const string AnimationStateName = "Take 001";
+    private const string FrontMaterialPath = "Effects/CardFx/Materials/test";
+    private const string BackMaterialPath = "Effects/CardFx/Materials/test01";
+    private const string LightEffectPath = "Effects/CardFx/Profabs/fx_chai_w_001";
+    private const string CardRendererNamePrefix = "mesh_skin_cardPack_";
+    private const int FrontRendererNumberLength = 3;
+    private const int BackRendererNumberLength = 5;
+
+    private RawImage mOutputImage;
+    private GameObject mWorldRoot;
+    private GameObject mModelObject;
+    private GameObject mLightEffectObject;
+    private Camera mEffectCamera;
+    private Animator mAnimator;
+    private RenderTexture mRenderTexture;
+    private Material mFrontMaterial;
+    private Material mBackMaterial;
+    private float mAnimationDuration;
+    private bool mIsPlaying;
+
+    public static CardPackOpeningEffect Attach(Transform parent)
+    {
+        if (parent == null)
+        {
+            return null;
+        }
+
+        var effectObject = new GameObject(
+            nameof(CardPackOpeningEffect),
+            typeof(RectTransform),
+            typeof(CanvasRenderer),
+            typeof(RawImage),
+            typeof(CardPackOpeningEffect));
+        var rectTransform = effectObject.GetComponent<RectTransform>();
+        rectTransform.SetParent(parent, false);
+        rectTransform.anchorMin = Vector2.zero;
+        rectTransform.anchorMax = Vector2.one;
+        rectTransform.pivot = new Vector2(0.5f, 0.5f);
+        rectTransform.offsetMin = Vector2.zero;
+        rectTransform.offsetMax = Vector2.zero;
+        rectTransform.localScale = Vector3.one;
+        effectObject.transform.SetAsLastSibling();
+
+        var effect = effectObject.GetComponent<CardPackOpeningEffect>();
+        effect.mOutputImage = effectObject.GetComponent<RawImage>();
+        effect.mOutputImage.color = Color.white;
+        effect.mOutputImage.raycastTarget = false;
+        effectObject.SetActive(false);
+        return effect;
+    }
+
+    public bool Begin(Texture packTexture, RectTransform displayedPackRect)
+    {
+        CleanupPlaybackResources();
+        if (packTexture == null || displayedPackRect == null)
+        {
+            Debug.LogError("CardPackOpeningEffect: pack texture or display rect is missing.");
+            return false;
+        }
+
+        var variant = UnityEngine.Random.Range(1, ModelVariantCount + 1);
+        var modelPrefab = Resources.Load<GameObject>(string.Format(ModelPathFormat, variant));
+        var controller = Resources.Load<RuntimeAnimatorController>(AnimatorControllerPath);
+        var frontMaterialTemplate = Resources.Load<Material>(FrontMaterialPath);
+        var backMaterialTemplate = Resources.Load<Material>(BackMaterialPath);
+        var lightEffectPrefab = Resources.Load<GameObject>(LightEffectPath);
+        if (modelPrefab == null
+            || controller == null
+            || frontMaterialTemplate == null
+            || backMaterialTemplate == null
+            || lightEffectPrefab == null)
+        {
+            Debug.LogError(
+                $"CardPackOpeningEffect: required resource is missing. variant={variant}, "
+                + $"model={modelPrefab != null}, controller={controller != null}, "
+                + $"frontMaterial={frontMaterialTemplate != null}, "
+                + $"backMaterial={backMaterialTemplate != null}, light={lightEffectPrefab != null}");
+            return false;
+        }
+
+        CreateRenderStage();
+        if (mEffectCamera == null || mRenderTexture == null || mWorldRoot == null)
+        {
+            CleanupPlaybackResources();
+            return false;
+        }
+
+        var stageRoot = new GameObject("CardPackOpeningStage").transform;
+        stageRoot.SetParent(mWorldRoot.transform, false);
+        stageRoot.localPosition = new Vector3(IsolatedWorldX, 0f, 0f);
+        stageRoot.localRotation = Quaternion.identity;
+        stageRoot.localScale = Vector3.one;
+        stageRoot.gameObject.layer = EffectLayer;
+
+        mModelObject = Instantiate(modelPrefab, stageRoot, false);
+        mModelObject.name = modelPrefab.name;
+        mModelObject.transform.localPosition = new Vector3(0f, 0f, DemoModelZ);
+        mModelObject.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+        mModelObject.transform.localScale = Vector3.one * DemoModelScale;
+        SetLayerRecursively(mModelObject, EffectLayer);
+
+        mFrontMaterial = new Material(frontMaterialTemplate)
+        {
+            name = frontMaterialTemplate.name + " (Runtime Pack)"
+        };
+        mFrontMaterial.mainTexture = packTexture;
+        mBackMaterial = new Material(backMaterialTemplate)
+        {
+            name = backMaterialTemplate.name + " (Runtime Back)"
+        };
+
+        if (!ApplyCardPackMaterials(mModelObject, mFrontMaterial, mBackMaterial))
+        {
+            Debug.LogError(
+                $"CardPackOpeningEffect: expected card renderers were not found in {modelPrefab.name}.");
+            CleanupPlaybackResources();
+            return false;
+        }
+
+        mAnimator = mModelObject.GetComponent<Animator>();
+        if (mAnimator == null)
+        {
+            mAnimator = mModelObject.AddComponent<Animator>();
+        }
+
+        mAnimator.runtimeAnimatorController = controller;
+        mAnimator.applyRootMotion = false;
+        mAnimator.updateMode = AnimatorUpdateMode.Normal;
+        mAnimator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+        mAnimator.Rebind();
+        mAnimator.Play(AnimationStateName, 0, 0f);
+        mAnimator.Update(0f);
+        mAnimationDuration = ResolveAnimationDuration(controller);
+
+        if (!TryFitStageToDisplayedPack(stageRoot, displayedPackRect))
+        {
+            Debug.LogError("CardPackOpeningEffect: failed to calculate the opening model bounds.");
+            CleanupPlaybackResources();
+            return false;
+        }
+
+        mLightEffectObject = Instantiate(lightEffectPrefab, stageRoot, false);
+        mLightEffectObject.name = lightEffectPrefab.name;
+        mLightEffectObject.transform.localPosition = new Vector3(0f, 1f, -1.5f);
+        mLightEffectObject.transform.localRotation = Quaternion.identity;
+        mLightEffectObject.transform.localScale = Vector3.one;
+        SetLayerRecursively(mLightEffectObject, EffectLayer);
+        mLightEffectObject.SetActive(false);
+
+        mOutputImage.texture = mRenderTexture;
+        gameObject.SetActive(true);
+        mEffectCamera.enabled = true;
+        mEffectCamera.Render();
+        mIsPlaying = true;
+        Debug.Log(
+            $"CardPackOpeningEffect: started variant {variant:D3} with {packTexture.name}. "
+            + $"duration={mAnimationDuration:F3}s, lightDelay={LightEffectDelay:F3}s");
+        return true;
+    }
+
+    public IEnumerator WaitForCompletion()
+    {
+        if (!mIsPlaying)
+        {
+            yield break;
+        }
+
+        var elapsed = 0f;
+        var lightStarted = false;
+        while (elapsed < mAnimationDuration)
+        {
+            elapsed += Time.deltaTime;
+            if (!lightStarted && elapsed >= LightEffectDelay)
+            {
+                lightStarted = true;
+                StartLightEffect();
+            }
+
+            yield return null;
+        }
+
+        mIsPlaying = false;
+    }
+
+    private void CreateRenderStage()
+    {
+        var renderWidth = Mathf.Max(1, Screen.width);
+        var renderHeight = Mathf.Max(1, Screen.height);
+        var format = SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.ARGBHalf)
+            ? RenderTextureFormat.ARGBHalf
+            : RenderTextureFormat.ARGB32;
+        mRenderTexture = new RenderTexture(
+            renderWidth,
+            renderHeight,
+            24,
+            format,
+            RenderTextureReadWrite.Default)
+        {
+            name = "CardPackOpeningEffectRT",
+            filterMode = FilterMode.Bilinear,
+            wrapMode = TextureWrapMode.Clamp,
+            useMipMap = false,
+            autoGenerateMips = false
+        };
+        mRenderTexture.Create();
+
+        mWorldRoot = new GameObject("CardPackOpeningEffectWorld");
+        mWorldRoot.layer = EffectLayer;
+
+        var cameraObject = new GameObject("CardPackOpeningEffectCamera", typeof(Camera));
+        cameraObject.transform.SetParent(mWorldRoot.transform, false);
+        cameraObject.transform.position = new Vector3(IsolatedWorldX, 0f, DemoCameraZ);
+        cameraObject.transform.rotation = Quaternion.identity;
+        cameraObject.layer = EffectLayer;
+        mEffectCamera = cameraObject.GetComponent<Camera>();
+        mEffectCamera.clearFlags = CameraClearFlags.SolidColor;
+        mEffectCamera.backgroundColor = Color.clear;
+        mEffectCamera.orthographic = true;
+        mEffectCamera.orthographicSize = DemoCameraOrthographicSize;
+        mEffectCamera.nearClipPlane = 0.3f;
+        mEffectCamera.farClipPlane = 1000f;
+        mEffectCamera.depth = 1f;
+        mEffectCamera.cullingMask = 1 << EffectLayer;
+        mEffectCamera.renderingPath = RenderingPath.UsePlayerSettings;
+        mEffectCamera.allowHDR = true;
+        mEffectCamera.allowMSAA = false;
+        mEffectCamera.allowDynamicResolution = false;
+        mEffectCamera.useOcclusionCulling = false;
+        mEffectCamera.targetTexture = mRenderTexture;
+        mEffectCamera.enabled = false;
+    }
+
+    private bool TryFitStageToDisplayedPack(Transform stageRoot, RectTransform displayedPackRect)
+    {
+        var renderers = mModelObject.GetComponentsInChildren<Renderer>(true);
+        if (renderers.Length == 0)
+        {
+            return false;
+        }
+
+        var hasBounds = false;
+        var bounds = default(Bounds);
+        for (var i = 0; i < renderers.Length; i++)
+        {
+            if (!renderers[i].enabled)
+            {
+                renderers[i].enabled = true;
+            }
+
+            if (!hasBounds)
+            {
+                bounds = renderers[i].bounds;
+                hasBounds = true;
+            }
+            else
+            {
+                bounds.Encapsulate(renderers[i].bounds);
+            }
+        }
+
+        if (!hasBounds || bounds.size.y <= 0.0001f)
+        {
+            return false;
+        }
+
+        var corners = new Vector3[4];
+        displayedPackRect.GetWorldCorners(corners);
+        var bottom = RectTransformUtility.WorldToScreenPoint(null, corners[0]);
+        var top = RectTransformUtility.WorldToScreenPoint(null, corners[1]);
+        var targetScreenHeight = Mathf.Abs(top.y - bottom.y);
+        if (targetScreenHeight <= 0.001f)
+        {
+            targetScreenHeight = Screen.height
+                * displayedPackRect.rect.height
+                / GameDefine.DesignHeight;
+        }
+
+        var targetWorldHeight = mEffectCamera.orthographicSize
+            * 2f
+            * targetScreenHeight
+            / Mathf.Max(1f, Screen.height);
+        var uniformScale = targetWorldHeight / bounds.size.y;
+        stageRoot.localScale = Vector3.one * uniformScale;
+        return true;
+    }
+
+    private static bool ApplyCardPackMaterials(
+        GameObject model,
+        Material frontMaterial,
+        Material backMaterial)
+    {
+        var foundFront = false;
+        var foundBack = false;
+        var renderers = model.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+        for (var i = 0; i < renderers.Length; i++)
+        {
+            var renderer = renderers[i];
+            if (!renderer.name.StartsWith(CardRendererNamePrefix))
+            {
+                continue;
+            }
+
+            var numberLength = renderer.name.Length - CardRendererNamePrefix.Length;
+            if (numberLength == BackRendererNumberLength)
+            {
+                renderer.sharedMaterial = backMaterial;
+                foundBack = true;
+            }
+            else if (numberLength == FrontRendererNumberLength)
+            {
+                renderer.sharedMaterial = frontMaterial;
+                foundFront = true;
+            }
+        }
+
+        return foundFront && foundBack;
+    }
+
+    private static float ResolveAnimationDuration(RuntimeAnimatorController controller)
+    {
+        var duration = 0f;
+        var clips = controller.animationClips;
+        for (var i = 0; i < clips.Length; i++)
+        {
+            if (clips[i] != null)
+            {
+                duration = Mathf.Max(duration, clips[i].length);
+            }
+        }
+
+        return duration > 0f ? duration : FallbackAnimationDuration;
+    }
+
+    private void StartLightEffect()
+    {
+        if (mLightEffectObject == null)
+        {
+            return;
+        }
+
+        mLightEffectObject.SetActive(true);
+        var particleSystems = mLightEffectObject.GetComponentsInChildren<ParticleSystem>(true);
+        for (var i = 0; i < particleSystems.Length; i++)
+        {
+            particleSystems[i].Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            particleSystems[i].Play(true);
+        }
+    }
+
+    private static void SetLayerRecursively(GameObject root, int layer)
+    {
+        root.layer = layer;
+        var transforms = root.GetComponentsInChildren<Transform>(true);
+        for (var i = 0; i < transforms.Length; i++)
+        {
+            transforms[i].gameObject.layer = layer;
+        }
+    }
+
+    private void CleanupPlaybackResources()
+    {
+        mIsPlaying = false;
+        if (mOutputImage != null)
+        {
+            mOutputImage.texture = null;
+        }
+
+        if (mWorldRoot != null)
+        {
+            Destroy(mWorldRoot);
+            mWorldRoot = null;
+        }
+
+        if (mRenderTexture != null)
+        {
+            mRenderTexture.Release();
+            Destroy(mRenderTexture);
+            mRenderTexture = null;
+        }
+
+        if (mFrontMaterial != null)
+        {
+            Destroy(mFrontMaterial);
+            mFrontMaterial = null;
+        }
+
+        if (mBackMaterial != null)
+        {
+            Destroy(mBackMaterial);
+            mBackMaterial = null;
+        }
+
+        mModelObject = null;
+        mLightEffectObject = null;
+        mEffectCamera = null;
+        mAnimator = null;
+        mAnimationDuration = 0f;
+    }
+
+    private void OnDestroy()
+    {
+        CleanupPlaybackResources();
+    }
 }
