@@ -1,50 +1,49 @@
 # 当前任务
 
-- 任务：更新卡包尺寸分档
+- 任务：修复多关卡默认描边断裂
 - 状态：已完成
-- 更新时间：2026-08-07
+- 更新时间：2026-08-08
 
 ## 用户意图
 
-- 将卡包尺寸按贴纸数量重新划分为：`<20=XS`、`20..30=S`、`31..55=M`、`56..85=L`、`86..125=XL`、`126..170=XXL`、`>170=XXXL`。
-- 后续使用卡包配置更新工具时继续按同一规则自动写入尺寸。
+- 修复当前组外边界与已完成组接触边在交汇处断裂的问题。
+- 问题存在于多个关卡，应修复通用烘焙算法并批量更新蒙版，而不是单独修改某一关。
 
 ## 工作记录
 
-- `CardBagPrefabGeneratorEditor.ResolvePackSize` 已改为新的七档边界。
-- 已按现有 `StickerCount` 重算 22 行 `CardPacks.csv`；其中 16 个卡包的 `PackSize` 或 `BoardScale` 发生变化。
-- 尺寸枚举、尺寸图标编号、基础分表和尺寸到棋盘缩放的映射保持不变。
-- 已同步项目上下文、策划需求和统一规格记录。
-- 上一项任务系统的未提交修改保持原样，没有回退或覆盖。
+- 截图对应 `CardBag008/Group02.png`，断点位于已完成组接触边与当前组最终外边界的交汇处。
+- 移除了交汇双方各自 `24px` 的双向裁剪，以及跨分组删除已认领描边像素的逻辑。
+- 当前组外边界继续使用距离和局部法线方向过滤；相邻组允许在真实交点共享少量外边界像素。
+- 增加交汇端点桥接：只沿最终外边界与已完成区域边界组成的走廊寻找真实路径，最大路径 `64px`，走廊容差 `8px`，不使用跨空白直线。
+- 通过当前 Unity 编辑器全量重烘焙 22 个 CardBag Prefab，生成 96 个有效分组；其中 87 张默认 `GroupNN.png` 发生变化。
+- `CardBag020` 和 `CardBag022` 仍因 Piece 尚未正式分组而跳过；`GroupNN_Level.png` 与 `GroupNN_Stickers.png` 未发生变化。
+- 上一项错误放置红色回弹修改保持原样，没有回退或覆盖。
 
 ## 修改文件
 
-- `Assets/Scripts/Editor/CardBagPrefabGeneratorEditor.cs`
-- `Assets/Resources/Configs/CardPacks.csv`
+- `Assets/Scripts/Editor/PuzzleOutlineBakerEditor.cs`
+- `Assets/Resources/Generated/PuzzleOutlines/CardBag002` 至 `CardBag019`、`CardBag021` 中发生变化的默认 `GroupNN.png`
 - `Documents/PROJECT_CONTEXT.md`
-- `Documents/GAME_DESIGN_REQUIREMENTS.md`
 - `Documents/CURRENT_TASK.md`
-- `specs/spec-driven-development.md`
 
 ## 决策
 
-- 分档函数依次使用 `<20`、`<31`、`<56`、`<86`、`<126`、`<171`，从而准确表达所有闭区间。
-- 当前配置立即跟随新定义更新，避免运行时配置与后续编辑器工具结果不一致。
+- 不再通过预留空隙避免交点多画；运行时只显示当前阶段蒙版，因此相邻阶段共享交点像素是正确行为。
+- 保留法线方向过滤以阻止切线方向误判；桥接只修复存在真实边界路径的邻近端点。
 - 本次没有修改 SQLite 或 JSON 数据结构，不需要重置本地持久化文件。
 
 ## 验证
 
-- 22 个 `CardBagNNN` 源目录的标准 Piece 数量与 `CardPacks.csv/StickerCount` 全部一致。
-- 22 行配置按新尺寸和既有 `BoardScale` 映射检查，零不一致。
-- 边界映射已静态核对：`19/20/30/31/55/56/85/86/125/126/170/171` 全部符合新定义。
-- `git diff --check` 通过。
-- 当前 Unity `2022.3.62f2c1` 实例完成资源刷新并重新生成编辑器程序集；Editor.log 最近记录中 C# 错误和警告均为 `0`，无配置导入异常。
-- Unity 保持打开，未修改场景、Prefab 或其他资源。
+- `CardBag008/Group02.png` 烘焙前为分离的两段线，烘焙后接触边与顶部外边界连续闭合。
+- 抽查 `CardBag008/Group03` 至 `Group06`，不存在真实边界路径的独立线段未被强行连接。
+- Unity 日志记录 `Puzzle outline baker: baked 96 group mask(s) from 22 card bag(s).`。
+- `dotnet build Assembly-CSharp-Editor.csproj --no-restore --nologo` 通过，0 警告、0 错误。
+- `git diff --check` 通过；尚需在 Unity Play Mode 中目视复查实际缩放和 Bilinear 过滤后的显示效果。
 
 ## 下一步
 
-1. 在编辑器中查看不同尺寸卡包的列表图标与棋盘缩放是否符合策划预期。
+1. 在 Unity 中复测 `CardBag008` 第 2 组，并随机抽查其他卡包的后续分组交汇处。
 
 ## 恢复提示
 
-卡包尺寸判定和现有配置已经更新并通过当前 Unity 实例编译。下一步目视检查尺寸图标与棋盘缩放。
+多关卡默认描边断裂已从通用烘焙算法修复，96 个有效分组已全量重烘焙。下一步在 Play Mode 中复测 CardBag008 第 2 组并抽查其他卡包。

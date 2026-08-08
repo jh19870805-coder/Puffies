@@ -34,8 +34,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 606.5}
-  m_SizeDelta: {x: 1300, y: 164}
+  m_AnchoredPosition: {x: 0, y: 599.5}
+  m_SizeDelta: {x: 1186, y: 150}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &5582194683916832638
 CanvasRenderer:
@@ -87,7 +87,7 @@ GameObject:
   - component: {fileID: 4075440482350194070}
   - component: {fileID: 6099828610740709612}
   m_Layer: 0
-  m_Name: Piece013
+  m_Name: Piece44
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -133,7 +133,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 0}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -162,7 +162,7 @@ GameObject:
   - component: {fileID: 733471816924058249}
   - component: {fileID: 2412682846134439800}
   m_Layer: 0
-  m_Name: Piece015
+  m_Name: Piece24
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -208,7 +208,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 0}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -237,7 +237,7 @@ GameObject:
   - component: {fileID: 1203601850109909157}
   - component: {fileID: 2122798121163171056}
   m_Layer: 0
-  m_Name: Piece026
+  m_Name: Piece35
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -283,7 +283,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 0}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -312,7 +312,7 @@ GameObject:
   - component: {fileID: 2141939938713461293}
   - component: {fileID: 201142939978278603}
   m_Layer: 0
-  m_Name: Piece007
+  m_Name: Piece31
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -358,7 +358,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 0}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -387,7 +387,7 @@ GameObject:
   - component: {fileID: 2005496597862062313}
   - component: {fileID: 2781301896326702593}
   m_Layer: 0
-  m_Name: Piece025
+  m_Name: Piece49
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -433,7 +433,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 0}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -462,7 +462,7 @@ GameObject:
   - component: {fileID: 9034450795951945453}
   - component: {fileID: 2537130474326941774}
   m_Layer: 0
-  m_Name: Piece016
+  m_Name: Piece25
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -508,7 +508,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 0}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -537,7 +537,7 @@ GameObject:
   - component: {fileID: 7054123181259048365}
   - component: {fileID: 875707044601280146}
   m_Layer: 0
-  m_Name: Piece006
+  m_Name: Piece45
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -583,7 +583,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 0}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -612,7 +612,7 @@ GameObject:
   - component: {fileID: 1009911731802199826}
   - component: {fileID: 8568582943239716554}
   m_Layer: 0
-  m_Name: Piece017
+  m_Name: Piece36
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -658,7 +658,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 0}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -687,7 +687,7 @@ GameObject:
   - component: {fileID: 6058719736579455874}
   - component: {fileID: 3098149462613215225}
   m_Layer: 0
-  m_Name: Piece010
+  m_Name: Piece43
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -733,7 +733,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 0}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -762,7 +762,7 @@ GameObject:
   - component: {fileID: 2185473905402374159}
   - component: {fileID: 2354754654041886855}
   m_Layer: 0
-  m_Name: Piece012
+  m_Name: Piece14
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -808,7 +808,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 0}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -837,7 +837,7 @@ GameObject:
   - component: {fileID: 466310781824564081}
   - component: {fileID: 46034266750155381}
   m_Layer: 0
-  m_Name: Piece021
+  m_Name: Piece46
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -883,7 +883,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 0}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -912,7 +912,7 @@ GameObject:
   - component: {fileID: 6812274644809116312}
   - component: {fileID: 3320161465096288106}
   m_Layer: 0
-  m_Name: Piece004
+  m_Name: Piece12
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -958,7 +958,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 0}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -987,7 +987,7 @@ GameObject:
   - component: {fileID: 3815304734085614095}
   - component: {fileID: 2993314646925925642}
   m_Layer: 0
-  m_Name: Piece022
+  m_Name: Piece47
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1033,7 +1033,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 0}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -1062,7 +1062,7 @@ GameObject:
   - component: {fileID: 8129861164244839711}
   - component: {fileID: 9125249139725304749}
   m_Layer: 0
-  m_Name: Piece023
+  m_Name: Piece38
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1108,7 +1108,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 0}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -1137,7 +1137,7 @@ GameObject:
   - component: {fileID: 2194669964704468664}
   - component: {fileID: 4917660802261240914}
   m_Layer: 0
-  m_Name: Piece019
+  m_Name: Piece33
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1183,7 +1183,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 0}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -1212,7 +1212,7 @@ GameObject:
   - component: {fileID: 4905962027596895833}
   - component: {fileID: 6503762853248431440}
   m_Layer: 0
-  m_Name: Piece009
+  m_Name: Piece42
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1258,7 +1258,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 0}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -1287,7 +1287,7 @@ GameObject:
   - component: {fileID: 7047177131419554636}
   - component: {fileID: 6889247005158995446}
   m_Layer: 0
-  m_Name: Piece014
+  m_Name: Piece32
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1333,7 +1333,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 0}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -1362,7 +1362,7 @@ GameObject:
   - component: {fileID: 858832064630965264}
   - component: {fileID: 8670703005044942776}
   m_Layer: 0
-  m_Name: Piece027
+  m_Name: Piece37
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1408,7 +1408,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 0}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -1437,7 +1437,7 @@ GameObject:
   - component: {fileID: 5261062318705179232}
   - component: {fileID: 799082366478759003}
   m_Layer: 0
-  m_Name: Piece002
+  m_Name: Piece11
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1483,7 +1483,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 0}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -1512,7 +1512,7 @@ GameObject:
   - component: {fileID: 2837179463749245830}
   - component: {fileID: 1930081351127833778}
   m_Layer: 0
-  m_Name: Piece024
+  m_Name: Piece48
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1558,7 +1558,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 0}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -1587,7 +1587,7 @@ GameObject:
   - component: {fileID: 1336838472303680136}
   - component: {fileID: 6929875787884375127}
   m_Layer: 0
-  m_Name: Piece001
+  m_Name: Piece21
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1633,7 +1633,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 0}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -1662,7 +1662,7 @@ GameObject:
   - component: {fileID: 1787653897292631959}
   - component: {fileID: 4183453685518678272}
   m_Layer: 0
-  m_Name: Piece003
+  m_Name: Piece22
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1708,7 +1708,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 0}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -1737,7 +1737,7 @@ GameObject:
   - component: {fileID: 5143519736752666530}
   - component: {fileID: 8936543069523498386}
   m_Layer: 0
-  m_Name: Piece020
+  m_Name: Piece34
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1783,7 +1783,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 0}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -1812,7 +1812,7 @@ GameObject:
   - component: {fileID: 1903324995351836927}
   - component: {fileID: 570404582649420739}
   m_Layer: 0
-  m_Name: Piece018
+  m_Name: Piece26
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1858,7 +1858,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 0}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -1906,33 +1906,33 @@ RectTransform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 8634819254933426484}
-  - {fileID: 7840601984226537963}
   - {fileID: 8512184569529716547}
-  - {fileID: 5314053260346046025}
   - {fileID: 3371385111314712453}
   - {fileID: 9164731547027793953}
-  - {fileID: 4845729693366075982}
+  - {fileID: 6047439368557661980}
+  - {fileID: 7840601984226537963}
+  - {fileID: 5314053260346046025}
+  - {fileID: 7824592518578406420}
+  - {fileID: 6019585915371733437}
+  - {fileID: 8959870367350547485}
+  - {fileID: 5224711754048614428}
   - {fileID: 5249621548999092691}
+  - {fileID: 5416955077685924848}
+  - {fileID: 6155717848680924521}
+  - {fileID: 5006232566534317919}
+  - {fileID: 5328977634321543101}
+  - {fileID: 7251873151787129343}
+  - {fileID: 9042233749534881620}
+  - {fileID: 1498384886233914499}
   - {fileID: 6203333032031032177}
   - {fileID: 2498104164445492271}
   - {fileID: 8085313061433531463}
-  - {fileID: 7824592518578406420}
-  - {fileID: 6047439368557661980}
   - {fileID: 9187585889013621423}
-  - {fileID: 5416955077685924848}
-  - {fileID: 6019585915371733437}
-  - {fileID: 8959870367350547485}
-  - {fileID: 7251873151787129343}
-  - {fileID: 5224711754048614428}
-  - {fileID: 6155717848680924521}
-  - {fileID: 5006232566534317919}
+  - {fileID: 4845729693366075982}
   - {fileID: 6490930728179987470}
   - {fileID: 6964287714069323892}
-  - {fileID: 1498384886233914499}
   - {fileID: 8987586709243264815}
   - {fileID: 77644169342854505}
-  - {fileID: 5328977634321543101}
-  - {fileID: 9042233749534881620}
   m_Father: {fileID: 986903682420263022}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
@@ -2066,7 +2066,7 @@ GameObject:
   - component: {fileID: 9106208933834814564}
   - component: {fileID: 1671866714090546237}
   m_Layer: 0
-  m_Name: Piece011
+  m_Name: Piece23
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2112,7 +2112,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 0}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -2141,7 +2141,7 @@ GameObject:
   - component: {fileID: 4226320190856951523}
   - component: {fileID: 5903488668819338454}
   m_Layer: 0
-  m_Name: Piece005
+  m_Name: Piece13
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2187,7 +2187,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 0}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -2216,7 +2216,7 @@ GameObject:
   - component: {fileID: 828812192623861450}
   - component: {fileID: 2700556745388651080}
   m_Layer: 0
-  m_Name: Piece008
+  m_Name: Piece41
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2262,7 +2262,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 0}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1

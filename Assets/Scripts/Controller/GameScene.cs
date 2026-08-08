@@ -47,6 +47,9 @@ public class GameScene : MonoBehaviour
     private const float GroupTransitionDefaultHoldDuration = 0.1f;
     private const float PieceSnapDuration = 0.18f;
     private const float PiecePlacementFlashDuration = 0.3f;
+    private const float InvalidDropHoldDuration = 0.08f;
+    private const float InvalidDropReturnDuration = 0.3f;
+    private const float InvalidDropColorRestoreDuration = 0.1f;
     private const int PieceSortingOrder = 520;
     private const float HintShakeAngle = 6f;
     private const float HintShakeCyclesPerSecond = 4.5f;
@@ -100,6 +103,7 @@ public class GameScene : MonoBehaviour
 #endif
     private static readonly Color PieceHintOutlineColor = new Color32(112, 151, 75, 255);
     private static readonly Color TutorialTargetOutlineColor = new Color32(80, 139, 230, 255);
+    private static readonly Color InvalidDropTintColor = new Color32(255, 58, 58, 255);
     private static readonly Vector2 TutorialStrongPromptAnchor = new Vector2(0.42f, 0.78f);
     private static readonly Vector2 TutorialHintPromptAnchor = new Vector2(0.73f, 0.76f);
 
@@ -1534,7 +1538,6 @@ public class GameScene : MonoBehaviour
         if (IsPieceOverGameBoard(state.PieceRenderer))
         {
             ReturnPieceAfterInvalidBoardDrop(state, wasOnTray);
-            RestorePiecePlacementTutorialPresentation(state);
             return;
         }
 
@@ -1597,17 +1600,80 @@ public class GameScene : MonoBehaviour
             return;
         }
 
-        state.PieceRenderer.transform.position = _dragStartPosition;
         state.IsOnTray = wasOnTray;
         if (wasOnTray)
         {
-            state.PieceRenderer.transform.localScale = state.TrayScale;
             ResetPieceTrayPosition(instant: true);
-            return;
         }
 
-        state.PieceRenderer.transform.localScale = state.DragScale;
-        ResetPieceTrayPosition(instant: true);
+        StartCoroutine(PlayInvalidDropReturnAnimation(state, _dragStartPosition));
+    }
+
+    private IEnumerator PlayInvalidDropReturnAnimation(
+        DraggablePieceState state,
+        Vector3 returnPosition)
+    {
+        var renderer = state?.PieceRenderer;
+        if (renderer == null)
+        {
+            yield break;
+        }
+
+        _isPiecePlacementAnimating = true;
+        var startPosition = renderer.transform.position;
+        var startScale = renderer.transform.localScale;
+        var returnScale = state.IsOnTray ? state.TrayScale : state.DragScale;
+        var originalColor = renderer.color;
+        var invalidColor = InvalidDropTintColor;
+        invalidColor.a = originalColor.a;
+        renderer.color = invalidColor;
+        renderer.sortingOrder = PieceSortingOrder + 100;
+
+        if (InvalidDropHoldDuration > 0f)
+        {
+            yield return new WaitForSecondsRealtime(InvalidDropHoldDuration);
+        }
+
+        var elapsed = 0f;
+        while (elapsed < InvalidDropReturnDuration && renderer != null)
+        {
+            elapsed += Mathf.Min(Time.unscaledDeltaTime, GameEntranceMaxFrameDelta);
+            var progress = Mathf.Clamp01(elapsed / InvalidDropReturnDuration);
+            var eased = 1f - Mathf.Pow(1f - progress, 3f);
+            renderer.transform.position = Vector3.LerpUnclamped(
+                startPosition,
+                returnPosition,
+                eased);
+            renderer.transform.localScale = Vector3.LerpUnclamped(
+                startScale,
+                returnScale,
+                eased);
+            yield return null;
+        }
+
+        if (renderer != null)
+        {
+            renderer.transform.position = returnPosition;
+            renderer.transform.localScale = returnScale;
+
+            elapsed = 0f;
+            while (elapsed < InvalidDropColorRestoreDuration && renderer != null)
+            {
+                elapsed += Mathf.Min(Time.unscaledDeltaTime, GameEntranceMaxFrameDelta);
+                var progress = Mathf.Clamp01(elapsed / InvalidDropColorRestoreDuration);
+                renderer.color = Color.LerpUnclamped(invalidColor, originalColor, progress);
+                yield return null;
+            }
+        }
+
+        if (renderer != null)
+        {
+            renderer.color = originalColor;
+            renderer.sortingOrder = PieceSortingOrder;
+        }
+
+        _isPiecePlacementAnimating = false;
+        RestorePiecePlacementTutorialPresentation(state);
     }
 
     private void RecordPlacedPiece(DraggablePieceState state)

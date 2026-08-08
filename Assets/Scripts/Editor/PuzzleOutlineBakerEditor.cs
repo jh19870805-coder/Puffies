@@ -17,8 +17,8 @@ public static class PuzzleOutlineBakerEditor
     private const int BoundaryNormalSampleRadius = 3;
     private const float MinimumBoundaryFacingDot = 0.5f;
     private const int FinalBoundaryAssignmentRadius = 12;
-    private const int CompletedBoundaryJunctionTrimRadius = 24;
-    private const int ContactExteriorJunctionTrimRadius = 24;
+    private const int BoundaryJunctionBridgeMaxLength = 64;
+    private const int BoundaryJunctionBridgeCorridorRadius = 8;
     private const int StrokeRadius = 1;
     private static readonly Color32 OutlineColor = new Color32(0x3f, 0x42, 0x3e, 0xff);
     private static readonly Vector2Int[] Neighbors =
@@ -155,28 +155,21 @@ public static class PuzzleOutlineBakerEditor
                 finalExteriorMask,
                 width,
                 height);
-            var finalBoundaryOwners = BuildFinalBoundaryOwners(
-                groupMasks,
-                closedFinalMask,
-                finalBoundary,
-                width,
-                height);
 
             var outputFolder = $"{OutputRoot}/{GameDefine.CardBagPrefabPrefix}{bagId:D3}";
             Directory.CreateDirectory(outputFolder);
             var completedMask = new bool[width * height];
-            var claimedOutlinePixels = new bool[width * height];
             foreach (var pair in groupMasks)
             {
                 var completedContactBoundary = BuildCompletedContactBoundary(
                     completedMask,
                     pair.Value,
-                    finalBoundary,
                     width,
                     height);
                 var activeBoundary = BuildActiveGroupBoundary(
-                    pair.Key,
-                    finalBoundaryOwners,
+                    pair.Value,
+                    closedFinalMask,
+                    finalBoundary,
                     completedContactBoundary,
                     completedMask,
                     width,
@@ -185,9 +178,6 @@ public static class PuzzleOutlineBakerEditor
                     activeBoundary,
                     width,
                     height);
-                RemovePreviouslyClaimedOutlinePixels(
-                    outputPixels,
-                    claimedOutlinePixels);
 
                 for (var i = 0; i < completedMask.Length; i++)
                 {
@@ -580,83 +570,227 @@ public static class PuzzleOutlineBakerEditor
     }
 
     private static bool[] BuildActiveGroupBoundary(
-        int groupNumber,
-        int[] finalBoundaryOwners,
+        bool[] currentMask,
+        bool[] finalMask,
+        bool[] finalBoundary,
         bool[] completedContactBoundary,
         bool[] completedMask,
         int width,
         int height)
     {
         var activeBoundary = new bool[width * height];
+        var currentOuterBoundary = new bool[width * height];
         for (var y = 0; y < height; y++)
         {
             for (var x = 0; x < width; x++)
             {
                 var index = y * width + x;
-                var isCurrentOuterEdge = finalBoundaryOwners[index] == groupNumber
-                                         && !IsMaskWithinRadius(
-                                             completedMask,
+                var isCurrentOuterEdge = finalBoundary[index]
+                                         && IsBoundaryFacingMask(
+                                             finalMask,
+                                             currentMask,
                                              x,
                                              y,
                                              width,
                                              height,
-                                             CompletedBoundaryJunctionTrimRadius);
+                                             FinalBoundaryAssignmentRadius,
+                                             false);
+                currentOuterBoundary[index] = isCurrentOuterEdge;
                 activeBoundary[index] = isCurrentOuterEdge || completedContactBoundary[index];
             }
         }
 
+        BridgeBoundaryJunctions(
+            activeBoundary,
+            currentOuterBoundary,
+            completedContactBoundary,
+            finalBoundary,
+            completedMask,
+            width,
+            height);
         return activeBoundary;
     }
 
-    private static int[] BuildFinalBoundaryOwners(
-        SortedDictionary<int, bool[]> groupMasks,
-        bool[] finalMask,
+    private static void BridgeBoundaryJunctions(
+        bool[] activeBoundary,
+        bool[] currentOuterBoundary,
+        bool[] completedContactBoundary,
         bool[] finalBoundary,
+        bool[] completedMask,
         int width,
         int height)
     {
-        var owners = new int[finalBoundary.Length];
+        if (CountTrue(currentOuterBoundary) == 0 || CountTrue(completedContactBoundary) == 0)
+        {
+            return;
+        }
+
+        var corridor = new bool[activeBoundary.Length];
         for (var y = 0; y < height; y++)
         {
             for (var x = 0; x < width; x++)
             {
                 var index = y * width + x;
-                if (!finalBoundary[index])
+                corridor[index] = finalBoundary[index]
+                                  || (completedMask[index]
+                                      && IsMaskBoundary(completedMask, x, y, width, height));
+            }
+        }
+
+        corridor = DilateMask(
+            corridor,
+            width,
+            height,
+            BoundaryJunctionBridgeCorridorRadius);
+        var distances = new int[activeBoundary.Length];
+        var predecessors = new int[activeBoundary.Length];
+        Array.Fill(distances, -1);
+        Array.Fill(predecessors, -1);
+        var queue = new Queue<int>();
+        for (var i = 0; i < currentOuterBoundary.Length; i++)
+        {
+            if (!currentOuterBoundary[i])
+            {
+                continue;
+            }
+
+            distances[i] = 0;
+            queue.Enqueue(i);
+        }
+
+        while (queue.Count > 0)
+        {
+            var index = queue.Dequeue();
+            if (distances[index] >= BoundaryJunctionBridgeMaxLength)
+            {
+                continue;
+            }
+
+            var x = index % width;
+            var y = index / width;
+            for (var i = 0; i < Neighbors.Length; i++)
+            {
+                var nx = x + Neighbors[i].x;
+                var ny = y + Neighbors[i].y;
+                if (nx < 0 || nx >= width || ny < 0 || ny >= height)
                 {
                     continue;
                 }
 
-                var nearestDistanceSquared = int.MaxValue;
-                foreach (var pair in groupMasks)
+                var neighborIndex = ny * width + nx;
+                if (!corridor[neighborIndex] || distances[neighborIndex] >= 0)
                 {
-                    if (!TryGetBoundaryFacingDistanceSquared(
-                            finalMask,
-                            pair.Value,
-                            x,
-                            y,
-                            width,
-                            height,
-                            FinalBoundaryAssignmentRadius,
-                            false,
-                            out var distanceSquared)
-                        || distanceSquared >= nearestDistanceSquared)
+                    continue;
+                }
+
+                distances[neighborIndex] = distances[index] + 1;
+                predecessors[neighborIndex] = index;
+                queue.Enqueue(neighborIndex);
+            }
+        }
+
+        var visitedContact = new bool[activeBoundary.Length];
+        for (var start = 0; start < completedContactBoundary.Length; start++)
+        {
+            if (!completedContactBoundary[start] || visitedContact[start])
+            {
+                continue;
+            }
+
+            var bestIndex = -1;
+            var bestDistance = int.MaxValue;
+            visitedContact[start] = true;
+            queue.Enqueue(start);
+            while (queue.Count > 0)
+            {
+                var index = queue.Dequeue();
+                if (distances[index] >= 0 && distances[index] < bestDistance)
+                {
+                    bestIndex = index;
+                    bestDistance = distances[index];
+                }
+
+                var x = index % width;
+                var y = index / width;
+                for (var i = 0; i < Neighbors.Length; i++)
+                {
+                    var nx = x + Neighbors[i].x;
+                    var ny = y + Neighbors[i].y;
+                    if (nx < 0 || nx >= width || ny < 0 || ny >= height)
                     {
                         continue;
                     }
 
-                    nearestDistanceSquared = distanceSquared;
-                    owners[index] = pair.Key;
+                    var neighborIndex = ny * width + nx;
+                    if (!completedContactBoundary[neighborIndex]
+                        || visitedContact[neighborIndex])
+                    {
+                        continue;
+                    }
+
+                    visitedContact[neighborIndex] = true;
+                    queue.Enqueue(neighborIndex);
+                }
+            }
+
+            while (bestIndex >= 0 && !currentOuterBoundary[bestIndex])
+            {
+                activeBoundary[bestIndex] = true;
+                bestIndex = predecessors[bestIndex];
+            }
+        }
+    }
+
+    private static bool[] DilateMask(bool[] source, int width, int height, int radius)
+    {
+        if (radius <= 0)
+        {
+            return source;
+        }
+
+        var dilated = new bool[source.Length];
+        var radiusSquared = radius * radius;
+        for (var y = 0; y < height; y++)
+        {
+            for (var x = 0; x < width; x++)
+            {
+                var index = y * width + x;
+                if (!source[index])
+                {
+                    continue;
+                }
+
+                for (var oy = -radius; oy <= radius; oy++)
+                {
+                    var ny = y + oy;
+                    if (ny < 0 || ny >= height)
+                    {
+                        continue;
+                    }
+
+                    for (var ox = -radius; ox <= radius; ox++)
+                    {
+                        if (ox * ox + oy * oy > radiusSquared)
+                        {
+                            continue;
+                        }
+
+                        var nx = x + ox;
+                        if (nx >= 0 && nx < width)
+                        {
+                            dilated[ny * width + nx] = true;
+                        }
+                    }
                 }
             }
         }
 
-        return owners;
+        return dilated;
     }
 
     private static bool[] BuildCompletedContactBoundary(
         bool[] completedMask,
         bool[] currentMask,
-        bool[] finalBoundary,
         int width,
         int height)
     {
@@ -668,13 +802,6 @@ public static class PuzzleOutlineBakerEditor
                 var index = y * width + x;
                 if (!completedMask[index]
                     || !IsMaskBoundary(completedMask, x, y, width, height)
-                    || IsMaskWithinRadius(
-                        finalBoundary,
-                        x,
-                        y,
-                        width,
-                        height,
-                        ContactExteriorJunctionTrimRadius)
                     || !IsBoundaryFacingMask(
                         completedMask,
                         currentMask,
@@ -954,27 +1081,6 @@ public static class PuzzleOutlineBakerEditor
         return output;
     }
 
-    private static void RemovePreviouslyClaimedOutlinePixels(
-        Color32[] outputPixels,
-        bool[] claimedOutlinePixels)
-    {
-        for (var i = 0; i < outputPixels.Length; i++)
-        {
-            if (outputPixels[i].a == 0)
-            {
-                continue;
-            }
-
-            if (claimedOutlinePixels[i])
-            {
-                outputPixels[i] = default;
-                continue;
-            }
-
-            claimedOutlinePixels[i] = true;
-        }
-    }
-
     private static bool IsBoundaryFacingMask(
         bool[] boundaryMask,
         bool[] targetMask,
@@ -1115,41 +1221,6 @@ public static class PuzzleOutlineBakerEditor
         }
 
         return nearestDistanceSquared != int.MaxValue;
-    }
-
-    private static bool IsMaskWithinRadius(
-        bool[] mask,
-        int x,
-        int y,
-        int width,
-        int height,
-        int radius)
-    {
-        var radiusSquared = radius * radius;
-        for (var oy = -radius; oy <= radius; oy++)
-        {
-            var ny = y + oy;
-            if (ny < 0 || ny >= height)
-            {
-                continue;
-            }
-
-            for (var ox = -radius; ox <= radius; ox++)
-            {
-                if (ox * ox + oy * oy > radiusSquared)
-                {
-                    continue;
-                }
-
-                var nx = x + ox;
-                if (nx >= 0 && nx < width && mask[ny * width + nx])
-                {
-                    return true;
-                }
-            }
-        }
-
-        return false;
     }
 
     private static void WritePng(string assetPath, int width, int height, Color32[] pixels)
