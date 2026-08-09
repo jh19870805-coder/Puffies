@@ -1,50 +1,49 @@
 # 当前任务
 
-- 任务：恢复 MainScene 撕包流程并校准横向撕口光效
-- 状态：代码与编译完成，等待 Unity Play Mode 目视确认
+- 任务：将 CardBag Piece 正式命名升级为四位组号与索引
+- 状态：代码、Prefab 迁移和编译完成，等待 Unity Play Mode 回归
 - 更新时间：2026-08-09
 
 ## 用户意图
 
-- 卡包仍然在 MainScene 原有木桌开包页面撕开，撕包动画完成后才进入 GameScene。
-- 横向划开光效必须位于卡包实际撕口，目前位置略微偏下。
-- 进入 GameScene 后，当前组贴纸从上一页卡包下沿对应位置继续出现，再依次进入下方暗色托盘。
-- 不修改制作方卡包模型、材质、Shader、粒子参数或动画节奏。
+- CardBag Prefab 的正式 Piece 名称由两位 `PieceXY` 改为四位 `PieceGGII`。
+- `GG` 是两位分组号，`II` 是两位组内索引，不足两位时补 `0`；例如 `Piece11` 改为 `Piece0101`。
+- 运行时调用、关卡生成/更新工具和描边烘焙器同步使用新规则。
 
 ## 工作记录
 
-- 已撤销上一轮把撕包动画移动到 GameScene 并让 Piece 同步入槽的错误实现。
-- 恢复 MainScene 原有流程：轻点或横划后播放 `CardPackOpeningModel_001-006`、`CardPackAnimation.controller` 和 `fx_chai_w_001`，等待动画结束后再进入 GameScene。
-- 保持横向光在骨骼动画启动 `0.5s` 后播放。光效启动前只渲染当前动画帧的卡包正面透明蒙版，识别面积最大的下半包区域并读取其顶部边界中位高度，再把 `fx_chai_w_001` 根节点映射到该实际撕口；删除固定 `Y=1.14` 猜测值。蒙版查询失败时回退制作方场景原始 `(0,1,-1.5)`，Prefab 内部配置不变。
-- GameScene 不创建或播放卡包模型。MainScene 在切场景前从 `SelectedCardPackImage` 的实际 RectTransform 记录卡包下沿归一化屏幕坐标，GameScene 将该真实坐标作为当前组 Piece 入场起点；Piece 仍按原有错峰节奏进入现有暗色托盘目标位置。
+- `GameDefine` 增加统一格式化和严格解析 API；组号、索引都只接受 `01..99`，完整持久化编号使用 `group * 100 + index`。
+- GameScene 改为严格读取 `PieceGGII`，按前两位分组、后两位排序，并使用新完整编号保存拼图进度。
+- 描边烘焙器改为读取四位正式名；三位 `Piece001..Piece999` 继续视为未分组中间态并跳过整包烘焙。
+- 关卡生成器的显式分组源文件名改为 `PieceGGII.png` / `PiecesGGII.png`；标准 `piece_###.png` 仍生成三位未分组节点。现有布局更新同时接受四位正式名和三位中间名。
+- 21 个已分组 CardBag Prefab 共 619 个正式 Piece 节点已从两位名迁移为四位名。CardBag022 的 196 个三位未分组节点保持不变。
 
 ## 修改文件
 
-- `Assets/Scripts/Controller/MainScene.cs`
-- `Assets/Scripts/Controller/GameScene.cs`
 - `Assets/Scripts/Model/GameDefine.cs`
+- `Assets/Scripts/Controller/GameScene.cs`
+- `Assets/Scripts/Editor/PuzzleOutlineBakerEditor.cs`
+- `Assets/Scripts/Editor/CardBagPrefabGeneratorEditor.cs`
+- `Assets/Resources/CardBagPrefabs/CardBag001.prefab` 到 `CardBag021.prefab`
 - `Documents/PROJECT_CONTEXT.md`
+- `Documents/GAME_DESIGN_REQUIREMENTS.md`
 - `Documents/CURRENT_TASK.md`
-
-## 决策
-
-- MainScene 撕包、GameScene 拼图入场是两个连续阶段，不合并到同一场景。
-- 横向光位置必须从当前动画帧的卡包正面蒙版计算，不使用固定视觉猜测值；不改制作方资源本身。
-- GameScene 只承接贴纸从卡包下沿到托盘的后半段，不重播撕包特效。
 
 ## 验证
 
 - `dotnet build Assembly-CSharp.csproj --no-restore --nologo` 通过，0 警告、0 错误。
 - `dotnet build Assembly-CSharp-Editor.csproj --no-restore --nologo` 通过，0 警告、0 错误。
-- 待在 Unity Play Mode 确认六套随机撕包模型的蒙版都能被识别，黄色光贴合实际撕口。
-- 待在 Unity Play Mode 目视确认横向光是否贴合撕口。
+- 全部 CardBag Prefab 共识别 619 个合法四位正式名、196 个合法三位中间名；旧两位名 0、非法名 0、同一 Prefab 内重复名 0。
+- `git diff --check` 通过，仅有工作区换行符提示。
+- 待在 Unity Play Mode 回归分组顺序、拖拽吸附、进度保存恢复、新手引导和描边加载。
 
 ## 下一步
 
-1. 在 MainScene 选择卡包并进入开包舞台。
-2. 轻点或横划卡包，确认撕包仍完整发生在当前页面，横向光贴着撕口播放。
-3. 确认撕包完成后才进入 GameScene，当前组贴纸从上一页卡包下沿位置出现并依次进入暗色托盘。
+1. 删除旧的 `%USERPROFILE%/AppData/LocalLow/MainTown/Puffies/LocalData.db`，避免旧 Piece 编号进度与新编号混用。
+2. 从 LoadingScene 进入 CardBag001，验证三组顺序、新手引导、放置和退出恢复。
+3. 随机进入其他已分组卡包，验证描边、提示和一键完成。
 
 ## 数据说明
 
-- 本次没有修改 JSON、SQLite 或业务数据结构，不需要删除本地存储。
+- SQLite 表结构未变化，但 `CardPackPuzzleProgress.PlacedPieceNumbersJson` 中 Piece 完整编号已由旧两位规则改为 `group * 100 + index`。
+- 项目处于开发阶段，本次不增加旧进度兼容；测试前需要删除 `LocalData.db`。

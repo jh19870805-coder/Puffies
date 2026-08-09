@@ -50,7 +50,7 @@ public static class CardBagPrefabGeneratorEditor
         @"^piece_(\d+)$",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly Regex GameplayPieceRegex = new Regex(
-        @"^pieces?(\d+)$",
+        @"^pieces?(\d{4})$",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly Regex CardBagFolderRegex = new Regex(
         @"^CardBag(\d{3})$",
@@ -1094,18 +1094,8 @@ public static class CardBagPrefabGeneratorEditor
 
     private static bool IsPieceObjectName(string objectName)
     {
-        if (string.IsNullOrEmpty(objectName)
-            || !objectName.StartsWith(GameDefine.PieceObjectPrefix, StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        return int.TryParse(
-            objectName.Substring(GameDefine.PieceObjectPrefix.Length),
-            NumberStyles.Integer,
-            CultureInfo.InvariantCulture,
-            out var pieceNumber)
-               && pieceNumber > 0;
+        return GameDefine.TryParsePieceObjectName(objectName, out _)
+               || IsSequentialPlaceholderName(objectName);
     }
 
     private static void ValidatePlacementOverlaps(
@@ -1271,25 +1261,45 @@ public static class CardBagPrefabGeneratorEditor
     private static bool HasGameplayPieceName(string path)
     {
         var match = GameplayPieceRegex.Match(Path.GetFileNameWithoutExtension(path));
-        if (!match.Success || !int.TryParse(match.Groups[1].Value, out var pieceNumber))
-        {
-            return false;
-        }
-
-        var orderInGroup = pieceNumber % 10;
-        return pieceNumber >= 11 && orderInGroup >= 1 && orderInGroup <= 9;
+        return match.Success
+               && GameDefine.TryParsePieceObjectName(
+                   GameDefine.PieceObjectPrefix + match.Groups[1].Value,
+                   out _);
     }
 
     private static string ResolvePieceObjectName(string path, int index)
     {
         var fileName = Path.GetFileNameWithoutExtension(path);
         var gameplayName = GameplayPieceRegex.Match(fileName);
-        if (gameplayName.Success)
+        if (gameplayName.Success
+            && GameDefine.TryParsePieceObjectName(
+                GameDefine.PieceObjectPrefix + gameplayName.Groups[1].Value,
+                out var groupNumber,
+                out var indexInGroup,
+                out _))
         {
-            return "Piece" + gameplayName.Groups[1].Value;
+            return GameDefine.FormatPieceObjectName(groupNumber, indexInGroup);
         }
 
         return $"Piece{index + 1:D3}";
+    }
+
+    private static bool IsSequentialPlaceholderName(string objectName)
+    {
+        if (string.IsNullOrEmpty(objectName)
+            || !objectName.StartsWith(GameDefine.PieceObjectPrefix, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var numberText = objectName.Substring(GameDefine.PieceObjectPrefix.Length);
+        return numberText.Length == 3
+               && int.TryParse(
+                   numberText,
+                   NumberStyles.None,
+                   CultureInfo.InvariantCulture,
+                   out var sequenceNumber)
+               && sequenceNumber > 0;
     }
 
     private static PiecePlacement FindPlacement(

@@ -254,13 +254,13 @@ public static class PuzzleOutlineBakerEditor
         for (var i = 0; i < images.Length; i++)
         {
             var image = images[i];
-            if (image == null || image.sprite == null || !TryParsePieceNumber(image.gameObject.name, out var number))
-            {
-                continue;
-            }
-
-            var groupNumber = number / 10;
-            if (groupNumber <= 0)
+            if (image == null
+                || image.sprite == null
+                || !GameDefine.TryParsePieceObjectName(
+                    image.gameObject.name,
+                    out var groupNumber,
+                    out _,
+                    out _))
             {
                 continue;
             }
@@ -286,26 +286,9 @@ public static class PuzzleOutlineBakerEditor
         }
 
         var numberText = objectName.Substring(GameDefine.PieceObjectPrefix.Length);
-        return numberText.Length == 3 && numberText[0] == '0';
-    }
-
-    private static bool TryParsePieceNumber(string objectName, out int pieceNumber)
-    {
-        pieceNumber = 0;
-        if (string.IsNullOrEmpty(objectName)
-            || !objectName.StartsWith(GameDefine.PieceObjectPrefix, StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        var numberText = objectName.Substring(GameDefine.PieceObjectPrefix.Length);
-        if (numberText.Length > 1 && numberText[0] == '0')
-        {
-            return false;
-        }
-
-        return int.TryParse(numberText, out pieceNumber)
-               && pieceNumber > 0;
+        return numberText.Length == 3
+               && int.TryParse(numberText, out var sequenceNumber)
+               && sequenceNumber > 0;
     }
 
     internal static void DeleteStaleOutlines(int bagId)

@@ -30,7 +30,7 @@ Unity **2022.3** / Built-in Render Pipeline 项目，使用 Linear 色彩空间�
 |------|------|
 | LoadingScene | 初始化 JSON、SQLite、任务数据和卡包数据；加载结束后进入 MainScene |
 | MainScene | 根据 `CardPacks.csv` 与 SQLite 解锁状态刷新卡包列表；每页按 6 列 x 3 行显示 18 个静态卡包封面。`PackItem.prefab` 保留 `PackCover`、`PackShadow` 和 `PackSize`，运行时将 `PackCover` 替换为对应 `PackIconNNN.png`；列表不创建 3D 模型、粒子或 Animator。点击后在顶层 Overlay 中使用同一静态封面，从列表实际位置等比放大到屏幕中心 `600 x 680`，并显示 `PanelBagSelect` 和既有背景虚化；Back 将静态封面返回原列表位置。点击玩/确认重玩后进入 `BgGame` 开包舞台，等待玩家再次轻点卡包或横划；有效操作随机加载一套 `CardPackOpeningModel_001-006`，使用当前 `PackIconNNN` 作为正面纹理，播放制作方骨骼撕裂动画及 `fx_chai_w_001` 横向光效，完成后进入 `GameScene`。保留拍照、重玩确认、Rank、Achieve 和 Menu 入口。 |
-| GameScene | 根据选中 PackId 加载 `CardBagNNN` Prefab，并读取 `CardPacks.csv/BoardScale` 缩放棋盘；按照 `PieceNN` 数字命名组织拼图分组；从正常开包流程进入时播放棋盘、托盘和当前组 Piece 入场；每次正确放置 Piece 后立即持久化，重新进入时恢复已放置 Piece 并从首个未完成分组继续；全部完成后显示 RewardPanel；Editor 和 Development Build 在 `BtnTips` 左侧提供“一键完成”测试按钮 |
+| GameScene | 根据选中 PackId 加载 `CardBagNNN` Prefab，并读取 `CardPacks.csv/BoardScale` 缩放棋盘；按照 `PieceGGII` 四位数字命名组织拼图分组；从正常开包流程进入时播放棋盘、托盘和当前组 Piece 入场；每次正确放置 Piece 后立即持久化，重新进入时恢复已放置 Piece 并从首个未完成分组继续；全部完成后显示 RewardPanel；Editor 和 Development Build 在 `BtnTips` 左侧提供“一键完成”测试按钮 |
 | RankScene | 仅占位；首个 Demo 不包含排行榜后端功能。当前模拟列表前三名的 `RankBg` 分别使用原生 `1646 x 148` 的 `RankCellBg_1.png`、`RankCellBg_2.png`、`RankCellBg_3.png`，第四名以后使用 `1636 x 136` 的 `RankCellBg.png`；`RankItem` 根高度为 `148`，列表纵向间距为 `5`，条目中心步距为 `153` |
 | AchieveScene | 当前显示 20 条模拟成就，前 5 条已达成、后 15 条未达成；接入 Steam 后替换数据源。成就网格固定为 6 列，单元尺寸 `240 x 332`，横纵间距均为 `40` |
 
@@ -64,7 +64,7 @@ Unity **2022.3** / Built-in Render Pipeline 项目，使用 Linear 色彩空间�
 ### 内容扩展需求
 
 - 新卡包沿用唯一 `Package001` 模板；`MainScene` 在运行时动态创建列表项。
-- 新拼图通过在 `Resources/CardBagPrefabs/` 下新增 `CardBagNNN` Prefab 实现；每个 Prefab 包含 `GameBoard` 和 `Piece01`...`PieceNN`，不创建 Package JSON。
+- 新拼图通过在 `Resources/CardBagPrefabs/` 下新增 `CardBagNNN` Prefab 实现；每个已分组 Prefab 包含 `GameBoard` 和 `PieceGGII` 节点，不创建 Package JSON。
 - 编辑器批量生成器可扫描 `CardBagNNN` 资源目录，使用完整的 `Previews/CardBagNNN.png` 与透明 Piece PNG 进行像素匹配，并以 `GameBoard.png` 作为运行时棋盘底图批量创建 Prefab，不依赖 Package JSON 或 `unity_layout.json`。生成器优先使用精确 RGB 锚点；切图与预览几何一致但存在导出色差时，回退到分阶段感知颜色匹配，并且只有最低相似度和远距离第二候选分差同时达标才接受，避免相似贴纸误定位。每个源目录除 `BoardTitle.png`、`GameBoard.png` 外的碎片统一命名为小写三位编号 `piece_001.png`、`piece_002.png`……；已有 `.meta` 必须随 PNG 一起移动以保持 Prefab Sprite GUID 引用。
 - 新卡包撕包特效位于 `Resources/Effects`：六套 `CardPackOpeningModel_001-006` 共用 `CardPackAnimation.controller`，`fx_chai_w_001` 提供撕口横向光效。列表和选中放大仍使用静态图，只有 `BgGame` 内收到轻点或有效横划后才加载并播放这些资源。
 - 构建前执行 `Puffies -> Sync Build Resources`，将运行时磁盘加载的 UI 目录同步到 `StreamingAssets/UI`。
@@ -162,7 +162,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 | `BtnFinish` | 将新发卡包从 RewardPanel 动画移动到 MainScene 列表位置，然后完成返回 |
 | `TextLoading` | 加载进度文字，支持 TextMeshPro `TMP_Text` 和旧 `UnityEngine.UI.Text` |
 | `CardBagNNN` | 从 `Resources/CardBagPrefabs/` 加载的运行时游戏 Prefab |
-| `GameBoard` / `Piece01`... | `CardBagNNN` Prefab 内的棋盘和槽位 |
+| `GameBoard` / `PieceGGII` | `CardBagNNN` Prefab 内的棋盘和槽位；`GG` 是两位组号，`II` 是两位组内索引 |
 | `ActiveGroupOutline` | `GameBoard` 下运行时显示烘焙描边的根节点，按设置组合 `LevelOutline` 与 `StickerOutlines` UGUI Image |
 | `PieceBoard` | 拼图碎片托盘 |
 | `RewardPanel` | 拼图完成奖励面板 |
@@ -207,7 +207,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 - `SqliteLocalStore` 在 `AppRecords` 中使用集合/键记录；卡包业务状态使用专用 `CardPacks` 表。
 - `CardPackLifecycleState` 为 `Locked=0`、`Unlocked=1`、`InProgress=2`、`Completed=3`。首次进入 GameScene 时将未完成卡包标记为 `InProgress`，完成最后一组后标记为 `Completed`；重玩期间保持 `Completed`，不降级。
 - SQLite `CardPacks` 表包含 `PackId`、`PackSize`、`LifecycleState`、`UnlockTime` 和 `CompletionTime`，不保留旧 `IsUnlocked`、`IsPlayed` 字段。解锁和完成时间使用固定格式的本地时间 `yyyy-MM-dd HH:mm:ss.fff`。`CompletionTime` 仅在首次进入 `Completed` 时写入，重玩不修改。
-- SQLite `CardPackPuzzleProgress` 表包含 `PackId`、`PlacedPieceNumbersJson` 和 `UpdatedTime`。进入 GameScene 即创建会话，即使尚未放置 Piece 也保留空记录；正确吸附后按 `PieceNN` 的完整数字编号去重、排序并立即保存。桌面 Piece 的位置不持久化。完成整包并成功保存 `Completed` 后清除该会话。
+- SQLite `CardPackPuzzleProgress` 表包含 `PackId`、`PlacedPieceNumbersJson` 和 `UpdatedTime`。进入 GameScene 即创建会话，即使尚未放置 Piece 也保留空记录；正确吸附后按 `PieceGGII` 的 `组号 * 100 + 组内索引` 完整编号去重、排序并立即保存。桌面 Piece 的位置不持久化。完成整包并成功保存 `Completed` 后清除该会话。
 - `CardPackDistributionUtility` 与 `CardPackDataUtility` 放在一起，负责章节选择、`R` / 持有数量判断、确定性锁定候选选择和首次完成发包。重玩根据 GameScene 启动时记录的生命周期快照跳过该尝试。
 - 待发任务卡包权益保存在 SQLite `AppRecords` 的 `CardPackDistribution/Progress` 下，并按唯一 `TaskInstanceId` 去重。
 - GameScene 在推进任务前先持久化任务权益，且仅在任务推进保存成功后尝试发放，避免任务进度保存失败时重复发包。
@@ -230,7 +230,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 - 每组完成后先播放 `0.3s` 绿色正确放置反馈，再将 CardBag/棋盘位置、相机正交尺寸和托盘平滑切换到下一组布局；棋盘主体动画约 `0.72s`，新组 Piece 从棋盘区域用约 `0.38s` 错峰进入托盘。动画期间锁定拖拽、提示和“一键完成”，普通卡包同样使用该切组流程。
 - GameScene 的 `BtnCompleteAllTest` 仅在 Unity Editor 和 Development Build 中运行时创建。点击后批量持久化当前 CardBag 全部 Piece 编号、显示完整棋盘并调用正式 `ShowRewardPanel()`；因此卡包生命周期、任务积分、奖励发放和完成数量都会产生真实本地测试数据。正式非 Development Build 不显示该按钮。
 - `GameScene/BtnTips` 从当前组选择 Piece 编号最小的未完成碎片。目标碎片在托盘原位置左右抖动约 `0.8s` 后停止，棋盘对应 `GrooveRect` 使用 `HintDashedOutlineGraphic` 从 GPU 读取 Piece Sprite 的实际 Alpha 像素边界，沿真实累计轮廓长度生成固定 `20` 像素实线、基础间隔 `15` 像素、滚动速度 `60` 像素/秒的绿色滚动虚线；轮廓在当前 GameScene 内按 Sprite 缓存并在离场时清空，Physics Shape 只作为读取失败回退。再次点击按钮取消当前提示，成功放置、切组或结算时同样清理。一旦有效提示显示过，本局持续记为已使用提示。
-- `CardBag001` 引导按实际三组拆成三个阶段，首次流程已有部分进度时从当前未完成组继续；活动拼图会话优先于历史卡包完成状态和教程完成记录，因此已完成卡包“重玩”中途退出后再次进入，也会从当前未完成组继续引导。只有整包完成并进入结算时才将 `Tutorial/CardBag001TutorialCompleted` 写入 SQLite `AppRecords`，中途退出不会提前完成教程；没有活动会话的已完成卡包普通进入不自动引导，通过 MainScene“重玩”确认进入时则从第1组重新播放完整引导。第1组 `Piece11` 为强引导：托盘变暗，突出目标 Piece，显示蓝色滚动虚线和原始尺寸的 `GuideArrow1.png`；箭头从碎片中心出现并循环移动指向目标凹槽，不做从小到大的缩放，并只允许拖动目标；拿起后文字和虚线保留，放错恢复焦点。第2组 `Piece21/22` 同时高亮、允许任意顺序放置，并从本阶段开始显示当前组烘焙关卡描边；不显示箭头或目标虚线，第一片放对后只刷新剩余 Piece 焦点。第3组 `Piece31-35` 恢复正常交互和 `BtnTips`，并介绍提示功能；`BtnTips` 在前两步保持隐藏。三步提示框分别位于左上、当前待拼凹槽整体边界上方和右上，从对应方向淡入；第二步位置随棋盘布局动态计算并限制在屏幕安全范围内。三步文字统一克隆场景 `GuideTip/TextTips`，运行时只替换文案，不覆盖编辑器设置的 TMP 字体、材质、字号、颜色、粗体、对齐或 RectTransform。第三步从场景 `GuideTip/Arrow` 读取 `GuideArrow2.png` 及编辑器布局，提示框入场后箭头淡入并循环向右上推进。该引导本身不算使用提示。
+- `CardBag001` 引导按实际三组拆成三个阶段，首次流程已有部分进度时从当前未完成组继续；活动拼图会话优先于历史卡包完成状态和教程完成记录，因此已完成卡包“重玩”中途退出后再次进入，也会从当前未完成组继续引导。只有整包完成并进入结算时才将 `Tutorial/CardBag001TutorialCompleted` 写入 SQLite `AppRecords`，中途退出不会提前完成教程；没有活动会话的已完成卡包普通进入不自动引导，通过 MainScene“重玩”确认进入时则从第1组重新播放完整引导。第1组 `Piece0101` 为强引导：托盘变暗，突出目标 Piece，显示蓝色滚动虚线和原始尺寸的 `GuideArrow1.png`；箭头从碎片中心出现并循环移动指向目标凹槽，不做从小到大的缩放，并只允许拖动目标；拿起后文字和虚线保留，放错恢复焦点。第2组 `Piece0201/0202` 同时高亮、允许任意顺序放置，并从本阶段开始显示当前组烘焙关卡描边；不显示箭头或目标虚线，第一片放对后只刷新剩余 Piece 焦点。第3组 `Piece0301-0305` 恢复正常交互和 `BtnTips`，并介绍提示功能；`BtnTips` 在前两步保持隐藏。三步提示框分别位于左上、当前待拼凹槽整体边界上方和右上，从对应方向淡入；第二步位置随棋盘布局动态计算并限制在屏幕安全范围内。三步文字统一克隆场景 `GuideTip/TextTips`，运行时只替换文案，不覆盖编辑器设置的 TMP 字体、材质、字号、颜色、粗体、对齐或 RectTransform。第三步从场景 `GuideTip/Arrow` 读取 `GuideArrow2.png` 及编辑器布局，提示框入场后箭头淡入并循环向右上推进。该引导本身不算使用提示。
 - 正确放置 Piece 后先将运行时贴图从松手位置以三次方减速曲线吸附到凹槽中心，默认时长 `0.18s`；抵达后才切换为棋盘 Image、播放 `0.3s` 绿色成功闪光并继续切组或结算。吸附期间不得开始新的拖拽、提示或一键完成操作。
 - RewardPanel 先从 `0` 滚动到基础分，再依次展示本局实际生效的“未使用提示”“关闭关卡描边”“关闭贴纸描边”和“快速完成”加成，最后显示最终得分；显示顺序和动画不改变项目既有加成比例、任务进度或发包结果。
 - `PanelBagSelect` 每次打开时同时读取历史生命周期和当前拼图会话。只有 `Completed` 且没有活动会话的卡包显示 `重玩` 并弹出 `PanelReplay`；未完成卡包以及重玩中途退出、仍有活动会话的 `Completed` 卡包都显示 `玩` 并直接进入现有流程。`BtnReplay` 确认时清除旧会话，新会话在进入 GameScene 时创建；`BtnReturn` 和 `BtnClose` 取消。相机按钮只对历史上至少完整完成过一次、生命周期为 `Completed` 的卡包显示；首次拼图尚未完成的 `InProgress` 卡包不显示。弹窗显示期间隐藏选中卡包、其他列表卡包 Renderer 和尺寸图标，并锁定选择页按钮；取消时全部恢复，确认时保持隐藏并衔接开包舞台。
@@ -264,9 +264,9 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 
 1. 在 `Assets/Resources/CardBagPrefabs/` 下创建 `CardBagNNN` Prefab，`NNN` 与 `PackId` 一致。
 2. Prefab 内放置一个名为 `GameBoard` 的子对象。
-3. 在 `GameBoard` 下用 Image 对象添加分组碎片：第 1 组使用 `Piece11`、`Piece12`...；第 2 组使用 `Piece21`、`Piece22`...；第 3 组使用 `Piece31`...。分组号为 `PieceNN / 10`，按升序处理。
-4. 源贴图放在 `Assets/UI/CardBags/CardBagNNN/`，按分组命名，例如 `Pieces11`...`Pieces14` 和 `Pieces21`...`Pieces25`。
-5. 不使用 `PieceGroup` 父节点；分组只读取 `Piece` 后面的数字。
+3. 在 `GameBoard` 下用 Image 对象添加分组碎片，名称严格使用 `PieceGGII`：`GG` 和 `II` 都是两位数字且范围为 `01..99`。例如第 1 组使用 `Piece0101`、`Piece0102`...，第 2 组使用 `Piece0201`、`Piece0202`...。
+4. 源贴图放在 `Assets/UI/CardBags/CardBagNNN/`，标准切图名继续使用 `piece_001.png`、`piece_002.png`...；需要在源文件名中显式携带正式分组时使用 `Piece0101.png` 或 `Pieces0101.png` 格式。
+5. 不使用 `PieceGroup` 父节点；分组严格读取 `PieceGGII` 的前两位 `GG`，组内排序读取后两位 `II`。
 6. 不创建 Package JSON；运行时数据来自已加载 Prefab 的 Image。
 7. 新增或修改 CardBag 后，执行 **Puffies -> Bake Outline Masks**。烘焙器优先使用 `GameBoard.png` 的透明挖空 Alpha 作为最终拼图外边界，并使用已完成 Piece 的 Alpha 作为后续组接触边；GameBoard 没有有效挖空时回退到全部 Piece Alpha 并集。每组生成三张同尺寸资源：`GroupNN.png` 是默认连接区域；`GroupNN_Level.png` 是当前组 Piece Alpha 并集的完整外边界；`GroupNN_Stickers.png` 是当前组每块 Piece Alpha 边界的并集。默认连接图第 1 组只包含自身最终拼图外边界，后续图只包含当前组最终外边界及其与低编号已完成组的接触边。接触边和最终外轮廓均使用圆形最近距离与局部边界法线判定归属，切线方向的邻近不得延长端点；相邻分组可在真实交点共享少量边界像素，不能为避免重叠而删除交点。
 8. `GameScene` 将烘焙的 `#3f423e` Sprite 作为不可交互的 `GameBoard` 子 Image 显示。关卡描边关闭时加载 `GroupNN.png`，打开时替换为 `GroupNN_Level.png`；贴纸描边打开时额外叠加 `GroupNN_Stickers.png`。不要在 Prefab 中手工制作描边对象。
@@ -284,13 +284,13 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 - 第二轮不透明像素匹配排除 Alpha 轮廓内侧 `1px`，避免 Preview 分割线或相邻 Piece 覆盖导致正确位置被边缘像素否决。Preview 和 GameBoard 各自沿用同一校验：常规最低匹配率为 `98%`；低于该值时，只有匹配率至少 `90%` 且所选精确 RGB 锚点在当前参考图中唯一才允许生成并记录警告，重复锚点或低于 `90%` 继续报错。两张参考图都失败时错误同时包含两边原因。
 - 感知颜色匹配会验证透明像素轮次与不透明像素轮次中“精确 RGB 锚点唯一”的定位结果；该位置本身达到 `78%` 感知匹配率时才加入候选种子，避免重复图案中的偶然同色像素误导定位。首轮 `6px` 感知匹配仍不通过时才使用 `1px` 逐像素网格回退，覆盖细线和高对比图案偏移一个像素即失配的情况。逐像素回退优先执行最低 `78%`、候选差值至少 `1.5%` 的颜色校验；颜色受整批调色影响时，只有颜色仍达到 `65%`、原坐标的 RGB 边缘梯度达到 `85%`，且该结构区域领先远端候选至少 `3%` 才允许生成。结构校验只验证颜色定位得到的原坐标，不使用结构最高点移动 Piece。颜色与结构均失败且 Preview 包含青色分割边界时，最后使用 Piece Alpha 外边界匹配 Preview 边界邻域；该回退不用于 GameBoard，要求轮廓匹配至少 `75%` 且领先独立远端候选至少 `8%`，不能通过最佳点附近候选占满列表来绕过唯一性校验。
 - GameBoard 回退的首个 Piece 达到至少 `99.5%` 且位置唯一后，本卡包后续 Piece 统一使用 GameBoard，日志明确记录参考图。参考图颜色索引保存颜色次数和首次像素下标；唯一颜色锚点直接计算候选位置，不遍历整张画布。
-- `PieceNN.png` 或 `PiecesNN.png` 中的 `NN` 直接成为对象编号；未改名的 `piece_###.png` 依次生成 `Piece001`、`Piece002` 等未分组对象，不自动推断游戏分组。
-- 生成结构为 `CardBagNNN/GameBoard/BoardTitle` 和 `CardBagNNN/GameBoard/PieceNN`；棋盘标题与全部碎片统一归属 `GameBoard`。
+- `PieceGGII.png` 或 `PiecesGGII.png` 中的四位 `GGII` 直接成为正式对象编号；未改名的 `piece_###.png` 依次生成 `Piece001`、`Piece002` 等未分组对象，不自动推断游戏分组。
+- 生成结构为 `CardBagNNN/GameBoard/BoardTitle` 和 `CardBagNNN/GameBoard/PieceGGII`；棋盘标题与全部碎片统一归属 `GameBoard`。
 - 窗口默认只选择资源完整且尚无 Prefab 的卡包。选择已有 Prefab 时显示 `Overwrite`，执行前必须确认；覆盖会替换已有层级和手工 Piece 分组。
 - 批量生成逐个隔离失败并汇总结果，只负责创建 Prefab，不自动烘焙描边。完成手工 Piece 分组后再执行 **Bake Outline Masks**。
 - 同一窗口的 **Update Existing Piece Layouts** 用于切图更新后的局部校准。它复用 Preview/GameBoard 定位算法，通过现有 Piece 的 Sprite 资源路径映射节点，只更新 `RectTransform.anchoredPosition` 与 `sizeDelta`；不重建层级、不改变手工分组、Image 参数、影子、旋转缩放或描边资源，也不会自动烘焙描边。更新采用整包事务：源 PNG 与现有 Piece 数量或引用不一致、定位不唯一，或两张有效面积相近的切图在目标位置的高 Alpha 区域重叠达到 `65%` 时，该 Prefab 在保存前失败，避免重复切图覆盖正确布局；面积明显较小且位于大切图内部的独立配件允许更新。
-- `Piece001` 这类带前导零的三位顺序名是制作中间状态。Prefab 中只要仍有任一此类节点，描边烘焙器将整包跳过，避免超过99片时把 `Piece100` 等后续顺序节点误判为正式分组；卡包没有正式分组时删除对应旧描边目录。
-- 当前 CardBag017 为 `1316 x 1316`、37 片，已完成正式分组并生成 5 张描边蒙版。CardBag022 仍使用 `Piece001` 开始的顺序名称，完成手工分组并改为正式 `PieceNN` 后才能烘焙描边并进入 GameScene 测试。
+- `Piece001` 到 `Piece999` 的三位顺序名是制作中间状态，不属于正式命名。Prefab 中只要仍有任一此类节点，描边烘焙器将整包跳过，避免 `Piece100` 等顺序节点被误判为正式分组；卡包没有正式分组时删除对应旧描边目录。
+- 当前 CardBag017 为 `1316 x 1316`、37 片，已完成正式分组并生成 5 张描边蒙版。CardBag022 仍使用 `Piece001` 开始的顺序名称，完成手工分组并改为正式 `PieceGGII` 后才能烘焙描边并进入 GameScene 测试。
 
 ### 拼图描边渲染
 

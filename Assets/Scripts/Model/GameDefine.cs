@@ -102,6 +102,9 @@ public static class GameDefine
     public const string GameBoardObjectName = "GameBoard";
     public const string BackgroundObjectName = "Background";
     public const string PieceObjectPrefix = "Piece";
+    public const int PieceGroupDigits = 2;
+    public const int PieceIndexDigits = 2;
+    public const int PieceNumberGroupMultiplier = 100;
     public const string PieceBoardObjectName = "PieceBoard";
     public const string MainBackgroundFileName = "MainBg.png";
     public const string MainBackgroundPath = UiRoot + "/BasicUI/" + MainBackgroundFileName;
@@ -109,6 +112,72 @@ public static class GameDefine
     public const string ImageExtJpg = ".jpg";
     public const string ImageExtJpeg = ".jpeg";
     public const string ImageExtWebp = ".webp";
+
+    public static string FormatPieceObjectName(int groupNumber, int indexInGroup)
+    {
+        if (groupNumber < 1 || groupNumber > 99)
+        {
+            throw new ArgumentOutOfRangeException(nameof(groupNumber));
+        }
+
+        if (indexInGroup < 1 || indexInGroup > 99)
+        {
+            throw new ArgumentOutOfRangeException(nameof(indexInGroup));
+        }
+
+        return $"{PieceObjectPrefix}{groupNumber:D2}{indexInGroup:D2}";
+    }
+
+    public static bool TryParsePieceObjectName(string objectName, out int pieceNumber)
+    {
+        return TryParsePieceObjectName(
+            objectName,
+            out _,
+            out _,
+            out pieceNumber);
+    }
+
+    public static bool TryParsePieceObjectName(
+        string objectName,
+        out int groupNumber,
+        out int indexInGroup,
+        out int pieceNumber)
+    {
+        groupNumber = 0;
+        indexInGroup = 0;
+        pieceNumber = 0;
+        var expectedLength = PieceObjectPrefix.Length + PieceGroupDigits + PieceIndexDigits;
+        if (string.IsNullOrWhiteSpace(objectName)
+            || objectName.Length != expectedLength
+            || !objectName.StartsWith(PieceObjectPrefix, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var numberText = objectName.Substring(PieceObjectPrefix.Length);
+        for (var i = 0; i < numberText.Length; i++)
+        {
+            if (numberText[i] < '0' || numberText[i] > '9')
+            {
+                return false;
+            }
+        }
+
+        if (!int.TryParse(numberText.Substring(0, PieceGroupDigits), out groupNumber)
+            || !int.TryParse(numberText.Substring(PieceGroupDigits, PieceIndexDigits), out indexInGroup)
+            || groupNumber < 1
+            || groupNumber > 99
+            || indexInGroup < 1
+            || indexInGroup > 99)
+        {
+            groupNumber = 0;
+            indexInGroup = 0;
+            return false;
+        }
+
+        pieceNumber = groupNumber * PieceNumberGroupMultiplier + indexInGroup;
+        return true;
+    }
 
     // Default runtime values
     public const int DefaultBagId = 1;

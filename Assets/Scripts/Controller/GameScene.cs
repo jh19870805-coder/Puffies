@@ -914,13 +914,12 @@ public class GameScene : MonoBehaviour
     private static bool TryGetNumberedGroup(Image image, out int groupNumber)
     {
         groupNumber = 0;
-        if (image == null || !TryParsePieceObjectName(image.gameObject.name, out var pieceNumber))
-        {
-            return false;
-        }
-
-        groupNumber = pieceNumber / 10;
-        return groupNumber > 0;
+        return image != null
+               && GameDefine.TryParsePieceObjectName(
+                   image.gameObject.name,
+                   out groupNumber,
+                   out _,
+                   out _);
     }
 
     private static List<Image> CollectSortedEditorPieceGrooves()
@@ -951,15 +950,7 @@ public class GameScene : MonoBehaviour
 
     private static bool TryParsePieceObjectName(string objectName, out int pieceNumber)
     {
-        pieceNumber = 0;
-        if (string.IsNullOrWhiteSpace(objectName)
-            || !objectName.StartsWith(GameDefine.PieceObjectPrefix, StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        var numberText = objectName.Substring(GameDefine.PieceObjectPrefix.Length);
-        return int.TryParse(numberText, out pieceNumber) && pieceNumber > 0;
+        return GameDefine.TryParsePieceObjectName(objectName, out pieceNumber);
     }
 
     private void SyncEditorLayoutToSprites()
