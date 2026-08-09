@@ -1,41 +1,41 @@
 # 当前任务
 
-- 任务：微调 `CardBag002.prefab` 中更新切图对应的拼图位置
-- 状态：已完成可确认切图的精确微调，发现 `piece_025.png` 资源内容异常待确认
+- 任务：为关卡生成工具增加现有 Piece 布局更新功能
+- 状态：代码完成，等待 Unity 窗口内操作验证
 - 更新时间：2026-08-09
 
 ## 用户意图
 
-- 不重新生成整个 `CardBag002.prefab`。
-- 对照现有效果图，只微调本次更新切图对应 Piece 的位置和原生尺寸。
-- 不修改图片中的影子，不修改或重新烘焙描边。
+- 更新少量卡包切图后，可使用效果图重新校准现有 Prefab 中对应 Piece 的位置。
+- 不重新生成整个 Prefab，不丢失手工分组和编辑器配置。
+- 不修改影子，不重烘焙或修改描边。
 
 ## 工作记录
 
-- 使用 Git 中原来已经对齐的旧切图与当前新切图做内存特征比对，没有运行关卡生成器。
-- `piece_001.png` 相对旧图裁切偏移为 `(3, 7)`，将 `Piece11` 调整为位置 `(-437, 375)`、尺寸 `(404, 358)`。
-- `piece_002.png` 相对旧图裁切偏移为 `(0, 6)`，将 `Piece21` 调整为位置 `(315, 347)`、尺寸 `(274, 416)`。
-- `piece_003.png` 内容、尺寸和裁切位置均未变化，`Piece22` 保持不动。
-- `piece_004.png` 相对旧图裁切偏移为 `(0, 0)`，将 `Piece23` 调整为位置 `(69, 365)`、尺寸 `(322, 360)`。
-- `piece_024.png` 相对旧图裁切偏移为 `(0, 0)`，将 `Piece37` 调整为位置 `(344, -399)`、尺寸 `(194, 294)`。
-- `piece_025.png` 已从原来的底部小鸭内容变成顶部橡皮鸭，并与未修改的 `piece_011.png` 内容重复；为避免将 `Piece38` 错误叠到 `Piece26` 上，暂未修改 `Piece38`。
-- 保留了用户在 Prefab 中已有的 Piece Alpha 修改，没有触碰 Shadow、描边资源或其他节点。
+- 在 `Puffies -> Generate CardBag Prefabs From Images` 窗口增加 `Select Existing` 和 `Update Existing Piece Layouts`。
+- 提取并复用现有 Preview/GameBoard 图像匹配流程，生成和更新使用同一套定位标准。
+- 更新操作通过现有 Image 的 Sprite 资源路径映射源 PNG，因此 `piece_001.png` 可以继续对应手工改名后的 `Piece11`。
+- 只写入已有 Piece 的 `RectTransform.anchoredPosition` 和 `sizeDelta`；保留层级、对象名、手工分组、Image 参数、颜色、影子、旋转、缩放和描边资源。
+- 整包先计算和校验，全部通过后才保存。源文件数量或引用不一致、定位失败、重复 Sprite 引用、拉伸锚点，或目标高 Alpha 区域重叠达到 `65%` 时，本包不会保存。
+- 批量更新逐包隔离失败，结果弹窗显示成功包数、实际变化 Piece 数和失败原因。
 
 ## 修改文件
 
-- `Assets/Resources/CardBagPrefabs/CardBag002.prefab`
+- `Assets/Scripts/Editor/CardBagPrefabGeneratorEditor.cs`
+- `Documents/PROJECT_CONTEXT.md`
 - `Documents/CURRENT_TASK.md`
 
 ## 验证
 
-- 新旧切图特征比对确认 `piece_001/002/003/004/024` 的像素内容可 100% 对齐，并据此换算 Prefab 坐标。
-- `git diff --check -- Assets/Resources/CardBagPrefabs/CardBag002.prefab` 通过；仅有工作区换行符提示。
-- 尚未在 Unity Prefab Mode 或 Play Mode 中目视验收。
+- `dotnet build Assembly-CSharp-Editor.csproj --no-restore --nologo` 通过，0 警告、0 错误。
+- `git diff --check` 通过，仅有工作区换行符提示。
+- 当前已有 Unity 进程运行，因此未启动第二个 Batch Mode 实例；尚未在工具窗口实际点击更新。
 
 ## 下一步
 
-1. 确认 `piece_025.png` 是否误覆盖；如果是，恢复正确的底部小鸭切图后，再按同样方式只微调 `Piece38`。
-2. 在 Unity 中打开 `CardBag002.prefab`，目视检查五个已调整 Piece 与效果图的接缝。
+1. 等 Unity 完成脚本重载后，打开 `Puffies -> Generate CardBag Prefabs From Images`。
+2. 点击 `Select Existing`，也可以只勾选目标卡包，再点击 `Update Existing Piece Layouts`。
+3. 先用当前 `CardBag002` 验证重复的 `piece_025.png` 会报告重叠且不保存；修正该切图后重新执行并目视检查接缝。
 
 ## 数据说明
 

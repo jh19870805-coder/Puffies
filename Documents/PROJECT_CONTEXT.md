@@ -288,6 +288,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 - 生成结构为 `CardBagNNN/GameBoard/BoardTitle` 和 `CardBagNNN/GameBoard/PieceNN`；棋盘标题与全部碎片统一归属 `GameBoard`。
 - 窗口默认只选择资源完整且尚无 Prefab 的卡包。选择已有 Prefab 时显示 `Overwrite`，执行前必须确认；覆盖会替换已有层级和手工 Piece 分组。
 - 批量生成逐个隔离失败并汇总结果，只负责创建 Prefab，不自动烘焙描边。完成手工 Piece 分组后再执行 **Bake Outline Masks**。
+- 同一窗口的 **Update Existing Piece Layouts** 用于切图更新后的局部校准。它复用 Preview/GameBoard 定位算法，通过现有 Piece 的 Sprite 资源路径映射节点，只更新 `RectTransform.anchoredPosition` 与 `sizeDelta`；不重建层级、不改变手工分组、Image 参数、影子、旋转缩放或描边资源，也不会自动烘焙描边。更新采用整包事务：源 PNG 与现有 Piece 数量或引用不一致、定位不唯一，或两张切图在目标位置的高 Alpha 区域重叠达到 `65%` 时，该 Prefab 在保存前失败，避免重复切图覆盖正确布局。
 - `Piece001` 这类带前导零的三位顺序名是制作中间状态。Prefab 中只要仍有任一此类节点，描边烘焙器将整包跳过，避免超过99片时把 `Piece100` 等后续顺序节点误判为正式分组；卡包没有正式分组时删除对应旧描边目录。
 - 当前 CardBag017 为 `1316 x 1316`、37 片，已完成正式分组并生成 5 张描边蒙版。CardBag022 仍使用 `Piece001` 开始的顺序名称，完成手工分组并改为正式 `PieceNN` 后才能烘焙描边并进入 GameScene 测试。
 
@@ -345,7 +346,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 | Puffies -> Apply Design Resolution (All Scenes & Prefabs) | 为全部场景和 Prefab 应用 Canvas 设计分辨率 |
 | Puffies -> Setup Default Chinese Font | 设置中文字体 |
 | Puffies -> Bake Outline Masks | 为每个 CardBag Prefab 重建各分组外边界描边 |
-| Puffies -> Generate CardBag Prefabs From Images | 扫描完整背景和透明碎图，选择并批量生成 CardBag Prefab |
+| Puffies -> Generate CardBag Prefabs From Images | 扫描完整背景和透明碎图；窗口可选择完整生成 CardBag Prefab，或仅按效果图更新现有 Piece 的位置与原生尺寸 |
 | Puffies -> Update Pack Sizes From Piece Counts | 扫描 CardBag 源资源的碎片 PNG 数量并同步更新 `CardPacks.csv/PackSize`、`StickerCount` 与 `BoardScale`；跳过 `AutoUpdate=0` 的行，并始终保留手工 `Series` 内容 |
 
 ---

@@ -43,6 +43,8 @@ public static class CardBagPrefabGeneratorEditor
     private const int OutlineCoarseStride = 3;
     private const int OutlineProximityRadius = 2;
     private const int OutlineBoundarySampleCount = 256;
+    private const byte UpdateOverlapAlphaThreshold = 250;
+    private const float MaximumUpdateOverlapRatio = 0.65f;
     private static readonly Regex NumberedPieceRegex = new Regex(
         @"^piece_(\d+)$",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
@@ -597,6 +599,61 @@ public static class CardBagPrefabGeneratorEditor
         return result;
     }
 
+    internal static BatchUpdateResult UpdateExistingPrefabs(IReadOnlyList<int> packIds)
+    {
+        var result = new BatchUpdateResult();
+        var orderedIds = packIds
+            .Where(packId => packId > 0)
+            .Distinct()
+            .OrderBy(packId => packId)
+            .ToList();
+
+        try
+        {
+            for (var i = 0; i < orderedIds.Count; i++)
+            {
+                var packId = orderedIds[i];
+                EditorUtility.DisplayProgressBar(
+                    "Update CardBag Prefabs",
+                    $"Updating CardBag{packId:D3} ({i + 1}/{orderedIds.Count})",
+                    orderedIds.Count == 0 ? 1f : (i + 1f) / orderedIds.Count);
+                try
+                {
+                    result.ChangedPieceCounts.Add(packId, UpdateExistingPrefab(packId));
+                    result.UpdatedPackIds.Add(packId);
+                }
+                catch (Exception exception)
+                {
+                    result.Failures.Add(packId, exception.Message);
+                    Debug.LogException(exception);
+                }
+            }
+        }
+        finally
+        {
+            EditorUtility.ClearProgressBar();
+        }
+
+        if (result.UpdatedPackIds.Count > 0)
+        {
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            var lastPackId = result.UpdatedPackIds[result.UpdatedPackIds.Count - 1];
+            var lastPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(
+                $"{PrefabRoot}/CardBag{lastPackId:D3}.prefab");
+            if (lastPrefab != null)
+            {
+                Selection.activeObject = lastPrefab;
+                EditorGUIUtility.PingObject(lastPrefab);
+            }
+        }
+
+        Debug.Log(
+            $"CardBag updater: batch finished. " +
+            $"updated={result.UpdatedPackIds.Count}, failed={result.Failures.Count}.");
+        return result;
+    }
+
     [DidReloadScripts]
     private static void ProcessPendingRequestAfterReload()
     {
@@ -703,10 +760,63 @@ public static class CardBagPrefabGeneratorEditor
         }
 
         AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+        var placements = CalculatePlacements(
+            boardPath,
+            previewPath,
+            piecePaths,
+            out var boardWidth,
+            out var boardHeight);
+        ValidateUniqueObjectNames(placements);
+        CreatePrefab(
+            bagName,
+            boardWidth,
+            boardHeight,
+            boardPath,
+            titlePath,
+            placements,
+            prefabPath);
+
+        var hasExplicitGameplayNames = piecePaths.All(HasGameplayPieceName);
+        if (bakeOutlines && hasExplicitGameplayNames)
+        {
+            PuzzleOutlineBakerEditor.BakeAll();
+        }
+        else if (!hasExplicitGameplayNames)
+        {
+            PuzzleOutlineBakerEditor.DeleteStaleOutlines(packId);
+            Debug.LogWarning(
+                $"CardBag generator: {bagName} uses sequential ungrouped Piece names. " +
+                "Rename the Prefab objects for gameplay groups, then run Bake Outline Masks.");
+        }
+
+        AssetDatabase.SaveAssets();
+        AssetDatabase.Refresh();
+        var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+        if (openPrefab && prefab != null)
+        {
+            Selection.activeObject = prefab;
+            EditorGUIUtility.PingObject(prefab);
+            AssetDatabase.OpenAsset(prefab);
+        }
+
+        Debug.Log(
+            $"CardBag generator: created {prefabPath} with {piecePaths.Count} pieces " +
+            $"from image matching, without layout JSON.");
+    }
+
+    private static List<PiecePlacement> CalculatePlacements(
+        string boardPath,
+        string previewPath,
+        IReadOnlyList<string> piecePaths,
+        out int boardWidth,
+        out int boardHeight)
+    {
         using (var board = RawTexture.Load(boardPath))
         using (var preview = RawTexture.Load(previewPath))
         {
-            ValidatePreviewSize(preview, board.Width, board.Height);
+            boardWidth = board.Width;
+            boardHeight = board.Height;
+            ValidatePreviewSize(preview, boardWidth, boardHeight);
             var previewColorIndex = BuildColorIndex(preview.Pixels);
             var previewOutlineMap = BuildPreviewOutlineProximityMap(preview);
             Dictionary<int, ColorOccurrence> gameBoardColorIndex = null;
@@ -779,42 +889,298 @@ public static class CardBagPrefabGeneratorEditor
                     placement.ObjectName = ResolvePieceObjectName(piecePaths[i], i);
                     placements.Add(placement);
                     Debug.Log(
-                        $"CardBag generator: {Path.GetFileName(piecePaths[i])} -> {placement.ObjectName}, " +
+                        $"CardBag matcher: {Path.GetFileName(piecePaths[i])} -> {placement.ObjectName}, " +
                         $"reference={referenceName}, pixel origin=({placement.OriginX},{placement.OriginY}), " +
                         $"match={placement.Score:P2}.");
                 }
             }
 
-            ValidateUniqueObjectNames(placements);
-            CreatePrefab(bagName, board.Width, board.Height, boardPath, titlePath, placements, prefabPath);
+            return placements;
+        }
+    }
+
+    private static int UpdateExistingPrefab(int packId)
+    {
+        AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+
+        var bagName = $"CardBag{packId:D3}";
+        var sourceFolder = $"{CardBagSourceRoot}/{bagName}";
+        var boardPath = $"{sourceFolder}/{GameBoardFileName}";
+        var previewPath = $"{PreviewRoot}/{bagName}.png";
+        var prefabPath = $"{PrefabRoot}/{bagName}.prefab";
+
+        RequireAsset(boardPath, "GameBoard image");
+        RequireAsset(previewPath, "preview image");
+        RequireAsset(prefabPath, "existing CardBag prefab");
+
+        var piecePaths = CollectPiecePaths(sourceFolder);
+        if (piecePaths.Count == 0)
+        {
+            throw new InvalidOperationException(
+                $"CardBag updater: no Piece PNG files found in {sourceFolder}.");
         }
 
-        var hasExplicitGameplayNames = piecePaths.All(HasGameplayPieceName);
-        if (bakeOutlines && hasExplicitGameplayNames)
+        ConfigureSpriteImporter(boardPath);
+        ConfigureSpriteImporter(previewPath);
+        for (var i = 0; i < piecePaths.Count; i++)
         {
-            PuzzleOutlineBakerEditor.BakeAll();
-        }
-        else if (!hasExplicitGameplayNames)
-        {
-            PuzzleOutlineBakerEditor.DeleteStaleOutlines(packId);
-            Debug.LogWarning(
-                $"CardBag generator: {bagName} uses sequential ungrouped Piece names. " +
-                "Rename the Prefab objects for gameplay groups, then run Bake Outline Masks.");
+            ConfigureSpriteImporter(piecePaths[i]);
         }
 
-        AssetDatabase.SaveAssets();
-        AssetDatabase.Refresh();
-        var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
-        if (openPrefab && prefab != null)
+        AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+        var placements = CalculatePlacements(
+            boardPath,
+            previewPath,
+            piecePaths,
+            out var boardWidth,
+            out var boardHeight);
+        ValidatePlacementOverlaps(placements, boardWidth, boardHeight);
+
+        var root = PrefabUtility.LoadPrefabContents(prefabPath);
+        try
         {
-            Selection.activeObject = prefab;
-            EditorGUIUtility.PingObject(prefab);
-            AssetDatabase.OpenAsset(prefab);
+            var gameBoard = FindUniqueGameBoard(root, prefabPath);
+            var gameBoardRect = gameBoard.GetComponent<RectTransform>();
+            if (gameBoardRect == null)
+            {
+                throw new InvalidOperationException(
+                    $"CardBag updater: {prefabPath}/{GameDefine.GameBoardObjectName} has no RectTransform.");
+            }
+
+            if (!Approximately(gameBoardRect.rect.size, new Vector2(boardWidth, boardHeight)))
+            {
+                throw new InvalidOperationException(
+                    $"CardBag updater: existing GameBoard size is " +
+                    $"{gameBoardRect.rect.width:F2}x{gameBoardRect.rect.height:F2}, but source images are " +
+                    $"{boardWidth}x{boardHeight}. Regenerate the level when the board canvas size changes.");
+            }
+
+            var placementByPath = placements.ToDictionary(
+                placement => placement.AssetPath,
+                StringComparer.OrdinalIgnoreCase);
+            var imageByPath = MapExistingPieceImages(gameBoard, placementByPath, prefabPath);
+            var updates = new List<PieceRectUpdate>(placements.Count);
+            for (var i = 0; i < placements.Count; i++)
+            {
+                var placement = placements[i];
+                var image = imageByPath[placement.AssetPath];
+                var rect = image.rectTransform;
+                if (rect.anchorMin != rect.anchorMax)
+                {
+                    throw new InvalidOperationException(
+                        $"CardBag updater: {image.gameObject.name} uses stretch anchors. " +
+                        "Use fixed anchors before updating its image-matched position.");
+                }
+
+                var size = new Vector2(placement.Width, placement.Height);
+                var position = new Vector2(
+                    placement.OriginX + placement.Width * rect.pivot.x
+                    - boardWidth * rect.anchorMin.x,
+                    placement.OriginY + placement.Height * rect.pivot.y
+                    - boardHeight * rect.anchorMin.y);
+                updates.Add(new PieceRectUpdate(rect, position, size));
+            }
+
+            var changedCount = 0;
+            for (var i = 0; i < updates.Count; i++)
+            {
+                var update = updates[i];
+                if (Approximately(update.Rect.anchoredPosition, update.Position)
+                    && Approximately(update.Rect.sizeDelta, update.Size))
+                {
+                    continue;
+                }
+
+                update.Rect.anchoredPosition = update.Position;
+                update.Rect.sizeDelta = update.Size;
+                EditorUtility.SetDirty(update.Rect);
+                changedCount++;
+            }
+
+            if (changedCount > 0)
+            {
+                PrefabUtility.SaveAsPrefabAsset(root, prefabPath, out var success);
+                if (!success)
+                {
+                    throw new InvalidOperationException(
+                        $"CardBag updater: failed to save {prefabPath}.");
+                }
+            }
+
+            Debug.Log(
+                $"CardBag updater: {bagName} matched {placements.Count} existing Piece objects; " +
+                $"updated RectTransforms={changedCount}. Hierarchy, Image settings, shadows and outlines were unchanged.");
+            return changedCount;
+        }
+        finally
+        {
+            PrefabUtility.UnloadPrefabContents(root);
+        }
+    }
+
+    private static GameObject FindUniqueGameBoard(GameObject root, string prefabPath)
+    {
+        var matches = root
+            .GetComponentsInChildren<Transform>(true)
+            .Where(transform => transform.gameObject.name == GameDefine.GameBoardObjectName)
+            .Select(transform => transform.gameObject)
+            .ToList();
+        if (matches.Count != 1)
+        {
+            throw new InvalidOperationException(
+                $"CardBag updater: {prefabPath} must contain exactly one " +
+                $"{GameDefine.GameBoardObjectName}; found {matches.Count}.");
         }
 
-        Debug.Log(
-            $"CardBag generator: created {prefabPath} with {piecePaths.Count} pieces " +
-            $"from image matching, without layout JSON.");
+        return matches[0];
+    }
+
+    private static Dictionary<string, Image> MapExistingPieceImages(
+        GameObject gameBoard,
+        IReadOnlyDictionary<string, PiecePlacement> placementByPath,
+        string prefabPath)
+    {
+        var pieceImages = gameBoard
+            .GetComponentsInChildren<Image>(true)
+            .Where(image => IsPieceObjectName(image.gameObject.name))
+            .ToList();
+        if (pieceImages.Count != placementByPath.Count)
+        {
+            throw new InvalidOperationException(
+                $"CardBag updater: {prefabPath} contains {pieceImages.Count} Piece Image objects, " +
+                $"but the source folder contains {placementByPath.Count} Piece PNG files. " +
+                "The update operation does not add or remove Piece objects.");
+        }
+
+        var result = new Dictionary<string, Image>(StringComparer.OrdinalIgnoreCase);
+        for (var i = 0; i < pieceImages.Count; i++)
+        {
+            var image = pieceImages[i];
+            if (image.sprite == null)
+            {
+                throw new InvalidOperationException(
+                    $"CardBag updater: {prefabPath}/{image.gameObject.name} has no Sprite.");
+            }
+
+            var spritePath = AssetDatabase.GetAssetPath(image.sprite);
+            if (!placementByPath.ContainsKey(spritePath))
+            {
+                throw new InvalidOperationException(
+                    $"CardBag updater: {prefabPath}/{image.gameObject.name} references {spritePath}, " +
+                    "which is not a current Piece PNG in the matching source folder.");
+            }
+
+            if (result.ContainsKey(spritePath))
+            {
+                throw new InvalidOperationException(
+                    $"CardBag updater: multiple Piece objects reference {spritePath}.");
+            }
+
+            result.Add(spritePath, image);
+        }
+
+        foreach (var placementPath in placementByPath.Keys)
+        {
+            if (!result.ContainsKey(placementPath))
+            {
+                throw new InvalidOperationException(
+                    $"CardBag updater: no existing Piece object references {placementPath}.");
+            }
+        }
+
+        return result;
+    }
+
+    private static bool IsPieceObjectName(string objectName)
+    {
+        if (string.IsNullOrEmpty(objectName)
+            || !objectName.StartsWith(GameDefine.PieceObjectPrefix, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return int.TryParse(
+            objectName.Substring(GameDefine.PieceObjectPrefix.Length),
+            NumberStyles.Integer,
+            CultureInfo.InvariantCulture,
+            out var pieceNumber)
+               && pieceNumber > 0;
+    }
+
+    private static void ValidatePlacementOverlaps(
+        IReadOnlyList<PiecePlacement> placements,
+        int boardWidth,
+        int boardHeight)
+    {
+        var primaryOwners = new int[boardWidth * boardHeight];
+        for (var i = 0; i < primaryOwners.Length; i++)
+        {
+            primaryOwners[i] = -1;
+        }
+
+        var opaqueCounts = new int[placements.Count];
+        var overlapCounts = new Dictionary<long, int>();
+        for (var placementIndex = 0; placementIndex < placements.Count; placementIndex++)
+        {
+            var placement = placements[placementIndex];
+            using (var piece = RawTexture.Load(placement.AssetPath))
+            {
+                for (var y = 0; y < piece.Height; y++)
+                {
+                    for (var x = 0; x < piece.Width; x++)
+                    {
+                        if (piece.Pixels[y * piece.Width + x].a < UpdateOverlapAlphaThreshold)
+                        {
+                            continue;
+                        }
+
+                        opaqueCounts[placementIndex]++;
+                        var boardIndex = (placement.OriginY + y) * boardWidth + placement.OriginX + x;
+                        var owner = primaryOwners[boardIndex];
+                        if (owner < 0)
+                        {
+                            primaryOwners[boardIndex] = placementIndex;
+                            continue;
+                        }
+
+                        var pairKey = ((long)owner << 32) | (uint)placementIndex;
+                        overlapCounts.TryGetValue(pairKey, out var overlapCount);
+                        overlapCounts[pairKey] = overlapCount + 1;
+                    }
+                }
+            }
+        }
+
+        foreach (var pair in overlapCounts)
+        {
+            var firstIndex = (int)(pair.Key >> 32);
+            var secondIndex = (int)pair.Key;
+            var smallerOpaqueArea = Mathf.Min(
+                opaqueCounts[firstIndex],
+                opaqueCounts[secondIndex]);
+            if (smallerOpaqueArea <= 0)
+            {
+                continue;
+            }
+
+            var overlapRatio = pair.Value / (float)smallerOpaqueArea;
+            if (overlapRatio < MaximumUpdateOverlapRatio)
+            {
+                continue;
+            }
+
+            throw new InvalidOperationException(
+                $"CardBag updater: {Path.GetFileName(placements[firstIndex].AssetPath)} and " +
+                $"{Path.GetFileName(placements[secondIndex].AssetPath)} resolve to overlapping opaque " +
+                $"regions ({overlapRatio:P1}). Check for a duplicated or incorrectly replaced cut image; " +
+                "the existing prefab was not changed.");
+        }
+    }
+
+    private static bool Approximately(Vector2 left, Vector2 right)
+    {
+        return Mathf.Approximately(left.x, right.x)
+               && Mathf.Approximately(left.y, right.y);
     }
 
     private static List<string> CollectPiecePaths(string sourceFolder)
@@ -2128,6 +2494,13 @@ public static class CardBagPrefabGeneratorEditor
         public Dictionary<int, string> Failures { get; } = new Dictionary<int, string>();
     }
 
+    internal sealed class BatchUpdateResult
+    {
+        public List<int> UpdatedPackIds { get; } = new List<int>();
+        public Dictionary<int, int> ChangedPieceCounts { get; } = new Dictionary<int, int>();
+        public Dictionary<int, string> Failures { get; } = new Dictionary<int, string>();
+    }
+
     internal sealed class PackSizeUpdateResult
     {
         public int ScannedPackCount { get; set; }
@@ -2318,6 +2691,20 @@ public static class CardBagPrefabGeneratorEditor
         }
     }
 
+    private readonly struct PieceRectUpdate
+    {
+        public readonly RectTransform Rect;
+        public readonly Vector2 Position;
+        public readonly Vector2 Size;
+
+        public PieceRectUpdate(RectTransform rect, Vector2 position, Vector2 size)
+        {
+            Rect = rect;
+            Position = position;
+            Size = size;
+        }
+    }
+
     private sealed class PiecePlacement
     {
         public static PiecePlacement Invalid => new PiecePlacement
@@ -2370,8 +2757,9 @@ internal sealed class CardBagPrefabGeneratorWindow : EditorWindow
         EditorGUILayout.HelpBox(
             "Scans Assets/UI/CardBags/CardBagNNN. New prefabs are selected by default. " +
             "GameBoard.png is required; a missing BoardTitle.png only shows a warning. " +
-            "Generate prefabs first, rename sequential Piece nodes into gameplay groups, " +
-            "then run Bake Outline Masks.",
+            "Generate creates the full prefab. Update Existing only refreshes current Piece " +
+            "positions and native sizes from the preview; it preserves hierarchy, grouping, " +
+            "Image settings, shadows and baked outlines.",
             MessageType.Info);
 
         DrawToolbar();
@@ -2379,6 +2767,8 @@ internal sealed class CardBagPrefabGeneratorWindow : EditorWindow
         DrawSourceList();
         EditorGUILayout.Space(6f);
         DrawGenerateButton();
+        EditorGUILayout.Space(4f);
+        DrawUpdateButton();
         EditorGUILayout.Space(6f);
     }
 
@@ -2399,6 +2789,11 @@ internal sealed class CardBagPrefabGeneratorWindow : EditorWindow
             if (GUILayout.Button("Select All Ready", EditorStyles.toolbarButton, GUILayout.Width(110f)))
             {
                 SelectSources(info => info.IsReady);
+            }
+
+            if (GUILayout.Button("Select Existing", EditorStyles.toolbarButton, GUILayout.Width(100f)))
+            {
+                SelectSources(info => info.IsReady && info.PrefabExists);
             }
 
             if (GUILayout.Button("Clear", EditorStyles.toolbarButton, GUILayout.Width(60f)))
@@ -2502,6 +2897,42 @@ internal sealed class CardBagPrefabGeneratorWindow : EditorWindow
         ShowResult(result);
     }
 
+    private void DrawUpdateButton()
+    {
+        var selectedExisting = _sourcePacks
+            .Where(info => info.IsReady
+                           && info.PrefabExists
+                           && _selectedPackIds.Contains(info.PackId))
+            .ToList();
+
+        using (new EditorGUI.DisabledScope(selectedExisting.Count == 0))
+        {
+            if (!GUILayout.Button(
+                    $"Update Existing Piece Layouts ({selectedExisting.Count})",
+                    GUILayout.Height(32f)))
+            {
+                return;
+            }
+        }
+
+        if (!EditorUtility.DisplayDialog(
+                "Update Existing Piece Layouts?",
+                $"Update {selectedExisting.Count} existing prefab(s) from their preview images?\n\n" +
+                "Only existing Piece RectTransform positions and native sizes will change. " +
+                "Hierarchy, grouping, Image settings, shadows and baked outlines are preserved. " +
+                "A missing, duplicated or overlapping cut image stops that prefab before saving.",
+                "Update Existing",
+                "Cancel"))
+        {
+            return;
+        }
+
+        var result = CardBagPrefabGeneratorEditor.UpdateExistingPrefabs(
+            selectedExisting.Select(info => info.PackId).ToList());
+        RefreshSources();
+        ShowUpdateResult(result);
+    }
+
     private void RefreshSources()
     {
         _sourcePacks = CardBagPrefabGeneratorEditor.ScanSourcePacks();
@@ -2541,6 +2972,32 @@ internal sealed class CardBagPrefabGeneratorWindow : EditorWindow
         }
 
         EditorUtility.DisplayDialog("CardBag Generation Finished", message, "OK");
+    }
+
+    private static void ShowUpdateResult(CardBagPrefabGeneratorEditor.BatchUpdateResult result)
+    {
+        var changedPieces = result.ChangedPieceCounts.Values.Sum();
+        var message =
+            $"Updated prefabs: {result.UpdatedPackIds.Count}\n" +
+            $"Changed Piece RectTransforms: {changedPieces}\n" +
+            $"Failed: {result.Failures.Count}";
+        if (result.Failures.Count > 0)
+        {
+            var failureLines = result.Failures
+                .Take(8)
+                .Select(pair => $"CardBag{pair.Key:D3}: {pair.Value}");
+            message += "\n\n" + string.Join("\n", failureLines);
+            if (result.Failures.Count > 8)
+            {
+                message += "\nSee Console for remaining failures.";
+            }
+        }
+        else
+        {
+            message += "\n\nNo hierarchy, grouping, Image settings, shadows or outlines were changed.";
+        }
+
+        EditorUtility.DisplayDialog("CardBag Layout Update Finished", message, "OK");
     }
 }
 #endif
