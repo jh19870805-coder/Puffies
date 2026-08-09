@@ -85,6 +85,8 @@ public class GameScene : MonoBehaviour
         GameDefine.UiRoot + "/BasicUI/BgCardBoard1.png";
     private const string HighContrastCardBoardBackgroundPath =
         GameDefine.UiRoot + "/BasicUI/BgCardBoard2.png";
+    private const string PuzzleOutlineTintShaderResourcesPath = "PuzzleOutlineTint";
+    private const string PuzzleOutlineTintMaterialName = "PuzzleOutlineTint (Runtime)";
     private const string DraggableGroupRootObjectName = "DraggableGroupPieces";
     private const string ActiveGroupOutlineRootObjectName = "ActiveGroupOutline";
     private const string LevelOutlineLayerObjectName = "LevelOutline";
@@ -104,6 +106,8 @@ public class GameScene : MonoBehaviour
     private static readonly Color PieceHintOutlineColor = new Color32(112, 151, 75, 255);
     private static readonly Color TutorialTargetOutlineColor = new Color32(80, 139, 230, 255);
     private static readonly Color InvalidDropTintColor = new Color32(255, 58, 58, 255);
+    private static readonly Color StandardPuzzleOutlineColor = new Color32(0x3f, 0x42, 0x3e, 0xff);
+    private static readonly Color HighContrastPuzzleOutlineColor = new Color32(0xb1, 0xd7, 0x02, 0xff);
     private static readonly Vector2 TutorialStrongPromptAnchor = new Vector2(0.42f, 0.78f);
     private static readonly Vector2 TutorialHintPromptAnchor = new Vector2(0.73f, 0.76f);
 
@@ -134,6 +138,7 @@ public class GameScene : MonoBehaviour
     private bool _wasHintUsed;
     private bool _isLevelOutlineEnabled;
     private bool _isStickerOutlineEnabled;
+    private bool _isHighContrastEnabled;
     private bool _hasGameplayTimerStarted;
     private float _gameplayStartRealtime;
     private float _completionTimeSeconds;
@@ -156,6 +161,8 @@ public class GameScene : MonoBehaviour
     private GameObject _loadedCardBagRoot;
     private RectTransform _loadedCardBagRect;
     private Sprite _runtimeCardBoardBackgroundSprite;
+    private Material _runtimePuzzleOutlineTintMaterial;
+    private bool _didWarnMissingPuzzleOutlineTintShader;
     private float _configuredBoardScale = DefaultBoardScale;
     private Vector3 _originalCardBagLocalScale = Vector3.one;
     private bool _hasOriginalCardBagLocalScale;
@@ -258,6 +265,7 @@ public class GameScene : MonoBehaviour
         DestroyTutorialArrowSprite();
         DestroyTutorialTipBackgroundSprite();
         DestroyRuntimeCardBoardBackgroundSprite();
+        DestroyRuntimePuzzleOutlineTintMaterial();
         ClearPieceHint();
         HintDashedOutlineGraphic.ClearPathCache();
     }
@@ -1373,7 +1381,7 @@ public class GameScene : MonoBehaviour
             stickerOutlineSprite);
     }
 
-    private static void CreateOutlineLayer(Transform parent, string objectName, Sprite sprite)
+    private void CreateOutlineLayer(Transform parent, string objectName, Sprite sprite)
     {
         if (parent == null || sprite == null)
         {
@@ -1397,10 +1405,61 @@ public class GameScene : MonoBehaviour
 
         var outlineImage = outlineObject.GetComponent<Image>();
         outlineImage.sprite = sprite;
-        outlineImage.color = Color.white;
+        var tintMaterial = GetOrCreatePuzzleOutlineTintMaterial();
+        if (tintMaterial != null)
+        {
+            outlineImage.material = tintMaterial;
+            outlineImage.color = _isHighContrastEnabled
+                ? HighContrastPuzzleOutlineColor
+                : StandardPuzzleOutlineColor;
+        }
+        else
+        {
+            outlineImage.color = Color.white;
+        }
         outlineImage.raycastTarget = false;
         outlineImage.maskable = false;
         outlineImage.preserveAspect = false;
+    }
+
+    private Material GetOrCreatePuzzleOutlineTintMaterial()
+    {
+        if (_runtimePuzzleOutlineTintMaterial != null)
+        {
+            return _runtimePuzzleOutlineTintMaterial;
+        }
+
+        var shader = Resources.Load<Shader>(PuzzleOutlineTintShaderResourcesPath);
+        if (shader == null)
+        {
+            if (!_didWarnMissingPuzzleOutlineTintShader)
+            {
+                _didWarnMissingPuzzleOutlineTintShader = true;
+                Debug.LogWarning(
+                    $"GameScene: puzzle outline tint shader is missing at " +
+                    $"Resources/{PuzzleOutlineTintShaderResourcesPath}.shader; " +
+                    "using baked outline colors.");
+            }
+
+            return null;
+        }
+
+        _runtimePuzzleOutlineTintMaterial = new Material(shader)
+        {
+            name = PuzzleOutlineTintMaterialName
+        };
+        return _runtimePuzzleOutlineTintMaterial;
+    }
+
+    private void DestroyRuntimePuzzleOutlineTintMaterial()
+    {
+        if (_runtimePuzzleOutlineTintMaterial == null)
+        {
+            return;
+        }
+
+        Destroy(_runtimePuzzleOutlineTintMaterial);
+        _runtimePuzzleOutlineTintMaterial = null;
     }
 
     private void ClearActiveGroupOutline()
@@ -2649,13 +2708,15 @@ public class GameScene : MonoBehaviour
         _wasHintUsed = false;
         _isLevelOutlineEnabled = settings.IsLevelOutlineEnabled;
         _isStickerOutlineEnabled = settings.IsStickerOutlineEnabled;
+        _isHighContrastEnabled = settings.IsHighContrastEnabled;
         _hasGameplayTimerStarted = false;
         _gameplayStartRealtime = 0f;
         _completionTimeSeconds = 0f;
 
         Debug.Log(
             $"GameScene: scoring session initialized. levelOutline={_isLevelOutlineEnabled}, " +
-            $"stickerOutline={_isStickerOutlineEnabled}");
+            $"stickerOutline={_isStickerOutlineEnabled}, " +
+            $"highContrast={_isHighContrastEnabled}");
     }
 
     private bool ShouldOfferPiecePlacementTutorial(int bagId, bool isReplaySession)

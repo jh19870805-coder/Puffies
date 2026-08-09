@@ -1,7 +1,7 @@
 # 当前任务
 
-- 任务：同步 CardBag022 空间分组规则到自动生成工具
-- 状态：Prefab 分组、生成器逻辑、编译和 CardBag022 描边完成，等待 Unity 工具与 Play Mode 回归
+- 任务：按高对比度状态切换游戏描边颜色
+- 状态：代码和 Shader 完成并通过 C# 编译，等待 Unity Shader 导入与 Play Mode 视觉回归
 - 更新时间：2026-08-09
 
 ## 用户意图
@@ -9,6 +9,7 @@
 - 参考现有 `CardBagXXX.prefab` 的分组方式，将同一局部区域的贴纸划入一组。
 - 先在 `CardBag022.prefab` 上尝试一版大概分组。
 - 将 CardBag022 最终确认的排序和命名规则同步到 CardBag 自动生成工具。
+- 浅色底板继续使用现有描边颜色 `#3f423e`；高对比度深色底板将烘焙描边显示为 `#b1d702`。
 - 不重建 Prefab，不修改贴图、位置、尺寸、Image 参数、层级或影子。
 
 ## 工作记录
@@ -25,12 +26,17 @@
 - 批量生成不自动执行耗时描边烘焙，但会删除该包旧描边并提示执行 `Bake Outline Masks`，避免新分组加载旧蒙版。
 - 尝试以 Unity 批处理执行全量描边烘焙；由于项目已被当前打开的 Unity Editor 占用，批处理实例等待项目锁，已只关闭该等待实例。现有编辑器已成功导入更新后的 Prefab。
 - 当前打开的 Unity Editor 随后完成全量描边烘焙；CardBag022 已生成 14 组对应的默认、关卡和贴纸描边资源，共 42 张 PNG。
+- GameScene 初始化时读取并缓存 `IsHighContrastEnabled`；默认连接描边、完整关卡描边和贴纸描边共用同一颜色规则。
+- 新增 Built-in UGUI 描边 Shader，只读取烘焙 PNG 的 Alpha，忽略原始深色 RGB；普通模式输出 `#3f423e`，高对比模式输出 `#b1d702`，避免直接 Image Tint 与深色纹理相乘后仍然偏暗。
+- 描边 Shader 和运行时 Material 只服务于烘焙棋盘描边；提示虚线与新手引导的专用蓝绿颜色保持不变。GameScene 销毁时释放运行时 Material。
 
 ## 修改文件
 
 - `Assets/Resources/CardBagPrefabs/CardBag022.prefab`
 - `Assets/Scripts/Editor/CardBagPrefabGeneratorEditor.cs`
 - `Assets/Resources/Generated/PuzzleOutlines/CardBag022/`
+- `Assets/Scripts/Controller/GameScene.cs`
+- `Assets/Resources/PuzzleOutlineTint.shader`
 - `Documents/PROJECT_CONTEXT.md`
 - `Documents/CURRENT_TASK.md`
 
@@ -47,12 +53,14 @@
 - 使用 CardBag022 的 196 个实际中心位置回放自动分组算法，得到 14 组、每组 14 片，自动名称与当前人工确认结果完全一致，差异 0。
 - CardBag022 描边目录包含 42 张 PNG 和 42 个对应 Meta；`Group01..Group14` 的默认、`_Level`、`_Stickers` 文件全部存在。
 - Unity 日志显示 `Puzzle outline baker: baked 114 group mask(s) from 22 card bag(s).`，未发现脚本编译错误；尚未进行 Play Mode 视觉和流程验证。
+- `dotnet build Assembly-CSharp.csproj --no-restore --nologo` 和 `dotnet build Assembly-CSharp-Editor.csproj --no-restore --nologo` 顺序执行通过，均为 0 警告、0 错误。
+- 项目当前被已打开的 Unity Editor 占用，未启动第二个批处理实例；新增 Shader 的 Unity 导入和浅色/深色底板实际显示仍需 Play Mode 验证。
 
 ## 下一步
 
-1. 用后续新卡包执行一次 `Generate Selected`，确认标准切图直接生成正式分组且 Hierarchy 顺序正确。
-2. 进入 CardBag022，验证蛇形组序、每组 14 片、提示描边和一键完成。
-3. 若实际体验中某一自动空间组边界不理想，调整通用分带参数或使用全量显式 `PieceGGII.png` 覆盖该包分组。
+1. 等当前 Unity Editor 导入 `PuzzleOutlineTint.shader` 后确认 Console 无 Shader 错误。
+2. 分别关闭和打开高对比度进入同一卡包，确认描边为 `#3f423e` 和 `#b1d702`，默认、关卡、贴纸三种描边模式一致。
+3. 继续回归 CardBag022 蛇形组序、提示描边和一键完成。
 
 ## 数据说明
 
