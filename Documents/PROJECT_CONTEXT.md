@@ -65,7 +65,7 @@ Unity **2022.3** / Built-in Render Pipeline 项目，使用 Linear 色彩空间�
 
 - 新卡包沿用唯一 `Package001` 模板；`MainScene` 在运行时动态创建列表项。
 - 新拼图通过在 `Resources/CardBagPrefabs/` 下新增 `CardBagNNN` Prefab 实现；每个已分组 Prefab 包含 `GameBoard` 和 `PieceGGII` 节点，不创建 Package JSON。
-- 编辑器批量生成器可扫描 `CardBagNNN` 资源目录，使用完整的 `Previews/CardBagNNN.png` 与透明 Piece PNG 进行像素匹配，并以 `GameBoard.png` 作为运行时棋盘底图批量创建 Prefab，不依赖 Package JSON 或 `unity_layout.json`。生成器优先使用精确 RGB 锚点；切图与预览几何一致但存在导出色差时，回退到分阶段感知颜色匹配，并且只有最低相似度和远距离第二候选分差同时达标才接受，避免相似贴纸误定位。每个源目录除 `BoardTitle.png`、`GameBoard.png` 外的碎片统一命名为小写三位编号 `piece_001.png`、`piece_002.png`……；已有 `.meta` 必须随 PNG 一起移动以保持 Prefab Sprite GUID 引用。
+- 编辑器批量生成器可扫描 `CardBagNNN` 资源目录，使用完整的 `Previews/CardBagNNN.png` 与透明 Piece PNG 进行像素匹配，并以 `GameBoard.png` 作为运行时棋盘底图批量创建 Prefab，不依赖 Package JSON 或 `unity_layout.json`。生成器优先使用精确 RGB 锚点；切图与预览几何一致但存在导出色差时，回退到分阶段感知颜色匹配，并且只有最低相似度和远距离第二候选分差同时达标才接受，避免相似贴纸误定位。每个源目录除 `BoardTitle.png`、`GameBoard.png` 外的碎片统一命名为小写三位编号 `piece_001.png`、`piece_002.png`……；定位完成后自动按空间生成正式 `PieceGGII` 分组。已有 `.meta` 必须随 PNG 一起移动以保持 Prefab Sprite GUID 引用。
 - 新卡包撕包特效位于 `Resources/Effects`：六套 `CardPackOpeningModel_001-006` 共用 `CardPackAnimation.controller`，`fx_chai_w_001` 提供撕口横向光效。列表和选中放大仍使用静态图，只有 `BgGame` 内收到轻点或有效横划后才加载并播放这些资源。
 - 构建前执行 `Puffies -> Sync Build Resources`，将运行时磁盘加载的 UI 目录同步到 `StreamingAssets/UI`。
 
@@ -284,13 +284,13 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 - 第二轮不透明像素匹配排除 Alpha 轮廓内侧 `1px`，避免 Preview 分割线或相邻 Piece 覆盖导致正确位置被边缘像素否决。Preview 和 GameBoard 各自沿用同一校验：常规最低匹配率为 `98%`；低于该值时，只有匹配率至少 `90%` 且所选精确 RGB 锚点在当前参考图中唯一才允许生成并记录警告，重复锚点或低于 `90%` 继续报错。两张参考图都失败时错误同时包含两边原因。
 - 感知颜色匹配会验证透明像素轮次与不透明像素轮次中“精确 RGB 锚点唯一”的定位结果；该位置本身达到 `78%` 感知匹配率时才加入候选种子，避免重复图案中的偶然同色像素误导定位。首轮 `6px` 感知匹配仍不通过时才使用 `1px` 逐像素网格回退，覆盖细线和高对比图案偏移一个像素即失配的情况。逐像素回退优先执行最低 `78%`、候选差值至少 `1.5%` 的颜色校验；颜色受整批调色影响时，只有颜色仍达到 `65%`、原坐标的 RGB 边缘梯度达到 `85%`，且该结构区域领先远端候选至少 `3%` 才允许生成。结构校验只验证颜色定位得到的原坐标，不使用结构最高点移动 Piece。颜色与结构均失败且 Preview 包含青色分割边界时，最后使用 Piece Alpha 外边界匹配 Preview 边界邻域；该回退不用于 GameBoard，要求轮廓匹配至少 `75%` 且领先独立远端候选至少 `8%`，不能通过最佳点附近候选占满列表来绕过唯一性校验。
 - GameBoard 回退的首个 Piece 达到至少 `99.5%` 且位置唯一后，本卡包后续 Piece 统一使用 GameBoard，日志明确记录参考图。参考图颜色索引保存颜色次数和首次像素下标；唯一颜色锚点直接计算候选位置，不遍历整张画布。
-- `PieceGGII.png` 或 `PiecesGGII.png` 中的四位 `GGII` 直接成为正式对象编号；未改名的 `piece_###.png` 依次生成 `Piece001`、`Piece002` 等未分组对象，不自动推断游戏分组。
+- `PieceGGII.png` 或 `PiecesGGII.png` 中的四位 `GGII` 直接成为正式对象编号并作为人工覆盖规则。全部使用标准 `piece_###.png` 时，生成器按位置从上到下分带、每行最多两个空间组，每组最多 14 片；偶数行从左到右编号，奇数行从右到左编号，形成蛇形组序，组内始终按中心点从左到右编号。最终 Hierarchy 按 `PieceGGII` 升序创建。标准名与显式正式名不得在同一卡包内混用。
 - 生成结构为 `CardBagNNN/GameBoard/BoardTitle` 和 `CardBagNNN/GameBoard/PieceGGII`；棋盘标题与全部碎片统一归属 `GameBoard`。
 - 窗口默认只选择资源完整且尚无 Prefab 的卡包。选择已有 Prefab 时显示 `Overwrite`，执行前必须确认；覆盖会替换已有层级和手工 Piece 分组。
-- 批量生成逐个隔离失败并汇总结果，只负责创建 Prefab，不自动烘焙描边。完成手工 Piece 分组后再执行 **Bake Outline Masks**。
+- 批量生成逐个隔离失败并汇总结果，负责创建带正式自动分组的 Prefab，但不自动烘焙描边；生成时会删除该包可能残留的旧描边。完成生成后执行 **Bake Outline Masks**。
 - 同一窗口的 **Update Existing Piece Layouts** 用于切图更新后的局部校准。它复用 Preview/GameBoard 定位算法，通过现有 Piece 的 Sprite 资源路径映射节点，只更新 `RectTransform.anchoredPosition` 与 `sizeDelta`；不重建层级、不改变手工分组、Image 参数、影子、旋转缩放或描边资源，也不会自动烘焙描边。更新采用整包事务：源 PNG 与现有 Piece 数量或引用不一致、定位不唯一，或两张有效面积相近的切图在目标位置的高 Alpha 区域重叠达到 `65%` 时，该 Prefab 在保存前失败，避免重复切图覆盖正确布局；面积明显较小且位于大切图内部的独立配件允许更新。
-- `Piece001` 到 `Piece999` 的三位顺序名是制作中间状态，不属于正式命名。Prefab 中只要仍有任一此类节点，描边烘焙器将整包跳过，避免 `Piece100` 等顺序节点被误判为正式分组；卡包没有正式分组时删除对应旧描边目录。
-- 当前 CardBag017 为 `1316 x 1316`、37 片，已完成正式分组并生成 5 张描边蒙版。CardBag022 仍使用 `Piece001` 开始的顺序名称，完成手工分组并改为正式 `PieceGGII` 后才能烘焙描边并进入 GameScene 测试。
+- `Piece001` 到 `Piece999` 的三位顺序名仅作为旧 Prefab 的制作中间状态，不属于正式命名；当前生成器不会再从标准切图创建这类名称。Prefab 中只要仍有任一三位节点，描边烘焙器仍会跳过整包，避免 `Piece100` 等顺序节点被误判为正式分组；卡包没有正式分组时删除对应旧描边目录。
+- 当前 CardBag017 为 `1316 x 1316`、37 片，已完成正式分组并生成 5 组描边资源。CardBag022 为 `2600 x 4000`、196 片，已按相邻空间区域分为 14 组、每组 14 片并使用正式 `PieceGGII` 命名；14 组默认、关卡和贴纸描边资源均已生成。
 
 ### 拼图描边渲染
 

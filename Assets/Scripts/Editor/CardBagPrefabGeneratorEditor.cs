@@ -46,6 +46,8 @@ public static class CardBagPrefabGeneratorEditor
     private const byte UpdateOverlapAlphaThreshold = 250;
     private const float MaximumUpdateOverlapRatio = 0.65f;
     private const float MinimumDuplicateAreaSimilarity = 0.65f;
+    private const int AutomaticPieceGroupCapacity = 14;
+    private const int AutomaticGroupsPerRow = 2;
     private static readonly Regex NumberedPieceRegex = new Regex(
         @"^piece_(\d+)$",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
@@ -767,6 +769,7 @@ public static class CardBagPrefabGeneratorEditor
             piecePaths,
             out var boardWidth,
             out var boardHeight);
+        AssignAndSortPieceObjectNames(placements);
         ValidateUniqueObjectNames(placements);
         CreatePrefab(
             bagName,
@@ -777,17 +780,16 @@ public static class CardBagPrefabGeneratorEditor
             placements,
             prefabPath);
 
-        var hasExplicitGameplayNames = piecePaths.All(HasGameplayPieceName);
-        if (bakeOutlines && hasExplicitGameplayNames)
+        if (bakeOutlines)
         {
             PuzzleOutlineBakerEditor.BakeAll();
         }
-        else if (!hasExplicitGameplayNames)
+        else
         {
             PuzzleOutlineBakerEditor.DeleteStaleOutlines(packId);
             Debug.LogWarning(
-                $"CardBag generator: {bagName} uses sequential ungrouped Piece names. " +
-                "Rename the Prefab objects for gameplay groups, then run Bake Outline Masks.");
+                $"CardBag generator: {bagName} has formal Piece groups, but outlines were not baked. " +
+                "Run Bake Outline Masks before gameplay testing.");
         }
 
         AssetDatabase.SaveAssets();
@@ -887,10 +889,11 @@ public static class CardBagPrefabGeneratorEditor
                     }
 
                     placement.AssetPath = piecePaths[i];
-                    placement.ObjectName = ResolvePieceObjectName(piecePaths[i], i);
+                    placement.ObjectName = ResolveExplicitPieceObjectName(piecePaths[i]);
                     placements.Add(placement);
                     Debug.Log(
-                        $"CardBag matcher: {Path.GetFileName(piecePaths[i])} -> {placement.ObjectName}, " +
+                        $"CardBag matcher: {Path.GetFileName(piecePaths[i])} -> " +
+                        $"{placement.ObjectName ?? "automatic group pending"}, " +
                         $"reference={referenceName}, pixel origin=({placement.OriginX},{placement.OriginY}), " +
                         $"match={placement.Score:P2}.");
                 }
@@ -1258,22 +1261,12 @@ public static class CardBagPrefabGeneratorEditor
             : int.MaxValue;
     }
 
-    private static bool HasGameplayPieceName(string path)
+    private static string ResolveExplicitPieceObjectName(string path)
     {
         var match = GameplayPieceRegex.Match(Path.GetFileNameWithoutExtension(path));
-        return match.Success
-               && GameDefine.TryParsePieceObjectName(
-                   GameDefine.PieceObjectPrefix + match.Groups[1].Value,
-                   out _);
-    }
-
-    private static string ResolvePieceObjectName(string path, int index)
-    {
-        var fileName = Path.GetFileNameWithoutExtension(path);
-        var gameplayName = GameplayPieceRegex.Match(fileName);
-        if (gameplayName.Success
+        if (match.Success
             && GameDefine.TryParsePieceObjectName(
-                GameDefine.PieceObjectPrefix + gameplayName.Groups[1].Value,
+                GameDefine.PieceObjectPrefix + match.Groups[1].Value,
                 out var groupNumber,
                 out var indexInGroup,
                 out _))
@@ -1281,7 +1274,126 @@ public static class CardBagPrefabGeneratorEditor
             return GameDefine.FormatPieceObjectName(groupNumber, indexInGroup);
         }
 
-        return $"Piece{index + 1:D3}";
+        return null;
+    }
+
+    private static void AssignAndSortPieceObjectNames(List<PiecePlacement> placements)
+    {
+        var explicitNameCount = placements.Count(placement => !string.IsNullOrEmpty(placement.ObjectName));
+        if (explicitNameCount > 0 && explicitNameCount != placements.Count)
+        {
+            throw new InvalidOperationException(
+                "CardBag generator: do not mix piece_###.png with explicit PieceGGII.png names " +
+                "in one CardBag folder. Use all standard names for automatic grouping, or give " +
+                "every Piece an explicit gameplay name.");
+        }
+
+        if (explicitNameCount == 0)
+        {
+            AssignAutomaticPieceObjectNames(placements);
+        }
+
+        placements.Sort((left, right) =>
+        {
+            var nameComparison = string.CompareOrdinal(left.ObjectName, right.ObjectName);
+            return nameComparison != 0
+                ? nameComparison
+                : string.Compare(left.AssetPath, right.AssetPath, StringComparison.OrdinalIgnoreCase);
+        });
+    }
+
+    private static void AssignAutomaticPieceObjectNames(List<PiecePlacement> placements)
+    {
+        if (placements.Count == 0)
+        {
+            return;
+        }
+
+        var groupCount = Mathf.CeilToInt(placements.Count / (float)AutomaticPieceGroupCapacity);
+        if (groupCount > 99)
+        {
+            throw new InvalidOperationException(
+                $"CardBag generator: automatic grouping requires {groupCount} groups for " +
+                $"{placements.Count} Pieces, but PieceGGII supports at most 99 groups.");
+        }
+
+        var groupSizes = new int[groupCount];
+        var minimumGroupSize = placements.Count / groupCount;
+        var largerGroupCount = placements.Count % groupCount;
+        for (var groupIndex = 0; groupIndex < groupCount; groupIndex++)
+        {
+            groupSizes[groupIndex] = minimumGroupSize + (groupIndex < largerGroupCount ? 1 : 0);
+        }
+
+        var topToBottom = placements
+            .OrderByDescending(GetPieceCenterY)
+            .ThenBy(GetPieceCenterX)
+            .ThenBy(placement => placement.AssetPath, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var pieceOffset = 0;
+        var groupOffset = 0;
+        var rowIndex = 0;
+        while (groupOffset < groupCount)
+        {
+            var groupsInRow = Mathf.Min(AutomaticGroupsPerRow, groupCount - groupOffset);
+            var rowPieceCount = 0;
+            for (var groupIndex = 0; groupIndex < groupsInRow; groupIndex++)
+            {
+                rowPieceCount += groupSizes[groupOffset + groupIndex];
+            }
+
+            var rowPieces = topToBottom
+                .GetRange(pieceOffset, rowPieceCount)
+                .OrderBy(GetPieceCenterX)
+                .ThenByDescending(GetPieceCenterY)
+                .ThenBy(placement => placement.AssetPath, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var leftToRight = rowIndex % 2 == 0;
+            var rowPieceOffset = 0;
+            for (var spatialGroupIndex = 0;
+                 spatialGroupIndex < groupsInRow;
+                 spatialGroupIndex++)
+            {
+                var groupIndexInRow = leftToRight
+                    ? spatialGroupIndex
+                    : groupsInRow - 1 - spatialGroupIndex;
+                var groupNumber = groupOffset + groupIndexInRow + 1;
+                var groupSize = groupSizes[groupNumber - 1];
+                var groupPieces = rowPieces
+                    .GetRange(rowPieceOffset, groupSize)
+                    .OrderBy(GetPieceCenterX)
+                    .ThenByDescending(GetPieceCenterY)
+                    .ThenBy(placement => placement.AssetPath, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                for (var pieceIndex = 0; pieceIndex < groupPieces.Count; pieceIndex++)
+                {
+                    groupPieces[pieceIndex].ObjectName = GameDefine.FormatPieceObjectName(
+                        groupNumber,
+                        pieceIndex + 1);
+                }
+
+                rowPieceOffset += groupSize;
+            }
+
+            pieceOffset += rowPieceCount;
+            groupOffset += groupsInRow;
+            rowIndex++;
+        }
+
+        Debug.Log(
+            $"CardBag generator: automatically assigned {placements.Count} Pieces to " +
+            $"{groupCount} spatial group(s), up to {AutomaticPieceGroupCapacity} Pieces per group, " +
+            "using top-to-bottom snake ordering.");
+    }
+
+    private static float GetPieceCenterX(PiecePlacement placement)
+    {
+        return placement.OriginX + placement.Width * 0.5f;
+    }
+
+    private static float GetPieceCenterY(PiecePlacement placement)
+    {
+        return placement.OriginY + placement.Height * 0.5f;
     }
 
     private static bool IsSequentialPlaceholderName(string objectName)
@@ -2774,7 +2886,8 @@ internal sealed class CardBagPrefabGeneratorWindow : EditorWindow
         EditorGUILayout.HelpBox(
             "Scans Assets/UI/CardBags/CardBagNNN. New prefabs are selected by default. " +
             "GameBoard.png is required; a missing BoardTitle.png only shows a warning. " +
-            "Generate creates the full prefab. Update Existing only refreshes current Piece " +
+            "Generate creates the full prefab and automatically assigns standard piece_### files " +
+            "to spatial PieceGGII groups. Update Existing only refreshes current Piece " +
             "positions and native sizes from the preview; it preserves hierarchy, grouping, " +
             "Image settings, shadows and baked outlines.",
             MessageType.Info);
@@ -2901,7 +3014,8 @@ internal sealed class CardBagPrefabGeneratorWindow : EditorWindow
             && !EditorUtility.DisplayDialog(
                 "Overwrite Existing Prefabs?",
                 $"{overwrite.Count} selected prefab(s) already exist. " +
-                "Generating them will replace their hierarchy and manual Piece grouping.",
+                "Generating them will replace their hierarchy and apply source-explicit or " +
+                "automatic spatial Piece grouping.",
                 "Generate and Overwrite",
                 "Cancel"))
         {
