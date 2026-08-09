@@ -3272,6 +3272,7 @@ public class MainScene : MonoBehaviour
         SetBagSelectButtonsInteractable(false);
         var selectedBagId = mSelectedBagId;
         var isReplaySession = mIsSelectedPackageReplay;
+        StoreOpeningPackExitPosition();
 
         var openingEffectStarted = false;
         var packTexture = mSelectedPackageOverlayImage != null
@@ -3312,6 +3313,23 @@ public class MainScene : MonoBehaviour
             selectedBagId,
             playEntranceAnimation: true,
             isReplaySession: isReplaySession);
+    }
+
+    private void StoreOpeningPackExitPosition()
+    {
+        if (mSelectedPackageOverlayRect == null || Screen.width <= 0 || Screen.height <= 0)
+        {
+            return;
+        }
+
+        var corners = new Vector3[4];
+        mSelectedPackageOverlayRect.GetWorldCorners(corners);
+        var bottomLeft = RectTransformUtility.WorldToScreenPoint(null, corners[0]);
+        var bottomRight = RectTransformUtility.WorldToScreenPoint(null, corners[3]);
+        var bottomCenter = (bottomLeft + bottomRight) * 0.5f;
+        GameManager.SetOpeningPackExitPosition(new Vector2(
+            bottomCenter.x / Screen.width,
+            bottomCenter.y / Screen.height));
     }
 
     private IEnumerator HidePackageSelection()
@@ -3586,6 +3604,9 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
     private const float DemoModelScale = 550f;
     private const float DemoModelZ = 164.02565f;
     private const float LightEffectDelay = 0.5f;
+    private const float ReferenceLightEffectLocalY = 1f;
+    private const int TearMaskSampleWidth = 512;
+    private const byte TearMaskAlphaThreshold = 32;
     private const float FallbackAnimationDuration = 1.8333334f;
     private const float IsolatedWorldX = 1000f;
     private const string ModelPathFormat = "Effects/CardPack/Models/CardPackOpeningModel_{0:D3}";
@@ -3733,7 +3754,10 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
 
         mLightEffectObject = Instantiate(lightEffectPrefab, stageRoot, false);
         mLightEffectObject.name = lightEffectPrefab.name;
-        mLightEffectObject.transform.localPosition = new Vector3(0f, 1f, -1.5f);
+        mLightEffectObject.transform.localPosition = new Vector3(
+            0f,
+            ReferenceLightEffectLocalY,
+            -1.5f);
         mLightEffectObject.transform.localRotation = Quaternion.identity;
         mLightEffectObject.transform.localScale = Vector3.one;
         SetLayerRecursively(mLightEffectObject, EffectLayer);
@@ -3930,12 +3954,265 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
             return;
         }
 
+        if (!TryAlignLightToTearMask(out var tearViewportY))
+        {
+            Debug.LogWarning(
+                "CardPackOpeningEffect: tear mask position was unavailable; "
+                + "using the reference light position.");
+        }
+        else
+        {
+            Debug.Log(
+                $"CardPackOpeningEffect: aligned light to tear mask. "
+                + $"viewportY={tearViewportY:F4}, localY="
+                + $"{mLightEffectObject.transform.localPosition.y:F4}");
+        }
+
         mLightEffectObject.SetActive(true);
         var particleSystems = mLightEffectObject.GetComponentsInChildren<ParticleSystem>(true);
         for (var i = 0; i < particleSystems.Length; i++)
         {
             particleSystems[i].Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
             particleSystems[i].Play(true);
+        }
+    }
+
+    private bool TryAlignLightToTearMask(out float tearViewportY)
+    {
+        tearViewportY = 0f;
+        if (mEffectCamera == null
+            || mModelObject == null
+            || mLightEffectObject == null
+            || mRenderTexture == null)
+        {
+            return false;
+        }
+
+        var renderers = mModelObject.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+        if (renderers.Length == 0)
+        {
+            return false;
+        }
+
+        var enabledStates = new bool[renderers.Length];
+        var foundFrontRenderer = false;
+        for (var i = 0; i < renderers.Length; i++)
+        {
+            enabledStates[i] = renderers[i].enabled;
+            var numberLength = renderers[i].name.Length - CardRendererNamePrefix.Length;
+            var isFrontRenderer = renderers[i].name.StartsWith(CardRendererNamePrefix)
+                && numberLength == FrontRendererNumberLength;
+            renderers[i].enabled = isFrontRenderer;
+            foundFrontRenderer |= isFrontRenderer;
+        }
+
+        if (!foundFrontRenderer)
+        {
+            RestoreRendererStates(renderers, enabledStates);
+            return false;
+        }
+
+        var maskWidth = Mathf.Min(TearMaskSampleWidth, Mathf.Max(1, mRenderTexture.width));
+        var maskHeight = Mathf.Max(
+            1,
+            Mathf.RoundToInt(maskWidth * (float)mRenderTexture.height / mRenderTexture.width));
+        var maskTarget = RenderTexture.GetTemporary(
+            maskWidth,
+            maskHeight,
+            16,
+            RenderTextureFormat.ARGB32,
+            RenderTextureReadWrite.Linear);
+        var originalTarget = mEffectCamera.targetTexture;
+        var originalActive = RenderTexture.active;
+        Texture2D maskTexture = null;
+        try
+        {
+            mEffectCamera.targetTexture = maskTarget;
+            mEffectCamera.Render();
+            RenderTexture.active = maskTarget;
+            maskTexture = new Texture2D(
+                maskWidth,
+                maskHeight,
+                TextureFormat.RGBA32,
+                false,
+                true);
+            maskTexture.ReadPixels(new Rect(0f, 0f, maskWidth, maskHeight), 0, 0, false);
+            maskTexture.Apply(false, false);
+
+            if (!TryFindLowerPackTop(maskTexture.GetPixels32(), maskWidth, maskHeight, out var tearPixelY))
+            {
+                return false;
+            }
+
+            tearViewportY = (tearPixelY + 0.5f) / maskHeight;
+            var lightTransform = mLightEffectObject.transform;
+            var lightDepth = Vector3.Dot(
+                lightTransform.position - mEffectCamera.transform.position,
+                mEffectCamera.transform.forward);
+            if (lightDepth <= 0f)
+            {
+                return false;
+            }
+
+            var tearWorldPosition = mEffectCamera.ViewportToWorldPoint(
+                new Vector3(0.5f, tearViewportY, lightDepth));
+            var localPosition = lightTransform.localPosition;
+            localPosition.y = lightTransform.parent.InverseTransformPoint(tearWorldPosition).y;
+            lightTransform.localPosition = localPosition;
+            return true;
+        }
+        finally
+        {
+            if (maskTexture != null)
+            {
+                Destroy(maskTexture);
+            }
+
+            RenderTexture.active = originalActive;
+            mEffectCamera.targetTexture = originalTarget;
+            RenderTexture.ReleaseTemporary(maskTarget);
+            RestoreRendererStates(renderers, enabledStates);
+            mEffectCamera.Render();
+        }
+    }
+
+    private static bool TryFindLowerPackTop(
+        Color32[] pixels,
+        int width,
+        int height,
+        out int tearPixelY)
+    {
+        tearPixelY = 0;
+        if (pixels == null || pixels.Length != width * height)
+        {
+            return false;
+        }
+
+        var labels = new int[pixels.Length];
+        var queue = new int[pixels.Length];
+        var componentSizes = new List<int> { 0 };
+        var componentId = 0;
+        for (var index = 0; index < pixels.Length; index++)
+        {
+            if (labels[index] != 0 || pixels[index].a < TearMaskAlphaThreshold)
+            {
+                continue;
+            }
+
+            componentId++;
+            var readIndex = 0;
+            var writeIndex = 0;
+            queue[writeIndex++] = index;
+            labels[index] = componentId;
+            while (readIndex < writeIndex)
+            {
+                var current = queue[readIndex++];
+                var x = current % width;
+                var y = current / width;
+                for (var offsetY = -1; offsetY <= 1; offsetY++)
+                {
+                    for (var offsetX = -1; offsetX <= 1; offsetX++)
+                    {
+                        if (offsetX == 0 && offsetY == 0)
+                        {
+                            continue;
+                        }
+
+                        var neighborX = x + offsetX;
+                        var neighborY = y + offsetY;
+                        if (neighborX < 0
+                            || neighborX >= width
+                            || neighborY < 0
+                            || neighborY >= height)
+                        {
+                            continue;
+                        }
+
+                        var neighbor = neighborY * width + neighborX;
+                        if (labels[neighbor] != 0
+                            || pixels[neighbor].a < TearMaskAlphaThreshold)
+                        {
+                            continue;
+                        }
+
+                        labels[neighbor] = componentId;
+                        queue[writeIndex++] = neighbor;
+                    }
+                }
+            }
+
+            componentSizes.Add(writeIndex);
+        }
+
+        if (componentId == 0)
+        {
+            return false;
+        }
+
+        var largestComponent = 1;
+        for (var i = 2; i < componentSizes.Count; i++)
+        {
+            if (componentSizes[i] > componentSizes[largestComponent])
+            {
+                largestComponent = i;
+            }
+        }
+
+        if (componentSizes[largestComponent] < pixels.Length / 100)
+        {
+            return false;
+        }
+
+        var minX = width;
+        var maxX = -1;
+        for (var index = 0; index < labels.Length; index++)
+        {
+            if (labels[index] != largestComponent)
+            {
+                continue;
+            }
+
+            var x = index % width;
+            minX = Mathf.Min(minX, x);
+            maxX = Mathf.Max(maxX, x);
+        }
+
+        if (maxX <= minX)
+        {
+            return false;
+        }
+
+        var horizontalInset = Mathf.Max(1, Mathf.RoundToInt((maxX - minX + 1) * 0.1f));
+        var topBoundary = new List<int>(maxX - minX + 1);
+        for (var x = minX + horizontalInset; x <= maxX - horizontalInset; x++)
+        {
+            for (var y = height - 1; y >= 0; y--)
+            {
+                if (labels[y * width + x] == largestComponent)
+                {
+                    topBoundary.Add(y);
+                    break;
+                }
+            }
+        }
+
+        if (topBoundary.Count < Mathf.Max(4, (maxX - minX + 1) / 4))
+        {
+            return false;
+        }
+
+        topBoundary.Sort();
+        tearPixelY = topBoundary[topBoundary.Count / 2];
+        return true;
+    }
+
+    private static void RestoreRendererStates(
+        SkinnedMeshRenderer[] renderers,
+        bool[] enabledStates)
+    {
+        for (var i = 0; i < renderers.Length; i++)
+        {
+            renderers[i].enabled = enabledStates[i];
         }
     }
 

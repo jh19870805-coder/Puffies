@@ -401,6 +401,7 @@ public class GameScene : MonoBehaviour
                 camera,
                 WorldGameplayDepth)
             : Vector3.zero;
+        var pieceEntranceOrigin = GetPreviousPackBottomWorldPosition(camera, boardCenter);
 
         var boardRect = _loadedCardBagRect;
         var boardTarget = boardRect != null
@@ -455,7 +456,7 @@ public class GameScene : MonoBehaviour
             pieceTargetColors[i] = renderer.color;
             var angle = i * 137.5f * Mathf.Deg2Rad;
             var radius = 0.12f + (i % 4) * 0.07f;
-            pieceStarts[i] = boardCenter + new Vector3(
+            pieceStarts[i] = pieceEntranceOrigin + new Vector3(
                 Mathf.Cos(angle) * radius,
                 Mathf.Sin(angle) * radius,
                 0f);
@@ -581,6 +582,29 @@ public class GameScene : MonoBehaviour
         }
 #endif
         TryStartPiecePlacementTutorial();
+    }
+
+    private static Vector3 GetPreviousPackBottomWorldPosition(
+        Camera camera,
+        Vector3 fallback)
+    {
+        if (camera == null)
+        {
+            return fallback;
+        }
+
+        if (!GameManager.TryConsumeOpeningPackExitPosition(out var normalizedScreenPosition))
+        {
+            return fallback;
+        }
+
+        var screenPosition = new Vector3(
+            Screen.width * normalizedScreenPosition.x,
+            Screen.height * normalizedScreenPosition.y,
+            Mathf.Abs(WorldGameplayDepth - camera.transform.position.z));
+        var worldPosition = camera.ScreenToWorldPoint(screenPosition);
+        worldPosition.z = WorldGameplayDepth;
+        return worldPosition;
     }
 
     private static CanvasGroup GetOrAddCanvasGroup(GameObject target)

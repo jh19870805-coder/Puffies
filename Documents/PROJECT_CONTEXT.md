@@ -308,6 +308,8 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 - 选中态使用独立 Screen Space Overlay `Image` 显示同一张静态图，目标尺寸为 `600 x 680`；选择面板、背景虚化、返回、拍照和重玩确认继续沿用现有流程。
 - 点击玩后切换到 `BgGame` 开包舞台并等待玩家轻点或横划。有效操作随机选择 `CardPackOpeningModel_001-006`，共用制作方 `CardPackAnimation.controller`；模型正面材质只把 `_MainTex` 替换为当前 `PackIconNNN`，背面继续使用制作方 `test01/Bg01`，其他材质、Shader、骨骼和粒子参数不修改。
 - 制作方 Timeline 中骨骼动画先启动，`fx_chai_w_001` 在 `0.5s` 后启动；运行时沿用这一相对时序，并读取 Animator Clip 的约 `1.833s` 总时长后进入 `GameScene`。
+- 撕包完整发生在 MainScene 的 `BgGame` 开包舞台，不能移到 GameScene。横向撕口光效与模型共用隔离特效阶段；光效启动时从当前动画帧的卡包正面透明蒙版识别下半包顶部边界并动态对齐，不使用固定视觉猜测值。蒙版不可用时回退制作方场景原始根节点位置 `(0,1,-1.5)`，不修改 `fx_chai_w_001` Prefab 内部参数。
+- MainScene 撕包结束并进入 GameScene 后，不在游戏页重播卡包模型。切场景前由 `SelectedCardPackImage` 的实际 RectTransform 记录卡包下沿归一化屏幕坐标；当前未完成组的 Piece 从该坐标依次出现，再进入下方暗色托盘现有布局。托盘目标位置、顺序和 Piece 缩放继续使用 GameScene 已计算结果，不按固定分辨率估算起点。
 - 撕包模型和光效通过隔离相机渲染到透明 RenderTexture，再作为顶层 RawImage 合成到 `BgGame`；相机沿用参考场景的正交尺寸 `2.66` 和位置 `z=-29.28`。模型保持参考场景的 `Y=180`、动画阶段缩放 `550` 与 `z=164.02565`，只根据当前居中静态卡包的屏幕高度做统一尺寸适配。
 - `Assets/Scenes/EffectScene001.unity` 仅用于核对制作方配置和 Timeline，不加入正常场景导航。列表继续不加载 3D 模型，不恢复旧卡包常驻特效、特效 Skybox、Directional Light 或 `CardPackListUnlit.shader`。
 - `CardPackRewardFlyTransition` 仅负责结算后新卡包从 RewardPanel 飞到屏幕中央，再飞回 MainScene 对应列表位置，不属于开包特效，继续保留。

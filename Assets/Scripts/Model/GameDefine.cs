@@ -145,6 +145,8 @@ public static class GameManager
     private static bool sIsInitialized;
     private static bool sPlayGameEntranceAnimation;
     private static bool sIsReplaySession;
+    private static bool sHasOpeningPackExitPosition;
+    private static Vector2 sOpeningPackExitPositionNormalized;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     private static void Bootstrap()
@@ -162,6 +164,8 @@ public static class GameManager
         sBagId = GameDefine.DefaultBagId;
         sPlayGameEntranceAnimation = false;
         sIsReplaySession = false;
+        sHasOpeningPackExitPosition = false;
+        sOpeningPackExitPositionNormalized = default;
         sIsInitialized = true;
         Debug.Log("GameManager initialized.");
     }
@@ -199,6 +203,23 @@ public static class GameManager
         var isReplaySession = sIsReplaySession;
         sIsReplaySession = false;
         return isReplaySession;
+    }
+
+    public static void SetOpeningPackExitPosition(Vector2 normalizedScreenPosition)
+    {
+        sOpeningPackExitPositionNormalized = new Vector2(
+            Mathf.Clamp01(normalizedScreenPosition.x),
+            Mathf.Clamp01(normalizedScreenPosition.y));
+        sHasOpeningPackExitPosition = true;
+    }
+
+    public static bool TryConsumeOpeningPackExitPosition(out Vector2 normalizedScreenPosition)
+    {
+        normalizedScreenPosition = sOpeningPackExitPositionNormalized;
+        var hasPosition = sHasOpeningPackExitPosition;
+        sHasOpeningPackExitPosition = false;
+        sOpeningPackExitPositionNormalized = default;
+        return hasPosition;
     }
 
     public static void EnterRankScene()
