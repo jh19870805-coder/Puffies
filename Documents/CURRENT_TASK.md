@@ -1,60 +1,42 @@
 # 当前任务
 
-- 任务：接入真实卡包撕开动画与横向光效
-- 状态：代码完成，等待 Play Mode 目视验收
-- 更新时间：2026-08-08
+- 任务：微调 `CardBag002.prefab` 中更新切图对应的拼图位置
+- 状态：已完成可确认切图的精确微调，发现 `piece_025.png` 资源内容异常待确认
+- 更新时间：2026-08-09
 
 ## 用户意图
 
-- 不修改现有卡包列表点击和放大居中流程。
-- 卡包进入 `BgGame` 并居中后，玩家轻点卡包或从左向右横划时播放新的撕包特效。
-- 主要动画必须显示当前选中卡包的真实封面。
-- 光效和卡包撕裂节奏参考 `拆卡包特效演示.mkv` 及制作方截图。
+- 不重新生成整个 `CardBag002.prefab`。
+- 对照现有效果图，只微调本次更新切图对应 Piece 的位置和原生尺寸。
+- 不修改图片中的影子，不修改或重新烘焙描边。
 
 ## 工作记录
 
-- 现有输入状态机继续支持卡包内轻点，以及从撕口左侧开始的有效横划。
-- 有效输入不再直接进入 `GameScene`，而是随机加载 `CardPackOpeningModel_001-006` 中的一套并播放 `CardPackAnimation.controller`。
-- 六套模型的正面节点分别为 `mesh_skin_cardPack_001` 至 `006`，背面节点为对应编号后追加 `01`；运行时已按这一规则匹配全部模型。
-- 正面材质从制作方 `test` 克隆，只将 `_MainTex` 替换为当前 `PackIconNNN`；背面从 `test01` 克隆并保留 `Bg01`。没有修改制作方原材质、Shader、骨骼或粒子参数。
-- `fx_chai_w_001` 沿用原始 Prefab，在骨骼动画开始 `0.5s` 后播放；这是制作方 Timeline 中光效相对模型动画的原始时差。
-- Animator Clip 时长由运行时读取，当前资源约为 `1.833s`；播放结束后进入 `GameScene`。
-- 撕包画面使用隔离相机和透明 RenderTexture 合成到 `BgGame` 顶层，避免改动 MainScene 既有 Canvas；相机和模型基准参数来自 `EffectScene001`，只按当前居中卡包屏幕高度统一适配尺寸。
-- 资源缺失或模型节点不符合约定时输出明确错误，并回退到直接进入 `GameScene`，避免阻断游戏流程。
+- 使用 Git 中原来已经对齐的旧切图与当前新切图做内存特征比对，没有运行关卡生成器。
+- `piece_001.png` 相对旧图裁切偏移为 `(3, 7)`，将 `Piece11` 调整为位置 `(-437, 375)`、尺寸 `(404, 358)`。
+- `piece_002.png` 相对旧图裁切偏移为 `(0, 6)`，将 `Piece21` 调整为位置 `(315, 347)`、尺寸 `(274, 416)`。
+- `piece_003.png` 内容、尺寸和裁切位置均未变化，`Piece22` 保持不动。
+- `piece_004.png` 相对旧图裁切偏移为 `(0, 0)`，将 `Piece23` 调整为位置 `(69, 365)`、尺寸 `(322, 360)`。
+- `piece_024.png` 相对旧图裁切偏移为 `(0, 0)`，将 `Piece37` 调整为位置 `(344, -399)`、尺寸 `(194, 294)`。
+- `piece_025.png` 已从原来的底部小鸭内容变成顶部橡皮鸭，并与未修改的 `piece_011.png` 内容重复；为避免将 `Piece38` 错误叠到 `Piece26` 上，暂未修改 `Piece38`。
+- 保留了用户在 Prefab 中已有的 Piece Alpha 修改，没有触碰 Shadow、描边资源或其他节点。
 
 ## 修改文件
 
-- `Assets/Scripts/Controller/MainScene.cs`
-- `Documents/PROJECT_CONTEXT.md`
+- `Assets/Resources/CardBagPrefabs/CardBag002.prefab`
 - `Documents/CURRENT_TASK.md`
-
-## 使用资源
-
-- `Assets/Resources/Effects/CardPack/Models/CardPackOpeningModel_001-006.FBX`
-- `Assets/Resources/Effects/CardPack/Models/CardPackOpeningAnimation.FBX`
-- `Assets/Resources/Effects/CardPack/Animations/CardPackAnimation.controller`
-- `Assets/Resources/Effects/CardFx/Materials/test.mat`
-- `Assets/Resources/Effects/CardFx/Materials/test01.mat`
-- `Assets/Resources/Effects/CardFx/Profabs/fx_chai_w_001.prefab`
-- `Assets/UI/PackImages/Bg01.png`
 
 ## 验证
 
-- `dotnet build Assembly-CSharp.csproj --no-restore --nologo` 通过，0 警告、0 错误。
-- `dotnet build Assembly-CSharp-Editor.csproj --no-restore --nologo` 通过，0 警告、0 错误。
-- Unity Editor 当前日志中 C# 编译错误为 0，Shader 错误为 0；六套 FBX、Animator Controller 和光效 Prefab 均已开始并完成资源导入。
-- 静态扫描确认六套 FBX 都包含一对符合编号规则的正反面 SkinnedMeshRenderer，Animator Controller 正确引用 `CardPackOpeningAnimation.FBX/Take 001`，光效 Prefab 根节点为 `fx_chai_w_001`。
-- 尚未在 Unity Play Mode 中目视确认透明合成、真实封面朝向、最终尺寸和横向光效是否精确贴合撕口。
+- 新旧切图特征比对确认 `piece_001/002/003/004/024` 的像素内容可 100% 对齐，并据此换算 Prefab 坐标。
+- `git diff --check -- Assets/Resources/CardBagPrefabs/CardBag002.prefab` 通过；仅有工作区换行符提示。
+- 尚未在 Unity Prefab Mode 或 Play Mode 中目视验收。
+
+## 下一步
+
+1. 确认 `piece_025.png` 是否误覆盖；如果是，恢复正确的底部小鸭切图后，再按同样方式只微调 `Piece38`。
+2. 在 Unity 中打开 `CardBag002.prefab`，目视检查五个已调整 Piece 与效果图的接缝。
 
 ## 数据说明
 
 - 本次没有修改 JSON、SQLite 或业务数据结构，不需要删除本地存储。
-
-## 下一步
-
-1. 在 Unity 中从 MainScene 选择任一卡包，点击“玩”，再轻点或横划居中卡包，目视检查真实封面、撕裂方向、光效位置与约 `1.833s` 节奏。
-2. 至少连续测试 6 次以覆盖随机模型；如有尺寸或撕口位置偏差，只调整统一尺寸和制作方光效根节点定位，不修改材质及粒子参数。
-
-## 恢复提示
-
-新撕包动画已接入 MainScene：输入后随机使用六套真实撕裂模型，正面替换为当前卡包纹理，`0.5s` 后播放原始横向光效，约 `1.833s` 后进入 GameScene。下一步在 Play Mode 中覆盖六套随机模型并目视验收。
