@@ -45,6 +45,7 @@ public static class CardBagPrefabGeneratorEditor
     private const int OutlineBoundarySampleCount = 256;
     private const byte UpdateOverlapAlphaThreshold = 250;
     private const float MaximumUpdateOverlapRatio = 0.65f;
+    private const float MinimumDuplicateAreaSimilarity = 0.65f;
     private static readonly Regex NumberedPieceRegex = new Regex(
         @"^piece_(\d+)$",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
@@ -1158,13 +1159,18 @@ public static class CardBagPrefabGeneratorEditor
             var smallerOpaqueArea = Mathf.Min(
                 opaqueCounts[firstIndex],
                 opaqueCounts[secondIndex]);
+            var largerOpaqueArea = Mathf.Max(
+                opaqueCounts[firstIndex],
+                opaqueCounts[secondIndex]);
             if (smallerOpaqueArea <= 0)
             {
                 continue;
             }
 
             var overlapRatio = pair.Value / (float)smallerOpaqueArea;
-            if (overlapRatio < MaximumUpdateOverlapRatio)
+            var areaSimilarity = smallerOpaqueArea / (float)largerOpaqueArea;
+            if (overlapRatio < MaximumUpdateOverlapRatio
+                || areaSimilarity < MinimumDuplicateAreaSimilarity)
             {
                 continue;
             }
@@ -1172,7 +1178,8 @@ public static class CardBagPrefabGeneratorEditor
             throw new InvalidOperationException(
                 $"CardBag updater: {Path.GetFileName(placements[firstIndex].AssetPath)} and " +
                 $"{Path.GetFileName(placements[secondIndex].AssetPath)} resolve to overlapping opaque " +
-                $"regions ({overlapRatio:P1}). Check for a duplicated or incorrectly replaced cut image; " +
+                $"regions ({overlapRatio:P1}) with similar opaque areas ({areaSimilarity:P1}). " +
+                "Check for a duplicated or incorrectly replaced cut image; " +
                 "the existing prefab was not changed.");
         }
     }
