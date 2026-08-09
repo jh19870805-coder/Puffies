@@ -59,13 +59,13 @@ public class GameScene : MonoBehaviour
     private const float HintOutlineWidth = 3f;
     private const float HintOutlineScrollSpeed = 60f;
     private const int TutorialCanvasSortingOrder = 30000;
-    private const float TutorialTrayDimAlpha = 0.58f;
+    private const float TutorialArrowScale = 0.7f;
     private const float TutorialPracticePromptGap = 24f;
     private const float TutorialPromptScreenMargin = 24f;
+    private const string TutorialInvalidLineStartCharacters = "，。！？；：、”’）】》";
     private const string TutorialCollection = "Tutorial";
     private const string PiecePlacementTutorialKey = "CardBag001TutorialCompleted";
     private const string TutorialCanvasObjectName = "PiecePlacementTutorialCanvas";
-    private const string TutorialTrayDimObjectName = "TutorialTrayDim";
     private const string TutorialPieceObjectName = "TutorialPiece";
     private const string TutorialArrowObjectName = "TutorialArrow";
     private const string TutorialTextObjectName = "TutorialText";
@@ -108,7 +108,8 @@ public class GameScene : MonoBehaviour
     private static readonly Color InvalidDropTintColor = new Color32(255, 58, 58, 255);
     private static readonly Color StandardPuzzleOutlineColor = new Color32(0x3f, 0x42, 0x3e, 0xff);
     private static readonly Color HighContrastPuzzleOutlineColor = new Color32(0xb1, 0xd7, 0x02, 0xff);
-    private static readonly Vector2 TutorialStrongPromptAnchor = new Vector2(0.42f, 0.78f);
+    private static readonly Vector2 TutorialStrongPromptAnchor = new Vector2(0.5f, 0.7f);
+    private static readonly Vector2 TutorialStrongPromptOffset = new Vector2(-30f, -50f);
     private static readonly Vector2 TutorialHintPromptAnchor = new Vector2(0.73f, 0.76f);
 
     private enum TutorialStage
@@ -2881,12 +2882,6 @@ public class GameScene : MonoBehaviour
         }
 
         var canvasRect = _tutorialCanvasRoot.GetComponent<RectTransform>();
-        if (!TryGetPieceTrayScreenRect(camera, out var trayScreenRect)
-            || !TryScreenRectToCanvasRect(canvasRect, trayScreenRect, out var trayCanvasRect))
-        {
-            return false;
-        }
-
         _tutorialFocusRoot = new GameObject("TutorialFocus", typeof(RectTransform));
         var focusRect = _tutorialFocusRoot.GetComponent<RectTransform>();
         focusRect.SetParent(canvasRect, false);
@@ -2894,7 +2889,6 @@ public class GameScene : MonoBehaviour
         focusRect.anchorMax = Vector2.one;
         focusRect.offsetMin = Vector2.zero;
         focusRect.offsetMax = Vector2.zero;
-        CreateTutorialTrayDim(focusRect, canvasRect, trayCanvasRect);
 
         if (_tutorialStage == TutorialStage.StrongPlacement)
         {
@@ -2939,35 +2933,6 @@ public class GameScene : MonoBehaviour
         }
 
         return true;
-    }
-
-    private static void CreateTutorialTrayDim(
-        RectTransform parent,
-        RectTransform canvasRect,
-        Rect trayRect)
-    {
-        var dimObject = new GameObject(
-            TutorialTrayDimObjectName,
-            typeof(RectTransform),
-            typeof(CanvasRenderer),
-            typeof(Image));
-        var dimRect = dimObject.GetComponent<RectTransform>();
-        dimRect.SetParent(parent, false);
-        dimRect.anchorMin = new Vector2(0.5f, 0.5f);
-        dimRect.anchorMax = new Vector2(0.5f, 0.5f);
-        dimRect.pivot = new Vector2(0.5f, 0.5f);
-        var dimTop = Mathf.Max(
-            trayRect.yMax,
-            canvasRect.rect.yMin + canvasRect.rect.height * 0.34f);
-        var dimHeight = dimTop - canvasRect.rect.yMin;
-        dimRect.anchoredPosition = new Vector2(
-            canvasRect.rect.center.x,
-            canvasRect.rect.yMin + dimHeight * 0.5f);
-        dimRect.sizeDelta = new Vector2(canvasRect.rect.width, dimHeight);
-
-        var image = dimObject.GetComponent<Image>();
-        image.color = new Color(0f, 0f, 0f, TutorialTrayDimAlpha);
-        image.raycastTarget = false;
     }
 
     private static void CreateTutorialPieceCopy(
@@ -3062,9 +3027,48 @@ public class GameScene : MonoBehaviour
 
         var text = Instantiate(templateText, parent, false);
         text.name = TutorialTipTextObjectName;
-        text.text = GetTutorialInstruction(stage);
+        text.enableWordWrapping = false;
+        text.enableAutoSizing = true;
+        text.fontSizeMax = templateText.fontSize;
+        text.fontSizeMin = Mathf.Min(templateText.fontSizeMin, text.fontSizeMax);
+        text.maxVisibleLines = 2;
+        text.text = FormatTutorialInstruction(
+            text,
+            GetTutorialInstruction(stage));
         text.raycastTarget = false;
         text.gameObject.SetActive(true);
+    }
+
+    private static string FormatTutorialInstruction(TMP_Text text, string instruction)
+    {
+        var availableWidth = text.rectTransform.rect.width;
+        if (string.IsNullOrEmpty(instruction)
+            || availableWidth <= 0f
+            || text.GetPreferredValues(instruction).x <= availableWidth)
+        {
+            return instruction;
+        }
+
+        var bestSplit = 1;
+        var bestWidth = float.MaxValue;
+        for (var split = 1; split < instruction.Length; split++)
+        {
+            if (TutorialInvalidLineStartCharacters.IndexOf(instruction[split]) >= 0)
+            {
+                continue;
+            }
+
+            var firstLineWidth = text.GetPreferredValues(instruction.Substring(0, split)).x;
+            var secondLineWidth = text.GetPreferredValues(instruction.Substring(split)).x;
+            var widestLine = Mathf.Max(firstLineWidth, secondLineWidth);
+            if (widestLine < bestWidth)
+            {
+                bestWidth = widestLine;
+                bestSplit = split;
+            }
+        }
+
+        return instruction.Insert(bestSplit, "\n");
     }
 
     private static Vector2 GetTutorialHintPromptSize()
@@ -3138,11 +3142,17 @@ public class GameScene : MonoBehaviour
         var normalizedAnchor = stage == TutorialStage.StrongPlacement
             ? TutorialStrongPromptAnchor
             : TutorialHintPromptAnchor;
+        var position = new Vector2(
+            Mathf.Lerp(parent.rect.xMin, parent.rect.xMax, normalizedAnchor.x),
+            Mathf.Lerp(parent.rect.yMin, parent.rect.yMax, normalizedAnchor.y));
+        if (stage == TutorialStage.StrongPlacement)
+        {
+            position += Vector2.up * promptSize.y + TutorialStrongPromptOffset;
+        }
+
         return ClampTutorialPromptPosition(
             parent.rect,
-            new Vector2(
-                Mathf.Lerp(parent.rect.xMin, parent.rect.xMax, normalizedAnchor.x),
-                Mathf.Lerp(parent.rect.yMin, parent.rect.yMax, normalizedAnchor.y)),
+            position,
             promptSize);
     }
 
@@ -3216,7 +3226,7 @@ public class GameScene : MonoBehaviour
         arrowRect.anchorMin = new Vector2(0.5f, 0.5f);
         arrowRect.anchorMax = new Vector2(0.5f, 0.5f);
         arrowRect.pivot = new Vector2(0.5f, 0f);
-        arrowRect.sizeDelta = _tutorialArrowSprite.rect.size;
+        arrowRect.sizeDelta = _tutorialArrowSprite.rect.size * TutorialArrowScale;
 
         var arrowImage = arrowObject.GetComponent<Image>();
         arrowImage.sprite = _tutorialArrowSprite;
