@@ -46,7 +46,9 @@ public class GameScene : MonoBehaviour
     private const float GroupTransitionStrongHoldDuration = 0.3f;
     private const float GroupTransitionDefaultHoldDuration = 0.1f;
     private const float PieceSnapDuration = 0.18f;
-    private const float PiecePlacementFlashDuration = 0.3f;
+    private const float PiecePlacementShineDuration = 0.52f;
+    private const float PiecePlacementShineBandWidth = 0.045f;
+    private const float PiecePlacementShineNeighborPadding = 10f;
     private const float InvalidDropHoldDuration = 0.08f;
     private const float InvalidDropReturnDuration = 0.3f;
     private const float InvalidDropColorRestoreDuration = 0.1f;
@@ -87,6 +89,8 @@ public class GameScene : MonoBehaviour
         GameDefine.UiRoot + "/BasicUI/BgCardBoard2.png";
     private const string PuzzleOutlineTintShaderResourcesPath = "PuzzleOutlineTint";
     private const string PuzzleOutlineTintMaterialName = "PuzzleOutlineTint (Runtime)";
+    private const string PiecePlacementShineShaderResourcesPath = "PuzzlePlacementShine";
+    private const string PiecePlacementShineMaterialName = "PuzzlePlacementShine (Runtime)";
     private const string DraggableGroupRootObjectName = "DraggableGroupPieces";
     private const string ActiveGroupOutlineRootObjectName = "ActiveGroupOutline";
     private const string LevelOutlineLayerObjectName = "LevelOutline";
@@ -108,6 +112,11 @@ public class GameScene : MonoBehaviour
     private static readonly Color InvalidDropTintColor = new Color32(255, 58, 58, 255);
     private static readonly Color StandardPuzzleOutlineColor = new Color32(0x3f, 0x42, 0x3e, 0xff);
     private static readonly Color HighContrastPuzzleOutlineColor = new Color32(0xb1, 0xd7, 0x02, 0xff);
+    private static readonly Color PiecePlacementShineColor = new Color32(255, 244, 152, 230);
+    private static readonly int ShineSweepAxisId = Shader.PropertyToID("_SweepAxis");
+    private static readonly int ShineSweepCenterId = Shader.PropertyToID("_SweepCenter");
+    private static readonly int ShineBandWidthId = Shader.PropertyToID("_BandWidth");
+    private static readonly int ShineColorId = Shader.PropertyToID("_ShineColor");
     private static readonly Vector2 TutorialStrongPromptAnchor = new Vector2(0.5f, 0.7f);
     private static readonly Vector2 TutorialStrongPromptOffset = new Vector2(-30f, -50f);
     private static readonly Vector2 TutorialHintPromptAnchor = new Vector2(0.73f, 0.76f);
@@ -163,7 +172,9 @@ public class GameScene : MonoBehaviour
     private RectTransform _loadedCardBagRect;
     private Sprite _runtimeCardBoardBackgroundSprite;
     private Material _runtimePuzzleOutlineTintMaterial;
+    private Material _runtimePiecePlacementShineMaterial;
     private bool _didWarnMissingPuzzleOutlineTintShader;
+    private bool _didWarnMissingPiecePlacementShineShader;
     private float _configuredBoardScale = DefaultBoardScale;
     private Vector3 _originalCardBagLocalScale = Vector3.one;
     private bool _hasOriginalCardBagLocalScale;
@@ -267,6 +278,7 @@ public class GameScene : MonoBehaviour
         DestroyTutorialTipBackgroundSprite();
         DestroyRuntimeCardBoardBackgroundSprite();
         DestroyRuntimePuzzleOutlineTintMaterial();
+        DestroyRuntimePiecePlacementShineMaterial();
         ClearPieceHint();
         HintDashedOutlineGraphic.ClearPathCache();
     }
@@ -1463,6 +1475,46 @@ public class GameScene : MonoBehaviour
         _runtimePuzzleOutlineTintMaterial = null;
     }
 
+    private Material GetOrCreatePiecePlacementShineMaterial()
+    {
+        if (_runtimePiecePlacementShineMaterial != null)
+        {
+            return _runtimePiecePlacementShineMaterial;
+        }
+
+        var shader = Resources.Load<Shader>(PiecePlacementShineShaderResourcesPath);
+        if (shader == null)
+        {
+            if (!_didWarnMissingPiecePlacementShineShader)
+            {
+                _didWarnMissingPiecePlacementShineShader = true;
+                Debug.LogWarning(
+                    $"GameScene: piece placement shine shader is missing at "
+                    + $"Resources/{PiecePlacementShineShaderResourcesPath}.shader; "
+                    + "placement shine skipped.");
+            }
+
+            return null;
+        }
+
+        _runtimePiecePlacementShineMaterial = new Material(shader)
+        {
+            name = PiecePlacementShineMaterialName
+        };
+        return _runtimePiecePlacementShineMaterial;
+    }
+
+    private void DestroyRuntimePiecePlacementShineMaterial()
+    {
+        if (_runtimePiecePlacementShineMaterial == null)
+        {
+            return;
+        }
+
+        Destroy(_runtimePiecePlacementShineMaterial);
+        _runtimePiecePlacementShineMaterial = null;
+    }
+
     private void ClearActiveGroupOutline()
     {
         var root = GameObject.Find(ActiveGroupOutlineRootObjectName);
@@ -1915,7 +1967,7 @@ public class GameScene : MonoBehaviour
         }
 
         CommitPlacedPieceToBoardImage(state);
-        StartCoroutine(PlayPiecePlacementSuccessFlash(state.GrooveImage));
+        yield return PlayPiecePlacementSuccessShine(state.GrooveImage);
         _isPiecePlacementAnimating = false;
 
         var didAdvanceGroup = TryAdvanceGroup();
@@ -1925,50 +1977,258 @@ public class GameScene : MonoBehaviour
         }
     }
 
-    private IEnumerator PlayPiecePlacementSuccessFlash(Image grooveImage)
+    private IEnumerator PlayPiecePlacementSuccessShine(Image grooveImage)
     {
         if (grooveImage == null || grooveImage.sprite == null)
         {
             yield break;
         }
 
-        var sourceRect = grooveImage.rectTransform;
-        var flashObject = new GameObject(
-            "PiecePlacementSuccessFlash",
-            typeof(RectTransform),
-            typeof(CanvasRenderer),
-            typeof(Image));
-        var flashRect = flashObject.GetComponent<RectTransform>();
-        flashRect.SetParent(sourceRect.parent, false);
-        flashRect.anchorMin = sourceRect.anchorMin;
-        flashRect.anchorMax = sourceRect.anchorMax;
-        flashRect.pivot = sourceRect.pivot;
-        flashRect.anchoredPosition = sourceRect.anchoredPosition;
-        flashRect.sizeDelta = sourceRect.sizeDelta;
-        flashRect.localRotation = sourceRect.localRotation;
-        flashRect.localScale = sourceRect.localScale * 1.035f;
-        flashRect.SetAsLastSibling();
+        var shineMaterial = GetOrCreatePiecePlacementShineMaterial();
+        if (shineMaterial == null)
+        {
+            yield break;
+        }
 
-        var flashImage = flashObject.GetComponent<Image>();
-        flashImage.sprite = grooveImage.sprite;
-        flashImage.preserveAspect = grooveImage.preserveAspect;
-        flashImage.raycastTarget = false;
-        flashImage.maskable = false;
+        var shineImages = CollectConnectedPlacedImages(grooveImage);
+        if (shineImages.Count == 0)
+        {
+            shineImages.Add(grooveImage);
+        }
+
+        var shineObjects = new List<GameObject>(shineImages.Count);
+        var hasBounds = false;
+        var combinedScreenRect = default(Rect);
+        for (var i = 0; i < shineImages.Count; i++)
+        {
+            var sourceImage = shineImages[i];
+            var shineObject = CreatePiecePlacementShineOverlay(sourceImage, shineMaterial);
+            if (shineObject != null)
+            {
+                shineObjects.Add(shineObject);
+            }
+
+            if (!TryGetRectTransformScreenRect(sourceImage.rectTransform, out var screenRect))
+            {
+                continue;
+            }
+
+            combinedScreenRect = hasBounds ? UnionRects(combinedScreenRect, screenRect) : screenRect;
+            hasBounds = true;
+        }
+
+        if (shineObjects.Count == 0 || !hasBounds
+            || !TryGetRectTransformScreenRect(grooveImage.rectTransform, out var sourceScreenRect))
+        {
+            DestroyPlacementShineObjects(shineObjects);
+            yield break;
+        }
+
+        var sourceCenter = NormalizeScreenPoint(sourceScreenRect.center);
+        var connectedCenter = NormalizeScreenPoint(combinedScreenRect.center);
+        var sweepAxis = connectedCenter - sourceCenter;
+        if (sweepAxis.sqrMagnitude < 0.0025f)
+        {
+            sweepAxis = new Vector2(-0.58f, 0.82f);
+        }
+        else
+        {
+            sweepAxis = Vector2.Lerp(
+                new Vector2(-0.58f, 0.82f),
+                sweepAxis.normalized,
+                0.65f).normalized;
+        }
+
+        GetScreenRectAxisRange(
+            combinedScreenRect,
+            sweepAxis,
+            out var sweepStart,
+            out var sweepEnd);
+        sweepStart -= PiecePlacementShineBandWidth * 2f;
+        sweepEnd += PiecePlacementShineBandWidth * 2f;
+
+        shineMaterial.SetVector(ShineSweepAxisId, sweepAxis);
+        shineMaterial.SetFloat(ShineBandWidthId, PiecePlacementShineBandWidth);
+        shineMaterial.SetColor(ShineColorId, PiecePlacementShineColor);
 
         var elapsed = 0f;
-        while (elapsed < PiecePlacementFlashDuration && flashImage != null)
+        while (elapsed < PiecePlacementShineDuration && shineObjects.Count > 0)
         {
-            elapsed += Time.unscaledDeltaTime;
-            var progress = Mathf.Clamp01(elapsed / PiecePlacementFlashDuration);
-            var pulse = 1f - Mathf.Abs(progress * 2f - 1f);
-            flashImage.color = new Color(0.62f, 0.88f, 0.38f, pulse * 0.5f);
-            flashRect.localScale = sourceRect.localScale * Mathf.Lerp(1.01f, 1.055f, pulse);
+            elapsed += Mathf.Min(Time.unscaledDeltaTime, GameEntranceMaxFrameDelta);
+            var progress = Mathf.Clamp01(elapsed / PiecePlacementShineDuration);
+            var eased = progress * progress * (3f - 2f * progress);
+            shineMaterial.SetFloat(
+                ShineSweepCenterId,
+                Mathf.LerpUnclamped(sweepStart, sweepEnd, eased));
             yield return null;
         }
 
-        if (flashObject != null)
+        DestroyPlacementShineObjects(shineObjects);
+    }
+
+    private List<Image> CollectConnectedPlacedImages(Image placedImage)
+    {
+        var candidates = new List<Image>();
+        var screenRects = new Dictionary<Image, Rect>();
+        if (_board.GrooveImagesByGroup != null)
         {
-            Destroy(flashObject);
+            for (var groupIndex = 0; groupIndex < _board.GrooveImagesByGroup.Count; groupIndex++)
+            {
+                var group = _board.GrooveImagesByGroup[groupIndex];
+                if (group == null)
+                {
+                    continue;
+                }
+
+                for (var i = 0; i < group.Count; i++)
+                {
+                    var image = group[i];
+                    if (image == null
+                        || image.sprite == null
+                        || !image.gameObject.activeInHierarchy
+                        || image.color.a <= 0.01f
+                        || !TryGetRectTransformScreenRect(image.rectTransform, out var screenRect))
+                    {
+                        continue;
+                    }
+
+                    candidates.Add(image);
+                    screenRects[image] = screenRect;
+                }
+            }
+        }
+
+        if (!screenRects.ContainsKey(placedImage)
+            && TryGetRectTransformScreenRect(placedImage.rectTransform, out var placedRect))
+        {
+            candidates.Add(placedImage);
+            screenRects[placedImage] = placedRect;
+        }
+
+        var connected = new List<Image>();
+        if (!screenRects.ContainsKey(placedImage))
+        {
+            return connected;
+        }
+
+        var canvas = placedImage.canvas;
+        var padding = Mathf.Max(
+            2f,
+            PiecePlacementShineNeighborPadding * (canvas != null ? canvas.scaleFactor : 1f));
+        var visited = new HashSet<Image> { placedImage };
+        var queue = new Queue<Image>();
+        queue.Enqueue(placedImage);
+        while (queue.Count > 0)
+        {
+            var current = queue.Dequeue();
+            connected.Add(current);
+            var currentRect = screenRects[current];
+            for (var i = 0; i < candidates.Count; i++)
+            {
+                var candidate = candidates[i];
+                if (visited.Contains(candidate)
+                    || !AreScreenRectsConnected(currentRect, screenRects[candidate], padding))
+                {
+                    continue;
+                }
+
+                visited.Add(candidate);
+                queue.Enqueue(candidate);
+            }
+        }
+
+        return connected;
+    }
+
+    private static bool AreScreenRectsConnected(Rect first, Rect second, float padding)
+    {
+        return first.xMin <= second.xMax + padding
+               && first.xMax >= second.xMin - padding
+               && first.yMin <= second.yMax + padding
+               && first.yMax >= second.yMin - padding;
+    }
+
+    private static GameObject CreatePiecePlacementShineOverlay(
+        Image sourceImage,
+        Material shineMaterial)
+    {
+        if (sourceImage == null || sourceImage.sprite == null || shineMaterial == null)
+        {
+            return null;
+        }
+
+        var sourceRect = sourceImage.rectTransform;
+        var shineObject = new GameObject(
+            $"{sourceImage.gameObject.name}_PlacementShine",
+            typeof(RectTransform),
+            typeof(CanvasRenderer),
+            typeof(Image));
+        shineObject.layer = sourceImage.gameObject.layer;
+        var shineRect = shineObject.GetComponent<RectTransform>();
+        shineRect.SetParent(sourceRect.parent, false);
+        shineRect.anchorMin = sourceRect.anchorMin;
+        shineRect.anchorMax = sourceRect.anchorMax;
+        shineRect.pivot = sourceRect.pivot;
+        shineRect.anchoredPosition = sourceRect.anchoredPosition;
+        shineRect.sizeDelta = sourceRect.sizeDelta;
+        shineRect.localRotation = sourceRect.localRotation;
+        shineRect.localScale = sourceRect.localScale;
+        shineRect.SetAsLastSibling();
+
+        var shineImage = shineObject.GetComponent<Image>();
+        shineImage.sprite = sourceImage.sprite;
+        shineImage.type = sourceImage.type;
+        shineImage.preserveAspect = sourceImage.preserveAspect;
+        shineImage.useSpriteMesh = sourceImage.useSpriteMesh;
+        shineImage.fillCenter = sourceImage.fillCenter;
+        shineImage.fillMethod = sourceImage.fillMethod;
+        shineImage.fillAmount = sourceImage.fillAmount;
+        shineImage.fillClockwise = sourceImage.fillClockwise;
+        shineImage.fillOrigin = sourceImage.fillOrigin;
+        shineImage.color = Color.white;
+        shineImage.material = shineMaterial;
+        shineImage.raycastTarget = false;
+        shineImage.maskable = false;
+        return shineObject;
+    }
+
+    private static Vector2 NormalizeScreenPoint(Vector2 screenPoint)
+    {
+        return new Vector2(
+            Screen.width > 0 ? screenPoint.x / Screen.width : 0f,
+            Screen.height > 0 ? screenPoint.y / Screen.height : 0f);
+    }
+
+    private static void GetScreenRectAxisRange(
+        Rect screenRect,
+        Vector2 axis,
+        out float minimum,
+        out float maximum)
+    {
+        var bottomLeft = NormalizeScreenPoint(new Vector2(screenRect.xMin, screenRect.yMin));
+        var topLeft = NormalizeScreenPoint(new Vector2(screenRect.xMin, screenRect.yMax));
+        var topRight = NormalizeScreenPoint(new Vector2(screenRect.xMax, screenRect.yMax));
+        var bottomRight = NormalizeScreenPoint(new Vector2(screenRect.xMax, screenRect.yMin));
+        minimum = Mathf.Min(
+            Vector2.Dot(bottomLeft, axis),
+            Vector2.Dot(topLeft, axis),
+            Vector2.Dot(topRight, axis),
+            Vector2.Dot(bottomRight, axis));
+        maximum = Mathf.Max(
+            Vector2.Dot(bottomLeft, axis),
+            Vector2.Dot(topLeft, axis),
+            Vector2.Dot(topRight, axis),
+            Vector2.Dot(bottomRight, axis));
+    }
+
+    private static void DestroyPlacementShineObjects(List<GameObject> shineObjects)
+    {
+        for (var i = 0; i < shineObjects.Count; i++)
+        {
+            if (shineObjects[i] != null)
+            {
+                Destroy(shineObjects[i]);
+            }
         }
     }
 
