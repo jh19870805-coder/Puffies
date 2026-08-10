@@ -1,11 +1,12 @@
 # 当前任务
 
-- 任务：卡包投影改为编辑器可调 Shader
-- 状态：旧 PackShadow 和运行时纹理生成已删除，新 Shader/Material 已配置并通过 C# 编译，等待 Unity 导入与视觉调参
+- 任务：修正 MainScene Panel 文本颜色偏淡
+- 状态：已恢复根 Canvas 的顶点色空间设置，等待 Unity Play Mode 视觉确认
 - 更新时间：2026-08-10
 
 ## 用户意图
 
+- MainScene 中多个 `Panel*` 容器的 TMP 文本应准确显示 Inspector 配置的颜色，不应出现整体发白、偏淡。
 - 参考现有 `CardBagXXX.prefab` 的分组方式，将同一局部区域的贴纸划入一组。
 - 先在 `CardBag022.prefab` 上尝试一版大概分组。
 - 将 CardBag022 最终确认的排序和命名规则同步到 CardBag 自动生成工具。
@@ -25,6 +26,7 @@
 
 ## 工作记录
 
+- 确认 Panel 后代 TMP 文本颜色 Alpha、顶点色 Alpha、共享材质 Face Alpha 和祖先序列化 CanvasGroup 均正常；偏淡来自 MainScene 根 Canvas 的 `Vertex Color Always In Gamma Space` 在 Linear 色彩空间下改变了 TMP 顶点色解释方式。该选项已恢复为关闭，并与运行时新建 Overlay Canvas 的默认设置保持一致。
 - 解析 `CardBag022` 的 196 个 Piece 中心位置和原生尺寸，并与完整预览图核对空间分布。
 - 初版按从上到下的 7 个水平区域、每个区域从左到右 4 组分为 28 组；根据体验反馈将相邻的 `01+02`、`03+04` 等两两合并，当前共 14 组、每组 14 片。
 - 组号按棋盘从上到下、同一行从左到右排列；组内索引按中心位置从左到右稳定排列。
@@ -68,6 +70,7 @@
 
 ## 修改文件
 
+- `Assets/Scenes/MainScene.unity`
 - `Assets/Resources/CardBagPrefabs/CardBag022.prefab`
 - `Assets/Scripts/Editor/CardBagPrefabGeneratorEditor.cs`
 - `Assets/Resources/Generated/PuzzleOutlines/CardBag022/`
@@ -87,6 +90,7 @@
 
 ## 验证
 
+- `git diff --check` 通过；MainScene 场景差异仅为根 Canvas 的 `m_VertexColorAlwaysGammaSpace: 1 -> 0`，未修改任何 TMP 文本 RGB、字体、材质、Alpha 或 Panel 布局。`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译通过，均为 0 警告、0 错误；Unity 当前已打开，仍需重新载入场景后进行视觉确认。
 - `CardBag022` 共 196 个合法四位正式 Piece 名，三位中间名 0，重复名 0。
 - 分组为 `Group01..Group14`，每组均为 14 片，索引完整为 `01..14`。
 - `GameBoard` 共 197 个子节点，顺序精确等于 `BoardTitle` 加 `Piece0101..Piece1414`，顺序差异 0。
@@ -126,12 +130,13 @@
 
 ## 下一步
 
-1. 回到 Unity 等待 `PackCoverShadow.shader` 导入，确认 Console 无 Shader 错误，并在 MainScene 检查列表封面与投影边界。
-2. 由美术选中 `Assets/Resources/PackCoverShadow.mat` 调整投影参数，重点确认向下偏移、深浅、模糊高度和 `Padding` 不裁切。
-3. 回到 Unity 等待 `PuzzleOutlineTint.shader` 导入，确认 Console 无 Shader 错误。
-4. 分别用 `BgCardBoard1` 和 `BgCardBoard2` 进入关卡，确认两者描边均固定为 `#3f423e`，线条有轻微铅笔颗粒和小断点且仍清楚可读。
-5. 分别在普通和高对比度模式点击提示按钮，确认滚动虚线从当前绿色切换为 `#b1d702`；新手引导蓝色虚线保持原色。
-6. 在 Unity Play Mode 确认首次入场和每次切组时描边先隐藏，并从棋盘移动结束时开始用 `0.5s` 淡入；CardBag001 第一阶段保持无烘焙描边，第二阶段正常淡入。
+1. 重新载入 MainScene 并进入 Play Mode，依次打开 `PanelMenu`、`PanelSet`、`PanelUsable`、`PanelSave`、`PanelReplay` 和 `PanelBagSelect`，确认文本颜色与 Inspector 一致。
+2. 回到 Unity 等待 `PackCoverShadow.shader` 导入，确认 Console 无 Shader 错误，并在 MainScene 检查列表封面与投影边界。
+3. 由美术选中 `Assets/Resources/PackCoverShadow.mat` 调整投影参数，重点确认向下偏移、深浅、模糊高度和 `Padding` 不裁切。
+4. 回到 Unity 等待 `PuzzleOutlineTint.shader` 导入，确认 Console 无 Shader 错误。
+5. 分别用 `BgCardBoard1` 和 `BgCardBoard2` 进入关卡，确认两者描边均固定为 `#3f423e`，线条有轻微铅笔颗粒和小断点且仍清楚可读。
+6. 分别在普通和高对比度模式点击提示按钮，确认滚动虚线从当前绿色切换为 `#b1d702`；新手引导蓝色虚线保持原色。
+7. 在 Unity Play Mode 确认首次入场和每次切组时描边先隐藏，并从棋盘移动结束时开始用 `0.5s` 淡入；CardBag001 第一阶段保持无烘焙描边，第二阶段正常淡入。
 
 ## 数据说明
 
