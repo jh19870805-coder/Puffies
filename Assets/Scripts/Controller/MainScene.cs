@@ -72,6 +72,7 @@ public class MainScene : MonoBehaviour
     private const string PackItemTemplateObjectName = "PackItemTemplate";
     private const string PackShadowObjectName = "PackShadow";
     private const string PackCoverObjectName = "PackCover";
+    private const string PackHighlightObjectName = "PackHighlight";
     private const string PackSizeObjectName = "PackSize";
     private const string PackNameTextObjectName = "NameText";
     private const string MenuButtonObjectName = "BtnMenu";
@@ -1306,8 +1307,16 @@ public class MainScene : MonoBehaviour
 
         var coverImage = FindChild(slotObject.transform, PackCoverObjectName)?.GetComponent<Image>() ?? rootImage;
         var shadowImage = FindChild(slotObject.transform, PackShadowObjectName)?.GetComponent<Image>();
+        var highlightRect = FindChild(slotObject.transform, PackHighlightObjectName) as RectTransform;
         var sizeImage = FindChild(slotObject.transform, PackSizeObjectName)?.GetComponent<Image>();
-        PreparePagedPackageItem(slotObject, rootRect, rootImage, coverImage, shadowImage, sizeImage);
+        PreparePagedPackageItem(
+            slotObject,
+            rootRect,
+            rootImage,
+            coverImage,
+            shadowImage,
+            highlightRect,
+            sizeImage);
         EnsurePackageInteractionHandler(slotObject, coverImage, packId);
 
         var entry = new PackageEntry
@@ -2333,6 +2342,7 @@ public class MainScene : MonoBehaviour
         Image rootImage,
         Image coverImage,
         Image shadowImage,
+        RectTransform highlightRect,
         Image sizeImage)
     {
         if (rootRect != null)
@@ -2366,6 +2376,7 @@ public class MainScene : MonoBehaviour
             var coverRect = coverImage.rectTransform;
             ScaleOverlayWithCover(sizeImage != null ? sizeImage.rectTransform : null, coverRect.sizeDelta);
             ScaleOverlayWithCover(shadowImage != null ? shadowImage.rectTransform : null, coverRect.sizeDelta);
+            ScaleOverlayWithCover(highlightRect, coverRect.sizeDelta);
             coverRect.anchorMin = new Vector2(0.5f, 0.5f);
             coverRect.anchorMax = new Vector2(0.5f, 0.5f);
             coverRect.pivot = new Vector2(0.5f, 0.5f);

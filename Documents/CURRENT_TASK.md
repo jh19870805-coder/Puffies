@@ -1,7 +1,7 @@
 # 当前任务
 
-- 任务：实现拼图块落位连锁滑光
-- 状态：代码和 Shader 完成并通过 C# 编译，等待 Unity 导入与 Play Mode 视觉回归
+- 任务：将可调 ADD 高光配置到 PackItem
+- 状态：Prefab、资源和缩放适配已完成并通过 C# 编译，等待 Unity Inspector 与 Play Mode 视觉确认
 - 更新时间：2026-08-10
 
 ## 用户意图
@@ -16,7 +16,8 @@
 - 第一阶段提示框以屏幕归一化位置 `(0.5, 0.7)` 为基础，向上移动一个提示框背景板自身高度后，累计左移 `30`、下移 `50`；不跟随包含透明区域的 CardBag Rect。
 - 引导提示文字最多显示两行；内容较长时保持两行并自动缩小字号，不改变编辑器模板的字体、材质、颜色、字重和对齐样式。
 - 参考视频 `85562245f2decc4cc7e116bd1d06798f.mp4`：拼图块正确落位后播放暖白金色斜向滑光，并让与新块相邻连通的已拼贴纸一起出现连续滑光。
-- 滑光核心必须裁切在每块贴纸真实 Sprite Alpha 内，不照亮未拼区域或不连通贴纸；贴纸边缘允许低强度外扩光晕与底层桌面做 ADD 提亮。整体替换现有绿色整块缩放闪光。
+- 上一轮为拼图落位滑光增加外扩 ADD 光晕的方向不符合需求，需要恢复修改前行为。
+- 将新提供的四张高光贴片直接配置到 `PackItem.prefab`，让位置、尺寸、颜色和透明度可在 Unity Inspector 中调整；高光必须使用真正的 ADD 混合，MainScene 不在运行时修改视觉参数。
 
 ## 工作记录
 
@@ -46,8 +47,11 @@
 - 正确落位后从当前所有已显示、Alpha 大于零的 Piece 中，以屏幕 Rect 接触和 `10` 设计像素邻距构建新块所在的连通区域；光带范围覆盖整个连通区域，不包含未拼 Piece。
 - 落位反馈时为连通区域创建临时 Image 叠层，复制各 Piece 的 RectTransform、Sprite 和 Image 显示方式；滑光约 `0.52s`，结束后销毁叠层，GameScene 销毁时释放运行时 Material。
 - `PlayPieceSnapAnimation` 现在等待滑光结束后才解除落位锁定并执行切组或结算；吸附时长、持久化、分组和新手引导判断不变。原来的绿色缩放闪光已删除。
-- 首版滑光使用 `Blend SrcAlpha One` 且完全受贴纸 Alpha 裁切，桌面区域没有光效像素，因此看不到与底层桌面的明确 ADD 提亮。
-- 滑光 Shader 已改为 RGB 预乘后的 `Blend One One`，只写 RGB、不修改目标 Alpha；每块贴纸除原尺寸核心滑光外，再创建 `1.1x`、Alpha `0.28` 的外扩光晕，使贴纸边缘外的光效像素与桌面颜色做真实加法叠加。
+- 已撤销上一轮误加在 `PuzzlePlacementShine` 和 GameScene 临时叠层上的 `1.1x` 外扩光晕，恢复原有拼图滑光实现。
+- 将 `高光.zip` 中的四张贴片以 `PackHighlight02..05.png` 导入 `Assets/UI/MainScene`，使用无压缩 Sprite 配置保留透明边缘。
+- 新增 `PackHighlightAdditive` UGUI Shader 和 Material：使用 RGB 预乘后的 `Blend One One`，只写 RGB，不修改目标 Alpha。
+- `PackItem.prefab` 新增 `PackHighlight` 父节点和四个独立 Image 子节点，父节点提供统一 Alpha，子节点可分别调整位置、尺寸、颜色、Sprite 和 Material；层级位于 `PackCover` 上方、`PackSize` 下方。
+- MainScene 只在创建列表项时将整个 `PackHighlight` 按封面从 `600 x 680` 缩放到列表 `240 x 272`，不覆盖 Prefab 内高光参数。
 
 ## 修改文件
 
@@ -57,6 +61,11 @@
 - `Assets/Scripts/Controller/GameScene.cs`
 - `Assets/Resources/PuzzleOutlineTint.shader`
 - `Assets/Resources/PuzzlePlacementShine.shader`
+- `Assets/Prefabs/PackItem.prefab`
+- `Assets/Scripts/Controller/MainScene.cs`
+- `Assets/UI/MainScene/PackHighlight02.png` 到 `PackHighlight05.png`
+- `Assets/UI/MainScene/PackHighlightAdditive.shader`
+- `Assets/UI/MainScene/PackHighlightAdditive.mat`
 - `Documents/PROJECT_CONTEXT.md`
 - `Documents/CURRENT_TASK.md`
 
@@ -86,14 +95,15 @@
 - 参考视频已完成 5fps 全流程和 15fps 落位局部逐帧检查，确认滑光作用于新块及其相邻已拼区域，而不是全棋盘闪光。
 - `dotnet build Assembly-CSharp.csproj --no-restore --nologo` 与 `dotnet build Assembly-CSharp-Editor.csproj --no-restore --nologo` 在滑光实现及范围修正后顺序通过，均为 0 警告、0 错误。
 - 当前 Unity Editor 日志未发现新的 `Shader error` 或 C# 编译错误，但日志中尚未出现新 Shader 的明确导入记录；仍需回到 Unity 触发资源刷新并做 Play Mode 视觉验证。
-- ADD 修改后顺序编译运行时和编辑器程序集，均为 0 警告、0 错误；Unity 最新日志未发现 `PuzzlePlacementShine` Shader 错误或 C# 编译错误。
+- `git diff 1d8ebd7 -- Assets/Resources/PuzzlePlacementShine.shader Assets/Scripts/Controller/GameScene.cs` 无差异，确认错误的外扩 ADD 方案已完整撤回。
+- `PackItem.prefab` 的四个 Image 均引用同一个 `PackHighlightAdditive.mat`，并分别引用四张新高光 Sprite；`git diff --check` 通过。
+- 本轮顺序编译 `Assembly-CSharp.csproj` 和 `Assembly-CSharp-Editor.csproj`，均为 0 警告、0 错误。
 
 ## 下一步
 
-1. 回到 Unity 等待 `PuzzlePlacementShine.shader` 导入，确认 Console 无 Shader 错误。
-2. Play Mode 连续放置相邻 Piece，确认暖白金光带约半秒扫过新块和相邻连通已拼块，核心光保持贴纸形状，低强度外扩光晕以 ADD 方式提亮贴纸边缘周围的桌面，且不出现黑底或普通透明色块。
-3. 确认滑光播放期间不能拖动下一块，滑光结束后正常切组或结算，恢复进度和一键完成不播放错误反馈。
-4. 继续回归 CardBag001 新手引导提示框、CardBag022 描边和高对比度颜色。
+1. 在 Unity 打开 `Assets/Prefabs/PackItem.prefab`，通过 `PackHighlight` 的 CanvasGroup Alpha 和四个子 Image 的 RectTransform、Color 调整最终参数。
+2. Play Mode 检查首页列表，确认高光与下层封面/桌面按 ADD 提亮、没有黑底或半透明矩形，并且仍位于卡包尺寸图标下方。
+3. 确认选中、返回、翻页和列表刷新不改变 Prefab 内高光参数，再继续回归拼图落位滑光。
 
 ## 数据说明
 

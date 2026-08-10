@@ -29,7 +29,7 @@ Unity **2022.3** / Built-in Render Pipeline 项目，使用 Linear 色彩空间�
 | 场景 | 需求 |
 |------|------|
 | LoadingScene | 初始化 JSON、SQLite、任务数据和卡包数据；加载结束后进入 MainScene |
-| MainScene | 根据 `CardPacks.csv` 与 SQLite 解锁状态刷新卡包列表；每页按 6 列 x 3 行显示 18 个静态卡包封面。`PackItem.prefab` 保留 `PackCover`、`PackShadow` 和 `PackSize`，运行时将 `PackCover` 替换为对应 `PackIconNNN.png`；列表不创建 3D 模型、粒子或 Animator。点击后在顶层 Overlay 中使用同一静态封面，从列表实际位置等比放大到屏幕中心 `600 x 680`，并显示 `PanelBagSelect` 和既有背景虚化；Back 将静态封面返回原列表位置。点击玩/确认重玩后进入 `BgGame` 开包舞台，等待玩家再次轻点卡包或横划；有效操作随机加载一套 `CardPackOpeningModel_001-006`，使用当前 `PackIconNNN` 作为正面纹理，播放制作方骨骼撕裂动画及 `fx_chai_w_001` 横向光效，完成后进入 `GameScene`。保留拍照、重玩确认、Rank、Achieve 和 Menu 入口。 |
+| MainScene | 根据 `CardPacks.csv` 与 SQLite 解锁状态刷新卡包列表；每页按 6 列 x 3 行显示 18 个静态卡包封面。`PackItem.prefab` 保留 `PackCover`、`PackShadow`、`PackHighlight` 和 `PackSize`，运行时将 `PackCover` 替换为对应 `PackIconNNN.png`，只按列表封面尺寸整体缩放编辑器配置的 `PackHighlight`；列表不创建 3D 模型、粒子或 Animator。点击后在顶层 Overlay 中使用同一静态封面，从列表实际位置等比放大到屏幕中心 `600 x 680`，并显示 `PanelBagSelect` 和既有背景虚化；Back 将静态封面返回原列表位置。点击玩/确认重玩后进入 `BgGame` 开包舞台，等待玩家再次轻点卡包或横划；有效操作随机加载一套 `CardPackOpeningModel_001-006`，使用当前 `PackIconNNN` 作为正面纹理，播放制作方骨骼撕裂动画及 `fx_chai_w_001` 横向光效，完成后进入 `GameScene`。保留拍照、重玩确认、Rank、Achieve 和 Menu 入口。 |
 | GameScene | 根据选中 PackId 加载 `CardBagNNN` Prefab，并读取 `CardPacks.csv/BoardScale` 缩放棋盘；按照 `PieceGGII` 四位数字命名组织拼图分组；从正常开包流程进入时播放棋盘、托盘和当前组 Piece 入场；每次正确放置 Piece 后立即持久化，重新进入时恢复已放置 Piece 并从首个未完成分组继续；全部完成后显示 RewardPanel；Editor 和 Development Build 在 `BtnTips` 左侧提供“一键完成”测试按钮 |
 | RankScene | 仅占位；首个 Demo 不包含排行榜后端功能。当前模拟列表前三名的 `RankBg` 分别使用原生 `1646 x 148` 的 `RankCellBg_1.png`、`RankCellBg_2.png`、`RankCellBg_3.png`，第四名以后使用 `1636 x 136` 的 `RankCellBg.png`；`RankItem` 根高度为 `148`，列表纵向间距为 `5`，条目中心步距为 `153` |
 | AchieveScene | 当前显示 20 条模拟成就，前 5 条已达成、后 15 条未达成；接入 Steam 后替换数据源。成就网格固定为 6 列，单元尺寸 `240 x 332`，横纵间距均为 `40` |
@@ -169,6 +169,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 | `TaskItem` | MainScene 任务进度和 GameScene RewardPanel 结算共用的 `Assets/Prefabs/TaskItem.prefab` 实例 |
 | `Package001` | MainScene 卡包列表项模板，隐藏并在运行时克隆 |
 | `PackItem/PackCover` | MainScene 卡包封面 Image；运行时设置 `PackIconNNN.png` |
+| `PackItem/PackHighlight` | 卡包封面上方的可调 ADD 高光父节点；四个子 Image 的位置、尺寸、颜色和透明度由 Prefab 配置，运行时只随封面整体缩放 |
 | `PackItem/PackSize` | 卡包尺寸图标；运行时根据 `CardPackSize` 配置选择 `PackSize_1.png` 到 `PackSize_7.png` |
 
 ---
@@ -231,7 +232,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 - GameScene 的 `BtnCompleteAllTest` 仅在 Unity Editor 和 Development Build 中运行时创建。点击后批量持久化当前 CardBag 全部 Piece 编号、显示完整棋盘并调用正式 `ShowRewardPanel()`；因此卡包生命周期、任务积分、奖励发放和完成数量都会产生真实本地测试数据。正式非 Development Build 不显示该按钮。
 - `GameScene/BtnTips` 从当前组选择 Piece 编号最小的未完成碎片。目标碎片在托盘原位置左右抖动约 `0.8s` 后停止，棋盘对应 `GrooveRect` 使用 `HintDashedOutlineGraphic` 从 GPU 读取 Piece Sprite 的实际 Alpha 像素边界，沿真实累计轮廓长度生成固定 `20` 像素实线、基础间隔 `15` 像素、滚动速度 `60` 像素/秒的绿色滚动虚线；轮廓在当前 GameScene 内按 Sprite 缓存并在离场时清空，Physics Shape 只作为读取失败回退。再次点击按钮取消当前提示，成功放置、切组或结算时同样清理。一旦有效提示显示过，本局持续记为已使用提示。
 - `CardBag001` 引导按实际三组拆成三个阶段，首次流程已有部分进度时从当前未完成组继续；活动拼图会话优先于历史卡包完成状态和教程完成记录，因此已完成卡包“重玩”中途退出后再次进入，也会从当前未完成组继续引导。只有整包完成并进入结算时才将 `Tutorial/CardBag001TutorialCompleted` 写入 SQLite `AppRecords`，中途退出不会提前完成教程；没有活动会话的已完成卡包普通进入不自动引导，通过 MainScene“重玩”确认进入时则从第1组重新播放完整引导。第1组 `Piece0101` 为强引导：保留游戏原有暗色托盘且不额外叠加教程黑色遮罩，突出目标 Piece，显示蓝色滚动虚线和等比缩小至原尺寸 `70%` 的 `GuideArrow1.png`；箭头从碎片中心出现并循环移动指向目标凹槽，不做从小到大的缩放，并只允许拖动目标；拿起后文字和虚线保留，放错恢复焦点。第2组 `Piece0201/0202` 同时高亮、允许任意顺序放置，并从本阶段开始显示当前组烘焙关卡描边；不显示箭头或目标虚线，第一片放对后只刷新剩余 Piece 焦点。第3组 `Piece0301-0305` 恢复正常交互和 `BtnTips`，并介绍提示功能；`BtnTips` 在前两步保持隐藏。第一步提示框以屏幕归一化位置 `(0.5, 0.7)` 为基础向上增加一个提示框自身高度，再追加设计坐标偏移 `(-30, -50)` 并限制在屏幕安全范围内；第二、三步分别位于当前待拼凹槽整体边界上方和右上，三者从对应方向淡入；第二步位置随棋盘布局动态计算并限制在屏幕安全范围内。三步文字统一克隆场景 `GuideTip/TextTips`，保留编辑器设置的 TMP 字体、材质、颜色、字重、对齐和 RectTransform；运行时只替换文案，并将内容平衡为最多两行，排除标点出现在第二行开头的断点，超过单行宽度时启用 Auto Size 缩小字号。第三步从场景 `GuideTip/Arrow` 读取 `GuideArrow2.png` 及编辑器布局，提示框入场后箭头淡入并循环向右上推进。该引导本身不算使用提示。
-- 正确放置 Piece 后先将运行时贴图从松手位置以三次方减速曲线吸附到凹槽中心，默认时长 `0.18s`；抵达后切换为棋盘 Image，并播放约 `0.52s` 的暖白金斜向滑光。滑光从当前已显示且已放置 Piece 中查找新块所在的屏幕 Rect 接触连通区域，使用统一屏幕空间光带依次扫过整个连通区域；原尺寸核心层通过每块 Sprite Alpha 裁切，不照亮未拼 Piece、棋盘背景或不连通贴纸，另有 `1.1x`、Alpha `0.28` 的低强度外扩层在贴纸边缘周围与桌面做 RGB 预乘后的 `Blend One One` ADD 叠加且不写目标 Alpha。滑光替代旧绿色缩放闪光，播放结束后才解除落位锁定并继续切组或结算；吸附和滑光期间不得开始新的拖拽、提示或一键完成操作。
+- 正确放置 Piece 后先将运行时贴图从松手位置以三次方减速曲线吸附到凹槽中心，默认时长 `0.18s`；抵达后切换为棋盘 Image，并播放约 `0.52s` 的暖白金斜向滑光。滑光从当前已显示且已放置 Piece 中查找新块所在的屏幕 Rect 接触连通区域，使用统一屏幕空间光带依次扫过整个连通区域，并通过每块 Sprite Alpha 裁切，不照亮未拼 Piece、棋盘背景或不连通贴纸。滑光替代旧绿色缩放闪光，播放结束后才解除落位锁定并继续切组或结算；吸附和滑光期间不得开始新的拖拽、提示或一键完成操作。
 - RewardPanel 先从 `0` 滚动到基础分，再依次展示本局实际生效的“未使用提示”“关闭关卡描边”“关闭贴纸描边”和“快速完成”加成，最后显示最终得分；显示顺序和动画不改变项目既有加成比例、任务进度或发包结果。
 - `PanelBagSelect` 每次打开时同时读取历史生命周期和当前拼图会话。只有 `Completed` 且没有活动会话的卡包显示 `重玩` 并弹出 `PanelReplay`；未完成卡包以及重玩中途退出、仍有活动会话的 `Completed` 卡包都显示 `玩` 并直接进入现有流程。`BtnReplay` 确认时清除旧会话，新会话在进入 GameScene 时创建；`BtnReturn` 和 `BtnClose` 取消。相机按钮只对历史上至少完整完成过一次、生命周期为 `Completed` 的卡包显示；首次拼图尚未完成的 `InProgress` 卡包不显示。弹窗显示期间隐藏选中卡包、其他列表卡包 Renderer 和尺寸图标，并锁定选择页按钮；取消时全部恢复，确认时保持隐藏并衔接开包舞台。
 - 点击 `BtnCamera` 后播放一次全屏白色闪光，并离屏生成 `1024 x 1024` PNG。图片由 `MainPhotoBg` 木纹底图、当前 `CardBagNNN` Prefab 还原的完整拼图和左下角 `MainGameIcon` 组成；拼图等比适配并轻微旋转。文件以 `Application.productName-YYYY-MM-DD-BagId.png` 保存到桌面，BagId 使用三位编号，同日同一卡包重复拍照覆盖旧文件。保存成功后通过独立顶层 `PanelPhotoCanvas` 显示 `PanelPhoto` 并将 `Photo` 替换为生成图；预览期间隐藏选中卡包，点击 `BtnOK` 关闭预览并恢复卡包。拍照不写业务持久化数据。
@@ -250,7 +251,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 
 `MainScene.RefreshPackageList` 根据数据库动态创建已解锁卡包槽位。不要在场景中手工复制 `Package002`、`Package003` 等对象。
 
-共享尺寸图标为 `UI/PackImages/PackSize_1.png` 到 `PackSize_7.png`，对应 `CardPackSize` 数值（`XS=1` 到 `XXXL=7`）。`PackItem` 必须包含名为 `PackCover` 和 `PackSize` 的 Image 子节点；MainScene 在运行时设置两者 Sprite，并根据编辑器封面尺寸缩放尺寸图标。
+共享尺寸图标为 `UI/PackImages/PackSize_1.png` 到 `PackSize_7.png`，对应 `CardPackSize` 数值（`XS=1` 到 `XXXL=7`）。`PackItem` 必须包含名为 `PackCover` 和 `PackSize` 的 Image 子节点；MainScene 在运行时设置两者 Sprite，并根据编辑器封面尺寸缩放尺寸图标。可调高光位于同级 `PackHighlight` 下，层级顺序为 `PackShadow`、`PackCover`、`PackHighlight`、`PackSize`。四张高光贴片共用 `PackHighlightAdditive.mat`，以 RGB 预乘 `Blend One One` 做 ADD 叠加，只写 RGB；MainScene 只整体缩放 `PackHighlight`，不改其材质、颜色、Alpha 或子节点布局。
 
 `PackItem/PackShadow` 是渲染在 `PackCover` 后方的同级 Image。MainScene 读取运行时可读封面贴图，将 Alpha 缩小到 `240 x 272` 显示尺寸，并执行三次可分离 Box Blur，水平半径 2、垂直半径 5。缓存阴影 Sprite 尺寸为 `256 x 344`、偏移为 `(0,-20)`，使投影只向下而不是向右。水平/垂直内边距为 `8/36` 像素，阴影颜色 `#1f292d`，最大 Alpha `0.52`。MainScene 销毁时释放生成的阴影 Sprite 和 Texture。`PackSize` 保持在两张图片上方。
 
@@ -304,7 +305,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 
 ### 卡包展示与开包表现
 
-- 首页列表的卡包主体使用 `Assets/UI/PackImages/PackIconNNN.png` 静态图，`PackItem.prefab` 不嵌套卡包特效 Prefab。
+- 首页列表的卡包主体使用 `Assets/UI/PackImages/PackIconNNN.png` 静态图；`PackItem.prefab` 不嵌套 3D 卡包特效 Prefab，但包含编辑器可调的 UGUI ADD 高光贴片。
 - 选中态使用独立 Screen Space Overlay `Image` 显示同一张静态图，目标尺寸为 `600 x 680`；选择面板、背景虚化、返回、拍照和重玩确认继续沿用现有流程。
 - 点击玩后切换到 `BgGame` 开包舞台并等待玩家轻点或横划。有效操作随机选择 `CardPackOpeningModel_001-006`，共用制作方 `CardPackAnimation.controller`；模型正面材质只把 `_MainTex` 替换为当前 `PackIconNNN`，背面继续使用制作方 `test01/Bg01`，其他材质、Shader、骨骼和粒子参数不修改。
 - 制作方 Timeline 中骨骼动画先启动，`fx_chai_w_001` 在 `0.5s` 后启动；运行时沿用这一相对时序，并读取 Animator Clip 的约 `1.833s` 总时长后进入 `GameScene`。
