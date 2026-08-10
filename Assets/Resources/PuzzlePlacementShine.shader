@@ -41,8 +41,8 @@ Shader "Puffies/UI/PuzzlePlacementShine"
         Lighting Off
         ZWrite Off
         ZTest [unity_GUIZTestMode]
-        Blend SrcAlpha One
-        ColorMask [_ColorMask]
+        Blend One One
+        ColorMask RGB
 
         Pass
         {
@@ -108,15 +108,17 @@ Shader "Puffies/UI/PuzzlePlacementShine"
                 float core = 1.0 - smoothstep(bandWidth * 0.12, bandWidth, distanceToBand);
                 float glow = 1.0 - smoothstep(bandWidth, bandWidth * 2.6, distanceToBand);
                 float shine = saturate(core + glow * 0.38);
-                fixed4 color = fixed4(_ShineColor.rgb * (1.0 + core * 0.25),
-                    alpha * _ShineColor.a * shine);
+                fixed additive = alpha * _ShineColor.a * shine;
+                fixed4 color = fixed4(
+                    _ShineColor.rgb * (1.0 + core * 0.25) * additive,
+                    0.0);
 
                 #ifdef UNITY_UI_CLIP_RECT
-                color.a *= UnityGet2DClipping(input.localPosition.xy, _ClipRect);
+                color.rgb *= UnityGet2DClipping(input.localPosition.xy, _ClipRect);
                 #endif
 
                 #ifdef UNITY_UI_ALPHACLIP
-                clip(color.a - 0.001);
+                clip(additive - 0.001);
                 #endif
 
                 return color;

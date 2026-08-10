@@ -49,6 +49,8 @@ public class GameScene : MonoBehaviour
     private const float PiecePlacementShineDuration = 0.52f;
     private const float PiecePlacementShineBandWidth = 0.045f;
     private const float PiecePlacementShineNeighborPadding = 10f;
+    private const float PiecePlacementShineHaloScale = 1.1f;
+    private const float PiecePlacementShineHaloAlpha = 0.28f;
     private const float InvalidDropHoldDuration = 0.08f;
     private const float InvalidDropReturnDuration = 0.3f;
     private const float InvalidDropColorRestoreDuration = 0.1f;
@@ -2002,10 +2004,26 @@ public class GameScene : MonoBehaviour
         for (var i = 0; i < shineImages.Count; i++)
         {
             var sourceImage = shineImages[i];
-            var shineObject = CreatePiecePlacementShineOverlay(sourceImage, shineMaterial);
-            if (shineObject != null)
+            var haloObject = CreatePiecePlacementShineOverlay(
+                sourceImage,
+                shineMaterial,
+                PiecePlacementShineHaloScale,
+                PiecePlacementShineHaloAlpha,
+                "PlacementShineHalo");
+            if (haloObject != null)
             {
-                shineObjects.Add(shineObject);
+                shineObjects.Add(haloObject);
+            }
+
+            var coreObject = CreatePiecePlacementShineOverlay(
+                sourceImage,
+                shineMaterial,
+                1f,
+                1f,
+                "PlacementShine");
+            if (coreObject != null)
+            {
+                shineObjects.Add(coreObject);
             }
 
             if (!TryGetRectTransformScreenRect(sourceImage.rectTransform, out var screenRect))
@@ -2150,7 +2168,10 @@ public class GameScene : MonoBehaviour
 
     private static GameObject CreatePiecePlacementShineOverlay(
         Image sourceImage,
-        Material shineMaterial)
+        Material shineMaterial,
+        float scaleMultiplier,
+        float alpha,
+        string suffix)
     {
         if (sourceImage == null || sourceImage.sprite == null || shineMaterial == null)
         {
@@ -2159,7 +2180,7 @@ public class GameScene : MonoBehaviour
 
         var sourceRect = sourceImage.rectTransform;
         var shineObject = new GameObject(
-            $"{sourceImage.gameObject.name}_PlacementShine",
+            $"{sourceImage.gameObject.name}_{suffix}",
             typeof(RectTransform),
             typeof(CanvasRenderer),
             typeof(Image));
@@ -2172,7 +2193,7 @@ public class GameScene : MonoBehaviour
         shineRect.anchoredPosition = sourceRect.anchoredPosition;
         shineRect.sizeDelta = sourceRect.sizeDelta;
         shineRect.localRotation = sourceRect.localRotation;
-        shineRect.localScale = sourceRect.localScale;
+        shineRect.localScale = sourceRect.localScale * scaleMultiplier;
         shineRect.SetAsLastSibling();
 
         var shineImage = shineObject.GetComponent<Image>();
@@ -2185,7 +2206,7 @@ public class GameScene : MonoBehaviour
         shineImage.fillAmount = sourceImage.fillAmount;
         shineImage.fillClockwise = sourceImage.fillClockwise;
         shineImage.fillOrigin = sourceImage.fillOrigin;
-        shineImage.color = Color.white;
+        shineImage.color = new Color(1f, 1f, 1f, alpha);
         shineImage.material = shineMaterial;
         shineImage.raycastTarget = false;
         shineImage.maskable = false;
