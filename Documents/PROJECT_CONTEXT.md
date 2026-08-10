@@ -29,7 +29,7 @@ Unity **2022.3** / Built-in Render Pipeline 项目，使用 Linear 色彩空间�
 | 场景 | 需求 |
 |------|------|
 | LoadingScene | 初始化 JSON、SQLite、任务数据和卡包数据；加载结束后进入 MainScene |
-| MainScene | 根据 `CardPacks.csv` 与 SQLite 解锁状态刷新卡包列表；每页按 6 列 x 3 行显示 18 个静态卡包封面。`PackItem.prefab` 保留 `PackCover`、`PackShadow`、`PackHighlight` 和 `PackSize`，运行时将 `PackCover` 替换为对应 `PackIconNNN.png`，只按列表封面尺寸整体缩放编辑器配置的 `PackHighlight`；列表不创建 3D 模型、粒子或 Animator。点击后在顶层 Overlay 中使用同一静态封面，从列表实际位置等比放大到屏幕中心 `600 x 680`，并显示 `PanelBagSelect` 和既有背景虚化；Back 将静态封面返回原列表位置。点击玩/确认重玩后进入 `BgGame` 开包舞台，等待玩家再次轻点卡包或横划；有效操作随机加载一套 `CardPackOpeningModel_001-006`，使用当前 `PackIconNNN` 作为正面纹理，播放制作方骨骼撕裂动画及 `fx_chai_w_001` 横向光效，完成后进入 `GameScene`。保留拍照、重玩确认、Rank、Achieve 和 Menu 入口。 |
+| MainScene | 根据 `CardPacks.csv` 与 SQLite 解锁状态刷新卡包列表；每页按 6 列 x 3 行显示 18 个静态卡包封面。`PackItem.prefab` 保留 `PackCover`、`PackHighlight` 和 `PackSize`；`PackCover` 使用编辑器可调的 `PackCoverShadow.mat` 在同一个 Graphic 中合成封面投影，运行时只替换为对应 `PackIconNNN.png`，并按列表封面尺寸整体缩放编辑器配置的 `PackHighlight`；列表不创建 3D 模型、粒子或 Animator。点击后在顶层 Overlay 中使用同一静态封面，从列表实际位置等比放大到屏幕中心 `600 x 680`，并显示 `PanelBagSelect` 和既有背景虚化；Back 将静态封面返回原列表位置。点击玩/确认重玩后进入 `BgGame` 开包舞台，等待玩家再次轻点卡包或横划；有效操作随机加载一套 `CardPackOpeningModel_001-006`，使用当前 `PackIconNNN` 作为正面纹理，播放制作方骨骼撕裂动画及 `fx_chai_w_001` 横向光效，完成后进入 `GameScene`。保留拍照、重玩确认、Rank、Achieve 和 Menu 入口。 |
 | GameScene | 根据选中 PackId 加载 `CardBagNNN` Prefab，并读取 `CardPacks.csv/BoardScale` 缩放棋盘；按照 `PieceGGII` 四位数字命名组织拼图分组；从正常开包流程进入时播放棋盘、托盘和当前组 Piece 入场；每次正确放置 Piece 后立即持久化，重新进入时恢复已放置 Piece 并从首个未完成分组继续；全部完成后显示 RewardPanel；Editor 和 Development Build 在 `BtnTips` 左侧提供“一键完成”测试按钮 |
 | RankScene | 仅占位；首个 Demo 不包含排行榜后端功能。当前模拟列表前三名的 `RankBg` 分别使用原生 `1646 x 148` 的 `RankCellBg_1.png`、`RankCellBg_2.png`、`RankCellBg_3.png`，第四名以后使用 `1636 x 136` 的 `RankCellBg.png`；`RankItem` 根高度为 `148`，列表纵向间距为 `5`，条目中心步距为 `153` |
 | AchieveScene | 当前显示 20 条模拟成就，前 5 条已达成、后 15 条未达成；接入 Steam 后替换数据源。成就网格固定为 6 列，单元尺寸 `240 x 332`，横纵间距均为 `40` |
@@ -251,9 +251,9 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 
 `MainScene.RefreshPackageList` 根据数据库动态创建已解锁卡包槽位。不要在场景中手工复制 `Package002`、`Package003` 等对象。
 
-共享尺寸图标为 `UI/PackImages/PackSize_1.png` 到 `PackSize_7.png`，对应 `CardPackSize` 数值（`XS=1` 到 `XXXL=7`）。`PackItem` 必须包含名为 `PackCover` 和 `PackSize` 的 Image 子节点；MainScene 在运行时设置两者 Sprite，并根据编辑器封面尺寸缩放尺寸图标。可调高光位于同级 `PackHighlight` 下，层级顺序为 `PackShadow`、`PackCover`、`PackHighlight`、`PackSize`。四张高光贴片共用 `Assets/Resources/PackHighlightAdditive.mat`，以 RGB 预乘 `Blend One One` 做 ADD 叠加，只写 RGB；MainScene 只整体缩放 `PackHighlight`，不改其材质、颜色、Alpha 或子节点布局。Shader 和 Material 不得放进 `Assets/UI`，否则 BuildSync 会将其复制到 `StreamingAssets/UI` 并触发重复材质导入。
+共享尺寸图标为 `UI/PackImages/PackSize_1.png` 到 `PackSize_7.png`，对应 `CardPackSize` 数值（`XS=1` 到 `XXXL=7`）。`PackItem` 必须包含名为 `PackCover` 和 `PackSize` 的 Image 子节点；MainScene 在运行时设置两者 Sprite，并根据编辑器封面尺寸缩放尺寸图标。可调高光位于同级 `PackHighlight` 下，层级顺序为 `PackCover`、`PackHighlight`、`PackSize`。`PackHighlight` 父节点初始化关闭，MainScene 不得在首页常驻列表主动启用；四张高光贴片和 `Assets/Resources/PackHighlightAdditive.mat` 暂时保留，等待特效确认正确 ADD 混合方式与播放时机。MainScene 只整体缩放该节点，不改其材质、颜色、Alpha 或子节点布局。Shader 和 Material 不得放进 `Assets/UI`，否则 BuildSync 会将其复制到 `StreamingAssets/UI` 并触发重复材质导入。
 
-`PackItem/PackShadow` 是渲染在 `PackCover` 后方的同级 Image。MainScene 读取运行时可读封面贴图，将 Alpha 缩小到 `240 x 272` 显示尺寸，并执行三次可分离 Box Blur，水平半径 2、垂直半径 5。缓存阴影 Sprite 尺寸为 `256 x 344`、偏移为 `(0,-20)`，使投影只向下而不是向右。水平/垂直内边距为 `8/36` 像素，阴影颜色 `#1f292d`，最大 Alpha `0.52`。MainScene 销毁时释放生成的阴影 Sprite 和 Texture。`PackSize` 保持在两张图片上方。
+`PackItem` 不再包含 `PackShadow` Image，也不再读取封面像素或在 CPU 生成阴影 Texture/Sprite。`PackCover` 直接引用 `Assets/Resources/PackCoverShadow.mat`；对应 UGUI Shader 根据当前封面 Alpha 在同一次绘制中合成投影和原封面，并按源贴图像素提供颜色/透明度、X/Y 偏移、X/Y 模糊、扩散及 X/Y 渲染留白参数。`PackCoverShadowEffect` 只在 UGUI 网格生成阶段围绕 `PackCover` 自身矩形中心提供 Shader 所需留白，并在 Material 留白参数变化时刷新网格；不能在 Shader 顶点阶段围绕 Canvas 原点直接缩放。MainScene 只替换封面 Sprite，不覆盖 Material。美术统一在该 Material 中调整投影；阴影被裁切时先增大 `Render Padding X/Y`。
 
 1. 场景中只保留一个模板对象：`Package001`。
 2. 在 `CardPacks.csv` 增加一行（`PackId`、临时 `PackSize`、临时 `StickerCount`、`ChapterId`、正数 `BoardScale`、手工 `Series`、`AutoUpdate=1`），随后执行配置更新工具按实际片数同步 `PackSize`、`StickerCount` 和 `BoardScale`。需要手工固定这三个值时将该行 `AutoUpdate` 改为 `0`；工具始终保留 `Series` 原值。

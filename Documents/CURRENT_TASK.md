@@ -1,7 +1,7 @@
 # 当前任务
 
-- 任务：恢复固定颜色并增加铅笔质感描边
-- 状态：Shader 和运行时颜色逻辑已完成并通过编译与离线视觉预览，等待 Unity Play Mode 确认
+- 任务：卡包投影改为编辑器可调 Shader
+- 状态：旧 PackShadow 和运行时纹理生成已删除，新 Shader/Material 已配置并通过 C# 编译，等待 Unity 导入与视觉调参
 - 更新时间：2026-08-10
 
 ## 用户意图
@@ -21,6 +21,7 @@
 - 参考视频 `85562245f2decc4cc7e116bd1d06798f.mp4`：拼图块正确落位后播放暖白金色斜向滑光，并让与新块相邻连通的已拼贴纸一起出现连续滑光。
 - 上一轮为拼图落位滑光增加外扩 ADD 光晕的方向不符合需求，需要恢复修改前行为。
 - 将新提供的四张高光贴片直接配置到 `PackItem.prefab`，让位置、尺寸、颜色和透明度可在 Unity Inspector 中调整；高光必须使用真正的 ADD 混合，MainScene 不在运行时修改视觉参数。
+- 删除 `PackItem/PackShadow` 和 MainScene 动态生成阴影贴图的逻辑；卡包投影改由直接配置在 `PackCover` 上的 Shader 绘制，颜色、透明度、偏移、横纵模糊、扩散和渲染留白都可由美术在 Material Inspector 中调整。
 
 ## 工作记录
 
@@ -58,6 +59,12 @@
 - MainScene 只在创建列表项时将整个 `PackHighlight` 按封面从 `600 x 680` 缩放到列表 `240 x 272`，不覆盖 Prefab 内高光参数。
 - `ActiveGroupOutline` 根节点现在使用独立 `CanvasGroup` 控制透明度；创建首组或下一组时初始 Alpha 为 `0`，首次入场和切组的棋盘移动结束后使用不受 TimeScale 影响的 `0.5s` 平滑淡入。刷新或清理描边时会停止旧淡入协程，避免动画叠加。
 - 新手引导第一阶段继续阻止烘焙描边创建；从第一阶段切到第二阶段时允许提前创建透明描边，在棋盘移动完成后淡入，进入第二阶段提示时不再重复销毁重建描边。
+- 新增 `PackCoverShadow` UGUI Shader 和共享 Material；Shader 在同一个 `PackCover` Graphic 中先根据封面 Alpha 生成投影、再合成原封面，通过顶点外扩为偏移和模糊保留渲染空间，不需要额外阴影节点。
+- MainScene 已删除封面可读像素读取、CPU Box Blur、运行时 Shadow Sprite/Texture 缓存及释放逻辑；列表只替换 `PackCover.sprite`，不会覆盖 Prefab 中配置的投影 Material 参数。
+- 修复首版 Shader 直接缩放 UGUI 合批顶点导致 `PackCover` 围绕 Canvas 原点偏移的问题；新增 `PackCoverShadowEffect`，在 `Image` 网格生成阶段围绕自身 `RectTransform.rect.center` 外扩顶点，Shader 不再修改顶点位置。
+- `PackCoverShadowEffect` 实时读取共享 Material 的 `Render Padding X/Y` 和当前封面纹理尺寸；美术修改 Material 后会自动标记封面网格刷新，视觉参数仍只维护在 Material 中。
+- `PackHighlight` 父节点初始化改为关闭，MainScene 不主动启用；四张现有 ADD 高光贴片继续保留供后续特效时机和混合方式确认，但首页常驻列表不再显示散落光点。
+- 投影首版默认值在蓝色桌布上过弱，现将颜色调整为近黑色、Alpha `0.7`、Y 偏移 `-55px`、横纵模糊 `10/32px`、扩散 `8px`，Y 留白增至 `140px`；X 偏移保持 `0`，投影方向仍只向下。
 
 ## 修改文件
 
@@ -69,9 +76,12 @@
 - `Assets/Resources/PuzzlePlacementShine.shader`
 - `Assets/Prefabs/PackItem.prefab`
 - `Assets/Scripts/Controller/MainScene.cs`
+- `Assets/Scripts/View/PackCoverShadowEffect.cs`
 - `Assets/UI/MainScene/PackHighlight02.png` 到 `PackHighlight05.png`
 - `Assets/Resources/PackHighlightAdditive.shader`
 - `Assets/Resources/PackHighlightAdditive.mat`
+- `Assets/Resources/PackCoverShadow.shader`
+- `Assets/Resources/PackCoverShadow.mat`
 - `Documents/PROJECT_CONTEXT.md`
 - `Documents/CURRENT_TASK.md`
 
@@ -109,13 +119,19 @@
 - 提示按钮创建 `HintDashedOutlineGraphic` 时读取本局缓存的高对比度设置：关闭时保持 `(112,151,75)`，打开时使用 `#b1d702`；教程调用继续显式传入原蓝色。
 - 提示虚线颜色分支修改后顺序编译运行时和编辑器程序集，均为 0 警告、0 错误。
 - 棋盘描边淡入修改后顺序编译 `Assembly-CSharp.csproj` 和 `Assembly-CSharp-Editor.csproj`，均为 0 警告、0 错误；尚需在 Unity Play Mode 确认首次入场、普通切组和新手引导第1至第2阶段的实际节奏。
+- `PackItem.prefab` 已无 `PackShadow` 节点，`PackCover` 正确引用 `PackCoverShadow.mat`；MainScene 已无 `PackShadow`、动态阴影 Sprite 或 Box Blur 引用。
+- 投影改造后顺序编译 `Assembly-CSharp.csproj` 和 `Assembly-CSharp-Editor.csproj`，均为 0 警告、0 错误；当前 Unity Editor 日志未在本轮继续写入，Shader 导入和首页实际效果仍需回到编辑器确认。
+- 使用独立临时 `netstandard2.1` 编译项目引用当前 Unity 2022.3 的 `UnityEngine`、`UnityEngine.UI` 和 `TextRenderingModule`，确认新 `PackCoverShadowEffect.cs` 为 0 警告、0 错误；临时工程文件已删除，未修改 Unity 生成的 csproj。
+- Prefab YAML 检查确认 `PackHighlight.m_IsActive=0`；`PackCoverShadow.mat` 与 Shader 默认值已同步为加强后的下方投影参数，`git diff --check` 通过。现有 MainScene Play Mode 实例需重新进入场景后才会使用更新后的 Prefab 状态。
 
 ## 下一步
 
-1. 回到 Unity 等待 `PuzzleOutlineTint.shader` 导入，确认 Console 无 Shader 错误。
-2. 分别用 `BgCardBoard1` 和 `BgCardBoard2` 进入关卡，确认两者描边均固定为 `#3f423e`，线条有轻微铅笔颗粒和小断点且仍清楚可读。
-3. 分别在普通和高对比度模式点击提示按钮，确认滚动虚线从当前绿色切换为 `#b1d702`；新手引导蓝色虚线保持原色。
-4. 在 Unity Play Mode 确认首次入场和每次切组时描边先隐藏，并从棋盘移动结束时开始用 `0.5s` 淡入；CardBag001 第一阶段保持无烘焙描边，第二阶段正常淡入。
+1. 回到 Unity 等待 `PackCoverShadow.shader` 导入，确认 Console 无 Shader 错误，并在 MainScene 检查列表封面与投影边界。
+2. 由美术选中 `Assets/Resources/PackCoverShadow.mat` 调整投影参数，重点确认向下偏移、深浅、模糊高度和 `Padding` 不裁切。
+3. 回到 Unity 等待 `PuzzleOutlineTint.shader` 导入，确认 Console 无 Shader 错误。
+4. 分别用 `BgCardBoard1` 和 `BgCardBoard2` 进入关卡，确认两者描边均固定为 `#3f423e`，线条有轻微铅笔颗粒和小断点且仍清楚可读。
+5. 分别在普通和高对比度模式点击提示按钮，确认滚动虚线从当前绿色切换为 `#b1d702`；新手引导蓝色虚线保持原色。
+6. 在 Unity Play Mode 确认首次入场和每次切组时描边先隐藏，并从棋盘移动结束时开始用 `0.5s` 淡入；CardBag001 第一阶段保持无烘焙描边，第二阶段正常淡入。
 
 ## 数据说明
 
