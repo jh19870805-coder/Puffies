@@ -1,7 +1,7 @@
 # 当前任务
 
-- 任务：将可调 ADD 高光配置到 PackItem
-- 状态：Prefab、资源和缩放适配已完成并通过 C# 编译，等待 Unity Inspector 与 Play Mode 视觉确认
+- 任务：恢复固定颜色并增加铅笔质感描边
+- 状态：Shader 和运行时颜色逻辑已完成并通过编译与离线视觉预览，等待 Unity Play Mode 确认
 - 更新时间：2026-08-10
 
 ## 用户意图
@@ -9,7 +9,8 @@
 - 参考现有 `CardBagXXX.prefab` 的分组方式，将同一局部区域的贴纸划入一组。
 - 先在 `CardBag022.prefab` 上尝试一版大概分组。
 - 将 CardBag022 最终确认的排序和命名规则同步到 CardBag 自动生成工具。
-- 浅色底板继续使用现有描边颜色 `#3f423e`；高对比度深色底板将烘焙描边显示为 `#b1d702`。
+- 所有棋盘背景都固定使用原描边颜色 `#3f423e`；撤销高对比度深色底板改用 `#b1d702` 的规则。
+- 描边边界形状保持不变，线条改为轻微铅笔质感：不规则深浅、少量细小中空点和短断点，不做规则虚线，纹理不能随棋盘移动闪烁。
 - 不重建 Prefab，不修改贴图、位置、尺寸、Image 参数、层级或影子。
 - 新手引导只保留游戏原有的暗色托盘，不再额外叠加教程黑色遮罩。
 - 第一阶段从贴纸移动到凹槽的 `GuideArrow1.png` 保持宽高比并缩小 30%；第三阶段提示框内的箭头不变。
@@ -34,7 +35,8 @@
 - 尝试以 Unity 批处理执行全量描边烘焙；由于项目已被当前打开的 Unity Editor 占用，批处理实例等待项目锁，已只关闭该等待实例。现有编辑器已成功导入更新后的 Prefab。
 - 当前打开的 Unity Editor 随后完成全量描边烘焙；CardBag022 已生成 14 组对应的默认、关卡和贴纸描边资源，共 42 张 PNG。
 - GameScene 初始化时读取并缓存 `IsHighContrastEnabled`；默认连接描边、完整关卡描边和贴纸描边共用同一颜色规则。
-- 新增 Built-in UGUI 描边 Shader，只读取烘焙 PNG 的 Alpha，忽略原始深色 RGB；普通模式输出 `#3f423e`，高对比模式输出 `#b1d702`，避免直接 Image Tint 与深色纹理相乘后仍然偏暗。
+- Built-in UGUI 描边 Shader 只读取烘焙 PNG 的 Alpha并统一输出 `#3f423e`；高对比度开关继续更换棋盘背景，但不再改变描边颜色。
+- `PuzzleOutlineTint` 使用固定在源纹理像素坐标上的两级稳定噪声，对线条做轻微透明度颗粒，并以约 `9%` 的细粒空点和约 `3%` 的局部两像素空点形成不规则断墨；不修改离线烘焙边界和现有描边资源。
 - 描边 Shader 和运行时 Material 只服务于烘焙棋盘描边；提示虚线与新手引导的专用蓝绿颜色保持不变。GameScene 销毁时释放运行时 Material。
 - 删除教程焦点层创建 `TutorialTrayDim` 的逻辑，避免它与游戏现有 `PieceBoard/PieceBg` 暗色托盘叠加成两层遮罩；教程 Piece 高亮、文字、虚线和交互限制保持不变。
 - 第一阶段移动箭头的原生 Sprite 尺寸统一乘以 `0.7`，并继续使用缩放后的实际箭头高度计算移动终点。
@@ -64,8 +66,8 @@
 - `Assets/Prefabs/PackItem.prefab`
 - `Assets/Scripts/Controller/MainScene.cs`
 - `Assets/UI/MainScene/PackHighlight02.png` 到 `PackHighlight05.png`
-- `Assets/UI/MainScene/PackHighlightAdditive.shader`
-- `Assets/UI/MainScene/PackHighlightAdditive.mat`
+- `Assets/Resources/PackHighlightAdditive.shader`
+- `Assets/Resources/PackHighlightAdditive.mat`
 - `Documents/PROJECT_CONTEXT.md`
 - `Documents/CURRENT_TASK.md`
 
@@ -97,13 +99,15 @@
 - 当前 Unity Editor 日志未发现新的 `Shader error` 或 C# 编译错误，但日志中尚未出现新 Shader 的明确导入记录；仍需回到 Unity 触发资源刷新并做 Play Mode 视觉验证。
 - `git diff 1d8ebd7 -- Assets/Resources/PuzzlePlacementShine.shader Assets/Scripts/Controller/GameScene.cs` 无差异，确认错误的外扩 ADD 方案已完整撤回。
 - `PackItem.prefab` 的四个 Image 均引用同一个 `PackHighlightAdditive.mat`，并分别引用四张新高光 Sprite；`git diff --check` 通过。
-- 本轮顺序编译 `Assembly-CSharp.csproj` 和 `Assembly-CSharp-Editor.csproj`，均为 0 警告、0 错误。
+- 固定颜色与铅笔质感修改后，顺序编译 `Assembly-CSharp.csproj` 和 `Assembly-CSharp-Editor.csproj`，均为 0 警告、0 错误。
+- 使用真实 `CardBag001/Group01.png` 与深色 `BgCardBoard2.png` 离线模拟 Shader，确认边界位置不变，实线变为轻微颗粒、深浅和零星短空点，没有形成规则虚线或大段缺失。
+- 修复 Unity 导入时的两条 `MaterialPostprocessor` 空引用：`PackHighlightAdditive.shader/.mat` 已从会被 BuildSync 复制的 `Assets/UI/MainScene` 移到 `Assets/Resources`，保留原 GUID 和 PackItem 引用；旧 `StreamingAssets` 副本已清理，Unity 刷新后的最新日志不再出现这两条错误。
 
 ## 下一步
 
-1. 在 Unity 打开 `Assets/Prefabs/PackItem.prefab`，通过 `PackHighlight` 的 CanvasGroup Alpha 和四个子 Image 的 RectTransform、Color 调整最终参数。
-2. Play Mode 检查首页列表，确认高光与下层封面/桌面按 ADD 提亮、没有黑底或半透明矩形，并且仍位于卡包尺寸图标下方。
-3. 确认选中、返回、翻页和列表刷新不改变 Prefab 内高光参数，再继续回归拼图落位滑光。
+1. 回到 Unity 等待 `PuzzleOutlineTint.shader` 导入，确认 Console 无 Shader 错误。
+2. 分别用 `BgCardBoard1` 和 `BgCardBoard2` 进入关卡，确认两者描边均固定为 `#3f423e`，线条有轻微铅笔颗粒和小断点且仍清楚可读。
+3. 切换关卡描边、贴纸描边和新手引导第二步，确认三种烘焙描边共用同一质感，提示虚线与教程专用蓝色描边不受影响。
 
 ## 数据说明
 

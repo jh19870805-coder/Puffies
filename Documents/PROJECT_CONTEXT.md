@@ -214,7 +214,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 - GameScene 在推进任务前先持久化任务权益，且仅在任务推进保存成功后尝试发放，避免任务进度保存失败时重复发包。
 - MainScene 设置以集合/键 `GameSettings/Runtime` 保存在 `AppRecords`：音乐音量、音效音量和窗口模式。
 - MainScene 辅助选项开关同样保存在 `GameSettings/Runtime`，字段为 `UsableOption1`、`UsableOption2` 和 `UsableOption3`。
-- `UsableOption1` 是关卡描边开关，`UsableOption2` 是贴纸描边开关，两者新建设置时都默认关闭；`UsableOption3` 是高对比度并默认关闭。已持久化的用户选择优先。关卡描边关闭时 GameScene 保留现有当前阶段连接区域，打开时改为显示当前待拼组的完整合并外边界；贴纸描边关闭时不显示单块轮廓，打开时叠加当前组每块凹槽的独立轮廓。PanelUsable 的 `ImgContentBg` 按高对比度状态显示 `MainSetHigh1/2.png`；`ImgContentLine` 在描边全关、仅关卡描边、贴纸描边打开时分别显示 `MainSetLine1/2/3.png`，两项同时打开使用信息更完整的 `MainSetLine3.png`。GameScene 的 CardBag 根背景在高对比度关闭时使用 `UI/BasicUI/BgCardBoard1.png`，打开时使用 `BgCardBoard2.png`；运行时只替换根 `Image.sprite`，不改变 Prefab 布局。烘焙棋盘描边通过 Alpha-only UGUI Shader 统一着色：浅色底板使用 `#3f423e`，高对比度深色底板使用 `#b1d702`；提示虚线与新手引导专用描边颜色不随该设置变化。
+- `UsableOption1` 是关卡描边开关，`UsableOption2` 是贴纸描边开关，两者新建设置时都默认关闭；`UsableOption3` 是高对比度并默认关闭。已持久化的用户选择优先。关卡描边关闭时 GameScene 保留现有当前阶段连接区域，打开时改为显示当前待拼组的完整合并外边界；贴纸描边关闭时不显示单块轮廓，打开时叠加当前组每块凹槽的独立轮廓。PanelUsable 的 `ImgContentBg` 按高对比度状态显示 `MainSetHigh1/2.png`；`ImgContentLine` 在描边全关、仅关卡描边、贴纸描边打开时分别显示 `MainSetLine1/2/3.png`，两项同时打开使用信息更完整的 `MainSetLine3.png`。GameScene 的 CardBag 根背景在高对比度关闭时使用 `UI/BasicUI/BgCardBoard1.png`，打开时使用 `BgCardBoard2.png`；运行时只替换根 `Image.sprite`，不改变 Prefab 布局。烘焙棋盘描边通过 Alpha-only UGUI Shader 固定输出 `#3f423e`，不随高对比度切换颜色；提示虚线与新手引导专用描边颜色同样不随该设置变化。
 - MainScene 和 GameScene 引用相同 `TaskItem.prefab` GUID。场景 Override 只定位根节点（`MainScene`：`10,508`；`GameScene`：`-6,455`）；子节点布局和视觉必须在共享 Prefab 中修改。
 - 共享 TaskItem 子节点名称为 `TaskContent`、`TextProgress`、`ProgressMask`、`BagIcon` 和 `BagBg`。任务 UI 绑定代码应相对 TaskItem 实例解析这些名称，不得使用场景专属后缀。
 - `TaskProgressUIUtility` 是两个 TaskItem 实例共用的运行时绑定。三类任务文案分别为“完成任意拼图包，收集 N 分”“从任意拼图包中收集 N 个贴纸”和“完成 N 个 S/M 尺寸的拼图包”；`TextProgress` 显示当前值与任务实例目标值，可见 `ProgressMask` 宽度使用两者比值并限制在有效范围。`BagIcon` 始终使用共享 Prefab 中配置的固定 Sprite，运行时不得按任务奖励或卡包编号替换。
@@ -251,7 +251,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 
 `MainScene.RefreshPackageList` 根据数据库动态创建已解锁卡包槽位。不要在场景中手工复制 `Package002`、`Package003` 等对象。
 
-共享尺寸图标为 `UI/PackImages/PackSize_1.png` 到 `PackSize_7.png`，对应 `CardPackSize` 数值（`XS=1` 到 `XXXL=7`）。`PackItem` 必须包含名为 `PackCover` 和 `PackSize` 的 Image 子节点；MainScene 在运行时设置两者 Sprite，并根据编辑器封面尺寸缩放尺寸图标。可调高光位于同级 `PackHighlight` 下，层级顺序为 `PackShadow`、`PackCover`、`PackHighlight`、`PackSize`。四张高光贴片共用 `PackHighlightAdditive.mat`，以 RGB 预乘 `Blend One One` 做 ADD 叠加，只写 RGB；MainScene 只整体缩放 `PackHighlight`，不改其材质、颜色、Alpha 或子节点布局。
+共享尺寸图标为 `UI/PackImages/PackSize_1.png` 到 `PackSize_7.png`，对应 `CardPackSize` 数值（`XS=1` 到 `XXXL=7`）。`PackItem` 必须包含名为 `PackCover` 和 `PackSize` 的 Image 子节点；MainScene 在运行时设置两者 Sprite，并根据编辑器封面尺寸缩放尺寸图标。可调高光位于同级 `PackHighlight` 下，层级顺序为 `PackShadow`、`PackCover`、`PackHighlight`、`PackSize`。四张高光贴片共用 `Assets/Resources/PackHighlightAdditive.mat`，以 RGB 预乘 `Blend One One` 做 ADD 叠加，只写 RGB；MainScene 只整体缩放 `PackHighlight`，不改其材质、颜色、Alpha 或子节点布局。Shader 和 Material 不得放进 `Assets/UI`，否则 BuildSync 会将其复制到 `StreamingAssets/UI` 并触发重复材质导入。
 
 `PackItem/PackShadow` 是渲染在 `PackCover` 后方的同级 Image。MainScene 读取运行时可读封面贴图，将 Alpha 缩小到 `240 x 272` 显示尺寸，并执行三次可分离 Box Blur，水平半径 2、垂直半径 5。缓存阴影 Sprite 尺寸为 `256 x 344`、偏移为 `(0,-20)`，使投影只向下而不是向右。水平/垂直内边距为 `8/36` 像素，阴影颜色 `#1f292d`，最大 Alpha `0.52`。MainScene 销毁时释放生成的阴影 Sprite 和 Texture。`PackSize` 保持在两张图片上方。
 
@@ -270,7 +270,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 5. 不使用 `PieceGroup` 父节点；分组严格读取 `PieceGGII` 的前两位 `GG`，组内排序读取后两位 `II`。
 6. 不创建 Package JSON；运行时数据来自已加载 Prefab 的 Image。
 7. 新增或修改 CardBag 后，执行 **Puffies -> Bake Outline Masks**。烘焙器优先使用 `GameBoard.png` 的透明挖空 Alpha 作为最终拼图外边界，并使用已完成 Piece 的 Alpha 作为后续组接触边；GameBoard 没有有效挖空时回退到全部 Piece Alpha 并集。每组生成三张同尺寸资源：`GroupNN.png` 是默认连接区域；`GroupNN_Level.png` 是当前组 Piece Alpha 并集的完整外边界；`GroupNN_Stickers.png` 是当前组每块 Piece Alpha 边界的并集。默认连接图第 1 组只包含自身最终拼图外边界，后续图只包含当前组最终外边界及其与低编号已完成组的接触边。接触边和最终外轮廓均使用圆形最近距离与局部边界法线判定归属，切线方向的邻近不得延长端点；相邻分组可在真实交点共享少量边界像素，不能为避免重叠而删除交点。
-8. `GameScene` 将烘焙 Sprite 的 Alpha 作为不可交互的 `GameBoard` 子 Image 显示，并通过专用 UGUI Shader 按底板模式输出描边颜色：浅色为 `#3f423e`，高对比深色为 `#b1d702`。关卡描边关闭时加载 `GroupNN.png`，打开时替换为 `GroupNN_Level.png`；贴纸描边打开时额外叠加 `GroupNN_Stickers.png`。不要在 Prefab 中手工制作描边对象，也不要为两种底板重复烘焙资源。
+8. `GameScene` 将烘焙 Sprite 的 Alpha 作为不可交互的 `GameBoard` 子 Image 显示，并通过专用 UGUI Shader 固定输出 `#3f423e`。Shader 在源纹理像素坐标上生成稳定的细粒和少量小空点，形成轻微铅笔断墨质感；纹理不随棋盘移动或缩放逐帧变化。关卡描边关闭时加载 `GroupNN.png`，打开时替换为 `GroupNN_Level.png`；贴纸描边打开时额外叠加 `GroupNN_Stickers.png`。不要在 Prefab 中手工制作描边对象，也不要为两种底板重复烘焙资源。
 9. 缺少生成 Sprite 时，运行时记录制作警告，并在无描边情况下继续游戏。交付前重新运行烘焙器。
 - 创建一组碎片时按编号从左向右排列。Piece 首次离开托盘时只允许仍在托盘且编号靠后的 Piece 沿 X 前移，不得刷新前序 Piece、桌面 Piece 或任何剩余 Piece 的 Y/缩放；先拿队尾 Piece 时其余 Piece 不移动。未吸附 Piece 仅可停留在 CardBag 棋盘范围外的桌面；与棋盘相交但未命中自身凹槽时先变红，在错误位置短暂停留后缓动返回本次拖拽起点，落位后恢复原色。桌面 Piece 与黑色托盘水平相交且垂直重叠达到自身当前高度 `50%` 时，松手后恢复托盘尺寸并按编号自动重排。未吸附松手时空托盘恢复为回收目标，最后一块正确吸附后仍进入切组或结算。
 

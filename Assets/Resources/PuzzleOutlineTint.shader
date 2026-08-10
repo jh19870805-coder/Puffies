@@ -10,6 +10,8 @@ Shader "Puffies/UI/PuzzleOutlineTint"
         _StencilWriteMask ("Stencil Write Mask", Float) = 255
         _StencilReadMask ("Stencil Read Mask", Float) = 255
         _ColorMask ("Color Mask", Float) = 15
+        _PencilGrain ("Pencil Grain", Range(0, 1)) = 0.38
+        _PencilHoleAmount ("Pencil Hole Amount", Range(0, 0.25)) = 0.09
         [Toggle(UNITY_UI_ALPHACLIP)] _UseUIAlphaClip ("Use Alpha Clip", Float) = 0
     }
 
@@ -74,6 +76,14 @@ Shader "Puffies/UI/PuzzleOutlineTint"
             sampler2D _MainTex;
             fixed4 _Color;
             float4 _ClipRect;
+            float4 _MainTex_TexelSize;
+            float _PencilGrain;
+            float _PencilHoleAmount;
+
+            float PencilHash(float2 position)
+            {
+                return frac(sin(dot(position, float2(12.9898, 78.233))) * 43758.5453);
+            }
 
             v2f vert(appdata_t input)
             {
@@ -90,7 +100,16 @@ Shader "Puffies/UI/PuzzleOutlineTint"
             fixed4 frag(v2f input) : SV_Target
             {
                 fixed4 color = input.color;
-                color.a *= tex2D(_MainTex, input.texcoord).a;
+                fixed outlineAlpha = tex2D(_MainTex, input.texcoord).a;
+                float2 sourcePixel = floor(input.texcoord / max(
+                    _MainTex_TexelSize.xy,
+                    float2(0.000001, 0.000001)));
+                float fineGrain = PencilHash(sourcePixel + 17.0);
+                float paperGrain = PencilHash(floor(sourcePixel * 0.5) + 53.0);
+                float opacityGrain = lerp(1.0, 0.58 + 0.42 * lerp(fineGrain, paperGrain, 0.38), _PencilGrain);
+                float fineKeep = step(_PencilHoleAmount, fineGrain);
+                float clusteredKeep = step(_PencilHoleAmount * 0.32, paperGrain);
+                color.a *= outlineAlpha * opacityGrain * fineKeep * clusteredKeep;
 
                 #ifdef UNITY_UI_CLIP_RECT
                 color.a *= UnityGet2DClipping(input.worldPosition.xy, _ClipRect);

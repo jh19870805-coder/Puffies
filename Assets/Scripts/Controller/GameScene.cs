@@ -111,7 +111,6 @@ public class GameScene : MonoBehaviour
     private static readonly Color TutorialTargetOutlineColor = new Color32(80, 139, 230, 255);
     private static readonly Color InvalidDropTintColor = new Color32(255, 58, 58, 255);
     private static readonly Color StandardPuzzleOutlineColor = new Color32(0x3f, 0x42, 0x3e, 0xff);
-    private static readonly Color HighContrastPuzzleOutlineColor = new Color32(0xb1, 0xd7, 0x02, 0xff);
     private static readonly Color PiecePlacementShineColor = new Color32(255, 244, 152, 230);
     private static readonly int ShineSweepAxisId = Shader.PropertyToID("_SweepAxis");
     private static readonly int ShineSweepCenterId = Shader.PropertyToID("_SweepCenter");
@@ -1422,9 +1421,7 @@ public class GameScene : MonoBehaviour
         if (tintMaterial != null)
         {
             outlineImage.material = tintMaterial;
-            outlineImage.color = _isHighContrastEnabled
-                ? HighContrastPuzzleOutlineColor
-                : StandardPuzzleOutlineColor;
+            outlineImage.color = StandardPuzzleOutlineColor;
         }
         else
         {
