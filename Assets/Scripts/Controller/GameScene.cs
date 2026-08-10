@@ -45,6 +45,7 @@ public class GameScene : MonoBehaviour
     private const float GroupTransitionPromptDelay = 0.22f;
     private const float GroupTransitionStrongHoldDuration = 0.3f;
     private const float GroupTransitionDefaultHoldDuration = 0.1f;
+    private const float ActiveGroupOutlineFadeDuration = 0.5f;
     private const float PieceSnapDuration = 0.18f;
     private const float PiecePlacementShineDuration = 0.52f;
     private const float PiecePlacementShineBandWidth = 0.045f;
@@ -108,6 +109,7 @@ public class GameScene : MonoBehaviour
     private const string TestCompleteButtonText = "一键完成";
 #endif
     private static readonly Color PieceHintOutlineColor = new Color32(112, 151, 75, 255);
+    private static readonly Color HighContrastPieceHintOutlineColor = new Color32(0xb1, 0xd7, 0x02, 0xff);
     private static readonly Color TutorialTargetOutlineColor = new Color32(80, 139, 230, 255);
     private static readonly Color InvalidDropTintColor = new Color32(255, 58, 58, 255);
     private static readonly Color StandardPuzzleOutlineColor = new Color32(0x3f, 0x42, 0x3e, 0xff);
@@ -172,6 +174,7 @@ public class GameScene : MonoBehaviour
     private Sprite _runtimeCardBoardBackgroundSprite;
     private Material _runtimePuzzleOutlineTintMaterial;
     private Material _runtimePiecePlacementShineMaterial;
+    private Coroutine _activeGroupOutlineFadeCoroutine;
     private bool _didWarnMissingPuzzleOutlineTintShader;
     private bool _didWarnMissingPiecePlacementShineShader;
     private float _configuredBoardScale = DefaultBoardScale;
@@ -264,6 +267,7 @@ public class GameScene : MonoBehaviour
         else
         {
             TryStartPiecePlacementTutorial();
+            FadeInActiveGroupOutline();
         }
 
         Debug.Log("GameScene bootstrap completed.");
@@ -503,6 +507,7 @@ public class GameScene : MonoBehaviour
                 + Mathf.Max(0, pieceCount - 1) * GameEntrancePieceStagger
                 + GameEntrancePieceDuration);
         var elapsed = 0f;
+        var didStartOutlineFade = false;
         while (elapsed < totalDuration)
         {
             elapsed += Mathf.Min(Time.unscaledDeltaTime, GameEntranceMaxFrameDelta);
@@ -513,6 +518,12 @@ public class GameScene : MonoBehaviour
                     1f,
                     Mathf.Clamp01(elapsed / GameEntranceBoardDuration));
                 boardRect.anchoredPosition = Vector2.LerpUnclamped(boardStart, boardTarget, boardT);
+            }
+
+            if (!didStartOutlineFade && elapsed >= GameEntranceBoardDuration)
+            {
+                didStartOutlineFade = true;
+                FadeInActiveGroupOutline();
             }
 
             if (trayRect != null)
@@ -571,6 +582,11 @@ public class GameScene : MonoBehaviour
         if (boardRect != null)
         {
             boardRect.anchoredPosition = boardTarget;
+        }
+
+        if (!didStartOutlineFade)
+        {
+            FadeInActiveGroupOutline();
         }
 
         if (trayRect != null)
@@ -1147,7 +1163,9 @@ public class GameScene : MonoBehaviour
         return renderer;
     }
 
-    private void CreateDraggableGroup(int groupIndex)
+    private void CreateDraggableGroup(
+        int groupIndex,
+        bool allowOutlineDuringTutorialTransition = false)
     {
         if (groupIndex > 0)
         {
@@ -1223,7 +1241,10 @@ public class GameScene : MonoBehaviour
 
         LayoutTrayPieces();
         CachePieceTrayOriginalPosition();
-        TryRefreshActiveGroupOutline(groupIndex);
+        TryRefreshActiveGroupOutline(
+            groupIndex,
+            startHidden: true,
+            ignoreTutorialBlock: allowOutlineDuringTutorialTransition);
     }
 
     private static SpriteRenderer CreateDraggablePieceFromGroove(Image grooveImage, string objectName, Transform parent)
@@ -1293,9 +1314,12 @@ public class GameScene : MonoBehaviour
         }
     }
 
-    private void TryRefreshActiveGroupOutline(int groupIndex)
+    private void TryRefreshActiveGroupOutline(
+        int groupIndex,
+        bool startHidden = false,
+        bool ignoreTutorialBlock = false)
     {
-        if (_isTutorialPending || IsTutorialBlockingOutline)
+        if (_isTutorialPending || (IsTutorialBlockingOutline && !ignoreTutorialBlock))
         {
             ClearActiveGroupOutline();
             return;
@@ -1303,7 +1327,7 @@ public class GameScene : MonoBehaviour
 
         try
         {
-            RefreshActiveGroupOutline(groupIndex);
+            RefreshActiveGroupOutline(groupIndex, startHidden);
         }
         catch (Exception exception)
         {
@@ -1312,7 +1336,7 @@ public class GameScene : MonoBehaviour
         }
     }
 
-    private void RefreshActiveGroupOutline(int groupIndex)
+    private void RefreshActiveGroupOutline(int groupIndex, bool startHidden)
     {
         ClearActiveGroupOutline();
         if (_board.GrooveImagesByGroup == null
@@ -1372,7 +1396,8 @@ public class GameScene : MonoBehaviour
 
         var outlineObject = new GameObject(
             ActiveGroupOutlineRootObjectName,
-            typeof(RectTransform));
+            typeof(RectTransform),
+            typeof(CanvasGroup));
         var outlineRect = outlineObject.GetComponent<RectTransform>();
         outlineRect.SetParent(_board.GameBoardImage.rectTransform, false);
         outlineRect.anchorMin = Vector2.zero;
@@ -1382,6 +1407,7 @@ public class GameScene : MonoBehaviour
         outlineRect.offsetMin = Vector2.zero;
         outlineRect.offsetMax = Vector2.zero;
         outlineRect.localScale = Vector3.one;
+        outlineObject.GetComponent<CanvasGroup>().alpha = startHidden ? 0f : 1f;
 
         CreateOutlineLayer(
             outlineRect,
@@ -1514,12 +1540,63 @@ public class GameScene : MonoBehaviour
 
     private void ClearActiveGroupOutline()
     {
+        if (_activeGroupOutlineFadeCoroutine != null)
+        {
+            StopCoroutine(_activeGroupOutlineFadeCoroutine);
+            _activeGroupOutlineFadeCoroutine = null;
+        }
+
         var root = GameObject.Find(ActiveGroupOutlineRootObjectName);
         if (root != null)
         {
             root.SetActive(false);
             Destroy(root);
         }
+    }
+
+    private void FadeInActiveGroupOutline()
+    {
+        var root = GameObject.Find(ActiveGroupOutlineRootObjectName);
+        if (root == null)
+        {
+            return;
+        }
+
+        var canvasGroup = root.GetComponent<CanvasGroup>();
+        if (canvasGroup == null)
+        {
+            canvasGroup = root.AddComponent<CanvasGroup>();
+        }
+
+        if (_activeGroupOutlineFadeCoroutine != null)
+        {
+            StopCoroutine(_activeGroupOutlineFadeCoroutine);
+        }
+
+        _activeGroupOutlineFadeCoroutine = StartCoroutine(
+            PlayActiveGroupOutlineFade(canvasGroup));
+    }
+
+    private IEnumerator PlayActiveGroupOutlineFade(CanvasGroup canvasGroup)
+    {
+        canvasGroup.alpha = 0f;
+        var elapsed = 0f;
+        while (elapsed < ActiveGroupOutlineFadeDuration && canvasGroup != null)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            canvasGroup.alpha = Mathf.SmoothStep(
+                0f,
+                1f,
+                Mathf.Clamp01(elapsed / ActiveGroupOutlineFadeDuration));
+            yield return null;
+        }
+
+        if (canvasGroup != null)
+        {
+            canvasGroup.alpha = 1f;
+        }
+
+        _activeGroupOutlineFadeCoroutine = null;
     }
 
     private void OnPointerEnd(Vector2 screenPosition)
@@ -2471,7 +2548,9 @@ public class GameScene : MonoBehaviour
             : Vector3.zero;
         var pieceBgFillTransform = GetPieceBgFillTransform();
 
-        CreateDraggableGroup(nextGroupIndex);
+        CreateDraggableGroup(
+            nextGroupIndex,
+            allowOutlineDuringTutorialTransition: wasTutorialActive);
 
         var boardTarget = boardRect != null ? boardRect.anchoredPosition : boardStart;
         var cameraTargetSize = camera != null ? camera.orthographicSize : cameraStartSize;
@@ -2593,6 +2672,8 @@ public class GameScene : MonoBehaviour
         {
             ApplyPieceBgSlidePosition(pieceBackgroundTarget, pieceBgFillTransform);
         }
+
+        FadeInActiveGroupOutline();
 
         elapsed = 0f;
         var pieceAnimationDuration = GroupTransitionPieceDuration
@@ -3064,7 +3145,7 @@ public class GameScene : MonoBehaviour
         {
             ClearActiveGroupOutline();
         }
-        else
+        else if (GameObject.Find(ActiveGroupOutlineRootObjectName) == null)
         {
             TryRefreshActiveGroupOutline(groupIndex);
         }
@@ -4029,7 +4110,11 @@ public class GameScene : MonoBehaviour
         _hintedPieceBaseRotation = state.PieceRenderer.transform.rotation;
         _hintShakeStartTime = Time.unscaledTime;
         _isHintPieceShaking = true;
-        CreatePieceHintOutline(state, PieceHintOutlineColor);
+        CreatePieceHintOutline(
+            state,
+            _isHighContrastEnabled
+                ? HighContrastPieceHintOutlineColor
+                : PieceHintOutlineColor);
     }
 
     private void UpdatePieceHintAnimation()
