@@ -97,6 +97,7 @@ public class GameScene : MonoBehaviour
     private const string PiecePlacementShineShaderResourcesPath = "PuzzlePlacementShine";
     private const string PiecePlacementShineMaterialName = "PuzzlePlacementShine (Runtime)";
     private const string DraggableGroupRootObjectName = "DraggableGroupPieces";
+    private const string BoardOccupancyProbeRootObjectName = "BoardOccupancyProbes";
     private const string ActiveGroupOutlineRootObjectName = "ActiveGroupOutline";
     private const string LevelOutlineLayerObjectName = "LevelOutline";
     private const string StickerOutlineLayerObjectName = "StickerOutlines";
@@ -139,12 +140,17 @@ public class GameScene : MonoBehaviour
     private readonly DragState _drag = new DragState();
     private readonly List<int> _settlementPackRewardIds = new List<int>();
     private readonly HashSet<int> _placedPieceNumbers = new HashSet<int>();
+    private readonly Dictionary<Image, Collider2D> _boardOccupancyProbes =
+        new Dictionary<Image, Collider2D>();
     private Vector3 _pieceBgOriginalPosition;
     private bool _hasPieceBgOriginalPosition;
     private bool _isPieceBgHidden;
     private Vector2 _pieceBoardOriginalAnchoredPosition;
     private bool _hasPieceBoardOriginalAnchoredPosition;
     private bool _isPieceBoardHidden;
+    private Rect _pieceTrayDropNormalizedScreenRect;
+    private bool _hasPieceTrayDropNormalizedScreenRect;
+    private Transform _boardOccupancyProbeRoot;
     private Coroutine _pieceTraySlideCoroutine;
     private Coroutine _trayPieceReflowCoroutine;
     private bool _isTrayPieceReflowAnimating;
@@ -297,6 +303,7 @@ public class GameScene : MonoBehaviour
         DestroyRuntimeCardBoardBackgroundSprite();
         DestroyRuntimePuzzleOutlineTintMaterial();
         DestroyRuntimePiecePlacementShineMaterial();
+        DestroyBoardOccupancyProbes();
         ClearPieceHint();
         HintDashedOutlineGraphic.ClearPathCache();
     }
@@ -1740,7 +1747,7 @@ public class GameScene : MonoBehaviour
 
     private void OnPointerEnd(Vector2 screenPosition)
     {
-        EndDragging();
+        EndDragging(screenPosition);
     }
 
     private void TryBeginDrag(Vector2 screenPosition)
@@ -1848,7 +1855,7 @@ public class GameScene : MonoBehaviour
             WorldGameplayDepth);
     }
 
-    private void EndDragging()
+    private void EndDragging(Vector2? releaseScreenPosition = null)
     {
         if (_drag.DraggingPiece == null || _drag.DraggingPiece.PieceRenderer == null)
         {
@@ -1888,29 +1895,18 @@ public class GameScene : MonoBehaviour
             return;
         }
 
-        if (CanReturnPieceToTray(state) && ShouldReturnPieceToTray(state.PieceRenderer))
+        if (releaseScreenPosition.HasValue
+            && ShouldReturnPieceToTray(releaseScreenPosition.Value))
         {
-            ResetPieceTrayPosition(instant: true);
-            state.IsOnTray = true;
-            if (wasOnTray)
-            {
-                state.PieceRenderer.transform.localScale = state.TrayScale;
-                LayoutTrayPieces(animate: true);
-                RestorePiecePlacementTutorialPresentation(state);
-            }
-            else
-            {
-                LayoutTrayPieces(animate: true, excludedState: state);
-                StartCoroutine(
-                    PlayInvalidDropReturnAnimation(state, state.StartPosition));
-            }
+            ReturnPieceToTray(state, wasOnTray);
             return;
         }
 
         state.PieceRenderer.transform.localScale = state.DragScale;
         state.PieceRenderer.transform.position = ClampPieceToTableBounds(state.PieceRenderer);
         Physics2D.SyncTransforms();
-        if (DoesPieceOverlapLoosePiece(state) || DoesPieceIntersectOwnGroove(state))
+        if (DoesPieceOverlapLoosePiece(state)
+            || !IsLoosePiecePlacementAllowed(state))
         {
             ReturnPieceAfterInvalidDrop(state, wasOnTray);
             return;
@@ -1921,27 +1917,168 @@ public class GameScene : MonoBehaviour
         RestorePiecePlacementTutorialPresentation(state);
     }
 
-    private bool CanReturnPieceToTray(DraggablePieceState movingState)
+    private bool IsLoosePiecePlacementAllowed(DraggablePieceState state)
     {
-        if (movingState != null && movingState.IsOnTray && !IsPieceTrayHidden())
+        if (state?.PieceRenderer == null || _board.GameBoardImage == null)
         {
             return true;
         }
 
-        for (var i = 0; i < _drag.CurrentGroupDraggables.Count; i++)
+        var camera = Camera.main;
+        if (camera == null)
         {
-            var state = _drag.CurrentGroupDraggables[i];
-            if (state != null
-                && state != movingState
-                && !state.IsPlaced
-                && state.IsOnTray
-                && state.PieceRenderer != null)
+            return true;
+        }
+
+        var pieceBounds = state.PieceRenderer.bounds;
+        var boardBounds = GameCommonUtility.GetRectTransformCameraWorldBounds(
+            _board.GameBoardImage.rectTransform,
+            camera,
+            WorldGameplayDepth);
+        if (pieceBounds.size.sqrMagnitude <= 0f || boardBounds.size.sqrMagnitude <= 0f)
+        {
+            return true;
+        }
+
+        var fullyInsideBoard = pieceBounds.min.x >= boardBounds.min.x
+                               && pieceBounds.max.x <= boardBounds.max.x
+                               && pieceBounds.min.y >= boardBounds.min.y
+                               && pieceBounds.max.y <= boardBounds.max.y;
+        if (fullyInsideBoard)
+        {
+            return !DoesPieceOverlapOccupiedBoardArea(state);
+        }
+
+        var fullyLeftOfBoard = pieceBounds.max.x <= boardBounds.min.x;
+        var fullyRightOfBoard = pieceBounds.min.x >= boardBounds.max.x;
+        return fullyLeftOfBoard || fullyRightOfBoard;
+    }
+
+    private void ReturnPieceToTray(DraggablePieceState state, bool wasOnTray)
+    {
+        if (state?.PieceRenderer == null)
+        {
+            return;
+        }
+
+        ResetPieceTrayPosition(instant: true);
+        if (_board.PieceBoardRect != null)
+        {
+            _board.PieceBoardRect.gameObject.SetActive(true);
+        }
+        else if (_board.PieceBgRenderer != null)
+        {
+            _board.PieceBgRenderer.gameObject.SetActive(true);
+            _board.PieceBgRenderer.enabled = true;
+        }
+
+        Canvas.ForceUpdateCanvases();
+        state.IsOnTray = true;
+        if (wasOnTray)
+        {
+            state.PieceRenderer.transform.localScale = state.TrayScale;
+            LayoutTrayPieces(animate: true);
+            RestorePiecePlacementTutorialPresentation(state);
+            return;
+        }
+
+        LayoutTrayPieces(animate: true, excludedState: state);
+        var trayPosition = state.StartPosition;
+        StartCoroutine(PlayInvalidDropReturnAnimation(state, trayPosition));
+    }
+
+    private bool DoesPieceOverlapOccupiedBoardArea(DraggablePieceState movingState)
+    {
+        if (movingState?.PieceCollider == null || _board.GrooveImagesByGroup == null)
+        {
+            return false;
+        }
+
+        var occupiedProbes = new List<Collider2D>();
+        for (var groupIndex = 0; groupIndex < _board.GrooveImagesByGroup.Count; groupIndex++)
+        {
+            var group = _board.GrooveImagesByGroup[groupIndex];
+            if (group == null)
+            {
+                continue;
+            }
+
+            for (var i = 0; i < group.Count; i++)
+            {
+                var grooveImage = group[i];
+                if (grooveImage == null
+                    || grooveImage.sprite == null
+                    || !grooveImage.gameObject.activeInHierarchy
+                    || grooveImage.color.a <= 0.001f)
+                {
+                    continue;
+                }
+
+                var probe = GetOrCreateBoardOccupancyProbe(grooveImage);
+                if (probe == null)
+                {
+                    continue;
+                }
+
+                var probeTransform = probe.transform;
+                probeTransform.position = GetGrooveSnapPosition(
+                    grooveImage.rectTransform,
+                    Camera.main);
+                probeTransform.rotation = grooveImage.rectTransform.rotation;
+                probeTransform.localScale = CalculatePieceScaleOnBoard(grooveImage);
+                occupiedProbes.Add(probe);
+            }
+        }
+
+        Physics2D.SyncTransforms();
+        for (var i = 0; i < occupiedProbes.Count; i++)
+        {
+            if (CollidersOverlap(movingState.PieceCollider, occupiedProbes[i]))
             {
                 return true;
             }
         }
 
         return false;
+    }
+
+    private Collider2D GetOrCreateBoardOccupancyProbe(Image grooveImage)
+    {
+        if (grooveImage == null || grooveImage.sprite == null)
+        {
+            return null;
+        }
+
+        if (_boardOccupancyProbes.TryGetValue(grooveImage, out var existingProbe)
+            && existingProbe != null)
+        {
+            return existingProbe;
+        }
+
+        if (_boardOccupancyProbeRoot == null)
+        {
+            var rootObject = new GameObject(BoardOccupancyProbeRootObjectName);
+            _boardOccupancyProbeRoot = rootObject.transform;
+        }
+
+        var probe = CreateGrooveOverlapProbe(
+            grooveImage.sprite,
+            _boardOccupancyProbeRoot,
+            $"{grooveImage.gameObject.name}_OccupancyProbe");
+        _boardOccupancyProbes[grooveImage] = probe;
+        return probe;
+    }
+
+    private void DestroyBoardOccupancyProbes()
+    {
+        _boardOccupancyProbes.Clear();
+        if (_boardOccupancyProbeRoot == null)
+        {
+            return;
+        }
+
+        Destroy(_boardOccupancyProbeRoot.gameObject);
+        _boardOccupancyProbeRoot = null;
     }
 
     private static void UpdateGrooveOverlapProbe(
@@ -2027,12 +2164,6 @@ public class GameScene : MonoBehaviour
         }
 
         return false;
-    }
-
-    private static bool DoesPieceIntersectOwnGroove(DraggablePieceState state)
-    {
-        return state != null
-            && CollidersOverlap(state.PieceCollider, state.GrooveProbeCollider);
     }
 
     private static bool CollidersOverlap(Collider2D first, Collider2D second)
@@ -2203,25 +2334,42 @@ public class GameScene : MonoBehaviour
         }
     }
 
-    private bool ShouldReturnPieceToTray(SpriteRenderer renderer)
+    private bool ShouldReturnPieceToTray(Vector2 releaseScreenPosition)
     {
-        if (renderer == null)
+        if (!IsScreenPointBelowBoard(releaseScreenPosition)
+            || !TryGetPieceTrayDropScreenRect(out var trayScreenRect))
         {
             return false;
         }
 
-        var pieceBounds = renderer.bounds;
-        var trayBounds = GetPieceTrayBounds();
-        if (pieceBounds.size.y <= 0f || trayBounds.size.sqrMagnitude <= 0f)
+        return trayScreenRect.Contains(releaseScreenPosition);
+    }
+
+    private bool IsScreenPointBelowBoard(Vector2 screenPosition)
+    {
+        return _board.GameBoardImage != null
+               && TryGetRectTransformScreenRect(
+                   _board.GameBoardImage.rectTransform,
+                   out var boardScreenRect)
+               && screenPosition.y < boardScreenRect.yMin;
+    }
+
+    private bool TryGetPieceTrayDropScreenRect(out Rect screenRect)
+    {
+        screenRect = default;
+        if (!_hasPieceTrayDropNormalizedScreenRect
+            || Screen.width <= 0
+            || Screen.height <= 0)
         {
             return false;
         }
 
-        var horizontalOverlap = Mathf.Min(pieceBounds.max.x, trayBounds.max.x)
-                                - Mathf.Max(pieceBounds.min.x, trayBounds.min.x);
-        var verticalOverlap = Mathf.Min(pieceBounds.max.y, trayBounds.max.y)
-                              - Mathf.Max(pieceBounds.min.y, trayBounds.min.y);
-        return horizontalOverlap > 0f && verticalOverlap >= pieceBounds.size.y * 0.5f;
+        screenRect = Rect.MinMaxRect(
+            _pieceTrayDropNormalizedScreenRect.xMin * Screen.width,
+            _pieceTrayDropNormalizedScreenRect.yMin * Screen.height,
+            _pieceTrayDropNormalizedScreenRect.xMax * Screen.width,
+            _pieceTrayDropNormalizedScreenRect.yMax * Screen.height);
+        return screenRect.width > 0f && screenRect.height > 0f;
     }
 
     private bool DoesPieceOverlapTray(SpriteRenderer renderer)
@@ -5652,6 +5800,24 @@ public class GameScene : MonoBehaviour
         }
 
         CachePieceBgOriginalPosition();
+        CachePieceTrayDropScreenRect();
+    }
+
+    private void CachePieceTrayDropScreenRect()
+    {
+        if (Screen.width <= 0
+            || Screen.height <= 0
+            || !TryGetPieceTrayScreenRect(Camera.main, out var screenRect))
+        {
+            return;
+        }
+
+        _pieceTrayDropNormalizedScreenRect = Rect.MinMaxRect(
+            screenRect.xMin / Screen.width,
+            screenRect.yMin / Screen.height,
+            screenRect.xMax / Screen.width,
+            screenRect.yMax / Screen.height);
+        _hasPieceTrayDropNormalizedScreenRect = true;
     }
 
     private void CachePieceBgOriginalPosition()
@@ -5706,6 +5872,7 @@ public class GameScene : MonoBehaviour
         ApplyPieceBgSlidePosition(anchoredPosition, GetPieceBgFillTransform());
         _pieceBgOriginalPosition = anchoredPosition;
         _hasPieceBgOriginalPosition = true;
+        CachePieceTrayDropScreenRect();
     }
 
     private void SlidePieceTrayOutOfScreen()

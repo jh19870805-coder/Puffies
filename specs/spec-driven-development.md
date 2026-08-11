@@ -85,19 +85,20 @@
 **用户故事：** 作为玩家，我希望未正确吸附的 Piece 可以临时整理在桌面或棋盘空位，同时错误靠近自身凹槽时得到明确反馈，并在托盘清空后能持续识别散落 Piece。
 
 1. WHEN Piece 达到自身凹槽吸附标准 AND 吸附目标未被其他错误 Piece 占用 THEN 系统 SHALL 正确吸附 Piece。
-2. WHEN Piece 与自身凹槽的实际轮廓相交 AND 未达到吸附标准 THEN 系统 SHALL 判定放错并回弹到本次拖拽起点。
-3. WHEN Piece 未与自身凹槽相交 THEN 系统 SHALL 允许其停留在桌面或棋盘上的任意合法空位。
-4. WHEN Piece 的实际轮廓与另一块停留在桌面或错误棋盘位置的 Piece 相交 THEN 系统 SHALL 拒绝本次放置并回弹；托盘 Piece 和已经正确吸附的棋盘内容不参与该阻挡判定。
+2. WHEN Piece 完整渲染边界位于棋盘内 AND 实际轮廓未与 Alpha 大于 0 的已拼 Piece 相交 THEN 系统 SHALL 允许其停留在该棋盘空位。
+3. WHEN Piece 完整渲染边界位于棋盘左侧或右侧的背景范围内 THEN 系统 SHALL 允许其停留在桌面；横跨棋盘边框时 SHALL 拒绝放置。
+4. WHEN Piece 与已拼 Piece 或另一块外部 Piece 的实际轮廓相交 THEN 系统 SHALL 拒绝本次放置并回弹；托盘 Piece 不参与该阻挡判定。
 5. WHEN 黑色托盘中没有 Piece THEN 系统 SHALL 自动将托盘收下去，不因桌面或错误棋盘位置仍有未完成 Piece 而重新显示。
-6. WHEN 黑色托盘已完全收下 AND 当前组仍有未正确吸附的外部 Piece THEN 系统 SHALL 从托盘收起完成后开始计时，每隔 `5s` 让这些错误 Piece 播放一次短暂抖动。
-7. WHEN 玩家开始拖拽、Piece 正在回弹、切组、结算或托盘重新出现 THEN 系统 SHALL 暂停抖动提醒并在再次满足条件后重新计时。
+6. WHEN 鼠标在棋盘下方的托盘原始区域松手 THEN 系统 SHALL 恢复托盘并将当前 Piece 自动排回托盘，不受托盘当前隐藏状态或剩余 Piece 数量限制。
+7. WHEN 黑色托盘已完全收下 AND 当前组仍有未正确吸附的外部 Piece THEN 系统 SHALL 从托盘收起完成后开始计时，每隔 `5s` 让这些错误 Piece 播放一次短暂抖动。
+8. WHEN 玩家开始拖拽、Piece 正在回弹、切组、结算或托盘重新出现 THEN 系统 SHALL 暂停抖动提醒并在再次满足条件后重新计时。
 
 ### 设计
 
 - 运行时为 Piece 创建基于 `Sprite.GetPhysicsShape` 的 `Collider2D`；没有可用轮廓时回退 Sprite 本地边界 Box。
-- 每个 Piece 同时持有一个不渲染的自身凹槽轮廓探针；松手时将探针同步到当前凹槽世界位置和棋盘缩放，用 `Collider2D.Distance().isOverlapped` 判断真实轮廓相交。
-- 松手优先级固定为：正确吸附目标且未被占用 -> 可见且仍有 Piece 的托盘回收 -> 与其他错误 Piece 重叠 -> 与自身凹槽相交但未吸附 -> 自由放置。
-- 从托盘拿起最后一块时立即沿用现有托盘下收动画；托盘尚可见时允许当前 Piece 快速放回。托盘完全收起后，自由放置或正确吸附都不会因为外部 Piece 重显空托盘，只有来自托盘的错误回弹会恢复。
+- 松手时先用 Piece 完整 `SpriteRenderer.bounds` 判断其是否完整处于棋盘内或棋盘左右桌面，再为 Alpha 大于 0 的已拼 Image 建立并复用不渲染的 Physics Shape 探针，用 `Collider2D.Distance().isOverlapped` 判断真实轮廓相交；Alpha 为 0 的凹槽不参与阻挡。
+- 松手优先级固定为：正确吸附目标且未被占用 -> 鼠标进入托盘原始区域回收 -> 与其他错误 Piece 或已拼内容重叠 -> 棋盘内空位或左右桌面自由放置 -> 其他位置回弹。
+- 从托盘拿起最后一块时继续执行托盘下收动画，但托盘原始屏幕区域保持为回收热区；在该区域松手会立即恢复并启用托盘，刷新布局后将 Piece 动画送到按编号重新计算的托盘位置。
 - 使用不受 `TimeScale` 影响的统一提醒计时和短时旋转抖动；任何交互或生命周期切换都恢复原旋转并停止旧动画。
 
 ### 任务
