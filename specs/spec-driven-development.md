@@ -1,5 +1,45 @@
 # Spec Driven Development
 
+## 2026-08-11 - 黑色托盘 Piece 居中与补位缓动
+
+### 需求
+
+**用户故事：** 作为玩家，我希望当前分组的 Piece 在黑色托盘中整齐、稳定地排列，并在拿起 Piece 后平滑补位，以便不同卡包的托盘表现一致且易于追踪。
+
+1. WHEN 创建当前分组的托盘 Piece THEN 系统 SHALL 将 Piece 的实际渲染边界在黑色托盘内上下居中。
+2. WHEN 排列任意卡包的托盘 Piece THEN 系统 SHALL 使用统一的固定水平间距，不因卡包或 Piece 尺寸改变间距值。
+3. WHEN 玩家从托盘拿起一个 Piece AND 该 Piece 后方没有仍在托盘的同组 Piece THEN 系统 SHALL 不刷新其他 Piece 的位置。
+4. WHEN 玩家从托盘拿起一个 Piece AND 其后方存在仍在托盘的同组 Piece THEN 系统 SHALL 仅将这些后序 Piece 向前补位，前序 Piece、桌面 Piece、Y 坐标和缩放保持不变。
+5. WHEN 托盘 Piece 需要补位或回收重排 THEN 系统 SHALL 使用 `0.5s` 缓动移动到目标位置，不得瞬移。
+6. WHEN Piece 因错误放置返回原托盘位置 THEN 系统 SHALL 同步恢复其他托盘 Piece 的固定间距布局。
+
+### 设计
+
+- 保留现有 `DraggableHorizontalSpacingPixels=20`，将其作为所有卡包共用的设计像素间距。
+- 初始布局使用 `SpriteRenderer.bounds.center` 校正最终世界坐标，直接对齐实际渲染边界中心与托盘中心。
+- 在 `TryBeginDrag` 中触发后序 Piece 补位；队尾没有移动目标时不启动协程。
+- 新增单一托盘 Piece 重排协程，使用 `Time.unscaledDeltaTime` 和 `Mathf.SmoothStep` 在 `0.5s` 内只插值世界 X 坐标。
+- 重排期间暂时禁止开始下一次拖拽；当前已拿起的 Piece 仍可继续移动和松手。
+- Piece 放回托盘时按编号重新计算固定间距目标；初始建组仍即时布局，不播放补位动画。
+
+### 任务
+
+- [x] 1. 修正初始托盘 Piece 的实际渲染边界垂直居中。
+- [x] 2. 将拿起后的后序补位改为统一 `0.5s` 缓动，并保证队尾不刷新。
+- [x] 3. 将托盘回收重排接入相同固定间距与缓动逻辑。
+- [x] 4. 更新长期规则和当前任务记录。
+- [ ] 5. 编译并验证初始布局、队尾、非队尾和回收分支。
+
+### 当前验证
+
+- 静态检查确认所有布局入口共用 `DraggableHorizontalSpacingPixels=20`。
+- 拿起补位只收集编号大于当前 Piece、仍在托盘且不是当前拖拽对象的状态；队尾目标列表为空时不启动协程。
+- 初始布局使用 `SpriteRenderer.bounds.center` 计算实际渲染中心偏移，托盘重排目标继续保持同一 Y 和缩放。
+- 运行时与编辑器 `dotnet build` 顺序通过，均为 `0` 警告、`0` 错误。
+- Unity `2022.3.62f2c1` 无界面编译和完整资源导入通过，返回码为 `0`，日志中无 C# 错误或警告。
+- `git diff --check` 通过；Unity 未修改场景、Prefab 或资源。
+- 待在 Play Mode 分别拿起队首、中间、队尾 Piece，并测试错误返回和桌面回收的实际视觉节奏。
+
 ## 2026-08-07 - 卡包尺寸分档更新
 
 ### 需求

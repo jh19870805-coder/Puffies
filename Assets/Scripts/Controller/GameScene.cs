@@ -15,6 +15,7 @@ public class GameScene : MonoBehaviour
     private const float GamePageCameraPadding = 0.3f;
     private const float DraggableLeftPadding = 0.2f;
     private const float DraggableHorizontalSpacingPixels = 20f;
+    private const float TrayPieceReflowDuration = 0.5f;
     private const float PieceTrayMaxHeightRatio = 0.9f;
     private const float SnapDistanceMin = 0.2f;
     private const float SnapDistanceMax = 0.8f;
@@ -142,6 +143,8 @@ public class GameScene : MonoBehaviour
     private bool _hasPieceBoardOriginalAnchoredPosition;
     private bool _isPieceBoardHidden;
     private Coroutine _pieceTraySlideCoroutine;
+    private Coroutine _trayPieceReflowCoroutine;
+    private bool _isTrayPieceReflowAnimating;
     private Vector2 _originalGameBoardAnchoredPosition;
     private bool _hasOriginalGameBoardAnchoredPosition;
     private bool _isGameFinished;
@@ -275,6 +278,7 @@ public class GameScene : MonoBehaviour
 
     private void OnDestroy()
     {
+        StopTrayPieceReflow();
         GameCursorUtility.SetDefault();
         StopPiecePlacementTutorial(restoreLevelOutline: false);
         DestroyTutorialArrowSprite();
@@ -1302,6 +1306,7 @@ public class GameScene : MonoBehaviour
 
     private void ClearCurrentDraggableGroup()
     {
+        StopTrayPieceReflow();
         ClearPieceHint();
         _drag.DraggingPiece = null;
         _drag.CurrentGroupDraggables.Clear();
@@ -1606,7 +1611,7 @@ public class GameScene : MonoBehaviour
 
     private void TryBeginDrag(Vector2 screenPosition)
     {
-        if (_isGameFinished || _isPiecePlacementAnimating)
+        if (_isGameFinished || _isPiecePlacementAnimating || _isTrayPieceReflowAnimating)
         {
             return;
         }
@@ -1642,6 +1647,10 @@ public class GameScene : MonoBehaviour
         }
         state.PieceRenderer.transform.localScale = state.DragScale;
         state.PieceRenderer.sortingOrder = PieceSortingOrder + 100;
+        if (state.IsOnTray)
+        {
+            CompactFollowingTrayPieces(state);
+        }
         if (state.IsOnTray && CountUnplacedTrayPieces() == 1)
         {
             SlidePieceTrayOutOfScreen();
@@ -1658,6 +1667,7 @@ public class GameScene : MonoBehaviour
 
         if (!_isGameFinished
             && !_isPiecePlacementAnimating
+            && !_isTrayPieceReflowAnimating
             && FindDraggablePieceAt(screenPosition) != null)
         {
             GameCursorUtility.SetPieceHover();
@@ -1727,10 +1737,6 @@ public class GameScene : MonoBehaviour
                 ClearPieceHint();
             }
             StartGameplayTimerIfNeeded();
-            if (wasOnTray)
-            {
-                CompactFollowingTrayPieces(state);
-            }
             RecordPlacedPiece(state);
             StartCoroutine(PlayPieceSnapAnimation(state, groovePosition));
             return;
@@ -1747,7 +1753,7 @@ public class GameScene : MonoBehaviour
         {
             state.IsOnTray = true;
             state.PieceRenderer.transform.localScale = state.TrayScale;
-            LayoutTrayPieces();
+            LayoutTrayPieces(animate: true);
             RestorePiecePlacementTutorialPresentation(state);
             return;
         }
@@ -1755,10 +1761,6 @@ public class GameScene : MonoBehaviour
         state.PieceRenderer.transform.localScale = state.DragScale;
         state.PieceRenderer.transform.position = ClampPieceToTableBounds(state.PieceRenderer);
         state.IsOnTray = false;
-        if (wasOnTray)
-        {
-            CompactFollowingTrayPieces(state);
-        }
 
         RestorePiecePlacementTutorialPresentation(state);
     }
@@ -1805,6 +1807,7 @@ public class GameScene : MonoBehaviour
         if (wasOnTray)
         {
             ResetPieceTrayPosition(instant: true);
+            LayoutTrayPieces(animate: true, excludedState: state);
         }
 
         StartCoroutine(PlayInvalidDropReturnAnimation(state, _dragStartPosition));
@@ -2345,8 +2348,11 @@ public class GameScene : MonoBehaviour
         return new Bounds(Vector3.zero, Vector3.one);
     }
 
-    private void LayoutTrayPieces()
+    private void LayoutTrayPieces(
+        bool animate = false,
+        DraggablePieceState excludedState = null)
     {
+        StopTrayPieceReflow();
         Canvas.ForceUpdateCanvases();
         var hostBounds = GetPieceTrayBounds();
         if (hostBounds.size.sqrMagnitude <= 0f)
@@ -2374,38 +2380,59 @@ public class GameScene : MonoBehaviour
 
         unplaced.Sort((a, b) => GetPieceNumberFromState(a).CompareTo(GetPieceNumberFromState(b)));
         var trayCenterY = hostBounds.center.y;
+        var animatedStates = animate ? new List<DraggablePieceState>() : null;
+        var animatedTargets = animate ? new List<Vector3>() : null;
         for (var i = 0; i < unplaced.Count; i++)
         {
             var state = unplaced[i];
-            var pieceWidth = GameCommonUtility.GetPieceWidth(state.PieceRenderer, state.TrayScale);
+            var currentScale = state.PieceRenderer.transform.localScale;
+            state.PieceRenderer.transform.localScale = state.TrayScale;
+            var pieceWidth = Mathf.Max(0.01f, state.PieceRenderer.bounds.size.x);
             var pieceHalfWidth = pieceWidth * 0.5f;
             var pieceCenterX = nextCenterX + pieceHalfWidth;
-            var position = PlaceTrayPieceAt(
+            var position = CalculateTrayPiecePosition(
                 state.PieceRenderer,
-                state.TrayScale,
                 pieceCenterX,
                 trayCenterY);
             state.StartPosition = position;
+            if (state == excludedState)
+            {
+                state.PieceRenderer.transform.localScale = currentScale;
+            }
+            if (!animate)
+            {
+                state.PieceRenderer.transform.position = position;
+            }
+            else if (state != excludedState
+                     && Vector3.SqrMagnitude(state.PieceRenderer.transform.position - position) > 0.000001f)
+            {
+                animatedStates.Add(state);
+                animatedTargets.Add(position);
+            }
             nextCenterX = pieceCenterX + pieceHalfWidth + horizontalSpacing;
         }
+
+        StartTrayPieceReflow(animatedStates, animatedTargets);
     }
 
-    private void CompactFollowingTrayPieces(DraggablePieceState placedState)
+    private bool CompactFollowingTrayPieces(DraggablePieceState removedState)
     {
-        if (placedState?.PieceRenderer == null)
+        if (removedState?.PieceRenderer == null)
         {
-            return;
+            return false;
         }
 
-        var placedPieceNumber = GetPieceNumberFromState(placedState);
-        if (placedPieceNumber == int.MaxValue)
+        var removedPieceNumber = GetPieceNumberFromState(removedState);
+        if (removedPieceNumber == int.MaxValue)
         {
-            return;
+            return false;
         }
 
         var shiftX = GameCommonUtility.GetPieceWidth(
-            placedState.PieceRenderer,
-            placedState.TrayScale) + DraggableHorizontalSpacingPixels / PixelsPerUnit;
+            removedState.PieceRenderer,
+            removedState.TrayScale) + DraggableHorizontalSpacingPixels / PixelsPerUnit;
+        var states = new List<DraggablePieceState>();
+        var targets = new List<Vector3>();
         for (var i = 0; i < _drag.CurrentGroupDraggables.Count; i++)
         {
             var state = _drag.CurrentGroupDraggables[i];
@@ -2413,32 +2440,107 @@ public class GameScene : MonoBehaviour
                 || state.IsPlaced
                 || !state.IsOnTray
                 || state.PieceRenderer == null
-                || GetPieceNumberFromState(state) <= placedPieceNumber)
+                || state == _drag.DraggingPiece
+                || GetPieceNumberFromState(state) <= removedPieceNumber)
             {
                 continue;
             }
 
-            var position = state.PieceRenderer.transform.position;
-            position.x -= shiftX;
-            state.PieceRenderer.transform.position = position;
-            state.StartPosition = position;
+            var target = state.PieceRenderer.transform.position;
+            target.x -= shiftX;
+            state.StartPosition = target;
+            states.Add(state);
+            targets.Add(target);
         }
+
+        StartTrayPieceReflow(states, targets);
+        return states.Count > 0;
     }
 
-    private static Vector3 PlaceTrayPieceAt(
+    private static Vector3 CalculateTrayPiecePosition(
         SpriteRenderer renderer,
-        Vector3 trayScale,
         float centerX,
         float trayCenterY)
     {
-        renderer.transform.localScale = trayScale;
-        var spriteCenter = renderer.sprite != null ? renderer.sprite.bounds.center : Vector3.zero;
-        renderer.transform.position = new Vector3(
-            centerX - spriteCenter.x * trayScale.x,
-            trayCenterY - spriteCenter.y * trayScale.y,
+        var renderedCenterOffset = renderer.bounds.center - renderer.transform.position;
+        return new Vector3(
+            centerX - renderedCenterOffset.x,
+            trayCenterY - renderedCenterOffset.y,
             WorldGameplayDepth);
+    }
 
-        return renderer.transform.position;
+    private void StartTrayPieceReflow(
+        List<DraggablePieceState> states,
+        List<Vector3> targets)
+    {
+        if (states == null || targets == null || states.Count == 0 || states.Count != targets.Count)
+        {
+            return;
+        }
+
+        var starts = new List<Vector3>(states.Count);
+        for (var i = 0; i < states.Count; i++)
+        {
+            starts.Add(states[i].PieceRenderer.transform.position);
+        }
+
+        _trayPieceReflowCoroutine = StartCoroutine(
+            AnimateTrayPieceReflow(states, starts, targets));
+    }
+
+    private IEnumerator AnimateTrayPieceReflow(
+        List<DraggablePieceState> states,
+        List<Vector3> starts,
+        List<Vector3> targets)
+    {
+        _isTrayPieceReflowAnimating = true;
+        var elapsed = 0f;
+        while (elapsed < TrayPieceReflowDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            var progress = Mathf.SmoothStep(
+                0f,
+                1f,
+                Mathf.Clamp01(elapsed / TrayPieceReflowDuration));
+            for (var i = 0; i < states.Count; i++)
+            {
+                var state = states[i];
+                if (state?.PieceRenderer == null || state.IsPlaced || !state.IsOnTray)
+                {
+                    continue;
+                }
+
+                state.PieceRenderer.transform.position = Vector3.LerpUnclamped(
+                    starts[i],
+                    targets[i],
+                    progress);
+            }
+
+            yield return null;
+        }
+
+        for (var i = 0; i < states.Count; i++)
+        {
+            var state = states[i];
+            if (state?.PieceRenderer != null && !state.IsPlaced && state.IsOnTray)
+            {
+                state.PieceRenderer.transform.position = targets[i];
+            }
+        }
+
+        _isTrayPieceReflowAnimating = false;
+        _trayPieceReflowCoroutine = null;
+    }
+
+    private void StopTrayPieceReflow()
+    {
+        if (_trayPieceReflowCoroutine != null)
+        {
+            StopCoroutine(_trayPieceReflowCoroutine);
+            _trayPieceReflowCoroutine = null;
+        }
+
+        _isTrayPieceReflowAnimating = false;
     }
 
     private static Vector3 GetGrooveSnapPosition(RectTransform grooveRect, Camera camera)
@@ -2969,6 +3071,7 @@ public class GameScene : MonoBehaviour
 
     private void RemoveRuntimePuzzlePieces()
     {
+        StopTrayPieceReflow();
         ClearPieceHint();
         _drag.DraggingPiece = null;
         _drag.CurrentGroupDraggables.Clear();
