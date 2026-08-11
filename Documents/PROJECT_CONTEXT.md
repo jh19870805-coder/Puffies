@@ -203,7 +203,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 
 - `GameConfigRepository` 加载并缓存任务和卡包配置。当前数据源为 `ResourcesGameConfigTextSource`，优先使用 `Resources.Load<TextAsset>`，失败时回退到编辑器磁盘路径。
 - `CsvTable` 是统一 CSV 解析器，支持表头访问、引号字段和空行过滤；业务代码不得直接 `Split(',')`。
-- `CardPacks.csv/BoardScale` 使用 invariant-culture 浮点数且必须大于零。GameScene 将其乘到当前 CardBag 根节点，使棋盘、槽位、描边和吸附坐标统一缩放。每个 Piece 的托盘生成比例为 `Min(配置后的棋盘目标比例, 原黑色托盘规则比例)`，不按整组宽高分支；拿起使用棋盘目标比例，所以按下时只会保持尺寸或放大。未正确吸附且不与 CardBag 棋盘相交时，Piece 以棋盘目标比例停留在桌面并限制在背景可见范围内；若贴图边界与棋盘相交，则恢复到本次拖拽起点。成功吸附后立即用 Prefab 对应原始 `Image` 替代拖拽 `SpriteRenderer`，确保已放置 Piece 与棋盘在同一 Canvas 层级共同缩放，接缝不随 `BoardScale` 放大。
+- `CardPacks.csv/BoardScale` 使用 invariant-culture 浮点数且必须大于零。GameScene 将其乘到当前 CardBag 根节点，使棋盘、槽位、描边和吸附坐标统一缩放。每个 Piece 的托盘生成比例为 `Min(配置后的棋盘目标比例, 原黑色托盘规则比例)`，不按整组宽高分支；拖拽目标比例使用当前 `SpriteRenderer` 屏幕包围盒与目标凹槽屏幕矩形直接校准，并在每次拿起时刷新，所以按下时只会保持尺寸或放大，正确落位切换为 Canvas `Image` 时不得再次缩放。未正确吸附且不与 CardBag 棋盘相交时，Piece 以棋盘目标比例停留在桌面并限制在背景可见范围内；若贴图边界与棋盘相交，则恢复到本次拖拽起点。成功吸附后立即用 Prefab 对应原始 `Image` 替代拖拽 `SpriteRenderer`，确保已放置 Piece 与棋盘在同一 Canvas 层级共同缩放，接缝不随 `BoardScale` 放大。
 - `JsonLocalStore` 读写整个文件的单一根对象，目前用于任务进度。
 - `SqliteLocalStore` 在 `AppRecords` 中使用集合/键记录；卡包业务状态使用专用 `CardPacks` 表。
 - `CardPackLifecycleState` 为 `Locked=0`、`Unlocked=1`、`InProgress=2`、`Completed=3`。首次进入 GameScene 时将未完成卡包标记为 `InProgress`，完成最后一组后标记为 `Completed`；重玩期间保持 `Completed`，不降级。

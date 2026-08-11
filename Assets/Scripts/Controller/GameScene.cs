@@ -1079,8 +1079,18 @@ public class GameScene : MonoBehaviour
         return Mathf.Min(factorX, factorY);
     }
 
-    private Vector3 CalculatePieceScaleOnBoard(Image grooveImage)
+    private Vector3 CalculatePieceScaleOnBoard(
+        Image grooveImage,
+        SpriteRenderer pieceRenderer = null)
     {
+        if (TryCalculatePieceScaleFromScreenRect(
+                grooveImage,
+                pieceRenderer,
+                out var screenMatchedScale))
+        {
+            return screenMatchedScale;
+        }
+
         if (grooveImage == null || grooveImage.sprite == null || Camera.main == null)
         {
             return Vector3.one * GetBoardToSpriteScaleFactor();
@@ -1105,6 +1115,59 @@ public class GameScene : MonoBehaviour
             grooveWorldSize.x / spriteWorldSize.x,
             grooveWorldSize.y / spriteWorldSize.y,
             1f);
+    }
+
+    private static bool TryCalculatePieceScaleFromScreenRect(
+        Image grooveImage,
+        SpriteRenderer pieceRenderer,
+        out Vector3 scale)
+    {
+        scale = Vector3.one;
+        var camera = Camera.main;
+        if (grooveImage == null
+            || grooveImage.sprite == null
+            || pieceRenderer == null
+            || pieceRenderer.sprite == null
+            || camera == null)
+        {
+            return false;
+        }
+
+        var grooveScreenRect = GetRectTransformScreenRect(
+            grooveImage.rectTransform,
+            camera);
+        var rendererBounds = pieceRenderer.bounds;
+        var rendererScreenMin = camera.WorldToScreenPoint(rendererBounds.min);
+        var rendererScreenMax = camera.WorldToScreenPoint(rendererBounds.max);
+        var rendererScreenWidth = Mathf.Abs(rendererScreenMax.x - rendererScreenMin.x);
+        var rendererScreenHeight = Mathf.Abs(rendererScreenMax.y - rendererScreenMin.y);
+        if (grooveScreenRect.width <= 0.001f
+            || grooveScreenRect.height <= 0.001f
+            || rendererScreenWidth <= 0.001f
+            || rendererScreenHeight <= 0.001f)
+        {
+            return false;
+        }
+
+        var currentScale = pieceRenderer.transform.localScale;
+        scale = new Vector3(
+            currentScale.x * grooveScreenRect.width / rendererScreenWidth,
+            currentScale.y * grooveScreenRect.height / rendererScreenHeight,
+            1f);
+        return IsFinitePositiveScale(scale);
+    }
+
+    private static bool IsFinitePositiveScale(Vector3 scale)
+    {
+        return scale.x > 0f
+               && scale.y > 0f
+               && scale.z > 0f
+               && !float.IsNaN(scale.x)
+               && !float.IsNaN(scale.y)
+               && !float.IsNaN(scale.z)
+               && !float.IsInfinity(scale.x)
+               && !float.IsInfinity(scale.y)
+               && !float.IsInfinity(scale.z);
     }
 
     private Vector3 CalculateTrayScaleForPiece(
@@ -1237,7 +1300,7 @@ public class GameScene : MonoBehaviour
                 continue;
             }
 
-            var dragScale = CalculatePieceScaleOnBoard(grooveImage);
+            var dragScale = CalculatePieceScaleOnBoard(grooveImage, pieceRenderer);
             var trayScale = Vector3.Min(
                 CalculateTrayScaleForPiece(pieceRenderer, hostBounds, dragScale),
                 dragScale);
@@ -1713,6 +1776,9 @@ public class GameScene : MonoBehaviour
         {
             state.PieceRenderer.transform.rotation = _hintedPieceBaseRotation;
         }
+        state.DragScale = CalculatePieceScaleOnBoard(
+            state.GrooveImage,
+            state.PieceRenderer);
         state.PieceRenderer.transform.localScale = state.DragScale;
         state.PieceRenderer.sortingOrder = PieceSortingOrder + 100;
         if (state.IsOnTray)
