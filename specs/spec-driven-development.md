@@ -1,5 +1,73 @@
 # Spec Driven Development
 
+## 2026-08-11 - 错误 Piece 回弹反馈时序
+
+### 需求
+
+**用户故事：** 作为玩家，我希望错误 Piece 先自然回弹，并在重新进入黑色托盘时才得到较柔和的红色提示，避免松手瞬间的强烈闪红打断操作节奏。
+
+1. WHEN 来自黑色托盘的 Piece 被判定为错误放置 THEN 系统 SHALL 立即开始回弹，不在松手位置先变红或停顿。
+2. WHEN 回弹中的错误 Piece 首次进入可见黑色托盘区域 THEN 系统 SHALL 才显示红色反馈。
+3. WHEN 显示错误红色反馈 THEN 系统 SHALL 将现有红色强度降低 `30%`，同时保持 Piece 原有透明度。
+4. IF 错误 Piece 的回弹目标不在黑色托盘 THEN 系统 SHALL 不因本次回弹显示托盘红色反馈。
+
+### 设计
+
+- 删除错误回弹开始前的红色赋值和 `0.08s` 停顿，保持现有 `0.3s` 三次方减速回弹。
+- 回弹每帧使用 Piece 的世界渲染边界与当前黑色托盘世界边界做二维相交检测；首次相交时开始染红。
+- 红色由 Piece 原始颜色向现有 `InvalidDropTintColor` 混合 `70%` 得到，Alpha 始终沿用原图，回弹到位后继续使用现有 `0.1s` 恢复动画。
+
+### 任务
+
+- [x] 1. 记录错误回弹和红色反馈的新时序。
+- [x] 2. 调整回弹动画的红色触发与强度。
+- [x] 3. 更新长期规则与当前任务记录。
+- [ ] 4. 编译并在 Unity Play Mode 验证托盘内外两类回弹。
+
+### 当前验证
+
+- 静态确认错误回弹开始前不再设置红色，也不再等待原 `0.08s` 停顿。
+- 回弹过程只在 `state.IsOnTray` 且 Piece 渲染边界首次与可见托盘边界相交时设置红色。
+- 错误红色使用 `Color.LerpUnclamped(originalColor, InvalidDropTintColor, 0.7f)`，并显式恢复原始 Alpha。
+- `Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 编译通过，均为 `0` 警告、`0` 错误。
+- 待在 Unity Play Mode 目视确认进入托盘的触发边界、红色强度和外部回弹无红色分支。
+
+## 2026-08-11 - Piece 正确吸附与绿色叠加滑光优化
+
+### 需求
+
+**用户故事：** 作为玩家，我希望 Piece 放对后的吸附更干脆，并通过清晰但不遮盖原图的绿色滑动确认效果得到即时反馈。
+
+1. WHEN Piece 达到正确吸附标准 THEN 系统 SHALL 将现有吸附位移动画时间缩短 `1/3`。
+2. WHEN Piece 完成吸附 THEN 系统 SHALL 只在当前刚吸附的 Piece 内播放绿色滑动光带，不扩散到任何相邻已放置 Piece，也不使用整块静态染色或缩放闪色。
+3. WHEN 绘制绿色确认光带 THEN 系统 SHALL 使用 ADD 加法叠加模式，并继续按 Piece Alpha 裁切，不覆盖原图细节或棋盘空白。
+
+### 设计
+
+- 将 `PieceSnapDuration` 从 `0.18s` 调整为 `0.12s`，即保留原时长的 `2/3`。
+- 沿用现有屏幕空间滑光路径和 `0.52s` 光带时长，只为当前 `grooveImage` 创建滑光覆盖层，范围直接使用当前 Piece 的屏幕 Rect；确认颜色使用项目标准绿 `(112,151,75)`。
+- `PuzzlePlacementShine.shader` 显式使用 `BlendOp Add` 与 `Blend SrcAlpha One`，保持带 Alpha 强度控制的加法叠加。
+
+### 任务
+
+- [x] 1. 记录吸附时长和绿色 ADD 滑光规格。
+- [x] 2. 缩短正确吸附动画并切换确认光带颜色。
+- [x] 3. 显式固定滑光 Shader 的 ADD 混合操作。
+- [x] 4. 更新长期规则与当前任务记录。
+- [x] 5. 将滑光范围限制为当前刚吸附 Piece，并删除相邻连通扫描。
+- [ ] 6. 在 Unity Play Mode 验证吸附节奏、当前块范围、滑光方向、颜色和叠加效果。
+
+### 当前验证
+
+- `PieceSnapDuration` 已由 `0.18f` 调整为 `0.12f`，数学上等于缩短 `1/3`。
+- 运行时 `_ShineColor` 已改为 `(112,151,75,230)`；Shader 默认值同步为对应归一化绿色。
+- 滑光仍通过 `_SweepCenter` 在约 `0.52s` 内从当前 Piece 起点移动到终点，并按当前 Sprite Alpha 裁切。
+- Shader 显式使用 `BlendOp Add` 和 `Blend SrcAlpha One`，未增加整块缩放或静态染色分支。
+- 运行时只为当前 `grooveImage` 创建一个滑光覆盖层；相邻 Piece 收集、Rect 接触判断和连通队列代码已删除。
+- `Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 编译通过，均为 `0` 警告、`0` 错误。
+- Unity `2022.3.62f2c1` 无界面完整导入成功退出，日志无 Shader 或 C# 编译错误。
+- 待在 Play Mode 目视确认 `0.12s` 吸附节奏和绿色 ADD 滑光亮度。
+
 ## 2026-08-11 - Piece 自由放置、防重叠与空托盘提醒
 
 ### 需求

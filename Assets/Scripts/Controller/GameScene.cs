@@ -47,13 +47,12 @@ public class GameScene : MonoBehaviour
     private const float GroupTransitionStrongHoldDuration = 0.3f;
     private const float GroupTransitionDefaultHoldDuration = 0.1f;
     private const float ActiveGroupOutlineFadeDuration = 0.5f;
-    private const float PieceSnapDuration = 0.18f;
+    private const float PieceSnapDuration = 0.12f;
     private const float PiecePlacementShineDuration = 0.52f;
     private const float PiecePlacementShineBandWidth = 0.045f;
-    private const float PiecePlacementShineNeighborPadding = 10f;
-    private const float InvalidDropHoldDuration = 0.08f;
     private const float InvalidDropReturnDuration = 0.3f;
     private const float InvalidDropColorRestoreDuration = 0.1f;
+    private const float InvalidDropTintStrength = 0.7f;
     private const int PieceSortingOrder = 520;
     private const float HintShakeAngle = 6f;
     private const float HintShakeCyclesPerSecond = 4.5f;
@@ -118,7 +117,7 @@ public class GameScene : MonoBehaviour
     private static readonly Color TutorialTargetOutlineColor = new Color32(80, 139, 230, 255);
     private static readonly Color InvalidDropTintColor = new Color32(255, 58, 58, 255);
     private static readonly Color StandardPuzzleOutlineColor = new Color32(0x3f, 0x42, 0x3e, 0xff);
-    private static readonly Color PiecePlacementShineColor = new Color32(255, 244, 152, 230);
+    private static readonly Color PiecePlacementShineColor = new Color32(112, 151, 75, 230);
     private static readonly int ShineSweepAxisId = Shader.PropertyToID("_SweepAxis");
     private static readonly int ShineSweepCenterId = Shader.PropertyToID("_SweepCenter");
     private static readonly int ShineBandWidthId = Shader.PropertyToID("_BandWidth");
@@ -1981,17 +1980,15 @@ public class GameScene : MonoBehaviour
         var startScale = renderer.transform.localScale;
         var returnScale = state.IsOnTray ? state.TrayScale : state.DragScale;
         var originalColor = renderer.color;
-        var invalidColor = InvalidDropTintColor;
+        var invalidColor = Color.LerpUnclamped(
+            originalColor,
+            InvalidDropTintColor,
+            InvalidDropTintStrength);
         invalidColor.a = originalColor.a;
-        renderer.color = invalidColor;
         renderer.sortingOrder = PieceSortingOrder + 100;
 
-        if (InvalidDropHoldDuration > 0f)
-        {
-            yield return new WaitForSecondsRealtime(InvalidDropHoldDuration);
-        }
-
         var elapsed = 0f;
+        var didEnterTray = false;
         while (elapsed < InvalidDropReturnDuration && renderer != null)
         {
             elapsed += Mathf.Min(Time.unscaledDeltaTime, GameEntranceMaxFrameDelta);
@@ -2005,6 +2002,13 @@ public class GameScene : MonoBehaviour
                 startScale,
                 returnScale,
                 eased);
+            if (!didEnterTray
+                && state.IsOnTray
+                && DoesPieceOverlapTray(renderer))
+            {
+                didEnterTray = true;
+                renderer.color = invalidColor;
+            }
             yield return null;
         }
 
@@ -2014,7 +2018,9 @@ public class GameScene : MonoBehaviour
             renderer.transform.localScale = returnScale;
 
             elapsed = 0f;
-            while (elapsed < InvalidDropColorRestoreDuration && renderer != null)
+            while (didEnterTray
+                   && elapsed < InvalidDropColorRestoreDuration
+                   && renderer != null)
             {
                 elapsed += Mathf.Min(Time.unscaledDeltaTime, GameEntranceMaxFrameDelta);
                 var progress = Mathf.Clamp01(elapsed / InvalidDropColorRestoreDuration);
@@ -2070,6 +2076,26 @@ public class GameScene : MonoBehaviour
         var verticalOverlap = Mathf.Min(pieceBounds.max.y, trayBounds.max.y)
                               - Mathf.Max(pieceBounds.min.y, trayBounds.min.y);
         return horizontalOverlap > 0f && verticalOverlap >= pieceBounds.size.y * 0.5f;
+    }
+
+    private bool DoesPieceOverlapTray(SpriteRenderer renderer)
+    {
+        if (renderer == null || IsPieceTrayHidden())
+        {
+            return false;
+        }
+
+        var pieceBounds = renderer.bounds;
+        var trayBounds = GetPieceTrayBounds();
+        if (pieceBounds.size.sqrMagnitude <= 0f || trayBounds.size.sqrMagnitude <= 0f)
+        {
+            return false;
+        }
+
+        return pieceBounds.max.x > trayBounds.min.x
+            && pieceBounds.min.x < trayBounds.max.x
+            && pieceBounds.max.y > trayBounds.min.y
+            && pieceBounds.min.y < trayBounds.max.y;
     }
 
     private Vector3 ClampPieceToTableBounds(SpriteRenderer renderer)
@@ -2224,57 +2250,23 @@ public class GameScene : MonoBehaviour
             yield break;
         }
 
-        var shineImages = CollectConnectedPlacedImages(grooveImage);
-        if (shineImages.Count == 0)
-        {
-            shineImages.Add(grooveImage);
-        }
-
-        var shineObjects = new List<GameObject>(shineImages.Count);
-        var hasBounds = false;
-        var combinedScreenRect = default(Rect);
-        for (var i = 0; i < shineImages.Count; i++)
-        {
-            var sourceImage = shineImages[i];
-            var shineObject = CreatePiecePlacementShineOverlay(sourceImage, shineMaterial);
-            if (shineObject != null)
-            {
-                shineObjects.Add(shineObject);
-            }
-
-            if (!TryGetRectTransformScreenRect(sourceImage.rectTransform, out var screenRect))
-            {
-                continue;
-            }
-
-            combinedScreenRect = hasBounds ? UnionRects(combinedScreenRect, screenRect) : screenRect;
-            hasBounds = true;
-        }
-
-        if (shineObjects.Count == 0 || !hasBounds
+        var shineObject = CreatePiecePlacementShineOverlay(grooveImage, shineMaterial);
+        if (shineObject == null
             || !TryGetRectTransformScreenRect(grooveImage.rectTransform, out var sourceScreenRect))
         {
-            DestroyPlacementShineObjects(shineObjects);
+            if (shineObject != null)
+            {
+                Destroy(shineObject);
+            }
+
             yield break;
         }
 
-        var sourceCenter = NormalizeScreenPoint(sourceScreenRect.center);
-        var connectedCenter = NormalizeScreenPoint(combinedScreenRect.center);
-        var sweepAxis = connectedCenter - sourceCenter;
-        if (sweepAxis.sqrMagnitude < 0.0025f)
-        {
-            sweepAxis = new Vector2(-0.58f, 0.82f);
-        }
-        else
-        {
-            sweepAxis = Vector2.Lerp(
-                new Vector2(-0.58f, 0.82f),
-                sweepAxis.normalized,
-                0.65f).normalized;
-        }
+        var shineObjects = new List<GameObject>(1) { shineObject };
+        var sweepAxis = new Vector2(-0.58f, 0.82f).normalized;
 
         GetScreenRectAxisRange(
-            combinedScreenRect,
+            sourceScreenRect,
             sweepAxis,
             out var sweepStart,
             out var sweepEnd);
@@ -2298,88 +2290,6 @@ public class GameScene : MonoBehaviour
         }
 
         DestroyPlacementShineObjects(shineObjects);
-    }
-
-    private List<Image> CollectConnectedPlacedImages(Image placedImage)
-    {
-        var candidates = new List<Image>();
-        var screenRects = new Dictionary<Image, Rect>();
-        if (_board.GrooveImagesByGroup != null)
-        {
-            for (var groupIndex = 0; groupIndex < _board.GrooveImagesByGroup.Count; groupIndex++)
-            {
-                var group = _board.GrooveImagesByGroup[groupIndex];
-                if (group == null)
-                {
-                    continue;
-                }
-
-                for (var i = 0; i < group.Count; i++)
-                {
-                    var image = group[i];
-                    if (image == null
-                        || image.sprite == null
-                        || !image.gameObject.activeInHierarchy
-                        || image.color.a <= 0.01f
-                        || !TryGetRectTransformScreenRect(image.rectTransform, out var screenRect))
-                    {
-                        continue;
-                    }
-
-                    candidates.Add(image);
-                    screenRects[image] = screenRect;
-                }
-            }
-        }
-
-        if (!screenRects.ContainsKey(placedImage)
-            && TryGetRectTransformScreenRect(placedImage.rectTransform, out var placedRect))
-        {
-            candidates.Add(placedImage);
-            screenRects[placedImage] = placedRect;
-        }
-
-        var connected = new List<Image>();
-        if (!screenRects.ContainsKey(placedImage))
-        {
-            return connected;
-        }
-
-        var canvas = placedImage.canvas;
-        var padding = Mathf.Max(
-            2f,
-            PiecePlacementShineNeighborPadding * (canvas != null ? canvas.scaleFactor : 1f));
-        var visited = new HashSet<Image> { placedImage };
-        var queue = new Queue<Image>();
-        queue.Enqueue(placedImage);
-        while (queue.Count > 0)
-        {
-            var current = queue.Dequeue();
-            connected.Add(current);
-            var currentRect = screenRects[current];
-            for (var i = 0; i < candidates.Count; i++)
-            {
-                var candidate = candidates[i];
-                if (visited.Contains(candidate)
-                    || !AreScreenRectsConnected(currentRect, screenRects[candidate], padding))
-                {
-                    continue;
-                }
-
-                visited.Add(candidate);
-                queue.Enqueue(candidate);
-            }
-        }
-
-        return connected;
-    }
-
-    private static bool AreScreenRectsConnected(Rect first, Rect second, float padding)
-    {
-        return first.xMin <= second.xMax + padding
-               && first.xMax >= second.xMin - padding
-               && first.yMin <= second.yMax + padding
-               && first.yMax >= second.yMin - padding;
     }
 
     private static GameObject CreatePiecePlacementShineOverlay(

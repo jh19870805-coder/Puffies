@@ -4,7 +4,7 @@ Shader "Puffies/UI/PuzzlePlacementShine"
     {
         [PerRendererData] _MainTex ("Sprite Texture", 2D) = "white" {}
         _Color ("Tint", Color) = (1,1,1,1)
-        _ShineColor ("Shine Color", Color) = (1,0.96,0.6,0.9)
+        _ShineColor ("Shine Color", Color) = (0.439,0.592,0.294,0.9)
         _SweepAxis ("Sweep Axis", Vector) = (-0.58,0.82,0,0)
         _SweepCenter ("Sweep Center", Float) = 0
         _BandWidth ("Band Width", Float) = 0.045
@@ -41,6 +41,7 @@ Shader "Puffies/UI/PuzzlePlacementShine"
         Lighting Off
         ZWrite Off
         ZTest [unity_GUIZTestMode]
+        BlendOp Add
         Blend SrcAlpha One
         ColorMask [_ColorMask]
 
