@@ -3214,6 +3214,14 @@ public class GameScene : MonoBehaviour
         if (_settlementScoreTitleText != null)
         {
             GameFontUtility.ApplyDefaultFont(_settlementScoreTitleText);
+            var titleFontSize = _settlementScoreTitleText.fontSize;
+            _settlementScoreTitleText.enableWordWrapping = false;
+            _settlementScoreTitleText.enableAutoSizing = true;
+            _settlementScoreTitleText.fontSizeMax = titleFontSize;
+            _settlementScoreTitleText.fontSizeMin = Mathf.Min(
+                _settlementScoreTitleText.fontSizeMin,
+                titleFontSize);
+            SetSettlementScoreTitle(string.Empty);
         }
 
         if (_settlementBagCountText == null)
@@ -4894,7 +4902,7 @@ public class GameScene : MonoBehaviour
     {
         SetSettlementTaskProgress(taskItem, task, progressBeforeSettlement);
         SetSettlementScore(0);
-        SetSettlementScoreTitle("基础得分");
+        SetSettlementScoreTitle(string.Empty);
         yield return AnimateSettlementScoreRange(
             taskItem,
             task,
@@ -4919,7 +4927,7 @@ public class GameScene : MonoBehaviour
                 currentScore,
                 targetScore,
                 syncTaskWithScore,
-                $"未使用提示 +{scoreResult.NoHintBonusPercent}%");
+                $"未使用提示 +{targetScore - currentScore}分");
             currentScore = targetScore;
         }
 
@@ -4936,7 +4944,7 @@ public class GameScene : MonoBehaviour
                 currentScore,
                 targetScore,
                 syncTaskWithScore,
-                $"关闭关卡描边 +{scoreResult.LevelOutlineDisabledBonusPercent}%");
+                $"关闭关卡描边 +{targetScore - currentScore}分");
             currentScore = targetScore;
         }
 
@@ -4953,7 +4961,7 @@ public class GameScene : MonoBehaviour
                 currentScore,
                 targetScore,
                 syncTaskWithScore,
-                $"关闭贴纸描边 +{scoreResult.StickerOutlineDisabledBonusPercent}%");
+                $"关闭贴纸描边 +{targetScore - currentScore}分");
             currentScore = targetScore;
         }
 
@@ -4970,7 +4978,7 @@ public class GameScene : MonoBehaviour
                 currentScore,
                 targetScore,
                 syncTaskWithScore,
-                $"快速完成 +{scoreResult.CompletionTimeBonusPercent}%");
+                $"快速完成 +{targetScore - currentScore}分");
             currentScore = targetScore;
         }
 
@@ -4987,7 +4995,7 @@ public class GameScene : MonoBehaviour
         }
 
         SetSettlementScore(scoreResult.FinalScore);
-        SetSettlementScoreTitle("最终得分");
+        SetSettlementScoreTitle("卡包数");
         if (!syncTaskWithScore && progressAfterSettlement != progressBeforeSettlement)
         {
             yield return AnimateSettlementTaskProgressRange(

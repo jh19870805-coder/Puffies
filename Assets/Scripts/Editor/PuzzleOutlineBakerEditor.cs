@@ -17,8 +17,8 @@ public static class PuzzleOutlineBakerEditor
     private const int BoundaryNormalSampleRadius = 3;
     private const float MinimumBoundaryFacingDot = 0.5f;
     private const int FinalBoundaryAssignmentRadius = 12;
-    private const int BoundaryJunctionBridgeMaxLength = 64;
-    private const int BoundaryJunctionBridgeCorridorRadius = 8;
+    private const int BoundaryJunctionBridgeMaxLength = 4;
+    private const int BoundaryJunctionBridgeCorridorRadius = 1;
     private const int StrokeRadius = 1;
     private static readonly Color32 OutlineColor = new Color32(0x3f, 0x42, 0x3e, 0xff);
     private static readonly Vector2Int[] Neighbors =
@@ -603,6 +603,8 @@ public static class PuzzleOutlineBakerEditor
         int width,
         int height)
     {
+        // Only close tiny raster gaps at a real junction. Interior contact segments may be
+        // disconnected by design and must not be pulled toward the final exterior.
         if (CountTrue(currentOuterBoundary) == 0 || CountTrue(completedContactBoundary) == 0)
         {
             return;
