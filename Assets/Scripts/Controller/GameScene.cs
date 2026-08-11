@@ -58,6 +58,10 @@ public class GameScene : MonoBehaviour
     private const float HintShakeAngle = 6f;
     private const float HintShakeCyclesPerSecond = 4.5f;
     private const float HintShakeDuration = 0.8f;
+    private const float LoosePieceReminderInterval = 5f;
+    private const float LoosePieceReminderShakeDuration = 0.55f;
+    private const float LoosePieceReminderShakeAngle = 5f;
+    private const float LoosePieceReminderShakeCyclesPerSecond = 5f;
     private const float HintDashLength = 20f;
     private const float HintDashGap = 15f;
     private const float HintOutlineWidth = 3f;
@@ -145,6 +149,12 @@ public class GameScene : MonoBehaviour
     private Coroutine _pieceTraySlideCoroutine;
     private Coroutine _trayPieceReflowCoroutine;
     private bool _isTrayPieceReflowAnimating;
+    private Coroutine _loosePieceReminderShakeCoroutine;
+    private readonly List<DraggablePieceState> _loosePieceReminderStates =
+        new List<DraggablePieceState>();
+    private readonly List<Quaternion> _loosePieceReminderBaseRotations =
+        new List<Quaternion>();
+    private float _nextLoosePieceReminderTime = -1f;
     private Vector2 _originalGameBoardAnchoredPosition;
     private bool _hasOriginalGameBoardAnchoredPosition;
     private bool _isGameFinished;
@@ -278,6 +288,7 @@ public class GameScene : MonoBehaviour
 
     private void OnDestroy()
     {
+        StopLoosePieceReminderShake();
         StopTrayPieceReflow();
         GameCursorUtility.SetDefault();
         StopPiecePlacementTutorial(restoreLevelOutline: false);
@@ -293,6 +304,7 @@ public class GameScene : MonoBehaviour
     private void Update()
     {
         UpdatePieceHintAnimation();
+        UpdateLoosePieceReminder();
         if (_isEntranceAnimating || _isGroupTransitionAnimating)
         {
             GameCursorUtility.SetDefault();
@@ -1230,9 +1242,18 @@ public class GameScene : MonoBehaviour
                 CalculateTrayScaleForPiece(pieceRenderer, hostBounds, dragScale),
                 dragScale);
             pieceRenderer.transform.localScale = trayScale;
+            var pieceCollider = CreateSpriteOverlapCollider(
+                pieceRenderer.gameObject,
+                pieceRenderer.sprite);
+            var grooveProbeCollider = CreateGrooveOverlapProbe(
+                pieceRenderer.sprite,
+                root.transform,
+                $"GrooveProbe_{groupIndex}_{i}");
             _drag.CurrentGroupDraggables.Add(new DraggablePieceState
             {
                 PieceRenderer = pieceRenderer,
+                PieceCollider = pieceCollider,
+                GrooveProbeCollider = grooveProbeCollider,
                 GrooveImage = grooveImage,
                 GrooveRect = grooveImage.rectTransform,
                 StartPosition = pieceRenderer.transform.position,
@@ -1259,6 +1280,55 @@ public class GameScene : MonoBehaviour
             PieceSortingOrder,
             parent,
             forceCreate: true);
+    }
+
+    private static Collider2D CreateGrooveOverlapProbe(
+        Sprite sprite,
+        Transform parent,
+        string objectName)
+    {
+        var probeObject = new GameObject(objectName);
+        probeObject.transform.SetParent(parent, false);
+        return CreateSpriteOverlapCollider(probeObject, sprite);
+    }
+
+    private static Collider2D CreateSpriteOverlapCollider(GameObject host, Sprite sprite)
+    {
+        if (host == null || sprite == null)
+        {
+            return null;
+        }
+
+        var paths = new List<List<Vector2>>();
+        var shapeCount = sprite.GetPhysicsShapeCount();
+        for (var shapeIndex = 0; shapeIndex < shapeCount; shapeIndex++)
+        {
+            var path = new List<Vector2>();
+            sprite.GetPhysicsShape(shapeIndex, path);
+            if (path.Count >= 3)
+            {
+                paths.Add(path);
+            }
+        }
+
+        if (paths.Count > 0)
+        {
+            var polygonCollider = host.AddComponent<PolygonCollider2D>();
+            polygonCollider.isTrigger = true;
+            polygonCollider.pathCount = paths.Count;
+            for (var pathIndex = 0; pathIndex < paths.Count; pathIndex++)
+            {
+                polygonCollider.SetPath(pathIndex, paths[pathIndex]);
+            }
+
+            return polygonCollider;
+        }
+
+        var boxCollider = host.AddComponent<BoxCollider2D>();
+        boxCollider.isTrigger = true;
+        boxCollider.offset = sprite.bounds.center;
+        boxCollider.size = sprite.bounds.size;
+        return boxCollider;
     }
 
     private void UpdateGrooveGroupVisibility(int activeGroupIndex)
@@ -1306,6 +1376,7 @@ public class GameScene : MonoBehaviour
 
     private void ClearCurrentDraggableGroup()
     {
+        StopLoosePieceReminderShake();
         StopTrayPieceReflow();
         ClearPieceHint();
         _drag.DraggingPiece = null;
@@ -1627,6 +1698,7 @@ public class GameScene : MonoBehaviour
             return;
         }
 
+        StopLoosePieceReminderShake();
         if ((_tutorialStage == TutorialStage.StrongPlacement && state == _tutorialPiece)
             || _tutorialStage == TutorialStage.TwoPiecePractice)
         {
@@ -1637,10 +1709,6 @@ public class GameScene : MonoBehaviour
         _drag.DraggingPiece = state;
         _dragStartPosition = state.PieceRenderer.transform.position;
         _drag.DragOffset = state.PieceRenderer.transform.position - world;
-        if (!state.IsOnTray)
-        {
-            ResetPieceTrayPosition(instant: true);
-        }
         if (state == _hintedPiece)
         {
             state.PieceRenderer.transform.rotation = _hintedPieceBaseRotation;
@@ -1727,9 +1795,19 @@ public class GameScene : MonoBehaviour
         var wasOnTray = state.IsOnTray;
 
         var groovePosition = GetGrooveSnapPosition(state.GrooveRect, Camera.main);
-        if (state.GrooveRect != null
-            && Vector3.Distance(state.PieceRenderer.transform.position, groovePosition) <= CalculateSnapDistance(state))
+        UpdateGrooveOverlapProbe(state, groovePosition);
+        Physics2D.SyncTransforms();
+        var isWithinSnapDistance = state.GrooveRect != null
+            && Vector3.Distance(state.PieceRenderer.transform.position, groovePosition)
+            <= CalculateSnapDistance(state);
+        if (isWithinSnapDistance)
         {
+            if (DoesGrooveOverlapLoosePiece(state))
+            {
+                ReturnPieceAfterInvalidDrop(state, wasOnTray);
+                return;
+            }
+
             state.IsOnTray = false;
             state.IsPlaced = true;
             if (state == _hintedPiece)
@@ -1742,15 +1820,9 @@ public class GameScene : MonoBehaviour
             return;
         }
 
-        if (IsPieceOverGameBoard(state.PieceRenderer))
+        if (CanReturnPieceToTray(state) && ShouldReturnPieceToTray(state.PieceRenderer))
         {
-            ReturnPieceAfterInvalidBoardDrop(state, wasOnTray);
-            return;
-        }
-
-        ResetPieceTrayPosition(instant: true);
-        if (ShouldReturnPieceToTray(state.PieceRenderer))
-        {
+            ResetPieceTrayPosition(instant: true);
             state.IsOnTray = true;
             state.PieceRenderer.transform.localScale = state.TrayScale;
             LayoutTrayPieces(animate: true);
@@ -1760,41 +1832,122 @@ public class GameScene : MonoBehaviour
 
         state.PieceRenderer.transform.localScale = state.DragScale;
         state.PieceRenderer.transform.position = ClampPieceToTableBounds(state.PieceRenderer);
+        Physics2D.SyncTransforms();
+        if (DoesPieceOverlapLoosePiece(state) || DoesPieceIntersectOwnGroove(state))
+        {
+            ReturnPieceAfterInvalidDrop(state, wasOnTray);
+            return;
+        }
+
         state.IsOnTray = false;
 
         RestorePiecePlacementTutorialPresentation(state);
     }
 
-    private bool IsPieceOverGameBoard(SpriteRenderer renderer)
+    private bool CanReturnPieceToTray(DraggablePieceState movingState)
     {
-        if (renderer == null)
+        if (movingState != null && movingState.IsOnTray && !IsPieceTrayHidden())
         {
-            return false;
+            return true;
         }
 
-        var boardRect = _loadedCardBagRect != null
-            ? _loadedCardBagRect
-            : _board.GameBoardImage != null
-                ? _board.GameBoardImage.rectTransform
-                : null;
-        var camera = Camera.main;
-        if (boardRect == null || camera == null)
+        for (var i = 0; i < _drag.CurrentGroupDraggables.Count; i++)
         {
-            return false;
+            var state = _drag.CurrentGroupDraggables[i];
+            if (state != null
+                && state != movingState
+                && !state.IsPlaced
+                && state.IsOnTray
+                && state.PieceRenderer != null)
+            {
+                return true;
+            }
         }
 
-        var pieceBounds = renderer.bounds;
-        var boardBounds = GameCommonUtility.GetRectTransformCameraWorldBounds(
-            boardRect,
-            camera,
-            WorldGameplayDepth);
-        return pieceBounds.max.x > boardBounds.min.x
-            && pieceBounds.min.x < boardBounds.max.x
-            && pieceBounds.max.y > boardBounds.min.y
-            && pieceBounds.min.y < boardBounds.max.y;
+        return false;
     }
 
-    private void ReturnPieceAfterInvalidBoardDrop(
+    private static void UpdateGrooveOverlapProbe(
+        DraggablePieceState state,
+        Vector3 groovePosition)
+    {
+        if (state?.GrooveProbeCollider == null)
+        {
+            return;
+        }
+
+        var probeTransform = state.GrooveProbeCollider.transform;
+        probeTransform.position = groovePosition;
+        probeTransform.rotation = state.GrooveRect != null
+            ? state.GrooveRect.rotation
+            : Quaternion.identity;
+        probeTransform.localScale = state.DragScale;
+    }
+
+    private bool DoesGrooveOverlapLoosePiece(DraggablePieceState state)
+    {
+        return DoesColliderOverlapLoosePiece(state, state?.GrooveProbeCollider);
+    }
+
+    private bool DoesPieceOverlapLoosePiece(DraggablePieceState state)
+    {
+        return DoesColliderOverlapLoosePiece(state, state?.PieceCollider);
+    }
+
+    private bool DoesColliderOverlapLoosePiece(
+        DraggablePieceState movingState,
+        Collider2D movingCollider)
+    {
+        if (movingState == null || movingCollider == null)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < _drag.CurrentGroupDraggables.Count; i++)
+        {
+            var state = _drag.CurrentGroupDraggables[i];
+            if (state == null
+                || state == movingState
+                || state.IsPlaced
+                || state.IsOnTray
+                || state.PieceRenderer == null
+                || state.PieceCollider == null)
+            {
+                continue;
+            }
+
+            if (CollidersOverlap(movingCollider, state.PieceCollider))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool DoesPieceIntersectOwnGroove(DraggablePieceState state)
+    {
+        return state != null
+            && CollidersOverlap(state.PieceCollider, state.GrooveProbeCollider);
+    }
+
+    private static bool CollidersOverlap(Collider2D first, Collider2D second)
+    {
+        if (first == null
+            || second == null
+            || !first.enabled
+            || !second.enabled
+            || !first.gameObject.activeInHierarchy
+            || !second.gameObject.activeInHierarchy)
+        {
+            return false;
+        }
+
+        var distance = first.Distance(second);
+        return distance.isValid && distance.isOverlapped;
+    }
+
+    private void ReturnPieceAfterInvalidDrop(
         DraggablePieceState state,
         bool wasOnTray)
     {
@@ -1999,6 +2152,10 @@ public class GameScene : MonoBehaviour
 
         state.GrooveImage.gameObject.SetActive(true);
         SetImageAlpha(state.GrooveImage, 1f);
+        if (state.GrooveProbeCollider != null)
+        {
+            state.GrooveProbeCollider.gameObject.SetActive(false);
+        }
         state.PieceRenderer.gameObject.SetActive(false);
         Destroy(state.PieceRenderer.gameObject);
         state.PieceRenderer = null;
@@ -2322,6 +2479,144 @@ public class GameScene : MonoBehaviour
         }
 
         return count;
+    }
+
+    private void UpdateLoosePieceReminder()
+    {
+        if (!ShouldRunLoosePieceReminder())
+        {
+            _nextLoosePieceReminderTime = -1f;
+            StopLoosePieceReminderShake();
+            return;
+        }
+
+        if (_nextLoosePieceReminderTime < 0f)
+        {
+            _nextLoosePieceReminderTime = Time.unscaledTime + LoosePieceReminderInterval;
+            return;
+        }
+
+        if (_loosePieceReminderShakeCoroutine == null
+            && Time.unscaledTime >= _nextLoosePieceReminderTime)
+        {
+            StartLoosePieceReminderShake();
+            _nextLoosePieceReminderTime = Time.unscaledTime + LoosePieceReminderInterval;
+        }
+    }
+
+    private bool ShouldRunLoosePieceReminder()
+    {
+        if (_isGameFinished
+            || _isEntranceAnimating
+            || _isGroupTransitionAnimating
+            || _isPiecePlacementAnimating
+            || _isTrayPieceReflowAnimating
+            || _isHintPieceShaking
+            || _drag.DraggingPiece != null
+            || !IsPieceTrayHidden()
+            || CountUnplacedTrayPieces() > 0)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < _drag.CurrentGroupDraggables.Count; i++)
+        {
+            var state = _drag.CurrentGroupDraggables[i];
+            if (state != null
+                && !state.IsPlaced
+                && !state.IsOnTray
+                && state.PieceRenderer != null)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private bool IsPieceTrayHidden()
+    {
+        return _board.PieceBoardRect != null
+            ? _isPieceBoardHidden
+            : _isPieceBgHidden;
+    }
+
+    private void StartLoosePieceReminderShake()
+    {
+        StopLoosePieceReminderShake();
+        for (var i = 0; i < _drag.CurrentGroupDraggables.Count; i++)
+        {
+            var state = _drag.CurrentGroupDraggables[i];
+            if (state == null
+                || state.IsPlaced
+                || state.IsOnTray
+                || state.PieceRenderer == null)
+            {
+                continue;
+            }
+
+            _loosePieceReminderStates.Add(state);
+            _loosePieceReminderBaseRotations.Add(state.PieceRenderer.transform.rotation);
+        }
+
+        if (_loosePieceReminderStates.Count > 0)
+        {
+            _loosePieceReminderShakeCoroutine = StartCoroutine(AnimateLoosePieceReminderShake());
+        }
+    }
+
+    private IEnumerator AnimateLoosePieceReminderShake()
+    {
+        var elapsed = 0f;
+        while (elapsed < LoosePieceReminderShakeDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            var angle = Mathf.Sin(
+                elapsed * LoosePieceReminderShakeCyclesPerSecond * Mathf.PI * 2f)
+                * LoosePieceReminderShakeAngle;
+            for (var i = 0; i < _loosePieceReminderStates.Count; i++)
+            {
+                var state = _loosePieceReminderStates[i];
+                if (state?.PieceRenderer == null || state.IsPlaced || state.IsOnTray)
+                {
+                    continue;
+                }
+
+                state.PieceRenderer.transform.rotation =
+                    _loosePieceReminderBaseRotations[i] * Quaternion.Euler(0f, 0f, angle);
+            }
+
+            yield return null;
+        }
+
+        RestoreLoosePieceReminderRotations();
+        _loosePieceReminderShakeCoroutine = null;
+    }
+
+    private void StopLoosePieceReminderShake()
+    {
+        if (_loosePieceReminderShakeCoroutine != null)
+        {
+            StopCoroutine(_loosePieceReminderShakeCoroutine);
+            _loosePieceReminderShakeCoroutine = null;
+        }
+
+        RestoreLoosePieceReminderRotations();
+    }
+
+    private void RestoreLoosePieceReminderRotations()
+    {
+        for (var i = 0; i < _loosePieceReminderStates.Count; i++)
+        {
+            var state = _loosePieceReminderStates[i];
+            if (state?.PieceRenderer != null)
+            {
+                state.PieceRenderer.transform.rotation = _loosePieceReminderBaseRotations[i];
+            }
+        }
+
+        _loosePieceReminderStates.Clear();
+        _loosePieceReminderBaseRotations.Clear();
     }
 
     private Bounds GetPieceTrayBounds()
@@ -3071,6 +3366,7 @@ public class GameScene : MonoBehaviour
 
     private void RemoveRuntimePuzzlePieces()
     {
+        StopLoosePieceReminderShake();
         StopTrayPieceReflow();
         ClearPieceHint();
         _drag.DraggingPiece = null;
@@ -4203,6 +4499,7 @@ public class GameScene : MonoBehaviour
 
     private void ShowPieceHint(DraggablePieceState state)
     {
+        StopLoosePieceReminderShake();
         ClearPieceHint();
         if (state == null || state.PieceRenderer == null || state.GrooveImage == null || state.GrooveRect == null)
         {

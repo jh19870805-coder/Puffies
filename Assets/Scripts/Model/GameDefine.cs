@@ -7,6 +7,8 @@ using UnityEngine.UI;
 public sealed class DraggablePieceState
 {
     public SpriteRenderer PieceRenderer;
+    public Collider2D PieceCollider;
+    public Collider2D GrooveProbeCollider;
     public Image GrooveImage;
     public RectTransform GrooveRect;
     public Vector3 StartPosition;
