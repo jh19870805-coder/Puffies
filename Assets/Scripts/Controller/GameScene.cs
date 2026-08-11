@@ -148,6 +148,7 @@ public class GameScene : MonoBehaviour
     private Coroutine _pieceTraySlideCoroutine;
     private Coroutine _trayPieceReflowCoroutine;
     private bool _isTrayPieceReflowAnimating;
+    private int _piecePlacementAnimationCount;
     private Coroutine _loosePieceReminderShakeCoroutine;
     private readonly List<DraggablePieceState> _loosePieceReminderStates =
         new List<DraggablePieceState>();
@@ -1801,13 +1802,15 @@ public class GameScene : MonoBehaviour
             <= CalculateSnapDistance(state);
         if (isWithinSnapDistance)
         {
-            if (DoesGrooveOverlapLoosePiece(state))
+            state.IsOnTray = false;
+            var displacedPieces = CollectLoosePiecesOverlappingCollider(
+                state,
+                state.GrooveProbeCollider);
+            if (displacedPieces.Count > 0)
             {
-                ReturnPieceAfterInvalidDrop(state, wasOnTray);
-                return;
+                ReturnLoosePiecesToTray(displacedPieces);
             }
 
-            state.IsOnTray = false;
             state.IsPlaced = true;
             if (state == _hintedPiece)
             {
@@ -1823,9 +1826,18 @@ public class GameScene : MonoBehaviour
         {
             ResetPieceTrayPosition(instant: true);
             state.IsOnTray = true;
-            state.PieceRenderer.transform.localScale = state.TrayScale;
-            LayoutTrayPieces(animate: true);
-            RestorePiecePlacementTutorialPresentation(state);
+            if (wasOnTray)
+            {
+                state.PieceRenderer.transform.localScale = state.TrayScale;
+                LayoutTrayPieces(animate: true);
+                RestorePiecePlacementTutorialPresentation(state);
+            }
+            else
+            {
+                LayoutTrayPieces(animate: true, excludedState: state);
+                StartCoroutine(
+                    PlayInvalidDropReturnAnimation(state, state.StartPosition));
+            }
             return;
         }
 
@@ -1883,9 +1895,36 @@ public class GameScene : MonoBehaviour
         probeTransform.localScale = state.DragScale;
     }
 
-    private bool DoesGrooveOverlapLoosePiece(DraggablePieceState state)
+    private List<DraggablePieceState> CollectLoosePiecesOverlappingCollider(
+        DraggablePieceState movingState,
+        Collider2D movingCollider)
     {
-        return DoesColliderOverlapLoosePiece(state, state?.GrooveProbeCollider);
+        var overlappingStates = new List<DraggablePieceState>();
+        if (movingState == null || movingCollider == null)
+        {
+            return overlappingStates;
+        }
+
+        for (var i = 0; i < _drag.CurrentGroupDraggables.Count; i++)
+        {
+            var state = _drag.CurrentGroupDraggables[i];
+            if (state == null
+                || state == movingState
+                || state.IsPlaced
+                || state.IsOnTray
+                || state.PieceRenderer == null
+                || state.PieceCollider == null)
+            {
+                continue;
+            }
+
+            if (CollidersOverlap(movingCollider, state.PieceCollider))
+            {
+                overlappingStates.Add(state);
+            }
+        }
+
+        return overlappingStates;
     }
 
     private bool DoesPieceOverlapLoosePiece(DraggablePieceState state)
@@ -1965,6 +2004,35 @@ public class GameScene : MonoBehaviour
         StartCoroutine(PlayInvalidDropReturnAnimation(state, _dragStartPosition));
     }
 
+    private void ReturnLoosePiecesToTray(List<DraggablePieceState> states)
+    {
+        if (states == null || states.Count == 0)
+        {
+            return;
+        }
+
+        ResetPieceTrayPosition(instant: true);
+        var excludedStates = new HashSet<DraggablePieceState>();
+        for (var i = 0; i < states.Count; i++)
+        {
+            var state = states[i];
+            if (state?.PieceRenderer == null || state.IsPlaced)
+            {
+                continue;
+            }
+
+            state.IsOnTray = true;
+            excludedStates.Add(state);
+        }
+
+        LayoutTrayPieces(animate: true, excludedStates: excludedStates);
+        foreach (var state in excludedStates)
+        {
+            StartCoroutine(
+                PlayInvalidDropReturnAnimation(state, state.StartPosition));
+        }
+    }
+
     private IEnumerator PlayInvalidDropReturnAnimation(
         DraggablePieceState state,
         Vector3 returnPosition)
@@ -1975,7 +2043,7 @@ public class GameScene : MonoBehaviour
             yield break;
         }
 
-        _isPiecePlacementAnimating = true;
+        BeginPiecePlacementAnimation();
         var startPosition = renderer.transform.position;
         var startScale = renderer.transform.localScale;
         var returnScale = state.IsOnTray ? state.TrayScale : state.DragScale;
@@ -2035,8 +2103,20 @@ public class GameScene : MonoBehaviour
             renderer.sortingOrder = PieceSortingOrder;
         }
 
-        _isPiecePlacementAnimating = false;
+        EndPiecePlacementAnimation();
         RestorePiecePlacementTutorialPresentation(state);
+    }
+
+    private void BeginPiecePlacementAnimation()
+    {
+        _piecePlacementAnimationCount++;
+        _isPiecePlacementAnimating = true;
+    }
+
+    private void EndPiecePlacementAnimation()
+    {
+        _piecePlacementAnimationCount = Mathf.Max(0, _piecePlacementAnimationCount - 1);
+        _isPiecePlacementAnimating = _piecePlacementAnimationCount > 0;
     }
 
     private void RecordPlacedPiece(DraggablePieceState state)
@@ -2197,7 +2277,7 @@ public class GameScene : MonoBehaviour
             yield break;
         }
 
-        _isPiecePlacementAnimating = true;
+        BeginPiecePlacementAnimation();
         var startPosition = renderer.transform.position;
         var startScale = renderer.transform.localScale;
         renderer.sortingOrder = PieceSortingOrder + 100;
@@ -2228,7 +2308,7 @@ public class GameScene : MonoBehaviour
 
         CommitPlacedPieceToBoardImage(state);
         yield return PlayPiecePlacementSuccessShine(state.GrooveImage);
-        _isPiecePlacementAnimating = false;
+        EndPiecePlacementAnimation();
 
         var didAdvanceGroup = TryAdvanceGroup();
         if (!didAdvanceGroup && _tutorialStage == TutorialStage.TwoPiecePractice)
@@ -2555,7 +2635,8 @@ public class GameScene : MonoBehaviour
 
     private void LayoutTrayPieces(
         bool animate = false,
-        DraggablePieceState excludedState = null)
+        DraggablePieceState excludedState = null,
+        HashSet<DraggablePieceState> excludedStates = null)
     {
         StopTrayPieceReflow();
         Canvas.ForceUpdateCanvases();
@@ -2600,7 +2681,9 @@ public class GameScene : MonoBehaviour
                 pieceCenterX,
                 trayCenterY);
             state.StartPosition = position;
-            if (state == excludedState)
+            var isExcluded = state == excludedState
+                || (excludedStates != null && excludedStates.Contains(state));
+            if (isExcluded)
             {
                 state.PieceRenderer.transform.localScale = currentScale;
             }
@@ -2608,7 +2691,7 @@ public class GameScene : MonoBehaviour
             {
                 state.PieceRenderer.transform.position = position;
             }
-            else if (state != excludedState
+            else if (!isExcluded
                      && Vector3.SqrMagnitude(state.PieceRenderer.transform.position - position) > 0.000001f)
             {
                 animatedStates.Add(state);
