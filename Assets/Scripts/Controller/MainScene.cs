@@ -45,6 +45,7 @@ public class MainScene : MonoBehaviour
     private const float BagSelectPanelWorldDepth = -0.1f;
     private const float OverlayWorldDepth = -0.2f;
     private const float MainCanvasWorldDepth = 0f;
+    private const float OpeningStageBackgroundWorldDepth = 0f;
     private const int BagSelectBlurDownsample = 2;
     private const int BagSelectBlurPyramidLevels = 3;
     private const float OpeningStageTransitionDuration = 0.28f;
@@ -137,7 +138,9 @@ public class MainScene : MonoBehaviour
     private CanvasGroup mMainCanvasGroup;
     private CanvasGroup mBagSelectPanelCanvasGroup;
     private RawImage mBagSelectBackdropImage;
-    private Image mOpeningStageBackgroundImage;
+    private GameObject mOpeningStageBackgroundRoot;
+    private SpriteRenderer mOpeningStageBackgroundRenderer;
+    private Material mOpeningStageBackgroundMaterial;
     private Sprite mOpeningStageBackgroundSprite;
     private RenderTexture mBagSelectBackdropTexture;
     private FakeSettingsSliderInput mMusicSlider;
@@ -199,7 +202,9 @@ public class MainScene : MonoBehaviour
         public int BagId;
         public GameObject Root;
         public Image Image;
+        public GameObject HighlightRoot;
         public Image SizeImage;
+        public PackageInteractionHandler InteractionHandler;
         public RectTransform RectTransform;
         public bool SuppressDisplay;
     }
@@ -218,6 +223,16 @@ public class MainScene : MonoBehaviour
         if (mSelectedPackageOverlayCanvas != null)
         {
             Destroy(mSelectedPackageOverlayCanvas.gameObject);
+        }
+
+        if (mOpeningStageBackgroundRoot != null)
+        {
+            Destroy(mOpeningStageBackgroundRoot);
+        }
+
+        if (mOpeningStageBackgroundMaterial != null)
+        {
+            Destroy(mOpeningStageBackgroundMaterial);
         }
 
         ReleaseBagSelectBackdropTexture();
@@ -397,6 +412,8 @@ public class MainScene : MonoBehaviour
                 BagId = resolvedBagId,
                 Root = image.gameObject,
                 Image = image,
+                HighlightRoot = FindChild(image.transform, PackHighlightObjectName)?.gameObject,
+                InteractionHandler = image.GetComponentInParent<PackageInteractionHandler>(),
                 RectTransform = image.rectTransform
             };
         }
@@ -692,6 +709,7 @@ public class MainScene : MonoBehaviour
             PixelsPerUnit,
             BagSelectPanelWorldDepth);
         mBagSelectOverlayCanvas.sortingLayerID = sourceCanvas.sortingLayerID;
+        mBagSelectOverlayCanvas.overrideSorting = true;
         mBagSelectOverlayCanvas.sortingOrder = BagSelectPanelSortingOrder;
 
         CreateOpeningStageBackground();
@@ -743,6 +761,7 @@ public class MainScene : MonoBehaviour
             PixelsPerUnit,
             OverlayWorldDepth);
         mSelectedPackageOverlayCanvas.sortingLayerID = sourceCanvas.sortingLayerID;
+        mSelectedPackageOverlayCanvas.overrideSorting = true;
         mSelectedPackageOverlayCanvas.sortingOrder = SelectedPackageSortingOrder;
 
         var scaler = canvasObject.GetComponent<CanvasScaler>();
@@ -793,6 +812,9 @@ public class MainScene : MonoBehaviour
             && sourceCanvas.renderMode != RenderMode.ScreenSpaceOverlay
                 ? sourceCanvas.worldCamera
                 : null;
+        var overlayCamera = mSelectedPackageOverlayCanvas.renderMode != RenderMode.ScreenSpaceOverlay
+            ? mSelectedPackageOverlayCanvas.worldCamera
+            : null;
         var corners = new Vector3[4];
         source.GetWorldCorners(corners);
         var minimum = new Vector2(float.PositiveInfinity, float.PositiveInfinity);
@@ -803,7 +825,7 @@ public class MainScene : MonoBehaviour
             if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(
                     overlayRect,
                     screenPoint,
-                    null,
+                    overlayCamera,
                     out var localPoint))
             {
                 return false;
@@ -855,27 +877,71 @@ public class MainScene : MonoBehaviour
 
     private void CreateOpeningStageBackground()
     {
-        var backgroundObject = new GameObject(
-            OpeningStageBackgroundObjectName,
-            typeof(RectTransform),
-            typeof(CanvasRenderer),
-            typeof(Image));
-        backgroundObject.layer = mBagSelectPanelRoot.layer;
-        var rectTransform = backgroundObject.GetComponent<RectTransform>();
-        StretchToParent(rectTransform, mBagSelectOverlayCanvas.transform);
+        var camera = Camera.main;
+        if (camera == null)
+        {
+            Debug.LogWarning("MainScene: opening stage background could not be created without a camera.");
+            return;
+        }
 
-        mOpeningStageBackgroundImage = backgroundObject.GetComponent<Image>();
+        mOpeningStageBackgroundRoot = new GameObject(
+            OpeningStageBackgroundObjectName,
+            typeof(SpriteRenderer));
+        mOpeningStageBackgroundRenderer =
+            mOpeningStageBackgroundRoot.GetComponent<SpriteRenderer>();
         mOpeningStageBackgroundSprite = GameCommonUtility.LoadSpriteByPath(
             OpeningStageBackgroundPath,
             PixelsPerUnit);
         var fallbackBackground = GameCommonUtility.FindSceneObject(
             GameDefine.BackgroundObjectName)?.GetComponent<Image>();
-        mOpeningStageBackgroundImage.sprite = mOpeningStageBackgroundSprite != null
+        mOpeningStageBackgroundRenderer.sprite = mOpeningStageBackgroundSprite != null
             ? mOpeningStageBackgroundSprite
             : fallbackBackground != null ? fallbackBackground.sprite : null;
-        mOpeningStageBackgroundImage.color = Color.white;
-        mOpeningStageBackgroundImage.raycastTarget = true;
-        backgroundObject.SetActive(false);
+        var backgroundShader = Shader.Find("Sprites/Default");
+        if (backgroundShader != null)
+        {
+            mOpeningStageBackgroundMaterial = new Material(backgroundShader)
+            {
+                name = "CardPackOpeningStageBackground (Runtime)",
+                renderQueue = (int)UnityEngine.Rendering.RenderQueue.Geometry
+            };
+            mOpeningStageBackgroundRenderer.sharedMaterial = mOpeningStageBackgroundMaterial;
+        }
+        mOpeningStageBackgroundRenderer.color = Color.white;
+        FitOpeningStageBackgroundToCamera();
+        mOpeningStageBackgroundRoot.SetActive(false);
+    }
+
+    private void FitOpeningStageBackgroundToCamera()
+    {
+        var camera = Camera.main;
+        var sprite = mOpeningStageBackgroundRenderer != null
+            ? mOpeningStageBackgroundRenderer.sprite
+            : null;
+        if (camera == null || sprite == null)
+        {
+            return;
+        }
+
+        var distance = Mathf.Abs(
+            OpeningStageBackgroundWorldDepth - camera.transform.position.z);
+        var screenCenter = camera.ScreenToWorldPoint(new Vector3(
+            Screen.width * 0.5f,
+            Screen.height * 0.5f,
+            distance));
+        screenCenter.z = OpeningStageBackgroundWorldDepth;
+        mOpeningStageBackgroundRoot.transform.position = screenCenter;
+        mOpeningStageBackgroundRoot.transform.rotation = Quaternion.identity;
+
+        var visibleHeight = camera.orthographic
+            ? camera.orthographicSize * 2f
+            : 2f * distance * Mathf.Tan(camera.fieldOfView * Mathf.Deg2Rad * 0.5f);
+        var visibleWidth = visibleHeight * camera.aspect;
+        var spriteSize = sprite.bounds.size;
+        var coverScale = Mathf.Max(
+            visibleWidth / Mathf.Max(0.0001f, spriteSize.x),
+            visibleHeight / Mathf.Max(0.0001f, spriteSize.y));
+        mOpeningStageBackgroundRoot.transform.localScale = Vector3.one * coverScale;
     }
 
     private void CreateBagSelectBackdrop()
@@ -1288,6 +1354,8 @@ public class MainScene : MonoBehaviour
             BagId = packId,
             Root = slotObject,
             Image = image,
+            HighlightRoot = FindChild(slotObject.transform, PackHighlightObjectName)?.gameObject,
+            InteractionHandler = slotObject.GetComponent<PackageInteractionHandler>(),
             RectTransform = image != null ? image.rectTransform : null
         };
     }
@@ -1323,7 +1391,9 @@ public class MainScene : MonoBehaviour
             BagId = packId,
             Root = slotObject,
             Image = coverImage,
+            HighlightRoot = highlightRect != null ? highlightRect.gameObject : null,
             SizeImage = sizeImage,
+            InteractionHandler = slotObject.GetComponent<PackageInteractionHandler>(),
             RectTransform = rootRect
         };
         return entry;
@@ -1468,6 +1538,14 @@ public class MainScene : MonoBehaviour
         return Rect.MinMaxRect(min.x, min.y, max.x, max.y);
     }
 
+    private static Camera ResolveCanvasCamera(RectTransform rectTransform)
+    {
+        var canvas = rectTransform != null ? rectTransform.GetComponentInParent<Canvas>() : null;
+        return canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay
+            ? canvas.worldCamera
+            : null;
+    }
+
     private static void SetPackageCoverVisible(PackageEntry entry, bool visible)
     {
         if (entry == null)
@@ -1480,6 +1558,12 @@ public class MainScene : MonoBehaviour
             entry.Image.enabled = visible;
         }
 
+        if (entry.HighlightRoot != null && entry.HighlightRoot.activeSelf != visible)
+        {
+            entry.HighlightRoot.SetActive(visible);
+        }
+
+        entry.InteractionHandler?.SetBreathing(visible);
     }
 
     private static void SetPackageSizeImageVisible(PackageEntry entry, bool visible)
@@ -2962,9 +3046,10 @@ public class MainScene : MonoBehaviour
         mIsPlayingAnimation = true;
         SetBagSelectButtonsInteractable(false);
         SetUnselectedPackageVisualsVisible(false);
-        if (mOpeningStageBackgroundImage != null)
+        if (mOpeningStageBackgroundRoot != null)
         {
-            mOpeningStageBackgroundImage.gameObject.SetActive(true);
+            FitOpeningStageBackgroundToCamera();
+            mOpeningStageBackgroundRoot.SetActive(true);
             SetOpeningStageBackgroundAlpha(0f);
         }
 
@@ -3101,8 +3186,9 @@ public class MainScene : MonoBehaviour
 
         var corners = new Vector3[4];
         mSelectedPackageOverlayRect.GetWorldCorners(corners);
-        var bottomLeft = RectTransformUtility.WorldToScreenPoint(null, corners[0]);
-        var bottomRight = RectTransformUtility.WorldToScreenPoint(null, corners[3]);
+        var camera = ResolveCanvasCamera(mSelectedPackageOverlayRect);
+        var bottomLeft = RectTransformUtility.WorldToScreenPoint(camera, corners[0]);
+        var bottomRight = RectTransformUtility.WorldToScreenPoint(camera, corners[3]);
         var bottomCenter = (bottomLeft + bottomRight) * 0.5f;
         GameManager.SetOpeningPackExitPosition(new Vector2(
             bottomCenter.x / Screen.width,
@@ -3173,6 +3259,13 @@ public class MainScene : MonoBehaviour
 
     private void SetBagSelectPanelVisible(bool visible)
     {
+        if (visible && mBagSelectPanelCanvasGroup != null)
+        {
+            mBagSelectPanelCanvasGroup.alpha = 1f;
+            mBagSelectPanelCanvasGroup.interactable = true;
+            mBagSelectPanelCanvasGroup.blocksRaycasts = true;
+        }
+
         SetPanelVisible(mBagSelectPanelRoot, visible);
     }
 
@@ -3187,14 +3280,14 @@ public class MainScene : MonoBehaviour
 
     private void SetOpeningStageBackgroundAlpha(float alpha)
     {
-        if (mOpeningStageBackgroundImage == null)
+        if (mOpeningStageBackgroundRenderer == null)
         {
             return;
         }
 
-        var color = mOpeningStageBackgroundImage.color;
+        var color = mOpeningStageBackgroundRenderer.color;
         color.a = Mathf.Clamp01(alpha);
-        mOpeningStageBackgroundImage.color = color;
+        mOpeningStageBackgroundRenderer.color = color;
     }
 
     private void ReleaseBagSelectBackdropTexture()
@@ -3222,7 +3315,9 @@ public class MainScene : MonoBehaviour
             return false;
         }
 
-        mTearSwipeScreenRect = GetScreenRect(mSelectedPackageOverlayRect, null);
+        mTearSwipeScreenRect = GetScreenRect(
+            mSelectedPackageOverlayRect,
+            ResolveCanvasCamera(mSelectedPackageOverlayRect));
         if (mTearSwipeScreenRect.width <= 0.001f
             || mTearSwipeScreenRect.height <= 0.001f)
         {

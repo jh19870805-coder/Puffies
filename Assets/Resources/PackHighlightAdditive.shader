@@ -9,6 +9,7 @@ Shader "Puffies/UI/PackHighlightAdditive"
         _StencilOp ("Stencil Operation", Float) = 0
         _StencilWriteMask ("Stencil Write Mask", Float) = 255
         _StencilReadMask ("Stencil Read Mask", Float) = 255
+        _ColorMask ("Color Mask", Float) = 15
         [Toggle(UNITY_UI_ALPHACLIP)] _UseUIAlphaClip ("Use Alpha Clip", Float) = 0
     }
 
@@ -37,7 +38,7 @@ Shader "Puffies/UI/PackHighlightAdditive"
         ZWrite Off
         ZTest [unity_GUIZTestMode]
         Blend One One
-        ColorMask RGB
+        ColorMask [_ColorMask]
 
         Pass
         {

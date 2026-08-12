@@ -1,5 +1,47 @@
 # Spec Driven Development
 
+## 2026-08-12 - 首页卡包常驻呼吸特效
+
+### 需求
+
+**用户故事：** 作为玩家，我希望首页卡包列表保持柔和的常驻呼吸和高光效果，使可选择卡包具有持续的动态反馈。
+
+1. WHEN 首页卡包处于列表可见范围 THEN 系统 SHALL 循环播放卡包整体呼吸，并显示 Prefab 配置的 ADD 高光。
+2. WHEN 卡包呼吸 THEN 封面、高光和尺寸标识 SHALL 以共同中心同步缩放，列表位置与卡包间距不得变化。
+3. WHEN 卡包被选中放大、移出 ScrollRect 可见范围或被设置面板遮挡 THEN 系统 SHALL 同步隐藏高光并暂停该列表项呼吸。
+4. WHEN 卡包重新回到列表可见状态 THEN 系统 SHALL 恢复高光和呼吸。
+5. WHEN 美术或开发打开 `PackItem.prefab` THEN Hierarchy SHALL 显示 `CardPackEffect` 常驻表现容器，呼吸范围和周期 SHALL 可在 Inspector 调整，并可在 Prefab Mode 预览。
+6. WHEN 首页播放常驻效果 THEN 系统 SHALL 不加载 3D 卡包模型、撕包粒子、独立摄像机或 RenderTexture。
+
+### 设计
+
+- 复用 `PackageInteractionHandler` 承担卡包列表项的输入和轻量表现职责，避免新增单一用途脚本文件。
+- 在 `PackItem.prefab` 新增可见的 `CardPackEffect` 子容器，将封面、高光和尺寸标识放入其中，并序列化呼吸目标、最小缩放 `0.98`、最大缩放 `1.02`、周期 `2.4s` 和编辑模式预览开关。
+- 使用 `ExecuteAlways` 和不受 `Time.timeScale` 影响的时间推进；运行时呼吸不依赖 Animator，Prefab Mode 选中对象时持续刷新预览。
+- `PackHighlight` 保持 Prefab 自身 UGUI ADD 材质与贴片配置，只由 `MainScene` 现有可见性判断控制父节点显隐。
+- `PackageEntry` 保存高光父节点与交互组件引用，`SetPackageCoverVisible` 同步处理封面、高光和呼吸状态。
+- 选择页和选中卡包继续使用 Main Camera；独立 Canvas 显式开启 `overrideSorting`。所有 Camera Canvas 坐标换算和屏幕范围计算使用所属 Canvas 的 `worldCamera`，避免沿用 Overlay 模式的 `null` 相机造成选中卡包落到屏幕外或点击范围失效。
+
+### 任务
+
+- [x] 1. 将呼吸参数和逻辑并入卡包列表交互组件。
+- [x] 2. 在 `PackItem.prefab` 启用 ADD 高光并序列化呼吸配置。
+- [x] 3. 将高光与呼吸接入列表裁切、面板遮挡和选中态显隐流程。
+- [x] 4. 更新稳定项目事实和当前任务记录。
+- [x] 5. 使用 Unity 和两个 C# 工程完成编译验证。
+- [ ] 6. 在 Prefab Mode 和 MainScene Play Mode 目视确认幅度、层级、裁切及选择/返回流程。
+
+### 当前验证
+
+- Unity `2022.3.62f2c1` 批处理刷新成功；运行时与 Editor 程序集均编译成功，未报告 Prefab 丢失脚本或反序列化错误。
+- `Assembly-CSharp.csproj` 和 `Assembly-CSharp-Editor.csproj` 最终顺序编译通过，均为 `0` 警告、`0` 错误。
+- 静态确认 `PackHighlight` 默认启用，四张高光贴片继续引用既有 ADD Material；列表代码同步控制封面、高光和呼吸状态。
+- 修复选择页空白回归：选中卡包坐标换算、Canvas 排序、面板 CanvasGroup 恢复、撕包输入范围和退出位置已适配 Camera Canvas。
+- 修复确认开包后的动画空白：`BgGame` 从高排序 UGUI Image 改为主摄像机世界背景，使用早于卡包模型的渲染队列，避免全屏 Canvas 覆盖 3D 模型和粒子。
+- `PackHighlightAdditive.shader` 已补齐 UGUI `_ColorMask` 属性，消除新增高光产生的材质兼容警告。
+- Unity 当前实例已重新导入带 `CardPackEffect` 层级的 `PackItem.prefab`，未报告 Missing Script 或 Prefab 导入错误。
+- 尚未在 Unity 可视界面检查呼吸观感、高光亮度和完整交互流程。
+
 ## 2026-08-12 - 开包动画与 MainScene 共用主摄像机
 
 ### 需求
