@@ -33,8 +33,8 @@
 - 补齐 `PackHighlightAdditive.shader` 的 UGUI `_ColorMask` 属性，避免首页每个高光贴片持续产生材质警告。
 - 修复开包模型与撕口粒子比例失真：旧的 `Scale=550 / Z=164.02565` 属于独立特效相机演示参数，不适用于当前 Main Camera 世界承载。模型恢复制作方 `EffectScene001` 中的基准 `Scale=2.63 / localZ=0`，外层 Stage 再整体适配选中卡包屏幕高度，使模型和 `fx_chai_w_001` 保持制作方原始相对比例与深度。
 - 模型对齐包围盒只读取正面 `mesh_skin_cardPack_NNN`，不再让动画背面网格改变静态封面切换时的尺寸和中心。
-- 根据 Play Mode 截图确认中央灰块来自背面网格引用的制作方占位贴图 `Bg01.png`；运行时背面材质现在也绑定当前 `PackIconNNN`，继续保留独立背面材质、网格、UV 和动画，不再把灰色占位图展示给玩家。
-- 增加开包 Stage 对齐诊断日志，输出 Game View 分辨率、选中卡包目标像素高度、首帧正面 Bounds、Stage 缩放和屏幕中心，供下一次视觉验证直接定位尺寸偏小来源。
+- 根据 Play Mode 截图确认中央灰块来自长名称背面网格引用的制作方占位贴图 `Bg01.png`；将该网格替换为当前封面后又出现第二层完整卡包，因此运行时暂时禁用长名称背面 Renderer，只保留短名称正面网格绑定当前 `PackIconNNN`。
+- 增加开包 Stage 对齐诊断日志，输出 Game View 分辨率、选中卡包目标像素高度、首帧正面 Bounds、Stage 缩放和屏幕中心。模型继续按选中静态卡包尺寸适配；仅将划开时的 `fx_chai_w_001` 光效实例放大 `4` 倍，不放大卡包模型或共同 Stage。
 
 ## 修改文件
 
@@ -75,7 +75,7 @@
 - 静态确认开包背景已脱离 `PanelBagSelectCanvas`，使用主摄像机世界 `SpriteRenderer`，不会再以 Canvas Sorting Order 覆盖 3D 模型。
 - 对照 `EffectScene001` 确认开包模型基准为 `Scale=2.63 / localZ=0`，撕口粒子为 `(0,1,-1.5)`；运行时代码已使用相同相对关系。
 - 最新修改后 `Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 再次编译通过，均为 `0` 警告、`0` 错误；`git diff --check` 通过。
-- 背面动态封面修复后两个 C# 工程再次编译通过，均为 `0` 警告、`0` 错误。
+- 重复背面网格禁用和划开光效独立四倍缩放后，两个 C# 工程再次编译通过，均为 `0` 警告、`0` 错误；`git diff --check` 通过。
 - 尚未在 Unity Play Mode 目视确认黑边消失、模型对齐、粒子层级和进入 GameScene 时序。
 
 ## 下一步
@@ -83,7 +83,7 @@
 1. 重新打开 `PackItem.prefab`，确认 Hierarchy 显示 `PackItem/CardPackEffect/PackCover|PackHighlight|PackSize`，并在根节点 `PackageInteractionHandler / Breathing Effect` 中预览幅度与周期。
 2. 进入 MainScene Play Mode，确认首页可见卡包持续呼吸且 ADD 高光正常，没有改变列表间距或位置。
 3. 点击任一卡包，确认其他卡包、原位置高光和呼吸显示全部消失；返回时正常恢复。
-4. 继续进入 `BgGame` 并轻点/横划卡包，确认不再出现只有背景的空白页，且模型、撕裂动画和粒子可见；随后确认进入 GameScene 时序。
+4. 继续进入 `BgGame` 并轻点/横划卡包，确认卡包模型保持原适配尺寸、只有划开的光效放大四倍、撕包时只存在一层完整卡包，且关闭背面网格后上半包撕裂动画没有空白；随后确认进入 GameScene 时序。
 
 ## 恢复提示
 

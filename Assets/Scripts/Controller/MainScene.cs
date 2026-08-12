@@ -3473,6 +3473,7 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
     private const int ModelVariantCount = 6;
     private const float ReferenceModelScale = 2.63f;
     private const float ReferenceModelLocalZ = 0f;
+    private const float LightEffectScale = 4f;
     private const float ModelWorldDepth = -1f;
     private const float LightEffectDelay = 0.5f;
     private const float ReferenceLightEffectLocalY = 1f;
@@ -3481,7 +3482,6 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
     private const string AnimatorControllerPath = "Effects/CardPack/Animations/CardPackAnimation";
     private const string AnimationStateName = "Take 001";
     private const string FrontMaterialPath = "Effects/CardFx/Materials/test";
-    private const string BackMaterialPath = "Effects/CardFx/Materials/test01";
     private const string LightEffectPath = "Effects/CardFx/Profabs/fx_chai_w_001";
     private const string CardRendererNamePrefix = "mesh_skin_cardPack_";
     private const int FrontRendererNumberLength = 3;
@@ -3493,7 +3493,6 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
     private Camera mMainCamera;
     private Animator mAnimator;
     private Material mFrontMaterial;
-    private Material mBackMaterial;
     private int mOriginalCameraCullingMask;
     private bool mDidOverrideCameraCullingMask;
     private float mAnimationDuration;
@@ -3530,19 +3529,17 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         var modelPrefab = Resources.Load<GameObject>(string.Format(ModelPathFormat, variant));
         var controller = Resources.Load<RuntimeAnimatorController>(AnimatorControllerPath);
         var frontMaterialTemplate = Resources.Load<Material>(FrontMaterialPath);
-        var backMaterialTemplate = Resources.Load<Material>(BackMaterialPath);
         var lightEffectPrefab = Resources.Load<GameObject>(LightEffectPath);
         if (modelPrefab == null
             || controller == null
             || frontMaterialTemplate == null
-            || backMaterialTemplate == null
             || lightEffectPrefab == null)
         {
             Debug.LogError(
                 $"CardPackOpeningEffect: required resource is missing. variant={variant}, "
                 + $"model={modelPrefab != null}, controller={controller != null}, "
                 + $"frontMaterial={frontMaterialTemplate != null}, "
-                + $"backMaterial={backMaterialTemplate != null}, light={lightEffectPrefab != null}");
+                + $"light={lightEffectPrefab != null}");
             return false;
         }
 
@@ -3571,13 +3568,7 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
             name = frontMaterialTemplate.name + " (Runtime Pack)"
         };
         mFrontMaterial.mainTexture = packTexture;
-        mBackMaterial = new Material(backMaterialTemplate)
-        {
-            name = backMaterialTemplate.name + " (Runtime Back)"
-        };
-        mBackMaterial.mainTexture = packTexture;
-
-        if (!ApplyCardPackMaterials(mModelObject, mFrontMaterial, mBackMaterial))
+        if (!ApplyCardPackMaterials(mModelObject, mFrontMaterial))
         {
             Debug.LogError(
                 $"CardPackOpeningEffect: expected card renderers were not found in {modelPrefab.name}.");
@@ -3614,7 +3605,7 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
             ReferenceLightEffectLocalY,
             -1.5f);
         mLightEffectObject.transform.localRotation = Quaternion.identity;
-        mLightEffectObject.transform.localScale = Vector3.one;
+        mLightEffectObject.transform.localScale = Vector3.one * LightEffectScale;
         SetLayerRecursively(mLightEffectObject, EffectLayer);
         mLightEffectObject.SetActive(false);
 
@@ -3622,7 +3613,8 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         mIsPlaying = true;
         Debug.Log(
             $"CardPackOpeningEffect: started variant {variant:D3} with {packTexture.name}. "
-            + $"duration={mAnimationDuration:F3}s, lightDelay={LightEffectDelay:F3}s");
+            + $"duration={mAnimationDuration:F3}s, lightDelay={LightEffectDelay:F3}s, "
+            + $"lightScale={LightEffectScale:F1}");
         return true;
     }
 
@@ -3802,8 +3794,7 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
 
     private static bool ApplyCardPackMaterials(
         GameObject model,
-        Material frontMaterial,
-        Material backMaterial)
+        Material frontMaterial)
     {
         var foundFront = false;
         var foundBack = false;
@@ -3819,7 +3810,7 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
             var numberLength = renderer.name.Length - CardRendererNamePrefix.Length;
             if (numberLength == BackRendererNumberLength)
             {
-                renderer.sharedMaterial = backMaterial;
+                renderer.enabled = false;
                 foundBack = true;
             }
             else if (numberLength == FrontRendererNumberLength)
@@ -3894,12 +3885,6 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         {
             Destroy(mFrontMaterial);
             mFrontMaterial = null;
-        }
-
-        if (mBackMaterial != null)
-        {
-            Destroy(mBackMaterial);
-            mBackMaterial = null;
         }
 
         mModelObject = null;
