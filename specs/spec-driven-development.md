@@ -1,5 +1,76 @@
 # Spec Driven Development
 
+## 2026-08-12 - 开包动画与 MainScene 共用主摄像机
+
+### 需求
+
+**用户故事：** 作为玩家，我希望静态卡包切换到开包动画时没有透明合成产生的黑边，并保持现有位置、尺寸和撕包节奏。
+
+1. WHEN 播放 3D 开包动画 THEN 卡包模型、撕口粒子、开包背景和 MainScene SHALL 由同一台 `Main Camera` 完成最终画面渲染。
+2. WHEN 开包动画开始 THEN 系统 SHALL 不再创建独立特效摄像机、全屏 RenderTexture 或 RawImage 二次合成层。
+3. WHEN 静态卡包切换为 3D 模型 THEN 系统 SHALL 继续按选中卡包实际屏幕中心和高度定位并等比缩放，避免位置或尺寸跳动。
+4. WHEN 需要识别撕口位置 THEN 系统 MAY 临时使用同一台 `Main Camera` 对 EffectLayer 做离屏蒙版采样，但该采样结果不得作为最终画面合成层。
+5. WHEN 开包结束或中断 THEN 系统 SHALL 恢复 Main Camera 的 Culling Mask，并清理模型、粒子和运行时材质。
+
+### 设计
+
+- 将 `CardPackOpeningEffect` 收敛为普通运行时控制组件，不再创建 `RawImage`、`CardPackOpeningEffectCamera` 和 `CardPackOpeningEffectRT`。
+- `Begin` 获取 `Camera.main`，将 EffectLayer 加入其 Culling Mask；Stage 直接位于主摄像机视野中，中心通过选中卡包屏幕 Rect 转换得到，缩放按主摄像机正交尺寸计算。
+- 开包背景 Canvas 继续由 Main Camera 渲染，但播放阶段将其排序降到 EffectLayer 之后；卡包前后材质使用 UI 背景之后的运行时 Render Queue，粒子 Renderer 使用更高 Sorting Order。
+- 撕口蒙版采样时暂存主摄像机 TargetTexture、Culling Mask、ClearFlags 和背景色，只渲染 EffectLayer 到临时 RT，读取后完整恢复。
+
+### 任务
+
+- [x] 1. 明确黑边来源与同摄像机目标。
+- [x] 2. 移除开包最终画面的独立相机和 RenderTexture 合成。
+- [x] 3. 改造主摄像机下的模型定位、缩放和渲染顺序。
+- [x] 4. 保留同一主摄像机的临时撕口蒙版采样。
+- [x] 5. 更新长期规则和当前任务记录。
+- [ ] 6. 编译并在 Play Mode 验证黑边、尺寸、位置、粒子和进场时序。
+
+### 当前验证
+
+- 搜索确认运行时代码中不再存在 `CardPackOpeningEffectCamera`、`CardPackOpeningEffectRT`、最终画面 RawImage 及对应字段。
+- 选中卡包、选择面板、开包背景、3D 模型和撕口粒子的最终画面统一通过 `Main Camera`；模型按 RectTransform 的真实屏幕中心与四角屏幕高度定位。
+- 临时撕口采样在 `finally` 中恢复主相机的 TargetTexture、Culling Mask、ClearFlags 和背景色，并恢复模型 Renderer 启用状态。
+- 卡包前后材质只创建运行时实例，制作方材质资源本体、FBX、Animator 和粒子 Prefab 均未修改。
+- `Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译通过，均为 `0` 警告、`0` 错误。
+- 尚未在 Unity Play Mode 目视确认无黑边、静态图切模型无跳位、粒子完整显示及动画结束进入 GameScene。
+
+## 2026-08-12 - PackItem 与 MainScene 共用主摄像机
+
+### 需求
+
+**用户故事：** 作为开发者，我希望首页 `PackItem` 的卡包封面和高光特效与当前 MainScene 通过同一台主摄像机渲染，以便统一检查渲染层级和画面表现。
+
+1. WHEN MainScene 加载 THEN 系统 SHALL 将承载 `PackItem` 的主 Canvas 设置为 `Screen Space - Camera`。
+2. WHEN 配置 MainScene 主 Canvas THEN 系统 SHALL 将其 `World Camera` 明确绑定为场景 `Main Camera`。
+3. WHEN 运行时场景配置被误改或缺失 THEN `MainScene` SHALL 在初始化时重新校正主 Canvas 的渲染模式、摄像机、设计分辨率和 Plane Distance。
+4. WHEN 播放 3D 撕包动画 THEN 系统 SHALL 由同一台 `Main Camera` 直接渲染模型、粒子和开包背景，不使用独立特效相机和最终画面 RenderTexture 合成。
+
+### 设计
+
+- 直接修改 `MainScene.unity/Canvas`：`m_RenderMode=1`、`m_Camera=Main Camera`、`m_PlaneDistance=10`。
+- 在 `MainScene.Start()` 开始阶段调用 `ConfigureMainCanvas()`，复用 `GameCommonUtility.ConfigureCanvasForGameplay` 绑定 `Camera.main`，并保持 `2560 x 1440`、`Match=0.5`、`PPU=100`。
+- `PackItem/PackCover`、`PackHighlight` 和 `PackSize` 都是该主 Canvas 下的 UGUI Graphic，因此修改后统一经过 Main Camera；后续同摄像机改造同时将选中弹窗和 3D 开包最终画面接入 Main Camera，拍照闪屏继续保持独立职责。
+
+### 任务
+
+- [x] 1. 记录主 Canvas 与 PackItem 共用摄像机规格。
+- [x] 2. 修改 MainScene 场景和运行时校正逻辑。
+- [x] 3. 更新长期项目事实与当前任务记录。
+- [x] 4. 编译并验证场景序列化配置。
+- [ ] 5. 在 Unity Play Mode 检查首页布局、点击、裁切和高光显示。
+
+### 当前验证
+
+- `MainScene.unity/Canvas` 已保存为 `m_RenderMode: 1`，`m_Camera` 指向 `Main Camera` 的 Camera 组件，`m_PlaneDistance: 10`。
+- `MainScene.Start()` 在解析和实例化卡包列表前调用 `ConfigureMainCanvas()`，运行时复用统一配置绑定 `Camera.main`。
+- `PackItem` 的 `PackCover`、`PackHighlight` 和 `PackSize` 都继续作为主 Canvas 下的 UGUI Graphic，不增加额外相机或 RenderTexture。
+- 后续开包改造已移除 `CardPackOpeningEffectCamera`、最终画面 RenderTexture 和 RawImage；EffectLayer 改由 Main Camera 直接渲染。
+- `Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 编译通过，均为 `0` 警告、`0` 错误。
+- 待在 Unity Play Mode 检查布局、ScrollRect 裁切、点击命中、高光材质和完整开包流程。
+
 ## 2026-08-11 - 错误 Piece 回弹反馈时序
 
 ### 需求

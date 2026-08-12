@@ -1,58 +1,56 @@
 # 当前任务
 
-- 任务：限制 Piece 自由放置区域并恢复托盘回收
-- 状态：棋盘边界和托盘归位修正已完成，等待 Play Mode 验证
-- 更新时间：2026-08-11
+- 任务：开包动画与 MainScene 共用主摄像机
+- 状态：代码和编译验证完成，等待 Play Mode 视觉确认
+- 更新时间：2026-08-12
 
 ## 用户意图
 
-- Piece 可以停在棋盘左右两侧的桌面。
-- Piece 可以停在棋盘内 Alpha 为 `0`、没有已拼图占用的位置。
-- Piece 不得停在棋盘正上方、正下方或已拼内容上。
-- Piece 不得横跨棋盘边框；棋盘内和左右桌面的合法位置都必须容纳完整 Piece 渲染边界。
-- 鼠标在棋盘下方的黑色托盘区域松手时，Piece 自动回托盘；托盘需要显示时自动恢复。
+- 让首页卡包、选中卡包、开包背景、3D 撕包模型和粒子最终都由 MainScene 的 `Main Camera` 渲染，消除透明 RenderTexture 合成产生的黑边。
 
 ## 工作记录
 
-- 松手流程保持正确吸附为最高优先级，随后按鼠标位置判断托盘回收。
-- 缓存托盘原始归一化屏幕区域，托盘滑出或窗口尺寸变化后仍可判断底部回收热区。
-- 移除“托盘必须仍有其他 Piece”与“Piece 必须进入托盘高度 50%”的旧回收门槛，改为鼠标进入托盘区域即可回收。
-- 为 Alpha 大于 `0` 的已拼 Groove Image 延迟创建并复用 Physics Shape 探针；Alpha 为 `0` 的凹槽不阻挡自由放置。
-- Piece 与棋盘相交时，只要实际轮廓压到已拼内容就回弹；未压到时，Piece 中心在棋盘内可停放。
-- Piece 中心位于棋盘左右外侧时可停在桌面；中心位于棋盘正上方或正下方时回弹。
-- 放置区域改按完整 Piece 渲染边界判断，任何跨越棋盘边框的状态均回弹。
-- 底部回收统一先恢复并启用托盘、刷新 Canvas，再按编号计算新的托盘目标坐标并回弹到该位置。
-- 保留外部 Piece 之间防重叠、背景可见范围限制、错误回弹和红色反馈。
+- 确认 `PackItem/PackHighlight` 是 UGUI `Image + CanvasRenderer`，Prefab 自身没有 Camera、ParticleSystem、Animator 或独立 Canvas。
+- 将 MainScene 主 Canvas 从 `Screen Space - Overlay` 改为 `Screen Space - Camera`。
+- 在场景中将主 Canvas 的 `World Camera` 明确绑定到 `Main Camera`，Plane Distance 设置为 `10`。
+- 新增 `MainScene.ConfigureMainCanvas()`，进入 MainScene 时再次绑定 `Camera.main`，并校正 `2560 x 1440`、`Match=0.5`、`PPU=100`。
+- 将选择面板和选中卡包 Canvas 同样改为 `Screen Space - Camera` 并绑定 `Main Camera`。
+- 移除 3D 撕包最终画面的 `CardPackOpeningEffectCamera + RenderTexture + RawImage` 合成链路；模型和撕口粒子直接放入 MainScene 世界，由 `Main Camera` 渲染。
+- 模型按选中卡包的真实屏幕中心和四角屏幕高度等比对齐，避免静态封面切换到模型时横向偏移或尺寸跳动。
+- 撕口位置继续通过临时蒙版识别，但复用同一台 `Main Camera`，临时 RT 只读数据、不参与最终画面。
+- 运行时保存并恢复 Main Camera 的 Culling Mask；临时采样完整恢复 TargetTexture、ClearFlags、背景色和 Renderer 状态。
 
 ## 修改文件
 
-- `Assets/Scripts/Controller/GameScene.cs`
+- `Assets/Scenes/MainScene.unity`
+- `Assets/Scripts/Controller/MainScene.cs`
 - `Documents/PROJECT_CONTEXT.md`
-- `Documents/GAME_DESIGN_REQUIREMENTS.md`
 - `Documents/CURRENT_TASK.md`
 - `specs/spec-driven-development.md`
 
 ## 决策
 
-- “凹槽透明度为 0”按运行时 `Image.color.a <= 0.001` 判断；已拼内容继续使用 Sprite Physics Shape，而不是矩形包围盒。
-- 棋盘内、左侧桌面和右侧桌面按 Piece 完整渲染边界分类；跨越 GameBoard 任意边框时禁止放置，实际轮廓与已拼内容相交时同样禁止放置。
-- 托盘回收按鼠标松手点判断，不要求 Piece 本身进入托盘 50%。
-- 本次不修改场景、Prefab、切图、配置或持久化结构，不需要清理本地数据。
+- “同一个摄像机”覆盖开包完整最终画面：MainScene UI、选择页静态卡包、开包背景、3D 卡包模型和撕口粒子统一使用场景 `Main Camera`。
+- 临时 RenderTexture 只允许用于撕口蒙版数据读取，不得作为最终画面显示或合成。
+- 场景序列化和运行时校正同时保留，避免 Inspector 或场景合并导致摄像机引用丢失。
+- 本次不修改制作方 FBX、Animator、粒子 Prefab、材质资源本体、贴图、配置或持久化结构，不需要清理本地数据。
 
 ## 验证
 
-- `dotnet build Assembly-CSharp.csproj --no-restore` 已通过，`0` 警告、`0` 错误。
-- `dotnet build Assembly-CSharp-Editor.csproj --no-restore` 已通过，`0` 警告、`0` 错误。
-- `git diff --check` 已通过，仅有仓库既有的 LF/CRLF 转换提示。
-- 棋盘边界和托盘目标修正后，运行时与编辑器程序集已重新编译通过，均为 `0` 警告、`0` 错误。
-- 待在 Play Mode 验证棋盘左右、棋盘空位、已拼内容、棋盘上下和隐藏托盘回收路径。
+- 静态确认 `MainScene.unity/Canvas` 为 `m_RenderMode: 1`，`m_Camera` 指向 `Main Camera` 的 Camera 组件，`m_PlaneDistance: 10`。
+- 静态确认 `MainScene.Start()` 在生成卡包列表前调用 `ConfigureMainCanvas()`。
+- 搜索确认运行时代码不再创建 `CardPackOpeningEffectCamera`、`CardPackOpeningEffectRT` 或最终画面 RawImage。
+- 静态确认模型使用选中卡包真实屏幕中心和四角屏幕高度定位，临时蒙版采样的相机状态在 `finally` 中恢复。
+- `Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 编译通过，均为 `0` 警告、`0` 错误。
+- 尚未在 Unity Play Mode 目视确认黑边消失、模型对齐、粒子层级和进入 GameScene 时序。
 
 ## 下一步
 
-1. 在 Play Mode 覆盖五类松手位置和正确吸附优先级。
-2. 回归最后一块拿起后托盘收下，再拖回底部区域时托盘恢复和重排。
-3. 继续抽查 CardBag013 落位尺寸不再二次放大。
+1. 进入 MainScene Play Mode，打开任一卡包并进入 `BgGame` 开包舞台。
+2. 轻点卡包或横划，确认静态封面切 3D 模型时无黑边、中心和尺寸不跳动。
+3. 确认开包背景位于模型后方，撕口粒子完整可见，约 `1.833s` 后正常进入 GameScene。
+4. 返回 MainScene 再次开包，确认 Main Camera 状态恢复且重复播放正常。
 
 ## 恢复提示
 
-Piece 放置已限制为完整落在棋盘内未占用区域或完整落在棋盘左右桌面，横跨棋盘边框会回弹；底部托盘原始区域会恢复托盘并将 Piece 排回托盘内部。两个 C# 项目已编译通过，下一步进行 Play Mode 交互验证。
+MainScene UI、选中卡包和 3D 开包最终画面已统一由 `Main Camera` 渲染，独立特效相机与最终画面 RT 合成已移除；两个 C# 项目编译通过，下一步进行 Play Mode 黑边与对齐回归。

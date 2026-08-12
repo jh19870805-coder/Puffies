@@ -44,6 +44,7 @@ public class MainScene : MonoBehaviour
     private const float BagSelectBackdropAlpha = 0.34f;
     private const float BagSelectPanelWorldDepth = -0.1f;
     private const float OverlayWorldDepth = -0.2f;
+    private const float MainCanvasWorldDepth = 0f;
     private const int BagSelectBlurDownsample = 2;
     private const int BagSelectBlurPyramidLevels = 3;
     private const float OpeningStageTransitionDuration = 0.28f;
@@ -277,6 +278,8 @@ public class MainScene : MonoBehaviour
             Debug.LogWarning("MainScene: GameSettingsUtility is not ready; settings will use defaults until SQLite is available.");
         }
 
+        ConfigureMainCanvas();
+
         if (!TryResolvePackageList())
         {
             Debug.LogWarning("MainScene: package list not found. Expected PackageScrollView/Page_1 with PackItem prefab, or legacy Package001.");
@@ -296,6 +299,27 @@ public class MainScene : MonoBehaviour
         ConfigureUsablePanel();
         ConfigureSavePanel();
         RefreshTaskProgressUI();
+    }
+
+    private static void ConfigureMainCanvas()
+    {
+        var camera = Camera.main;
+        var canvasObject = GameCommonUtility.FindSceneObject("Canvas");
+        var canvas = canvasObject != null ? canvasObject.GetComponent<Canvas>() : null;
+        if (camera == null || canvas == null)
+        {
+            Debug.LogWarning("MainScene: main Canvas could not be bound to Main Camera.");
+            return;
+        }
+
+        GameCommonUtility.ConfigureCanvasForGameplay(
+            canvas,
+            camera,
+            GameDefine.DesignWidth,
+            ReferenceHeight,
+            PixelsPerUnit,
+            MainCanvasWorldDepth);
+        Canvas.ForceUpdateCanvases();
     }
 
     private static void RefreshTaskProgressUI()
@@ -667,8 +691,6 @@ public class MainScene : MonoBehaviour
             ReferenceHeight,
             PixelsPerUnit,
             BagSelectPanelWorldDepth);
-        mBagSelectOverlayCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        mBagSelectOverlayCanvas.worldCamera = null;
         mBagSelectOverlayCanvas.sortingLayerID = sourceCanvas.sortingLayerID;
         mBagSelectOverlayCanvas.sortingOrder = BagSelectPanelSortingOrder;
 
@@ -713,8 +735,13 @@ public class MainScene : MonoBehaviour
             typeof(CanvasScaler));
         canvasObject.layer = mBagSelectPanelRoot != null ? mBagSelectPanelRoot.layer : 5;
         mSelectedPackageOverlayCanvas = canvasObject.GetComponent<Canvas>();
-        mSelectedPackageOverlayCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        mSelectedPackageOverlayCanvas.worldCamera = null;
+        GameCommonUtility.ConfigureCanvasForGameplay(
+            mSelectedPackageOverlayCanvas,
+            Camera.main,
+            GameDefine.DesignWidth,
+            ReferenceHeight,
+            PixelsPerUnit,
+            OverlayWorldDepth);
         mSelectedPackageOverlayCanvas.sortingLayerID = sourceCanvas.sortingLayerID;
         mSelectedPackageOverlayCanvas.sortingOrder = SelectedPackageSortingOrder;
 
@@ -3349,16 +3376,15 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
 {
     private const int EffectLayer = 31;
     private const int ModelVariantCount = 6;
-    private const float DemoCameraOrthographicSize = 2.66f;
-    private const float DemoCameraZ = -29.28f;
     private const float DemoModelScale = 550f;
     private const float DemoModelZ = 164.02565f;
+    private const float ModelWorldDepth = -1f;
+    private const int EffectSortingOrder = 31000;
     private const float LightEffectDelay = 0.5f;
     private const float ReferenceLightEffectLocalY = 1f;
     private const int TearMaskSampleWidth = 512;
     private const byte TearMaskAlphaThreshold = 32;
     private const float FallbackAnimationDuration = 1.8333334f;
-    private const float IsolatedWorldX = 1000f;
     private const string ModelPathFormat = "Effects/CardPack/Models/CardPackOpeningModel_{0:D3}";
     private const string AnimatorControllerPath = "Effects/CardPack/Animations/CardPackAnimation";
     private const string AnimationStateName = "Take 001";
@@ -3369,15 +3395,15 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
     private const int FrontRendererNumberLength = 3;
     private const int BackRendererNumberLength = 5;
 
-    private RawImage mOutputImage;
     private GameObject mWorldRoot;
     private GameObject mModelObject;
     private GameObject mLightEffectObject;
-    private Camera mEffectCamera;
+    private Camera mMainCamera;
     private Animator mAnimator;
-    private RenderTexture mRenderTexture;
     private Material mFrontMaterial;
     private Material mBackMaterial;
+    private int mOriginalCameraCullingMask;
+    private bool mDidOverrideCameraCullingMask;
     private float mAnimationDuration;
     private bool mIsPlaying;
 
@@ -3390,24 +3416,11 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
 
         var effectObject = new GameObject(
             nameof(CardPackOpeningEffect),
-            typeof(RectTransform),
-            typeof(CanvasRenderer),
-            typeof(RawImage),
             typeof(CardPackOpeningEffect));
-        var rectTransform = effectObject.GetComponent<RectTransform>();
-        rectTransform.SetParent(parent, false);
-        rectTransform.anchorMin = Vector2.zero;
-        rectTransform.anchorMax = Vector2.one;
-        rectTransform.pivot = new Vector2(0.5f, 0.5f);
-        rectTransform.offsetMin = Vector2.zero;
-        rectTransform.offsetMax = Vector2.zero;
-        rectTransform.localScale = Vector3.one;
+        effectObject.transform.SetParent(parent, false);
         effectObject.transform.SetAsLastSibling();
 
         var effect = effectObject.GetComponent<CardPackOpeningEffect>();
-        effect.mOutputImage = effectObject.GetComponent<RawImage>();
-        effect.mOutputImage.color = Color.white;
-        effect.mOutputImage.raycastTarget = false;
         effectObject.SetActive(false);
         return effect;
     }
@@ -3441,8 +3454,7 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
             return false;
         }
 
-        CreateRenderStage();
-        if (mEffectCamera == null || mRenderTexture == null || mWorldRoot == null)
+        if (!CreateRenderStage())
         {
             CleanupPlaybackResources();
             return false;
@@ -3450,7 +3462,7 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
 
         var stageRoot = new GameObject("CardPackOpeningStage").transform;
         stageRoot.SetParent(mWorldRoot.transform, false);
-        stageRoot.localPosition = new Vector3(IsolatedWorldX, 0f, 0f);
+        stageRoot.localPosition = Vector3.zero;
         stageRoot.localRotation = Quaternion.identity;
         stageRoot.localScale = Vector3.one;
         stageRoot.gameObject.layer = EffectLayer;
@@ -3467,10 +3479,12 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
             name = frontMaterialTemplate.name + " (Runtime Pack)"
         };
         mFrontMaterial.mainTexture = packTexture;
+        mFrontMaterial.renderQueue = 2001;
         mBackMaterial = new Material(backMaterialTemplate)
         {
             name = backMaterialTemplate.name + " (Runtime Back)"
         };
+        mBackMaterial.renderQueue = 2001;
 
         if (!ApplyCardPackMaterials(mModelObject, mFrontMaterial, mBackMaterial))
         {
@@ -3511,12 +3525,10 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         mLightEffectObject.transform.localRotation = Quaternion.identity;
         mLightEffectObject.transform.localScale = Vector3.one;
         SetLayerRecursively(mLightEffectObject, EffectLayer);
+        SetRendererSortingOrder(mLightEffectObject, EffectSortingOrder);
         mLightEffectObject.SetActive(false);
 
-        mOutputImage.texture = mRenderTexture;
         gameObject.SetActive(true);
-        mEffectCamera.enabled = true;
-        mEffectCamera.Render();
         mIsPlaying = true;
         Debug.Log(
             $"CardPackOpeningEffect: started variant {variant:D3} with {packTexture.name}. "
@@ -3548,52 +3560,21 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         mIsPlaying = false;
     }
 
-    private void CreateRenderStage()
+    private bool CreateRenderStage()
     {
-        var renderWidth = Mathf.Max(1, Screen.width);
-        var renderHeight = Mathf.Max(1, Screen.height);
-        var format = SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.ARGBHalf)
-            ? RenderTextureFormat.ARGBHalf
-            : RenderTextureFormat.ARGB32;
-        mRenderTexture = new RenderTexture(
-            renderWidth,
-            renderHeight,
-            24,
-            format,
-            RenderTextureReadWrite.Default)
+        mMainCamera = Camera.main;
+        if (mMainCamera == null)
         {
-            name = "CardPackOpeningEffectRT",
-            filterMode = FilterMode.Bilinear,
-            wrapMode = TextureWrapMode.Clamp,
-            useMipMap = false,
-            autoGenerateMips = false
-        };
-        mRenderTexture.Create();
+            Debug.LogError("CardPackOpeningEffect: Main Camera is missing.");
+            return false;
+        }
 
         mWorldRoot = new GameObject("CardPackOpeningEffectWorld");
         mWorldRoot.layer = EffectLayer;
-
-        var cameraObject = new GameObject("CardPackOpeningEffectCamera", typeof(Camera));
-        cameraObject.transform.SetParent(mWorldRoot.transform, false);
-        cameraObject.transform.position = new Vector3(IsolatedWorldX, 0f, DemoCameraZ);
-        cameraObject.transform.rotation = Quaternion.identity;
-        cameraObject.layer = EffectLayer;
-        mEffectCamera = cameraObject.GetComponent<Camera>();
-        mEffectCamera.clearFlags = CameraClearFlags.SolidColor;
-        mEffectCamera.backgroundColor = Color.clear;
-        mEffectCamera.orthographic = true;
-        mEffectCamera.orthographicSize = DemoCameraOrthographicSize;
-        mEffectCamera.nearClipPlane = 0.3f;
-        mEffectCamera.farClipPlane = 1000f;
-        mEffectCamera.depth = 1f;
-        mEffectCamera.cullingMask = 1 << EffectLayer;
-        mEffectCamera.renderingPath = RenderingPath.UsePlayerSettings;
-        mEffectCamera.allowHDR = true;
-        mEffectCamera.allowMSAA = false;
-        mEffectCamera.allowDynamicResolution = false;
-        mEffectCamera.useOcclusionCulling = false;
-        mEffectCamera.targetTexture = mRenderTexture;
-        mEffectCamera.enabled = false;
+        mOriginalCameraCullingMask = mMainCamera.cullingMask;
+        mMainCamera.cullingMask |= 1 << EffectLayer;
+        mDidOverrideCameraCullingMask = true;
+        return true;
     }
 
     private bool TryFitStageToDisplayedPack(Transform stageRoot, RectTransform displayedPackRect)
@@ -3629,11 +3610,22 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
             return false;
         }
 
+        var canvas = displayedPackRect.GetComponentInParent<Canvas>();
+        var eventCamera = canvas != null && canvas.renderMode == RenderMode.ScreenSpaceOverlay
+            ? null
+            : canvas != null ? canvas.worldCamera : mMainCamera;
         var corners = new Vector3[4];
         displayedPackRect.GetWorldCorners(corners);
-        var bottom = RectTransformUtility.WorldToScreenPoint(null, corners[0]);
-        var top = RectTransformUtility.WorldToScreenPoint(null, corners[1]);
-        var targetScreenHeight = Mathf.Abs(top.y - bottom.y);
+        var minScreenY = float.PositiveInfinity;
+        var maxScreenY = float.NegativeInfinity;
+        for (var i = 0; i < corners.Length; i++)
+        {
+            var screenCorner = RectTransformUtility.WorldToScreenPoint(eventCamera, corners[i]);
+            minScreenY = Mathf.Min(minScreenY, screenCorner.y);
+            maxScreenY = Mathf.Max(maxScreenY, screenCorner.y);
+        }
+
+        var targetScreenHeight = maxScreenY - minScreenY;
         if (targetScreenHeight <= 0.001f)
         {
             targetScreenHeight = Screen.height
@@ -3641,13 +3633,63 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
                 / GameDefine.DesignHeight;
         }
 
-        var targetWorldHeight = mEffectCamera.orthographicSize
+        var targetWorldHeight = mMainCamera.orthographicSize
             * 2f
             * targetScreenHeight
             / Mathf.Max(1f, Screen.height);
         var uniformScale = targetWorldHeight / bounds.size.y;
         stageRoot.localScale = Vector3.one * uniformScale;
+        if (!TryGetRendererBounds(renderers, out var scaledBounds))
+        {
+            return false;
+        }
+
+        var screenCenter = RectTransformUtility.WorldToScreenPoint(
+            eventCamera,
+            displayedPackRect.TransformPoint(displayedPackRect.rect.center));
+        var distance = Mathf.Abs(ModelWorldDepth - mMainCamera.transform.position.z);
+        var worldCenter = mMainCamera.ScreenToWorldPoint(
+            new Vector3(screenCenter.x, screenCenter.y, distance));
+        stageRoot.position += new Vector3(
+            worldCenter.x - scaledBounds.center.x,
+            worldCenter.y - scaledBounds.center.y,
+            ModelWorldDepth - scaledBounds.center.z);
         return true;
+    }
+
+    private static bool TryGetRendererBounds(Renderer[] renderers, out Bounds bounds)
+    {
+        bounds = default;
+        var hasBounds = false;
+        for (var i = 0; i < renderers.Length; i++)
+        {
+            var renderer = renderers[i];
+            if (renderer == null || !renderer.enabled)
+            {
+                continue;
+            }
+
+            if (!hasBounds)
+            {
+                bounds = renderer.bounds;
+                hasBounds = true;
+            }
+            else
+            {
+                bounds.Encapsulate(renderer.bounds);
+            }
+        }
+
+        return hasBounds && bounds.size.y > 0.0001f;
+    }
+
+    private static void SetRendererSortingOrder(GameObject root, int sortingOrder)
+    {
+        var renderers = root.GetComponentsInChildren<Renderer>(true);
+        for (var i = 0; i < renderers.Length; i++)
+        {
+            renderers[i].sortingOrder = sortingOrder;
+        }
     }
 
     private static bool ApplyCardPackMaterials(
@@ -3730,10 +3772,9 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
     private bool TryAlignLightToTearMask(out float tearViewportY)
     {
         tearViewportY = 0f;
-        if (mEffectCamera == null
+        if (mMainCamera == null
             || mModelObject == null
-            || mLightEffectObject == null
-            || mRenderTexture == null)
+            || mLightEffectObject == null)
         {
             return false;
         }
@@ -3762,23 +3803,29 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
             return false;
         }
 
-        var maskWidth = Mathf.Min(TearMaskSampleWidth, Mathf.Max(1, mRenderTexture.width));
+        var maskWidth = Mathf.Min(TearMaskSampleWidth, Mathf.Max(1, Screen.width));
         var maskHeight = Mathf.Max(
             1,
-            Mathf.RoundToInt(maskWidth * (float)mRenderTexture.height / mRenderTexture.width));
+            Mathf.RoundToInt(maskWidth * (float)Screen.height / Mathf.Max(1, Screen.width)));
         var maskTarget = RenderTexture.GetTemporary(
             maskWidth,
             maskHeight,
             16,
             RenderTextureFormat.ARGB32,
             RenderTextureReadWrite.Linear);
-        var originalTarget = mEffectCamera.targetTexture;
+        var originalTarget = mMainCamera.targetTexture;
+        var originalCullingMask = mMainCamera.cullingMask;
+        var originalClearFlags = mMainCamera.clearFlags;
+        var originalBackgroundColor = mMainCamera.backgroundColor;
         var originalActive = RenderTexture.active;
         Texture2D maskTexture = null;
         try
         {
-            mEffectCamera.targetTexture = maskTarget;
-            mEffectCamera.Render();
+            mMainCamera.targetTexture = maskTarget;
+            mMainCamera.cullingMask = 1 << EffectLayer;
+            mMainCamera.clearFlags = CameraClearFlags.SolidColor;
+            mMainCamera.backgroundColor = Color.clear;
+            mMainCamera.Render();
             RenderTexture.active = maskTarget;
             maskTexture = new Texture2D(
                 maskWidth,
@@ -3797,14 +3844,14 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
             tearViewportY = (tearPixelY + 0.5f) / maskHeight;
             var lightTransform = mLightEffectObject.transform;
             var lightDepth = Vector3.Dot(
-                lightTransform.position - mEffectCamera.transform.position,
-                mEffectCamera.transform.forward);
+                lightTransform.position - mMainCamera.transform.position,
+                mMainCamera.transform.forward);
             if (lightDepth <= 0f)
             {
                 return false;
             }
 
-            var tearWorldPosition = mEffectCamera.ViewportToWorldPoint(
+            var tearWorldPosition = mMainCamera.ViewportToWorldPoint(
                 new Vector3(0.5f, tearViewportY, lightDepth));
             var localPosition = lightTransform.localPosition;
             localPosition.y = lightTransform.parent.InverseTransformPoint(tearWorldPosition).y;
@@ -3819,10 +3866,12 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
             }
 
             RenderTexture.active = originalActive;
-            mEffectCamera.targetTexture = originalTarget;
+            mMainCamera.targetTexture = originalTarget;
+            mMainCamera.cullingMask = originalCullingMask;
+            mMainCamera.clearFlags = originalClearFlags;
+            mMainCamera.backgroundColor = originalBackgroundColor;
             RenderTexture.ReleaseTemporary(maskTarget);
             RestoreRendererStates(renderers, enabledStates);
-            mEffectCamera.Render();
         }
     }
 
@@ -3979,22 +4028,18 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
     private void CleanupPlaybackResources()
     {
         mIsPlaying = false;
-        if (mOutputImage != null)
+
+        if (mMainCamera != null && mDidOverrideCameraCullingMask)
         {
-            mOutputImage.texture = null;
+            mMainCamera.cullingMask = mOriginalCameraCullingMask;
         }
+
+        mDidOverrideCameraCullingMask = false;
 
         if (mWorldRoot != null)
         {
             Destroy(mWorldRoot);
             mWorldRoot = null;
-        }
-
-        if (mRenderTexture != null)
-        {
-            mRenderTexture.Release();
-            Destroy(mRenderTexture);
-            mRenderTexture = null;
         }
 
         if (mFrontMaterial != null)
@@ -4011,7 +4056,7 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
 
         mModelObject = null;
         mLightEffectObject = null;
-        mEffectCamera = null;
+        mMainCamera = null;
         mAnimator = null;
         mAnimationDuration = 0f;
     }
