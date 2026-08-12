@@ -1,7 +1,7 @@
 # 当前任务
 
-- 任务：首页卡包常驻呼吸特效
-- 状态：代码、Prefab 和编译验证完成，等待 Play Mode 视觉确认
+- 任务：首页卡包常驻呼吸与开包特效修复
+- 状态：代码和编译验证完成，等待 Play Mode 视觉确认
 - 更新时间：2026-08-12
 
 ## 用户意图
@@ -19,7 +19,7 @@
 - 将选择面板和选中卡包 Canvas 同样改为 `Screen Space - Camera` 并绑定 `Main Camera`。
 - 移除 3D 撕包最终画面的 `CardPackOpeningEffectCamera + RenderTexture + RawImage` 合成链路；模型和撕口粒子直接放入 MainScene 世界，由 `Main Camera` 渲染。
 - 模型按选中卡包的真实屏幕中心和四角屏幕高度等比对齐，避免静态封面切换到模型时横向偏移或尺寸跳动。
-- 撕口位置继续通过临时蒙版识别，但复用同一台 `Main Camera`，临时 RT 只读数据、不参与最终画面。
+- 删除失准的运行时撕口蒙版识别。该逻辑在主摄像机方案下曾将光效根节点错误移动到 `localY≈302`；撕口光效恢复制作方场景保存的固定相对位置 `(0,1,-1.5)`。
 - 运行时保存并恢复 Main Camera 的 Culling Mask；临时采样完整恢复 TargetTexture、ClearFlags、背景色和 Renderer 状态。
 - 删除代码对全部粒子 Renderer 的统一 `sortingOrder=31000` 覆盖，恢复 `fx_chai_w_001.prefab` 自身保存的 `0/5/10` 相对层级。
 - 将卡包正反面 `Render Queue=2001` 从运行时代码移入 `test.mat` 和 `test01.mat`，使编辑器 Inspector 成为表现配置来源。
@@ -31,6 +31,10 @@
 - 选择面板每次显示时显式恢复 `CanvasGroup.alpha/interactable/blocksRaycasts`；等待撕包输入范围和进入 GameScene 前的卡包下沿记录也统一使用所属 Canvas Camera。
 - 修复确认开包后只剩背景、看不到动画的问题：`BgGame` 不再作为高排序 UGUI Image 覆盖 3D 模型，改为同一 `Main Camera` 下的世界 `SpriteRenderer` 背景，并以 `Geometry` 队列先于卡包模型绘制；模型、Animator 和制作方粒子 Prefab 参数保持不变。
 - 补齐 `PackHighlightAdditive.shader` 的 UGUI `_ColorMask` 属性，避免首页每个高光贴片持续产生材质警告。
+- 修复开包模型与撕口粒子比例失真：旧的 `Scale=550 / Z=164.02565` 属于独立特效相机演示参数，不适用于当前 Main Camera 世界承载。模型恢复制作方 `EffectScene001` 中的基准 `Scale=2.63 / localZ=0`，外层 Stage 再整体适配选中卡包屏幕高度，使模型和 `fx_chai_w_001` 保持制作方原始相对比例与深度。
+- 模型对齐包围盒只读取正面 `mesh_skin_cardPack_NNN`，不再让动画背面网格改变静态封面切换时的尺寸和中心。
+- 根据 Play Mode 截图确认中央灰块来自背面网格引用的制作方占位贴图 `Bg01.png`；运行时背面材质现在也绑定当前 `PackIconNNN`，继续保留独立背面材质、网格、UV 和动画，不再把灰色占位图展示给玩家。
+- 增加开包 Stage 对齐诊断日志，输出 Game View 分辨率、选中卡包目标像素高度、首帧正面 Bounds、Stage 缩放和屏幕中心，供下一次视觉验证直接定位尺寸偏小来源。
 
 ## 修改文件
 
@@ -48,9 +52,9 @@
 ## 决策
 
 - “同一个摄像机”覆盖开包完整最终画面：MainScene UI、选择页静态卡包、开包背景、3D 卡包模型和撕口粒子统一使用场景 `Main Camera`。
-- 临时 RenderTexture 只允许用于撕口蒙版数据读取，不得作为最终画面显示或合成。
+- 开包流程不再创建或读取任何撕口蒙版 RenderTexture。
 - 能在资源中稳定配置的表现参数放在 Prefab/Material：粒子相对排序、材质引用、Blend 和 Render Queue；代码不覆盖这些资源参数。
-- 代码只保留运行时动态职责：共用 Main Camera、卡包封面替换、屏幕位置尺寸适配、播放时序、EffectLayer 和撕口蒙版识别。
+- 代码只保留运行时动态职责：共用 Main Camera、卡包封面替换、屏幕位置尺寸适配、播放时序和 EffectLayer。
 - 场景序列化和运行时校正同时保留，避免 Inspector 或场景合并导致摄像机引用丢失。
 - 本次不修改制作方 FBX、Animator、粒子 Prefab、材质资源本体、贴图、配置或持久化结构，不需要清理本地数据。
 - 首页常驻效果定义为静态封面整体呼吸与 UGUI ADD 高光；点击后的 3D 卡包模型和撕包粒子仍只在 `BgGame` 开包舞台加载。
@@ -61,7 +65,7 @@
 - 静态确认 `MainScene.unity/Canvas` 为 `m_RenderMode: 1`，`m_Camera` 指向 `Main Camera` 的 Camera 组件，`m_PlaneDistance: 10`。
 - 静态确认 `MainScene.Start()` 在生成卡包列表前调用 `ConfigureMainCanvas()`。
 - 搜索确认运行时代码不再创建 `CardPackOpeningEffectCamera`、`CardPackOpeningEffectRT` 或最终画面 RawImage。
-- 静态确认模型使用选中卡包真实屏幕中心和四角屏幕高度定位，临时蒙版采样的相机状态在 `finally` 中恢复。
+- 静态确认模型使用选中卡包真实屏幕中心和四角屏幕高度定位，尺寸计算只使用正面网格。
 - 静态确认 `fx_chai_w_001.prefab` 的粒子 Renderer 保留 `sortingOrder=0/5/10`，代码不再调用统一排序覆盖；`test.mat` 与 `test01.mat` 均保存 `m_CustomRenderQueue: 2001`。
 - `Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 编译通过，均为 `0` 警告、`0` 错误。
 - Unity `2022.3.62f2c1` 批处理刷新成功，运行时和 Editor 程序集均由 Unity 编译成功，Prefab 未报告脚本丢失或反序列化错误。
@@ -69,6 +73,9 @@
 - Unity 当前实例已自动重新导入 `PackItem.prefab`，Editor.log 未出现 Missing Script、Prefab 导入错误或 C# 编译错误。
 - 点击空白修复后，`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 再次编译通过，均为 `0` 警告、`0` 错误；`git diff --check` 通过。
 - 静态确认开包背景已脱离 `PanelBagSelectCanvas`，使用主摄像机世界 `SpriteRenderer`，不会再以 Canvas Sorting Order 覆盖 3D 模型。
+- 对照 `EffectScene001` 确认开包模型基准为 `Scale=2.63 / localZ=0`，撕口粒子为 `(0,1,-1.5)`；运行时代码已使用相同相对关系。
+- 最新修改后 `Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 再次编译通过，均为 `0` 警告、`0` 错误；`git diff --check` 通过。
+- 背面动态封面修复后两个 C# 工程再次编译通过，均为 `0` 警告、`0` 错误。
 - 尚未在 Unity Play Mode 目视确认黑边消失、模型对齐、粒子层级和进入 GameScene 时序。
 
 ## 下一步

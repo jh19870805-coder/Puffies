@@ -51,7 +51,7 @@
 1. WHEN 播放 3D 开包动画 THEN 卡包模型、撕口粒子、开包背景和 MainScene SHALL 由同一台 `Main Camera` 完成最终画面渲染。
 2. WHEN 开包动画开始 THEN 系统 SHALL 不再创建独立特效摄像机、全屏 RenderTexture 或 RawImage 二次合成层。
 3. WHEN 静态卡包切换为 3D 模型 THEN 系统 SHALL 继续按选中卡包实际屏幕中心和高度定位并等比缩放，避免位置或尺寸跳动。
-4. WHEN 需要识别撕口位置 THEN 系统 MAY 临时使用同一台 `Main Camera` 对 EffectLayer 做离屏蒙版采样，但该采样结果不得作为最终画面合成层。
+4. WHEN 播放撕口粒子 THEN 系统 SHALL 保持制作方模型与粒子的固定相对坐标，不得通过屏幕蒙版识别单独移动粒子。
 5. WHEN 开包结束或中断 THEN 系统 SHALL 恢复 Main Camera 的 Culling Mask，并清理模型、粒子和运行时材质。
 
 ### 设计
@@ -59,14 +59,15 @@
 - 将 `CardPackOpeningEffect` 收敛为普通运行时控制组件，不再创建 `RawImage`、`CardPackOpeningEffectCamera` 和 `CardPackOpeningEffectRT`。
 - `Begin` 获取 `Camera.main`，将 EffectLayer 加入其 Culling Mask；Stage 直接位于主摄像机视野中，中心通过选中卡包屏幕 Rect 转换得到，缩放按主摄像机正交尺寸计算。
 - 开包背景 Canvas 继续由 Main Camera 渲染，但播放阶段将其排序降到 EffectLayer 之后；卡包前后材质使用 UI 背景之后的运行时 Render Queue，粒子 Renderer 使用更高 Sorting Order。
-- 撕口蒙版采样时暂存主摄像机 TargetTexture、Culling Mask、ClearFlags 和背景色，只渲染 EffectLayer 到临时 RT，读取后完整恢复。
+- 模型使用制作方 `EffectScene001` 的基准 `Scale=2.63 / localZ=0`，撕口粒子使用 `(0,1,-1.5)`；屏幕尺寸适配只缩放和移动共同 Stage。
+- 初始尺寸和中心只使用正面 `mesh_skin_cardPack_NNN` 包围盒，避免背面网格影响静态封面切换。
 
 ### 任务
 
 - [x] 1. 明确黑边来源与同摄像机目标。
 - [x] 2. 移除开包最终画面的独立相机和 RenderTexture 合成。
 - [x] 3. 改造主摄像机下的模型定位、缩放和渲染顺序。
-- [x] 4. 保留同一主摄像机的临时撕口蒙版采样。
+- [x] 4. 恢复制作方模型与撕口粒子的固定相对关系，删除失准的蒙版定位。
 - [x] 5. 更新长期规则和当前任务记录。
 - [ ] 6. 编译并在 Play Mode 验证黑边、尺寸、位置、粒子和进场时序。
 
@@ -74,10 +75,12 @@
 
 - 搜索确认运行时代码中不再存在 `CardPackOpeningEffectCamera`、`CardPackOpeningEffectRT`、最终画面 RawImage 及对应字段。
 - 选中卡包、选择面板、开包背景、3D 模型和撕口粒子的最终画面统一通过 `Main Camera`；模型按 RectTransform 的真实屏幕中心与四角屏幕高度定位。
-- 临时撕口采样在 `finally` 中恢复主相机的 TargetTexture、Culling Mask、ClearFlags 和背景色，并恢复模型 Renderer 启用状态。
+- 对照制作方 `EffectScene001` 确认模型基准为 `Scale=2.63 / localZ=0`、撕口粒子为 `(0,1,-1.5)`；代码已按该关系实例化，并删除曾产生 `localY≈302` 的蒙版定位。
+- Play Mode 截图确认背面 `Bg01.png` 是中央灰块来源；背面运行时材质已改为当前卡包封面纹理，不修改背面网格、UV 或动画。
 - 卡包前后材质只创建运行时实例，制作方材质资源本体、FBX、Animator 和粒子 Prefab 均未修改。
 - 后续按资源优先原则收敛：粒子相对排序继续由 `fx_chai_w_001.prefab` 的 `0/5/10` 控制，不再由代码统一覆盖；卡包正反面 Render Queue `2001` 保存到 `test.mat` 与 `test01.mat`，运行时只替换动态贴图。
 - `Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译通过，均为 `0` 警告、`0` 错误。
+- 最终修改再次编译两个工程，均为 `0` 警告、`0` 错误；`git diff --check` 通过。
 - 尚未在 Unity Play Mode 目视确认无黑边、静态图切模型无跳位、粒子完整显示及动画结束进入 GameScene。
 
 ## 2026-08-12 - PackItem 与 MainScene 共用主摄像机
