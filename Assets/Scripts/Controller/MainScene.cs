@@ -3379,7 +3379,6 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
     private const float DemoModelScale = 550f;
     private const float DemoModelZ = 164.02565f;
     private const float ModelWorldDepth = -1f;
-    private const int EffectSortingOrder = 31000;
     private const float LightEffectDelay = 0.5f;
     private const float ReferenceLightEffectLocalY = 1f;
     private const int TearMaskSampleWidth = 512;
@@ -3479,12 +3478,10 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
             name = frontMaterialTemplate.name + " (Runtime Pack)"
         };
         mFrontMaterial.mainTexture = packTexture;
-        mFrontMaterial.renderQueue = 2001;
         mBackMaterial = new Material(backMaterialTemplate)
         {
             name = backMaterialTemplate.name + " (Runtime Back)"
         };
-        mBackMaterial.renderQueue = 2001;
 
         if (!ApplyCardPackMaterials(mModelObject, mFrontMaterial, mBackMaterial))
         {
@@ -3525,7 +3522,6 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         mLightEffectObject.transform.localRotation = Quaternion.identity;
         mLightEffectObject.transform.localScale = Vector3.one;
         SetLayerRecursively(mLightEffectObject, EffectLayer);
-        SetRendererSortingOrder(mLightEffectObject, EffectSortingOrder);
         mLightEffectObject.SetActive(false);
 
         gameObject.SetActive(true);
@@ -3681,15 +3677,6 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         }
 
         return hasBounds && bounds.size.y > 0.0001f;
-    }
-
-    private static void SetRendererSortingOrder(GameObject root, int sortingOrder)
-    {
-        var renderers = root.GetComponentsInChildren<Renderer>(true);
-        for (var i = 0; i < renderers.Length; i++)
-        {
-            renderers[i].sortingOrder = sortingOrder;
-        }
     }
 
     private static bool ApplyCardPackMaterials(

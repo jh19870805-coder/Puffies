@@ -34,6 +34,7 @@
 - 选中卡包、选择面板、开包背景、3D 模型和撕口粒子的最终画面统一通过 `Main Camera`；模型按 RectTransform 的真实屏幕中心与四角屏幕高度定位。
 - 临时撕口采样在 `finally` 中恢复主相机的 TargetTexture、Culling Mask、ClearFlags 和背景色，并恢复模型 Renderer 启用状态。
 - 卡包前后材质只创建运行时实例，制作方材质资源本体、FBX、Animator 和粒子 Prefab 均未修改。
+- 后续按资源优先原则收敛：粒子相对排序继续由 `fx_chai_w_001.prefab` 的 `0/5/10` 控制，不再由代码统一覆盖；卡包正反面 Render Queue `2001` 保存到 `test.mat` 与 `test01.mat`，运行时只替换动态贴图。
 - `Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译通过，均为 `0` 警告、`0` 错误。
 - 尚未在 Unity Play Mode 目视确认无黑边、静态图切模型无跳位、粒子完整显示及动画结束进入 GameScene。
 

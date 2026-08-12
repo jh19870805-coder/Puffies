@@ -19,11 +19,15 @@
 - 模型按选中卡包的真实屏幕中心和四角屏幕高度等比对齐，避免静态封面切换到模型时横向偏移或尺寸跳动。
 - 撕口位置继续通过临时蒙版识别，但复用同一台 `Main Camera`，临时 RT 只读数据、不参与最终画面。
 - 运行时保存并恢复 Main Camera 的 Culling Mask；临时采样完整恢复 TargetTexture、ClearFlags、背景色和 Renderer 状态。
+- 删除代码对全部粒子 Renderer 的统一 `sortingOrder=31000` 覆盖，恢复 `fx_chai_w_001.prefab` 自身保存的 `0/5/10` 相对层级。
+- 将卡包正反面 `Render Queue=2001` 从运行时代码移入 `test.mat` 和 `test01.mat`，使编辑器 Inspector 成为表现配置来源。
 
 ## 修改文件
 
 - `Assets/Scenes/MainScene.unity`
 - `Assets/Scripts/Controller/MainScene.cs`
+- `Assets/Resources/Effects/CardFx/Materials/test.mat`
+- `Assets/Resources/Effects/CardFx/Materials/test01.mat`
 - `Documents/PROJECT_CONTEXT.md`
 - `Documents/CURRENT_TASK.md`
 - `specs/spec-driven-development.md`
@@ -32,6 +36,8 @@
 
 - “同一个摄像机”覆盖开包完整最终画面：MainScene UI、选择页静态卡包、开包背景、3D 卡包模型和撕口粒子统一使用场景 `Main Camera`。
 - 临时 RenderTexture 只允许用于撕口蒙版数据读取，不得作为最终画面显示或合成。
+- 能在资源中稳定配置的表现参数放在 Prefab/Material：粒子相对排序、材质引用、Blend 和 Render Queue；代码不覆盖这些资源参数。
+- 代码只保留运行时动态职责：共用 Main Camera、卡包封面替换、屏幕位置尺寸适配、播放时序、EffectLayer 和撕口蒙版识别。
 - 场景序列化和运行时校正同时保留，避免 Inspector 或场景合并导致摄像机引用丢失。
 - 本次不修改制作方 FBX、Animator、粒子 Prefab、材质资源本体、贴图、配置或持久化结构，不需要清理本地数据。
 
@@ -41,6 +47,7 @@
 - 静态确认 `MainScene.Start()` 在生成卡包列表前调用 `ConfigureMainCanvas()`。
 - 搜索确认运行时代码不再创建 `CardPackOpeningEffectCamera`、`CardPackOpeningEffectRT` 或最终画面 RawImage。
 - 静态确认模型使用选中卡包真实屏幕中心和四角屏幕高度定位，临时蒙版采样的相机状态在 `finally` 中恢复。
+- 静态确认 `fx_chai_w_001.prefab` 的粒子 Renderer 保留 `sortingOrder=0/5/10`，代码不再调用统一排序覆盖；`test.mat` 与 `test01.mat` 均保存 `m_CustomRenderQueue: 2001`。
 - `Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 编译通过，均为 `0` 警告、`0` 错误。
 - 尚未在 Unity Play Mode 目视确认黑边消失、模型对齐、粒子层级和进入 GameScene 时序。
 
