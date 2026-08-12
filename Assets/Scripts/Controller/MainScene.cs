@@ -52,6 +52,8 @@ public class MainScene : MonoBehaviour
     private const float OpeningStageSettleDuration = 0.22f;
     private const float OpeningStageScaleRatio = 0.92f;
     private const float OpeningStagePunchScaleRatio = 1.04f;
+    private const float OpeningModelHandoffHoldDuration = 0.06f;
+    private const float OpeningModelHandoffFadeDuration = 0.12f;
     private const float TearSwipeBandHeightRatio = 0.24f;
     private const float TearSwipeStartMaxRatio = 0.38f;
     private const float TearSwipeRequiredDistanceRatio = 0.5f;
@@ -737,6 +739,18 @@ public class MainScene : MonoBehaviour
             mSelectedPackageOverlayImage.enabled = visible
                 && mSelectedPackageOverlayImage.sprite != null;
         }
+    }
+
+    private void SetSelectedPackageImageAlpha(float alpha)
+    {
+        if (mSelectedPackageOverlayImage == null)
+        {
+            return;
+        }
+
+        var color = mSelectedPackageOverlayImage.color;
+        color.a = Mathf.Clamp01(alpha);
+        mSelectedPackageOverlayImage.color = color;
     }
 
     private void CreateSelectedPackageOverlayCanvas(Canvas sourceCanvas)
@@ -3155,14 +3169,38 @@ public class MainScene : MonoBehaviour
                 && mCardPackOpeningEffect.Begin(packTexture, mSelectedPackageOverlayRect);
         }
 
-        SetSelectedPackageImageVisible(false);
         SetBagSelectPanelVisible(false);
         if (openingEffectStarted)
         {
+            // Keep the static cover over the prepared animation frame until the model has
+            // reached the render loop. Its opaque hold masks the clip's initial mesh settle.
+            yield return new WaitForEndOfFrame();
+            mCardPackOpeningEffect.StartPlayback();
+            var handoffHoldElapsed = 0f;
+            while (handoffHoldElapsed < OpeningModelHandoffHoldDuration)
+            {
+                handoffHoldElapsed += Time.unscaledDeltaTime;
+                yield return null;
+            }
+
+            var handoffElapsed = 0f;
+            while (handoffElapsed < OpeningModelHandoffFadeDuration)
+            {
+                handoffElapsed += Time.unscaledDeltaTime;
+                var normalized = Mathf.Clamp01(
+                    handoffElapsed / OpeningModelHandoffFadeDuration);
+                SetSelectedPackageImageAlpha(1f - Mathf.SmoothStep(0f, 1f, normalized));
+                yield return null;
+            }
+
+            SetSelectedPackageImageVisible(false);
+            SetSelectedPackageImageAlpha(1f);
             yield return mCardPackOpeningEffect.WaitForCompletion();
         }
         else
         {
+            SetSelectedPackageImageVisible(false);
+            SetSelectedPackageImageAlpha(1f);
             Debug.LogWarning(
                 $"MainScene: card pack opening effect unavailable; entering game directly. "
                 + $"packId={selectedBagId}");
@@ -3496,7 +3534,9 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
     private int mOriginalCameraCullingMask;
     private bool mDidOverrideCameraCullingMask;
     private float mAnimationDuration;
+    private float mPlaybackStartTime;
     private bool mIsPlaying;
+    private bool mIsPrepared;
 
     public static CardPackOpeningEffect Attach(Transform parent)
     {
@@ -3589,6 +3629,7 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         mAnimator.Rebind();
         mAnimator.Play(AnimationStateName, 0, 0f);
         mAnimator.Update(0f);
+        mAnimator.speed = 0f;
         mAnimationDuration = ResolveAnimationDuration(controller);
 
         if (!TryFitStageToDisplayedPack(stageRoot, displayedPackRect))
@@ -3610,12 +3651,25 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         mLightEffectObject.SetActive(false);
 
         gameObject.SetActive(true);
-        mIsPlaying = true;
+        mIsPrepared = true;
         Debug.Log(
-            $"CardPackOpeningEffect: started variant {variant:D3} with {packTexture.name}. "
+            $"CardPackOpeningEffect: prepared variant {variant:D3} with {packTexture.name}. "
             + $"duration={mAnimationDuration:F3}s, lightDelay={LightEffectDelay:F3}s, "
             + $"lightScale={LightEffectScale:F1}");
         return true;
+    }
+
+    public void StartPlayback()
+    {
+        if (!mIsPrepared || mAnimator == null)
+        {
+            return;
+        }
+
+        mIsPrepared = false;
+        mAnimator.speed = 1f;
+        mPlaybackStartTime = Time.time;
+        mIsPlaying = true;
     }
 
     public IEnumerator WaitForCompletion()
@@ -3625,7 +3679,7 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
             yield break;
         }
 
-        var elapsed = 0f;
+        var elapsed = Mathf.Max(0f, Time.time - mPlaybackStartTime);
         var lightStarted = false;
         while (elapsed < mAnimationDuration)
         {
@@ -3867,6 +3921,7 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
     private void CleanupPlaybackResources()
     {
         mIsPlaying = false;
+        mIsPrepared = false;
 
         if (mMainCamera != null && mDidOverrideCameraCullingMask)
         {
@@ -3892,6 +3947,7 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         mMainCamera = null;
         mAnimator = null;
         mAnimationDuration = 0f;
+        mPlaybackStartTime = 0f;
     }
 
     private void OnDestroy()

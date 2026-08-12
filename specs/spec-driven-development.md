@@ -53,6 +53,7 @@
 3. WHEN 静态卡包切换为 3D 模型 THEN 系统 SHALL 继续按选中卡包实际屏幕中心和高度定位并等比缩放，避免位置或尺寸跳动。
 4. WHEN 播放撕口粒子 THEN 系统 SHALL 保持制作方模型与粒子的固定相对坐标，不得通过屏幕蒙版识别单独移动粒子。
 5. WHEN 开包结束或中断 THEN 系统 SHALL 恢复 Main Camera 的 Culling Mask，并清理模型、粒子和运行时材质。
+6. WHEN 静态封面切换为 3D 模型 THEN 系统 SHALL 先准备并渲染模型第 `0` 帧，再用短时交叠淡变隐藏静态封面；Animator 和光效计时 SHALL 在交接完成后开始。
 
 ### 设计
 
@@ -61,6 +62,7 @@
 - 开包背景 Canvas 继续由 Main Camera 渲染，但播放阶段将其排序降到 EffectLayer 之后；卡包前后材质使用 UI 背景之后的运行时 Render Queue，粒子 Renderer 使用更高 Sorting Order。
 - 模型使用制作方 `EffectScene001` 的基准 `Scale=2.63 / localZ=0`；划开光效 `fx_chai_w_001` 使用 `(0,1,-1.5)` 和独立 `Scale=4`。屏幕尺寸适配只缩放和移动共同 Stage，四倍不得作用于卡包模型或 Stage。
 - 初始尺寸和中心只使用正面 `mesh_skin_cardPack_NNN` 包围盒，避免背面网格影响静态封面切换。
+- `Begin` 只准备模型并将 Animator 固定在第 `0` 帧；等待一个渲染帧后调用 `StartPlayback`，但静态封面先全不透明保持 `0.06s`，再用 `0.12s SmoothStep` 淡出，以遮住动画开头的蒙皮预备变化。光效 `0.5s` 延迟和总播放时间从 `StartPlayback` 计算。
 
 ### 任务
 
@@ -71,6 +73,7 @@
 - [x] 5. 更新长期规则和当前任务记录。
 - [x] 6. 编译运行时和 Editor 程序集。
 - [ ] 7. 在 Play Mode 验证黑边、光效独立四倍缩放、单层卡包、粒子和进场时序。
+- [ ] 8. 在 Play Mode 验证静态封面到模型的首帧交叠淡变没有明显切换、闪帧或输入后额外卡顿。
 
 ### 当前验证
 

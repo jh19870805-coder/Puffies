@@ -315,6 +315,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 - 撕包完整发生在 MainScene 的 `BgGame` 开包舞台，不能移到 GameScene。横向撕口光效与模型共用隔离特效阶段；模型使用制作方 `EffectScene001` 保存的基准 `Scale=2.63 / localZ=0`，光效根节点使用固定相对位置 `(0,1,-1.5)` 和独立 `Scale=4`，再由外层 Stage 整体适配选中卡包的屏幕位置和高度。四倍仅作用于 `fx_chai_w_001` 光效实例，不作用于模型或共同 Stage。不得运行时识别蒙版后单独移动光效，也不得恢复旧独立相机使用的 `Scale=550 / Z=164.02565`。模型尺寸和中心只按正面 `mesh_skin_cardPack_NNN` 计算，背面网格不参与初始对齐。
 - MainScene 撕包结束并进入 GameScene 后，不在游戏页重播卡包模型。切场景前由 `SelectedCardPackImage` 的实际 RectTransform 记录卡包下沿归一化屏幕坐标；当前未完成组的 Piece 从该坐标依次出现，再进入下方暗色托盘现有布局。托盘目标位置、顺序和 Piece 缩放继续使用 GameScene 已计算结果，不按固定分辨率估算起点。
   - 撕包模型和光效直接放入 MainScene 世界并由 `Main Camera` 渲染；运行时将 EffectLayer 加入主相机 Culling Mask，按居中静态卡包的真实屏幕中心和高度等比定位整个 Stage，结束或中断时恢复原 Culling Mask。`BgGame` 开包背景使用同一主摄像机下的世界 `SpriteRenderer`，以不透明几何队列先于卡包模型绘制，不能放在高 Sorting Order 的全屏 UGUI Canvas 中覆盖模型。最终画面不创建独立特效相机、RenderTexture、RawImage 或撕口蒙版采样。
+  - 静态封面切换到 3D 模型时，模型先在 Animator 第 `0` 帧完成贴图、定位并实际渲染一帧；随后启动 Animator，静态封面继续全不透明保持 `0.06s` 以遮住动画开头的蒙皮预备变化，再以 `0.12s` 淡出。动画完成时间与光效延迟从 Animator 启动时计算，避免空白帧、硬切或开头横向展开被直接看见。
 - `Assets/Scenes/EffectScene001.unity` 仅用于核对制作方配置和 Timeline，不加入正常场景导航。列表保留静态封面整体呼吸与 UGUI ADD 高光，但不加载 3D 模型、撕包粒子、特效 Skybox、Directional Light 或 `CardPackListUnlit.shader`。
 - `CardPackRewardFlyTransition` 仅负责结算后新卡包从 RewardPanel 飞到屏幕中央，再飞回 MainScene 对应列表位置，不属于开包特效，继续保留。
 - `Assets/Resources/CardBagPrefabs/` 是 GameScene 拼图关卡资源，不属于卡包展示特效，必须保留。
