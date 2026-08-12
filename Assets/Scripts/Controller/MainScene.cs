@@ -3511,7 +3511,7 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
     private const int ModelVariantCount = 6;
     private const float ReferenceModelScale = 2.63f;
     private const float ReferenceModelLocalZ = 0f;
-    private const float LightEffectScale = 4f;
+    private const float LightBandScale = 3.5f;
     private const float ModelWorldDepth = -1f;
     private const float LightEffectDelay = 0.5f;
     private const float ReferenceLightEffectLocalY = 1f;
@@ -3522,6 +3522,13 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
     private const string FrontMaterialPath = "Effects/CardFx/Materials/test";
     private const string LightEffectPath = "Effects/CardFx/Profabs/fx_chai_w_001";
     private const string CardRendererNamePrefix = "mesh_skin_cardPack_";
+    private static readonly string[] ScaledLightBandNodeNames =
+    {
+        "line",
+        "line01",
+        "glow",
+        "glowC"
+    };
     private const int FrontRendererNumberLength = 3;
     private const int BackRendererNumberLength = 5;
 
@@ -3646,7 +3653,8 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
             ReferenceLightEffectLocalY,
             -1.5f);
         mLightEffectObject.transform.localRotation = Quaternion.identity;
-        mLightEffectObject.transform.localScale = Vector3.one * LightEffectScale;
+        mLightEffectObject.transform.localScale = Vector3.one;
+        ScaleLightBandNodes(mLightEffectObject.transform, LightBandScale);
         SetLayerRecursively(mLightEffectObject, EffectLayer);
         mLightEffectObject.SetActive(false);
 
@@ -3655,7 +3663,7 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         Debug.Log(
             $"CardPackOpeningEffect: prepared variant {variant:D3} with {packTexture.name}. "
             + $"duration={mAnimationDuration:F3}s, lightDelay={LightEffectDelay:F3}s, "
-            + $"lightScale={LightEffectScale:F1}");
+            + $"lightBandScale={LightBandScale:F1}");
         return true;
     }
 
@@ -3905,6 +3913,28 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         {
             particleSystems[i].Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
             particleSystems[i].Play(true);
+        }
+    }
+
+    private static void ScaleLightBandNodes(Transform effectRoot, float scale)
+    {
+        if (effectRoot == null || scale <= 0f)
+        {
+            return;
+        }
+
+        for (var i = 0; i < ScaledLightBandNodeNames.Length; i++)
+        {
+            var node = effectRoot.Find(ScaledLightBandNodeNames[i]);
+            if (node == null)
+            {
+                Debug.LogWarning(
+                    $"CardPackOpeningEffect: light band node is missing: "
+                    + ScaledLightBandNodeNames[i]);
+                continue;
+            }
+
+            node.localScale *= scale;
         }
     }
 
