@@ -296,6 +296,7 @@ public class MainScene : MonoBehaviour
         }
 
         ConfigureMainCanvas();
+        CardPackOpeningEffect.PrepareSceneLightEffect();
 
         if (!TryResolvePackageList())
         {
@@ -3512,32 +3513,16 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
     private const int ModelVariantCount = 6;
     private const float ReferenceModelScale = 2.63f;
     private const float ReferenceModelLocalZ = 0f;
-    private const float LightBandLengthScale = 7f;
-    private const float LightBandHeightScale = 1f;
-    private const float StarParticleScale = 3f;
     private const float ModelWorldDepth = -1f;
     private const float LightEffectDelay = 0.5f;
-    private const float ReferenceLightEffectLocalY = 1f;
     private const float FallbackAnimationDuration = 1.8333334f;
     private const string ModelPathFormat = "Effects/CardPack/Models/CardPackOpeningModel_{0:D3}";
     private const string AnimatorControllerPath = "Effects/CardPack/Animations/CardPackAnimation";
     private const string AnimationStateName = "Take 001";
     private const string FrontMaterialPath = "Effects/CardFx/Materials/test";
-    private const string LightEffectPath = "Effects/CardFx/Profabs/fx_chai_w_001";
+    private const string SceneLightEffectParentName = "PackObject";
+    private const string SceneLightEffectObjectName = "fx_chai_w_001";
     private const string CardRendererNamePrefix = "mesh_skin_cardPack_";
-    private static readonly string[] ScaledLightBandNodeNames =
-    {
-        "line",
-        "line01",
-        "glow",
-        "glowC"
-    };
-    private static readonly string[] ScaledStarParticleNodeNames =
-    {
-        "dot",
-        "dot01",
-        "glow01"
-    };
     private const int FrontRendererNumberLength = 3;
     private const int BackRendererNumberLength = 5;
 
@@ -3553,6 +3538,21 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
     private float mPlaybackStartTime;
     private bool mIsPlaying;
     private bool mIsPrepared;
+
+    public static void PrepareSceneLightEffect()
+    {
+        var lightEffect = FindSceneLightEffect();
+        if (lightEffect == null)
+        {
+            Debug.LogWarning(
+                $"CardPackOpeningEffect: scene light effect is missing: "
+                + $"{SceneLightEffectParentName}/{SceneLightEffectObjectName}");
+            return;
+        }
+
+        StopAndClearParticleSystems(lightEffect);
+        lightEffect.SetActive(false);
+    }
 
     public static CardPackOpeningEffect Attach(Transform parent)
     {
@@ -3585,17 +3585,14 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         var modelPrefab = Resources.Load<GameObject>(string.Format(ModelPathFormat, variant));
         var controller = Resources.Load<RuntimeAnimatorController>(AnimatorControllerPath);
         var frontMaterialTemplate = Resources.Load<Material>(FrontMaterialPath);
-        var lightEffectPrefab = Resources.Load<GameObject>(LightEffectPath);
         if (modelPrefab == null
             || controller == null
-            || frontMaterialTemplate == null
-            || lightEffectPrefab == null)
+            || frontMaterialTemplate == null)
         {
             Debug.LogError(
                 $"CardPackOpeningEffect: required resource is missing. variant={variant}, "
                 + $"model={modelPrefab != null}, controller={controller != null}, "
-                + $"frontMaterial={frontMaterialTemplate != null}, "
-                + $"light={lightEffectPrefab != null}");
+                + $"frontMaterial={frontMaterialTemplate != null}");
             return false;
         }
 
@@ -3655,23 +3652,17 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
             return false;
         }
 
-        mLightEffectObject = Instantiate(lightEffectPrefab, stageRoot, false);
-        mLightEffectObject.name = lightEffectPrefab.name;
-        mLightEffectObject.transform.localPosition = new Vector3(
-            0f,
-            ReferenceLightEffectLocalY,
-            -1.5f);
-        mLightEffectObject.transform.localRotation = Quaternion.identity;
-        mLightEffectObject.transform.localScale = Vector3.one;
-        ScaleLightBandNodes(
-            mLightEffectObject.transform,
-            LightBandLengthScale,
-            LightBandHeightScale);
-        ScaleParticleStartSizes(
-            mLightEffectObject.transform,
-            ScaledStarParticleNodeNames,
-            StarParticleScale);
-        SetLayerRecursively(mLightEffectObject, EffectLayer);
+        mLightEffectObject = FindSceneLightEffect();
+        if (mLightEffectObject == null)
+        {
+            Debug.LogError(
+                $"CardPackOpeningEffect: scene light effect is missing: "
+                + $"{SceneLightEffectParentName}/{SceneLightEffectObjectName}");
+            CleanupPlaybackResources();
+            return false;
+        }
+
+        StopAndClearParticleSystems(mLightEffectObject);
         mLightEffectObject.SetActive(false);
 
         gameObject.SetActive(true);
@@ -3679,8 +3670,20 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         Debug.Log(
             $"CardPackOpeningEffect: prepared variant {variant:D3} with {packTexture.name}. "
             + $"duration={mAnimationDuration:F3}s, lightDelay={LightEffectDelay:F3}s, "
-            + $"lightBandScale={LightBandLengthScale:F1}x{LightBandHeightScale:F1}");
+            + "light=scene instance");
         return true;
+    }
+
+    private static GameObject FindSceneLightEffect()
+    {
+        var parent = GameCommonUtility.FindSceneObject(SceneLightEffectParentName);
+        if (parent == null)
+        {
+            return null;
+        }
+
+        var lightEffect = parent.transform.Find(SceneLightEffectObjectName);
+        return lightEffect != null ? lightEffect.gameObject : null;
     }
 
     public void StartPlayback()
@@ -3932,75 +3935,30 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         }
     }
 
-    private static void ScaleLightBandNodes(
-        Transform effectRoot,
-        float lengthScale,
-        float heightScale)
+    private static void StopAndClearParticleSystems(GameObject effectRoot)
     {
-        if (effectRoot == null || lengthScale <= 0f || heightScale <= 0f)
+        if (effectRoot == null)
         {
             return;
         }
 
-        var lightBandScale = new Vector3(lengthScale, heightScale, 1f);
-        for (var i = 0; i < ScaledLightBandNodeNames.Length; i++)
+        var particleSystems = effectRoot.GetComponentsInChildren<ParticleSystem>(true);
+        for (var i = 0; i < particleSystems.Length; i++)
         {
-            var node = effectRoot.Find(ScaledLightBandNodeNames[i]);
-            if (node == null)
-            {
-                Debug.LogWarning(
-                    $"CardPackOpeningEffect: light band node is missing: "
-                    + ScaledLightBandNodeNames[i]);
-                continue;
-            }
-
-            var localPosition = node.localPosition;
-            localPosition.x *= lengthScale;
-            node.localPosition = localPosition;
-            node.localScale = Vector3.Scale(node.localScale, lightBandScale);
+            particleSystems[i].Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
         }
     }
 
-    private static void ScaleParticleStartSizes(
-        Transform effectRoot,
-        IReadOnlyList<string> nodeNames,
-        float sizeScale)
+    private void ReleaseSceneLightEffect()
     {
-        if (effectRoot == null || nodeNames == null || sizeScale <= 0f)
+        if (mLightEffectObject == null)
         {
             return;
         }
 
-        for (var i = 0; i < nodeNames.Count; i++)
-        {
-            var node = effectRoot.Find(nodeNames[i]);
-            if (node == null)
-            {
-                Debug.LogWarning(
-                    $"CardPackOpeningEffect: star particle node is missing: {nodeNames[i]}");
-                continue;
-            }
-
-            var particleSystem = node.GetComponent<ParticleSystem>();
-            if (particleSystem == null)
-            {
-                Debug.LogWarning(
-                    $"CardPackOpeningEffect: star particle system is missing: {nodeNames[i]}");
-                continue;
-            }
-
-            var main = particleSystem.main;
-            if (main.startSize3D)
-            {
-                main.startSizeXMultiplier *= sizeScale;
-                main.startSizeYMultiplier *= sizeScale;
-                main.startSizeZMultiplier *= sizeScale;
-            }
-            else
-            {
-                main.startSizeMultiplier *= sizeScale;
-            }
-        }
+        StopAndClearParticleSystems(mLightEffectObject);
+        mLightEffectObject.SetActive(false);
+        mLightEffectObject = null;
     }
 
     private static void SetLayerRecursively(GameObject root, int layer)
@@ -4025,6 +3983,8 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
 
         mDidOverrideCameraCullingMask = false;
 
+        ReleaseSceneLightEffect();
+
         if (mWorldRoot != null)
         {
             Destroy(mWorldRoot);
@@ -4038,7 +3998,6 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         }
 
         mModelObject = null;
-        mLightEffectObject = null;
         mMainCamera = null;
         mAnimator = null;
         mAnimationDuration = 0f;
