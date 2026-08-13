@@ -2855,6 +2855,14 @@ public class GameScene : MonoBehaviour
         var camera = Camera.main;
         if (_board.PieceBoardRect != null && camera != null)
         {
+            if (TryGetCanvasRectGameplayBounds(
+                    _board.PieceBoardRect,
+                    camera,
+                    out var stableBounds))
+            {
+                return stableBounds;
+            }
+
             return GameCommonUtility.GetRectTransformCameraWorldBounds(
                 _board.PieceBoardRect,
                 camera,
@@ -2872,6 +2880,52 @@ public class GameScene : MonoBehaviour
         }
 
         return new Bounds(Vector3.zero, Vector3.one);
+    }
+
+    private static bool TryGetCanvasRectGameplayBounds(
+        RectTransform targetRect,
+        Camera gameplayCamera,
+        out Bounds gameplayBounds)
+    {
+        gameplayBounds = default;
+        var canvas = targetRect != null ? targetRect.GetComponentInParent<Canvas>() : null;
+        var canvasRect = canvas != null ? canvas.rootCanvas.transform as RectTransform : null;
+        if (targetRect == null
+            || gameplayCamera == null
+            || canvasRect == null
+            || canvasRect.rect.width <= 0.001f
+            || canvasRect.rect.height <= 0.001f
+            || Screen.width <= 0
+            || Screen.height <= 0)
+        {
+            return false;
+        }
+
+        var targetBounds = RectTransformUtility.CalculateRelativeRectTransformBounds(
+            canvasRect,
+            targetRect);
+        var canvasLocalRect = canvasRect.rect;
+        var screenMin = new Vector3(
+            Mathf.InverseLerp(canvasLocalRect.xMin, canvasLocalRect.xMax, targetBounds.min.x)
+                * Screen.width,
+            Mathf.InverseLerp(canvasLocalRect.yMin, canvasLocalRect.yMax, targetBounds.min.y)
+                * Screen.height,
+            Mathf.Abs(gameplayCamera.transform.position.z - WorldGameplayDepth));
+        var screenMax = new Vector3(
+            Mathf.InverseLerp(canvasLocalRect.xMin, canvasLocalRect.xMax, targetBounds.max.x)
+                * Screen.width,
+            Mathf.InverseLerp(canvasLocalRect.yMin, canvasLocalRect.yMax, targetBounds.max.y)
+                * Screen.height,
+            screenMin.z);
+        var worldMin = gameplayCamera.ScreenToWorldPoint(screenMin);
+        var worldMax = gameplayCamera.ScreenToWorldPoint(screenMax);
+        gameplayBounds = new Bounds(worldMin, Vector3.zero);
+        gameplayBounds.Encapsulate(worldMax);
+        gameplayBounds.center = new Vector3(
+            gameplayBounds.center.x,
+            gameplayBounds.center.y,
+            WorldGameplayDepth);
+        return gameplayBounds.size.x > 0.0001f && gameplayBounds.size.y > 0.0001f;
     }
 
     private void LayoutTrayPieces(

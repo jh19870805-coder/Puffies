@@ -281,7 +281,7 @@
 ### 设计
 
 - 保留现有 `DraggableHorizontalSpacingPixels=20`，将其作为所有卡包共用的设计像素间距。
-- 初始布局使用 `SpriteRenderer.bounds.center` 校正最终世界坐标，直接对齐实际渲染边界中心与托盘中心。
+- PieceBoard 的托盘中心从根 Canvas 设计坐标直接换算到屏幕和游戏世界坐标，避免相机适配后首帧 Canvas 世界角点尚未刷新；Piece 继续使用实际 `SpriteRenderer.bounds.center` 校正最终世界坐标。
 - 在 `TryBeginDrag` 中触发后序 Piece 补位；队尾没有移动目标时不启动协程。
 - 新增单一托盘 Piece 重排协程，使用 `Time.unscaledDeltaTime` 和 `Mathf.SmoothStep` 在 `0.5s` 内只插值世界 X 坐标。
 - 重排期间暂时禁止开始下一次拖拽；当前已拿起的 Piece 仍可继续移动和松手。
@@ -299,7 +299,7 @@
 
 - 静态检查确认所有布局入口共用 `DraggableHorizontalSpacingPixels=20`。
 - 拿起补位只收集编号大于当前 Piece、仍在托盘且不是当前拖拽对象的状态；队尾目标列表为空时不启动协程。
-- 初始布局使用 `SpriteRenderer.bounds.center` 计算实际渲染中心偏移，托盘重排目标继续保持同一 Y 和缩放。
+- 初始布局与点击后的重排共用由 Canvas 设计坐标换算的托盘中心，并使用 `SpriteRenderer.bounds.center` 计算 Piece 实际渲染中心偏移；托盘重排目标继续保持同一 Y 和缩放。
 - 运行时与编辑器 `dotnet build` 顺序通过，均为 `0` 警告、`0` 错误。
 - Unity `2022.3.62f2c1` 无界面编译和完整资源导入通过，返回码为 `0`，日志中无 C# 错误或警告。
 - `git diff --check` 通过；Unity 未修改场景、Prefab 或资源。
