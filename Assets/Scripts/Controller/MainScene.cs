@@ -3515,6 +3515,8 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
     private const float ReferenceModelLocalZ = 0f;
     private const float ModelWorldDepth = -1f;
     private const float LightEffectDelay = 0.5f;
+    private const float LightEffectDuration = 3.0333333f;
+    private const uint LightEffectRandomSeed = 1u;
     private const float FallbackAnimationDuration = 1.8333334f;
     private const string ModelPathFormat = "Effects/CardPack/Models/CardPackOpeningModel_{0:D3}";
     private const string AnimatorControllerPath = "Effects/CardPack/Animations/CardPackAnimation";
@@ -3708,7 +3710,10 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
 
         var elapsed = Mathf.Max(0f, Time.time - mPlaybackStartTime);
         var lightStarted = false;
-        while (elapsed < mAnimationDuration)
+        var playbackDuration = Mathf.Max(
+            mAnimationDuration,
+            LightEffectDelay + LightEffectDuration);
+        while (elapsed < playbackDuration)
         {
             elapsed += Time.deltaTime;
             if (!lightStarted && elapsed >= LightEffectDelay)
@@ -3720,6 +3725,7 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
             yield return null;
         }
 
+        ReleaseSceneLightEffect();
         mIsPlaying = false;
     }
 
@@ -3926,12 +3932,32 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
             return;
         }
 
+        var rootParticleSystem = mLightEffectObject.GetComponent<ParticleSystem>();
+        if (rootParticleSystem == null)
+        {
+            Debug.LogError("CardPackOpeningEffect: scene light effect root has no ParticleSystem.");
+            return;
+        }
+
+        ApplyTimelineParticleSeeds(mLightEffectObject);
         mLightEffectObject.SetActive(true);
-        var particleSystems = mLightEffectObject.GetComponentsInChildren<ParticleSystem>(true);
+        rootParticleSystem.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+        rootParticleSystem.Play(true);
+    }
+
+    private static void ApplyTimelineParticleSeeds(GameObject effectRoot)
+    {
+        var particleSystems = effectRoot.GetComponentsInChildren<ParticleSystem>(true);
         for (var i = 0; i < particleSystems.Length; i++)
         {
-            particleSystems[i].Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
-            particleSystems[i].Play(true);
+            var particleSystem = particleSystems[i];
+            if (!particleSystem.useAutoRandomSeed)
+            {
+                continue;
+            }
+
+            particleSystem.useAutoRandomSeed = false;
+            particleSystem.randomSeed = LightEffectRandomSeed;
         }
     }
 
@@ -3942,10 +3968,10 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
             return;
         }
 
-        var particleSystems = effectRoot.GetComponentsInChildren<ParticleSystem>(true);
-        for (var i = 0; i < particleSystems.Length; i++)
+        var rootParticleSystem = effectRoot.GetComponent<ParticleSystem>();
+        if (rootParticleSystem != null)
         {
-            particleSystems[i].Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            rootParticleSystem.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
         }
     }
 

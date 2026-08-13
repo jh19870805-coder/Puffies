@@ -1,5 +1,26 @@
 # Spec Driven Development
 
+## 2026-08-13 - 开包滑光保持原生整组播放
+
+### 需求
+
+1. WHEN `fx_chai_w_001` 在开包阶段启动 THEN 系统 SHALL 保持与 MainScene Inspector 中整组预览一致的粒子时序和组合效果。
+2. WHEN 运行时代码播放或停止该特效 THEN 系统 SHALL 只从根 `ParticleSystem` 递归控制整组，不得再次逐个重启全部子粒子。
+3. WHEN 修复播放行为 THEN 系统 SHALL 不修改场景层级、Transform、材质、发射参数、随机种子或渲染排序。
+
+### 设计与任务
+
+- [x] 核对 `fx_chai_w_001` 根节点本身包含 `ParticleSystem`，七个表现节点为其子节点。
+- [x] 将启动逻辑改为根粒子一次 `Stop(withChildren)` 后一次 `Play(withChildren)`，等价于对整套粒子重新播放。
+- [x] 将初始化和结束清理改为根粒子一次 `Stop(withChildren)`，避免父节点递归后又逐个对子节点重复操作。
+- [ ] 在 MainScene Play Mode 对比 Inspector 手动预览和实际拆包阶段的光带、星星及渐变层时序。
+
+### 验证
+
+- [x] `Assembly-CSharp.csproj` 编译通过，`0` 警告、`0` 错误。
+- [x] `git diff --check` 通过。
+- [ ] Unity Play Mode 目视验证。
+
 ## 2026-08-13 - 首次拆包进入 GameScene 预加载
 
 ### 需求
@@ -83,7 +104,7 @@
 - 将 `CardPackOpeningEffect` 收敛为普通运行时控制组件，不再创建 `RawImage`、`CardPackOpeningEffectCamera` 和 `CardPackOpeningEffectRT`。
 - `Begin` 获取 `Camera.main`，将 EffectLayer 加入其 Culling Mask；Stage 直接位于主摄像机视野中，中心通过选中卡包屏幕 Rect 转换得到，缩放按主摄像机正交尺寸计算。
 - 开包背景 Canvas 继续由 Main Camera 渲染，但播放阶段将其排序降到 EffectLayer 之后；卡包前后材质使用 UI 背景之后的运行时 Render Queue，粒子 Renderer 使用更高 Sorting Order。
-- 模型使用制作方 `EffectScene001` 的基准 `Scale=2.63 / localZ=0`；划开光效直接复用 MainScene `PackObject/fx_chai_w_001` 场景 Prefab 实例，并始终保留其场景原层级和完整 Transform。运行时不得加载或实例化第二份光效，不得换父节点、设置位置/旋转/缩放或覆盖 Particle Start Size、发射参数、材质和排序；模型 Stage 的最终屏幕适配不作用于场景光效。
+- 模型使用制作方 `EffectScene001` 的基准 `Scale=2.63 / localZ=0`；划开光效直接复用 MainScene `Canvas/PackObject/fx_chai_w_001` 场景 Prefab 实例，并始终保留用户配置的父链和完整 Transform。主 Canvas 为 `Screen Space - Camera` 且绑定 Main Camera，已经满足同摄像机渲染要求。运行时不得加载或实例化第二份光效，不得换父节点、设置位置/旋转/缩放或覆盖 Particle Start Size、发射参数、材质和排序。
 - 初始尺寸和中心只使用正面 `mesh_skin_cardPack_NNN` 包围盒，避免背面网格影响静态封面切换。
 - `Begin` 只准备模型并将 Animator 固定在第 `0` 帧；等待一个渲染帧后调用 `StartPlayback`，但静态封面先全不透明保持 `0.06s`，再用 `0.12s SmoothStep` 淡出，以遮住动画开头的蒙皮预备变化。光效 `0.5s` 延迟和总播放时间从 `StartPlayback` 计算。
 
@@ -102,7 +123,8 @@
 
 - 搜索确认运行时代码中不再存在 `CardPackOpeningEffectCamera`、`CardPackOpeningEffectRT`、最终画面 RawImage 及对应字段。
 - 选中卡包、选择面板、开包背景、3D 模型和撕口粒子的最终画面统一通过 `Main Camera`；模型按 RectTransform 的真实屏幕中心与四角屏幕高度定位。
-- 对照制作方 `EffectScene001` 确认模型基准为 `Scale=2.63 / localZ=0`、撕口粒子为 `(0,1,-1.5)`；代码已按该关系实例化，并删除曾产生 `localY≈302` 的蒙版定位。
+- 对照制作方 `EffectScene001` 确认模型基准为 `Scale=2.63 / localZ=0`；正式撕口粒子基准是 Timeline 绑定的主 Canvas 下 `fx_chai_w_001` 实例（Timeline 延迟 `0.5s`、轨道约 `3.033s`），不是场景中 `(0,1,-1.5)` 的世界空间演示实例。运行时复用 MainScene 中已人工调好的同一场景实例，不再根据演示实例坐标换算或覆盖 Transform。
+- 制作方 Timeline 的正式滑光 Control Track 使用 `particleRandomSeed=1`。运行时直接播放场景粒子时，对启用 `Auto Random Seed` 的实例复现该固定种子，避免重新进入 MainScene 后随机形态变化；固定种子仅应用于运行时实例，不写回 Prefab。
 - Play Mode 截图确认长名称背面网格的 `Bg01.png` 是中央灰块来源；将其替换为当前封面后出现第二层完整卡包，因此当前禁用该 Renderer，只为短名称正面网格创建动态封面材质。
 - 制作方材质资源本体、FBX、Animator 和粒子 Prefab 均未修改；运行时与示例场景引用同一 GUID 的完整光效 Prefab，7 个粒子子节点没有丢失。模型保持屏幕适配尺寸，运行时只放大四个光带节点，三个星形节点保持 Prefab 原始 Transform。旧黑色矩形属于透明 RenderTexture/RawImage 二次合成异常，Main Camera 直绘后不应保留。
 - 后续按资源优先原则收敛：粒子相对排序继续由 `fx_chai_w_001.prefab` 的 `0/5/10` 控制，不再由代码统一覆盖；卡包正反面 Render Queue `2001` 保存到 `test.mat` 与 `test01.mat`，运行时只替换动态贴图。
