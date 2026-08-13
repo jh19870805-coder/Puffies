@@ -222,7 +222,7 @@
 
 - 将 `PieceSnapDuration` 从 `0.18s` 调整为 `0.12s`，即保留原时长的 `2/3`。
 - 沿用现有屏幕空间滑光路径和 `0.52s` 光带时长，只为当前 `grooveImage` 创建滑光覆盖层，范围直接使用当前 Piece 的屏幕 Rect；确认颜色使用项目标准绿 `(112,151,75)`。
-- `PuzzlePlacementShine.shader` 显式使用 `BlendOp Add` 与 `Blend SrcAlpha One`，保持带 Alpha 强度控制的加法叠加。
+- `PieceLight1.png` 到 `PieceLight4.png` 使用加法材质显示不规则贴纸微光；UGUI 与 SpriteRenderer 分别使用适配自身渲染路径的材质，并由贴纸 Alpha/ SpriteMask 裁切。正确落位时按实际相邻关系从当前块向已拼块错峰传播。
 
 ### 任务
 

@@ -48,8 +48,14 @@ public class GameScene : MonoBehaviour
     private const float GroupTransitionDefaultHoldDuration = 0.1f;
     private const float ActiveGroupOutlineFadeDuration = 0.5f;
     private const float PieceSnapDuration = 0.12f;
-    private const float PiecePlacementShineDuration = 0.52f;
-    private const float PiecePlacementShineBandWidth = 0.045f;
+    private const float PiecePlacementLightDuration = 0.72f;
+    private const float PiecePlacementLightFadeInRatio = 0.22f;
+    private const float PiecePlacementLightTravelPixels = 16f;
+    private const int PiecePlacementLightSpriteCount = 4;
+    private const int PiecePlacementLightMaxAffectedPieces = 7;
+    private const int AmbientPieceLightCount = 2;
+    private const float AmbientPieceLightMinimumAlpha = 0.035f;
+    private const float AmbientPieceLightMaximumAlpha = 0.22f;
     private const float InvalidDropReturnDuration = 0.3f;
     private const float InvalidDropColorRestoreDuration = 0.1f;
     private const float InvalidDropTintStrength = 0.7f;
@@ -94,8 +100,11 @@ public class GameScene : MonoBehaviour
         GameDefine.UiRoot + "/BasicUI/BgCardBoard2.png";
     private const string PuzzleOutlineTintShaderResourcesPath = "PuzzleOutlineTint";
     private const string PuzzleOutlineTintMaterialName = "PuzzleOutlineTint (Runtime)";
-    private const string PiecePlacementShineShaderResourcesPath = "PuzzlePlacementShine";
-    private const string PiecePlacementShineMaterialName = "PuzzlePlacementShine (Runtime)";
+    private const string PiecePlacementLightPathPrefix =
+        GameDefine.UiRoot + "/GameScene/PieceLight";
+    private const string PiecePlacementLightMaterialResourcesPath = "PackHighlightAdditive";
+    private const string PiecePlacementSpriteLightShaderResourcesPath =
+        "PuzzlePieceLightAdditive";
     private const string DraggableGroupRootObjectName = "DraggableGroupPieces";
     private const string BoardOccupancyProbeRootObjectName = "BoardOccupancyProbes";
     private const string ActiveGroupOutlineRootObjectName = "ActiveGroupOutline";
@@ -118,11 +127,6 @@ public class GameScene : MonoBehaviour
     private static readonly Color TutorialTargetOutlineColor = new Color32(80, 139, 230, 255);
     private static readonly Color InvalidDropTintColor = new Color32(255, 58, 58, 255);
     private static readonly Color StandardPuzzleOutlineColor = new Color32(0x3f, 0x42, 0x3e, 0xff);
-    private static readonly Color PiecePlacementShineColor = new Color32(112, 151, 75, 230);
-    private static readonly int ShineSweepAxisId = Shader.PropertyToID("_SweepAxis");
-    private static readonly int ShineSweepCenterId = Shader.PropertyToID("_SweepCenter");
-    private static readonly int ShineBandWidthId = Shader.PropertyToID("_BandWidth");
-    private static readonly int ShineColorId = Shader.PropertyToID("_ShineColor");
     private static readonly Vector2 TutorialStrongPromptAnchor = new Vector2(0.5f, 0.7f);
     private static readonly Vector2 TutorialStrongPromptOffset = new Vector2(-30f, -50f);
     private static readonly Vector2 TutorialHintPromptAnchor = new Vector2(0.73f, 0.76f);
@@ -133,6 +137,40 @@ public class GameScene : MonoBehaviour
         StrongPlacement,
         TwoPiecePractice,
         HintIntroduction
+    }
+
+    private sealed class PiecePlacementLightFx
+    {
+        public GameObject Root;
+        public Image Image;
+        public RectTransform Rect;
+        public float Delay;
+        public float Lifetime;
+        public Vector2 StartPosition;
+        public Vector2 Travel;
+        public Vector3 StartScale;
+    }
+
+    private sealed class AmbientPieceLightFx
+    {
+        public GameObject Root;
+        public Image Image;
+        public SpriteRenderer Renderer;
+        public SpriteRenderer SourceRenderer;
+        public SpriteMask SpriteMask;
+        public Transform Transform;
+        public Vector3 BasePosition;
+        public Vector3 BaseScale;
+        public float Phase;
+        public float Period;
+        public float Strength;
+    }
+
+    private struct PiecePlacementLightTarget
+    {
+        public Image Image;
+        public Rect ScreenRect;
+        public float Distance;
     }
 
     private static bool sHookedSceneLoaded;
@@ -192,10 +230,14 @@ public class GameScene : MonoBehaviour
     private RectTransform _loadedCardBagRect;
     private Sprite _runtimeCardBoardBackgroundSprite;
     private Material _runtimePuzzleOutlineTintMaterial;
-    private Material _runtimePiecePlacementShineMaterial;
+    private readonly List<Sprite> _piecePlacementLightSprites = new List<Sprite>();
+    private readonly List<AmbientPieceLightFx> _ambientPieceLights =
+        new List<AmbientPieceLightFx>();
+    private Material _piecePlacementLightMaterial;
+    private Material _pieceSpriteLightMaterial;
     private Coroutine _activeGroupOutlineFadeCoroutine;
     private bool _didWarnMissingPuzzleOutlineTintShader;
-    private bool _didWarnMissingPiecePlacementShineShader;
+    private bool _didWarnMissingPiecePlacementLightResources;
     private float _configuredBoardScale = DefaultBoardScale;
     private Vector3 _originalCardBagLocalScale = Vector3.one;
     private bool _hasOriginalCardBagLocalScale;
@@ -306,7 +348,8 @@ public class GameScene : MonoBehaviour
         DestroyTutorialTipBackgroundSprite();
         DestroyRuntimeCardBoardBackgroundSprite();
         DestroyRuntimePuzzleOutlineTintMaterial();
-        DestroyRuntimePiecePlacementShineMaterial();
+        ClearAmbientPieceLights();
+        DestroyPiecePlacementLightSprites();
         DestroyBoardOccupancyProbes();
         ClearPieceHint();
         HintDashedOutlineGraphic.ClearPathCache();
@@ -314,6 +357,7 @@ public class GameScene : MonoBehaviour
 
     private void Update()
     {
+        UpdateAmbientPieceLights();
         UpdatePieceHintAnimation();
         UpdateLoosePieceReminder();
         if (_isEntranceAnimating || _isGroupTransitionAnimating)
@@ -1270,6 +1314,7 @@ public class GameScene : MonoBehaviour
         }
 
         PreparePieceTrayForGroupStart();
+        ClearAmbientPieceLights();
         ClearCurrentDraggableGroup();
         _drag.CurrentGroupIndex = groupIndex;
 
@@ -1306,6 +1351,7 @@ public class GameScene : MonoBehaviour
             {
                 grooveImage.gameObject.SetActive(true);
                 SetImageAlpha(grooveImage, 1f);
+                AddAmbientBoardPieceLights(grooveImage);
                 continue;
             }
 
@@ -1343,7 +1389,10 @@ public class GameScene : MonoBehaviour
                 IsOnTray = true,
                 IsPlaced = false
             });
+            AddAmbientDraggablePieceLights(pieceRenderer, grooveImage);
         }
+
+        AddAmbientLightsForCompletedGroups(groupIndex);
 
         LayoutTrayPieces();
         CachePieceTrayOriginalPosition();
@@ -1655,44 +1704,366 @@ public class GameScene : MonoBehaviour
         _runtimePuzzleOutlineTintMaterial = null;
     }
 
-    private Material GetOrCreatePiecePlacementShineMaterial()
+    private bool EnsurePiecePlacementLightResources()
     {
-        if (_runtimePiecePlacementShineMaterial != null)
+        if (_piecePlacementLightSprites.Count == PiecePlacementLightSpriteCount
+            && _piecePlacementLightMaterial != null)
         {
-            return _runtimePiecePlacementShineMaterial;
+            return true;
         }
 
-        var shader = Resources.Load<Shader>(PiecePlacementShineShaderResourcesPath);
-        if (shader == null)
+        DestroyPiecePlacementLightSprites();
+        for (var i = 1; i <= PiecePlacementLightSpriteCount; i++)
         {
-            if (!_didWarnMissingPiecePlacementShineShader)
+            var sprite = GameCommonUtility.LoadSpriteByPath(
+                $"{PiecePlacementLightPathPrefix}{i}{GameDefine.ImageExtPng}",
+                PixelsPerUnit);
+            if (sprite == null)
             {
-                _didWarnMissingPiecePlacementShineShader = true;
-                Debug.LogWarning(
-                    $"GameScene: piece placement shine shader is missing at "
-                    + $"Resources/{PiecePlacementShineShaderResourcesPath}.shader; "
-                    + "placement shine skipped.");
+                DestroyPiecePlacementLightSprites();
+                WarnMissingPiecePlacementLightResources();
+                return false;
             }
 
-            return null;
+            _piecePlacementLightSprites.Add(sprite);
         }
 
-        _runtimePiecePlacementShineMaterial = new Material(shader)
+        _piecePlacementLightMaterial = Resources.Load<Material>(
+            PiecePlacementLightMaterialResourcesPath);
+        if (_piecePlacementLightMaterial == null)
         {
-            name = PiecePlacementShineMaterialName
-        };
-        return _runtimePiecePlacementShineMaterial;
+            DestroyPiecePlacementLightSprites();
+            WarnMissingPiecePlacementLightResources();
+            return false;
+        }
+
+        return true;
     }
 
-    private void DestroyRuntimePiecePlacementShineMaterial()
+    private void WarnMissingPiecePlacementLightResources()
     {
-        if (_runtimePiecePlacementShineMaterial == null)
+        if (_didWarnMissingPiecePlacementLightResources)
         {
             return;
         }
 
-        Destroy(_runtimePiecePlacementShineMaterial);
-        _runtimePiecePlacementShineMaterial = null;
+        _didWarnMissingPiecePlacementLightResources = true;
+        Debug.LogWarning(
+            "GameScene: PieceLight1-4.png or PackHighlightAdditive.mat is missing; "
+            + "placement light propagation skipped.");
+    }
+
+    private void DestroyPiecePlacementLightSprites()
+    {
+        for (var i = 0; i < _piecePlacementLightSprites.Count; i++)
+        {
+            var sprite = _piecePlacementLightSprites[i];
+            if (sprite == null)
+            {
+                continue;
+            }
+
+            var texture = sprite.texture;
+            Destroy(sprite);
+            if (texture != null)
+            {
+                Destroy(texture);
+            }
+        }
+
+        _piecePlacementLightSprites.Clear();
+        _piecePlacementLightMaterial = null;
+        if (_pieceSpriteLightMaterial != null)
+        {
+            Destroy(_pieceSpriteLightMaterial);
+            _pieceSpriteLightMaterial = null;
+        }
+    }
+
+    private void AddAmbientLightsForCompletedGroups(int activeGroupIndex)
+    {
+        if (_board.GrooveImagesByGroup == null)
+        {
+            return;
+        }
+
+        for (var groupIndex = 0; groupIndex < activeGroupIndex; groupIndex++)
+        {
+            var group = _board.GrooveImagesByGroup[groupIndex];
+            if (group == null)
+            {
+                continue;
+            }
+
+            for (var i = 0; i < group.Count; i++)
+            {
+                AddAmbientBoardPieceLights(group[i]);
+            }
+        }
+    }
+
+    private void AddAmbientBoardPieceLights(Image sourceImage)
+    {
+        if (sourceImage == null
+            || sourceImage.sprite == null
+            || !EnsurePiecePlacementLightResources())
+        {
+            return;
+        }
+
+        var maskObject = CreatePiecePlacementLightMask(sourceImage);
+        if (maskObject == null)
+        {
+            return;
+        }
+
+        maskObject.name = $"{sourceImage.gameObject.name}_AmbientLights";
+        var maskRect = maskObject.GetComponent<RectTransform>();
+        var random = CreatePieceLightRandom(sourceImage);
+        for (var i = 0; i < AmbientPieceLightCount; i++)
+        {
+            var sprite = _piecePlacementLightSprites[random.Next(_piecePlacementLightSprites.Count)];
+            var lightObject = new GameObject(
+                $"AmbientLight_{i + 1}",
+                typeof(RectTransform),
+                typeof(CanvasRenderer),
+                typeof(Image));
+            lightObject.layer = sourceImage.gameObject.layer;
+            var lightRect = lightObject.GetComponent<RectTransform>();
+            lightRect.SetParent(maskRect, false);
+            lightRect.anchorMin = lightRect.anchorMax = new Vector2(0.5f, 0.5f);
+            lightRect.pivot = new Vector2(0.5f, 0.5f);
+            lightRect.sizeDelta = sprite.rect.size;
+            lightRect.anchoredPosition = new Vector2(
+                sourceImage.rectTransform.rect.width * RandomRange(random, -0.3f, 0.3f),
+                sourceImage.rectTransform.rect.height * RandomRange(random, -0.3f, 0.3f));
+            lightRect.localRotation = Quaternion.Euler(
+                0f,
+                0f,
+                RandomRange(random, -24f, 24f));
+            lightRect.localScale = Vector3.one * RandomRange(random, 0.82f, 1.12f);
+
+            var lightImage = lightObject.GetComponent<Image>();
+            lightImage.sprite = sprite;
+            lightImage.material = _piecePlacementLightMaterial;
+            lightImage.color = new Color(1f, 1f, 1f, 0f);
+            lightImage.raycastTarget = false;
+            lightImage.maskable = true;
+            _ambientPieceLights.Add(CreateAmbientPieceLightFx(
+                maskObject,
+                lightImage,
+                null,
+                null,
+                null,
+                lightRect,
+                random));
+        }
+    }
+
+    private void AddAmbientDraggablePieceLights(
+        SpriteRenderer sourceRenderer,
+        Image sourceImage)
+    {
+        if (sourceRenderer == null
+            || sourceRenderer.sprite == null
+            || !EnsurePiecePlacementLightResources()
+            || !EnsurePieceSpriteLightMaterial())
+        {
+            return;
+        }
+
+        var random = CreatePieceLightRandom(sourceImage);
+        var sourceBounds = sourceRenderer.sprite.bounds;
+        var maskObject = new GameObject("AmbientPieceLightMask");
+        maskObject.transform.SetParent(sourceRenderer.transform, false);
+        var spriteMask = maskObject.AddComponent<SpriteMask>();
+        spriteMask.sprite = sourceRenderer.sprite;
+        spriteMask.alphaCutoff = 0.02f;
+        spriteMask.isCustomRangeActive = true;
+        spriteMask.frontSortingLayerID = sourceRenderer.sortingLayerID;
+        spriteMask.backSortingLayerID = sourceRenderer.sortingLayerID;
+        spriteMask.frontSortingOrder = sourceRenderer.sortingOrder + 1;
+        spriteMask.backSortingOrder = sourceRenderer.sortingOrder + 1;
+        for (var i = 0; i < AmbientPieceLightCount; i++)
+        {
+            var sprite = _piecePlacementLightSprites[random.Next(_piecePlacementLightSprites.Count)];
+            var lightObject = new GameObject($"AmbientLight_{i + 1}");
+            lightObject.transform.SetParent(sourceRenderer.transform, false);
+            lightObject.transform.localPosition = new Vector3(
+                RandomRange(random, sourceBounds.min.x * 0.65f, sourceBounds.max.x * 0.65f),
+                RandomRange(random, sourceBounds.min.y * 0.65f, sourceBounds.max.y * 0.65f),
+                -0.01f);
+            lightObject.transform.localRotation = Quaternion.Euler(
+                0f,
+                0f,
+                RandomRange(random, -24f, 24f));
+            lightObject.transform.localScale = Vector3.one * RandomRange(random, 0.82f, 1.12f);
+
+            var lightRenderer = lightObject.AddComponent<SpriteRenderer>();
+            lightRenderer.sprite = sprite;
+            lightRenderer.sharedMaterial = _pieceSpriteLightMaterial;
+            lightRenderer.sortingLayerID = sourceRenderer.sortingLayerID;
+            lightRenderer.sortingOrder = sourceRenderer.sortingOrder + 1;
+            lightRenderer.maskInteraction = SpriteMaskInteraction.VisibleInsideMask;
+            lightRenderer.color = new Color(1f, 1f, 1f, 0f);
+            _ambientPieceLights.Add(CreateAmbientPieceLightFx(
+                sourceRenderer.gameObject,
+                null,
+                lightRenderer,
+                sourceRenderer,
+                spriteMask,
+                lightObject.transform,
+                random));
+        }
+    }
+
+    private bool EnsurePieceSpriteLightMaterial()
+    {
+        if (_pieceSpriteLightMaterial != null)
+        {
+            return true;
+        }
+
+        var shader = Resources.Load<Shader>(
+            PiecePlacementSpriteLightShaderResourcesPath);
+        if (shader == null)
+        {
+            WarnMissingPiecePlacementLightResources();
+            return false;
+        }
+
+        _pieceSpriteLightMaterial = new Material(shader)
+        {
+            name = "PuzzlePieceLightAdditive (Runtime)"
+        };
+        return true;
+    }
+
+    private static System.Random CreatePieceLightRandom(Image sourceImage)
+    {
+        var pieceNumber = GetPieceNumberFromImage(sourceImage);
+        return new System.Random(pieceNumber == int.MaxValue ? 1 : pieceNumber * 486187739);
+    }
+
+    private static AmbientPieceLightFx CreateAmbientPieceLightFx(
+        GameObject root,
+        Image image,
+        SpriteRenderer renderer,
+        SpriteRenderer sourceRenderer,
+        SpriteMask spriteMask,
+        Transform lightTransform,
+        System.Random random)
+    {
+        return new AmbientPieceLightFx
+        {
+            Root = root,
+            Image = image,
+            Renderer = renderer,
+            SourceRenderer = sourceRenderer,
+            SpriteMask = spriteMask,
+            Transform = lightTransform,
+            BasePosition = lightTransform.localPosition,
+            BaseScale = lightTransform.localScale,
+            Phase = RandomRange(random, 0f, Mathf.PI * 2f),
+            Period = RandomRange(random, 1.55f, 2.35f),
+            Strength = RandomRange(random, 0.72f, 1f)
+        };
+    }
+
+    private void UpdateAmbientPieceLights()
+    {
+        for (var i = _ambientPieceLights.Count - 1; i >= 0; i--)
+        {
+            var effect = _ambientPieceLights[i];
+            if (effect == null
+                || effect.Root == null
+                || effect.Transform == null
+                || !effect.Root.activeInHierarchy)
+            {
+                _ambientPieceLights.RemoveAt(i);
+                continue;
+            }
+
+            var cycle = Time.unscaledTime / Mathf.Max(0.01f, effect.Period)
+                * Mathf.PI * 2f + effect.Phase;
+            var wave = 0.5f + 0.5f * Mathf.Sin(cycle);
+            wave = wave * wave * (3f - 2f * wave);
+            var alpha = Mathf.Lerp(
+                AmbientPieceLightMinimumAlpha,
+                AmbientPieceLightMaximumAlpha,
+                wave) * effect.Strength;
+            var color = new Color(1f, 1f, 1f, alpha);
+            if (effect.Image != null)
+            {
+                effect.Image.color = color;
+            }
+            if (effect.Renderer != null)
+            {
+                effect.Renderer.color = color;
+                if (effect.SourceRenderer != null)
+                {
+                    var sortingOrder = effect.SourceRenderer.sortingOrder + 1;
+                    effect.Renderer.sortingLayerID = effect.SourceRenderer.sortingLayerID;
+                    effect.Renderer.sortingOrder = sortingOrder;
+                    if (effect.SpriteMask != null)
+                    {
+                        effect.SpriteMask.frontSortingLayerID =
+                            effect.SourceRenderer.sortingLayerID;
+                        effect.SpriteMask.backSortingLayerID =
+                            effect.SourceRenderer.sortingLayerID;
+                        effect.SpriteMask.frontSortingOrder = sortingOrder;
+                        effect.SpriteMask.backSortingOrder = sortingOrder;
+                    }
+                }
+            }
+
+            var movementScale = effect.Renderer != null ? 0.01f : 1f;
+            effect.Transform.localPosition = effect.BasePosition
+                + new Vector3(
+                    Mathf.Sin(cycle * 0.5f) * 2f * movementScale,
+                    Mathf.Cos(cycle * 0.42f) * 1.5f * movementScale,
+                    0f);
+            effect.Transform.localScale = effect.BaseScale * Mathf.Lerp(0.96f, 1.04f, wave);
+        }
+    }
+
+    private void RemoveAmbientLightsForRoot(GameObject root)
+    {
+        if (root == null)
+        {
+            return;
+        }
+
+        for (var i = _ambientPieceLights.Count - 1; i >= 0; i--)
+        {
+            if (_ambientPieceLights[i]?.Root == root)
+            {
+                _ambientPieceLights.RemoveAt(i);
+            }
+        }
+    }
+
+    private void ClearAmbientPieceLights()
+    {
+        var roots = new HashSet<GameObject>();
+        for (var i = 0; i < _ambientPieceLights.Count; i++)
+        {
+            var root = _ambientPieceLights[i]?.Root;
+            if (root != null)
+            {
+                roots.Add(root);
+            }
+        }
+
+        foreach (var root in roots)
+        {
+            if (root != null && root.name.EndsWith("_AmbientLights", StringComparison.Ordinal))
+            {
+                Destroy(root);
+            }
+        }
+
+        _ambientPieceLights.Clear();
     }
 
     private void ClearActiveGroupOutline()
@@ -2499,6 +2870,8 @@ public class GameScene : MonoBehaviour
 
         state.GrooveImage.gameObject.SetActive(true);
         SetImageAlpha(state.GrooveImage, 1f);
+        RemoveAmbientLightsForRoot(state.PieceRenderer.gameObject);
+        AddAmbientBoardPieceLights(state.GrooveImage);
         if (state.GrooveProbeCollider != null)
         {
             state.GrooveProbeCollider.gameObject.SetActive(false);
@@ -2565,135 +2938,282 @@ public class GameScene : MonoBehaviour
             yield break;
         }
 
-        var shineMaterial = GetOrCreatePiecePlacementShineMaterial();
-        if (shineMaterial == null)
-        {
-            yield break;
-        }
-
-        var shineObject = CreatePiecePlacementShineOverlay(grooveImage, shineMaterial);
-        if (shineObject == null
+        if (!EnsurePiecePlacementLightResources()
             || !TryGetRectTransformScreenRect(grooveImage.rectTransform, out var sourceScreenRect))
         {
-            if (shineObject != null)
-            {
-                Destroy(shineObject);
-            }
-
             yield break;
         }
 
-        var shineObjects = new List<GameObject>(1) { shineObject };
-        var sweepAxis = new Vector2(-0.58f, 0.82f).normalized;
+        var targets = CollectPiecePlacementLightTargets(grooveImage, sourceScreenRect);
+        var effects = new List<PiecePlacementLightFx>();
+        for (var i = 0; i < targets.Count; i++)
+        {
+            CreatePiecePlacementLights(targets[i], sourceScreenRect, i, effects);
+        }
 
-        GetScreenRectAxisRange(
-            sourceScreenRect,
-            sweepAxis,
-            out var sweepStart,
-            out var sweepEnd);
-        sweepStart -= PiecePlacementShineBandWidth * 2f;
-        sweepEnd += PiecePlacementShineBandWidth * 2f;
-
-        shineMaterial.SetVector(ShineSweepAxisId, sweepAxis);
-        shineMaterial.SetFloat(ShineBandWidthId, PiecePlacementShineBandWidth);
-        shineMaterial.SetColor(ShineColorId, PiecePlacementShineColor);
+        if (effects.Count == 0)
+        {
+            yield break;
+        }
 
         var elapsed = 0f;
-        while (elapsed < PiecePlacementShineDuration && shineObjects.Count > 0)
+        while (elapsed < PiecePlacementLightDuration)
         {
             elapsed += Mathf.Min(Time.unscaledDeltaTime, GameEntranceMaxFrameDelta);
-            var progress = Mathf.Clamp01(elapsed / PiecePlacementShineDuration);
-            var eased = progress * progress * (3f - 2f * progress);
-            shineMaterial.SetFloat(
-                ShineSweepCenterId,
-                Mathf.LerpUnclamped(sweepStart, sweepEnd, eased));
+            for (var i = 0; i < effects.Count; i++)
+            {
+                UpdatePiecePlacementLight(effects[i], elapsed);
+            }
+
             yield return null;
         }
 
-        DestroyPlacementShineObjects(shineObjects);
+        DestroyPiecePlacementLights(effects);
     }
 
-    private static GameObject CreatePiecePlacementShineOverlay(
+    private List<PiecePlacementLightTarget> CollectPiecePlacementLightTargets(
         Image sourceImage,
-        Material shineMaterial)
+        Rect sourceScreenRect)
     {
-        if (sourceImage == null || sourceImage.sprite == null || shineMaterial == null)
+        var targets = new List<PiecePlacementLightTarget>
         {
-            return null;
+            new PiecePlacementLightTarget
+            {
+                Image = sourceImage,
+                ScreenRect = sourceScreenRect,
+                Distance = 0f
+            }
+        };
+        if (_board.GrooveImagesByGroup == null)
+        {
+            return targets;
         }
 
-        var sourceRect = sourceImage.rectTransform;
-        var shineObject = new GameObject(
-            $"{sourceImage.gameObject.name}_PlacementShine",
+        var displayScale = Screen.height > 0
+            ? Screen.height / (float)GameDefine.DesignHeight
+            : 1f;
+        for (var groupIndex = 0; groupIndex < _board.GrooveImagesByGroup.Count; groupIndex++)
+        {
+            var group = _board.GrooveImagesByGroup[groupIndex];
+            if (group == null)
+            {
+                continue;
+            }
+
+            for (var i = 0; i < group.Count; i++)
+            {
+                var candidate = group[i];
+                var pieceNumber = GetPieceNumberFromImage(candidate);
+                if (candidate == null
+                    || candidate == sourceImage
+                    || !_placedPieceNumbers.Contains(pieceNumber)
+                    || !candidate.gameObject.activeInHierarchy
+                    || candidate.color.a <= 0.001f
+                    || !TryGetRectTransformScreenRect(candidate.rectTransform, out var candidateRect))
+                {
+                    continue;
+                }
+
+                var edgeDistance = GetRectEdgeDistance(sourceScreenRect, candidateRect);
+                var adjacencyDistance = Mathf.Max(
+                    32f * displayScale,
+                    Mathf.Min(
+                        Mathf.Max(sourceScreenRect.width, sourceScreenRect.height),
+                        Mathf.Max(candidateRect.width, candidateRect.height)) * 0.22f);
+                if (edgeDistance > adjacencyDistance)
+                {
+                    continue;
+                }
+
+                targets.Add(new PiecePlacementLightTarget
+                {
+                    Image = candidate,
+                    ScreenRect = candidateRect,
+                    Distance = Vector2.Distance(sourceScreenRect.center, candidateRect.center)
+                });
+            }
+        }
+
+        targets.Sort((left, right) => left.Distance.CompareTo(right.Distance));
+        if (targets.Count > PiecePlacementLightMaxAffectedPieces)
+        {
+            targets.RemoveRange(
+                PiecePlacementLightMaxAffectedPieces,
+                targets.Count - PiecePlacementLightMaxAffectedPieces);
+        }
+
+        return targets;
+    }
+
+    private static float GetRectEdgeDistance(Rect first, Rect second)
+    {
+        var x = Mathf.Max(
+            0f,
+            Mathf.Abs(first.center.x - second.center.x) - (first.width + second.width) * 0.5f);
+        var y = Mathf.Max(
+            0f,
+            Mathf.Abs(first.center.y - second.center.y) - (first.height + second.height) * 0.5f);
+        return Mathf.Sqrt(x * x + y * y);
+    }
+
+    private void CreatePiecePlacementLights(
+        PiecePlacementLightTarget target,
+        Rect sourceScreenRect,
+        int targetIndex,
+        List<PiecePlacementLightFx> effects)
+    {
+        if (target.Image == null || target.Image.sprite == null)
+        {
+            return;
+        }
+
+        var maskObject = CreatePiecePlacementLightMask(target.Image);
+        if (maskObject == null)
+        {
+            return;
+        }
+
+        var maskRect = maskObject.GetComponent<RectTransform>();
+        var pieceNumber = GetPieceNumberFromImage(target.Image);
+        var random = new System.Random(pieceNumber * 397 ^ targetIndex * 7919);
+        var lightCount = targetIndex == 0 ? 4 : 2;
+        var direction = targetIndex == 0
+            ? Vector2.right
+            : (target.ScreenRect.center - sourceScreenRect.center).normalized;
+        var maxDistance = Mathf.Max(
+            sourceScreenRect.width,
+            sourceScreenRect.height) * 2f;
+        var normalizedDistance = Mathf.Clamp01(target.Distance / Mathf.Max(1f, maxDistance));
+        var targetDelay = targetIndex == 0 ? 0f : 0.07f + normalizedDistance * 0.16f;
+
+        for (var i = 0; i < lightCount; i++)
+        {
+            var sprite = _piecePlacementLightSprites[random.Next(_piecePlacementLightSprites.Count)];
+            var lightObject = new GameObject(
+                $"PlacementLight_{i + 1}",
+                typeof(RectTransform),
+                typeof(CanvasRenderer),
+                typeof(Image));
+            lightObject.layer = target.Image.gameObject.layer;
+            var lightRect = lightObject.GetComponent<RectTransform>();
+            lightRect.SetParent(maskRect, false);
+            lightRect.anchorMin = lightRect.anchorMax = new Vector2(0.5f, 0.5f);
+            lightRect.pivot = new Vector2(0.5f, 0.5f);
+            lightRect.sizeDelta = sprite.rect.size;
+
+            var tangent = new Vector2(-direction.y, direction.x);
+            var longitudinal = targetIndex == 0
+                ? RandomRange(random, -0.28f, 0.28f)
+                : RandomRange(random, -0.34f, -0.08f);
+            var lateral = RandomRange(random, -0.32f, 0.32f);
+            var localPosition = new Vector2(
+                direction.x * target.Image.rectTransform.rect.width * longitudinal
+                    + tangent.x * target.Image.rectTransform.rect.width * lateral,
+                direction.y * target.Image.rectTransform.rect.height * longitudinal
+                    + tangent.y * target.Image.rectTransform.rect.height * lateral);
+            lightRect.anchoredPosition = localPosition;
+            lightRect.localRotation = Quaternion.Euler(
+                0f,
+                0f,
+                RandomRange(random, -22f, 22f));
+
+            var scale = RandomRange(random, 0.88f, 1.16f);
+            lightRect.localScale = Vector3.one * scale;
+            var lightImage = lightObject.GetComponent<Image>();
+            lightImage.sprite = sprite;
+            lightImage.material = _piecePlacementLightMaterial;
+            lightImage.color = new Color(1f, 1f, 1f, 0f);
+            lightImage.raycastTarget = false;
+            lightImage.maskable = true;
+
+            effects.Add(new PiecePlacementLightFx
+            {
+                Root = maskObject,
+                Image = lightImage,
+                Rect = lightRect,
+                Delay = targetDelay + i * 0.035f,
+                Lifetime = targetIndex == 0 ? 0.48f : 0.42f,
+                StartPosition = localPosition,
+                Travel = direction * PiecePlacementLightTravelPixels,
+                StartScale = lightRect.localScale
+            });
+        }
+    }
+
+    private static GameObject CreatePiecePlacementLightMask(Image sourceImage)
+    {
+        var maskObject = new GameObject(
+            $"{sourceImage.gameObject.name}_PlacementLights",
             typeof(RectTransform),
             typeof(CanvasRenderer),
-            typeof(Image));
-        shineObject.layer = sourceImage.gameObject.layer;
-        var shineRect = shineObject.GetComponent<RectTransform>();
-        shineRect.SetParent(sourceRect.parent, false);
-        shineRect.anchorMin = sourceRect.anchorMin;
-        shineRect.anchorMax = sourceRect.anchorMax;
-        shineRect.pivot = sourceRect.pivot;
-        shineRect.anchoredPosition = sourceRect.anchoredPosition;
-        shineRect.sizeDelta = sourceRect.sizeDelta;
-        shineRect.localRotation = sourceRect.localRotation;
-        shineRect.localScale = sourceRect.localScale;
-        shineRect.SetAsLastSibling();
+            typeof(Image),
+            typeof(Mask));
+        maskObject.layer = sourceImage.gameObject.layer;
+        var maskRect = maskObject.GetComponent<RectTransform>();
+        maskRect.SetParent(sourceImage.rectTransform, false);
+        maskRect.anchorMin = Vector2.zero;
+        maskRect.anchorMax = Vector2.one;
+        maskRect.offsetMin = Vector2.zero;
+        maskRect.offsetMax = Vector2.zero;
+        maskRect.localRotation = Quaternion.identity;
+        maskRect.localScale = Vector3.one;
+        maskRect.SetAsLastSibling();
 
-        var shineImage = shineObject.GetComponent<Image>();
-        shineImage.sprite = sourceImage.sprite;
-        shineImage.type = sourceImage.type;
-        shineImage.preserveAspect = sourceImage.preserveAspect;
-        shineImage.useSpriteMesh = sourceImage.useSpriteMesh;
-        shineImage.fillCenter = sourceImage.fillCenter;
-        shineImage.fillMethod = sourceImage.fillMethod;
-        shineImage.fillAmount = sourceImage.fillAmount;
-        shineImage.fillClockwise = sourceImage.fillClockwise;
-        shineImage.fillOrigin = sourceImage.fillOrigin;
-        shineImage.color = Color.white;
-        shineImage.material = shineMaterial;
-        shineImage.raycastTarget = false;
-        shineImage.maskable = false;
-        return shineObject;
+        var maskImage = maskObject.GetComponent<Image>();
+        maskImage.sprite = sourceImage.sprite;
+        maskImage.type = sourceImage.type;
+        maskImage.preserveAspect = sourceImage.preserveAspect;
+        maskImage.useSpriteMesh = sourceImage.useSpriteMesh;
+        maskImage.raycastTarget = false;
+        maskImage.maskable = false;
+        maskObject.GetComponent<Mask>().showMaskGraphic = false;
+        return maskObject;
     }
 
-    private static Vector2 NormalizeScreenPoint(Vector2 screenPoint)
+    private static float RandomRange(System.Random random, float minimum, float maximum)
     {
-        return new Vector2(
-            Screen.width > 0 ? screenPoint.x / Screen.width : 0f,
-            Screen.height > 0 ? screenPoint.y / Screen.height : 0f);
+        return Mathf.Lerp(minimum, maximum, (float)random.NextDouble());
     }
 
-    private static void GetScreenRectAxisRange(
-        Rect screenRect,
-        Vector2 axis,
-        out float minimum,
-        out float maximum)
+    private static void UpdatePiecePlacementLight(PiecePlacementLightFx effect, float elapsed)
     {
-        var bottomLeft = NormalizeScreenPoint(new Vector2(screenRect.xMin, screenRect.yMin));
-        var topLeft = NormalizeScreenPoint(new Vector2(screenRect.xMin, screenRect.yMax));
-        var topRight = NormalizeScreenPoint(new Vector2(screenRect.xMax, screenRect.yMax));
-        var bottomRight = NormalizeScreenPoint(new Vector2(screenRect.xMax, screenRect.yMin));
-        minimum = Mathf.Min(
-            Vector2.Dot(bottomLeft, axis),
-            Vector2.Dot(topLeft, axis),
-            Vector2.Dot(topRight, axis),
-            Vector2.Dot(bottomRight, axis));
-        maximum = Mathf.Max(
-            Vector2.Dot(bottomLeft, axis),
-            Vector2.Dot(topLeft, axis),
-            Vector2.Dot(topRight, axis),
-            Vector2.Dot(bottomRight, axis));
-    }
-
-    private static void DestroyPlacementShineObjects(List<GameObject> shineObjects)
-    {
-        for (var i = 0; i < shineObjects.Count; i++)
+        if (effect?.Image == null || effect.Rect == null)
         {
-            if (shineObjects[i] != null)
+            return;
+        }
+
+        var progress = Mathf.Clamp01((elapsed - effect.Delay) / effect.Lifetime);
+        if (elapsed < effect.Delay || progress >= 1f)
+        {
+            effect.Image.color = new Color(1f, 1f, 1f, 0f);
+            return;
+        }
+
+        var fadeIn = Mathf.Clamp01(progress / PiecePlacementLightFadeInRatio);
+        var fadeOut = 1f - Mathf.SmoothStep(0f, 1f, progress);
+        var alpha = Mathf.SmoothStep(0f, 1f, fadeIn) * fadeOut;
+        effect.Image.color = new Color(1f, 1f, 1f, alpha);
+        var easedTravel = 1f - Mathf.Pow(1f - progress, 2f);
+        effect.Rect.anchoredPosition = effect.StartPosition + effect.Travel * easedTravel;
+        var pulse = 0.86f + Mathf.Sin(progress * Mathf.PI) * 0.22f;
+        effect.Rect.localScale = effect.StartScale * pulse;
+    }
+
+    private static void DestroyPiecePlacementLights(List<PiecePlacementLightFx> effects)
+    {
+        var roots = new HashSet<GameObject>();
+        for (var i = 0; i < effects.Count; i++)
+        {
+            var root = effects[i]?.Root;
+            if (root != null)
             {
-                Destroy(shineObjects[i]);
+                roots.Add(root);
             }
+        }
+
+        foreach (var root in roots)
+        {
+            Destroy(root);
         }
     }
 
@@ -3664,6 +4184,7 @@ public class GameScene : MonoBehaviour
     {
         StopLoosePieceReminderShake();
         StopTrayPieceReflow();
+        ClearAmbientPieceLights();
         ClearPieceHint();
         _drag.DraggingPiece = null;
         _drag.CurrentGroupDraggables.Clear();
