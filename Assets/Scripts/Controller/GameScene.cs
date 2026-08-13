@@ -1867,6 +1867,13 @@ public class GameScene : MonoBehaviour
         state.PieceRenderer.sortingOrder = PieceSortingOrder;
         var wasOnTray = state.IsOnTray;
 
+        if (releaseScreenPosition.HasValue
+            && ShouldReturnPieceToTray(releaseScreenPosition.Value))
+        {
+            ReturnPieceToTray(state, wasOnTray);
+            return;
+        }
+
         var groovePosition = GetGrooveSnapPosition(state.GrooveRect, Camera.main);
         UpdateGrooveOverlapProbe(state, groovePosition);
         Physics2D.SyncTransforms();
@@ -1892,13 +1899,6 @@ public class GameScene : MonoBehaviour
             StartGameplayTimerIfNeeded();
             RecordPlacedPiece(state);
             StartCoroutine(PlayPieceSnapAnimation(state, groovePosition));
-            return;
-        }
-
-        if (releaseScreenPosition.HasValue
-            && ShouldReturnPieceToTray(releaseScreenPosition.Value))
-        {
-            ReturnPieceToTray(state, wasOnTray);
             return;
         }
 
@@ -1951,7 +1951,33 @@ public class GameScene : MonoBehaviour
 
         var fullyLeftOfBoard = pieceBounds.max.x <= boardBounds.min.x;
         var fullyRightOfBoard = pieceBounds.min.x >= boardBounds.max.x;
-        return fullyLeftOfBoard || fullyRightOfBoard;
+        if (fullyLeftOfBoard || fullyRightOfBoard)
+        {
+            return true;
+        }
+
+        return IsPieceFullyInTableSpaceBelowBoard(pieceBounds, boardBounds, camera);
+    }
+
+    private bool IsPieceFullyInTableSpaceBelowBoard(
+        Bounds pieceBounds,
+        Bounds boardBounds,
+        Camera camera)
+    {
+        var horizontallyInsideBoard = pieceBounds.min.x >= boardBounds.min.x
+                                      && pieceBounds.max.x <= boardBounds.max.x;
+        if (!horizontallyInsideBoard
+            || pieceBounds.max.y > boardBounds.min.y
+            || !TryGetPieceTrayDropScreenRect(out var trayScreenRect))
+        {
+            return false;
+        }
+
+        var pieceBottomScreenY = camera.WorldToScreenPoint(new Vector3(
+            pieceBounds.center.x,
+            pieceBounds.min.y,
+            WorldGameplayDepth)).y;
+        return pieceBottomScreenY >= trayScreenRect.yMax;
     }
 
     private void ReturnPieceToTray(DraggablePieceState state, bool wasOnTray)
@@ -2336,22 +2362,12 @@ public class GameScene : MonoBehaviour
 
     private bool ShouldReturnPieceToTray(Vector2 releaseScreenPosition)
     {
-        if (!IsScreenPointBelowBoard(releaseScreenPosition)
-            || !TryGetPieceTrayDropScreenRect(out var trayScreenRect))
+        if (!TryGetPieceTrayDropScreenRect(out var trayScreenRect))
         {
             return false;
         }
 
         return trayScreenRect.Contains(releaseScreenPosition);
-    }
-
-    private bool IsScreenPointBelowBoard(Vector2 screenPosition)
-    {
-        return _board.GameBoardImage != null
-               && TryGetRectTransformScreenRect(
-                   _board.GameBoardImage.rectTransform,
-                   out var boardScreenRect)
-               && screenPosition.y < boardScreenRect.yMin;
     }
 
     private bool TryGetPieceTrayDropScreenRect(out Rect screenRect)
