@@ -1,55 +1,50 @@
 # 当前任务
 
-- 任务：拼图贴纸不规则亮光与落位传播微动画
-- 状态：代码、资源导入和编译验证已完成，等待 Play Mode 视觉确认
+- 任务：拼图单亮光持久滑动动画
+- 状态：代码与编译验证已完成，等待 Play Mode 视觉确认
 - 更新时间：2026-08-13
 
 ## 用户意图
 
-- 使用 `Assets/UI/GameScene/PieceLight1.png` 到 `PieceLight4.png` 复现参考视频中的不规则贴纸亮光。
-- 已拼棋盘贴纸和托盘待拼贴纸平时都有低强度、错峰变化的微光。
-- 正确落位后，当前块先增强亮光，再向附近已经拼好的相邻块短暂传播。
+- 每一片拼图只从 `PieceLight1.png` 到 `PieceLight4.png` 中选择一张亮光图片，只显示一个光。
+- 光完成一次滑动后停留在终点，不淡出、不销毁。
+- 该碎片后续被相邻传播再次触发时，从上次停留位置继续滑动。
+- 当前正确落位 Piece 原有的绿色斜向 ADD 光带继续保留。
 
 ## 工作记录
 
-- 使用 FFmpeg 将 `85562245f2decc4cc7e116bd1d06798f.mp4` 按 `10fps` 与原分辨率关键帧拆解。
-- 确认视频约 `6.17s / 30fps`：落位前贴纸已有微弱不规则亮光；落位后当前块出现短亮度峰值，并向相邻已拼块错峰传播，整体不到 `1s`。
-- 常驻层为每块可见贴纸确定性创建两个不规则亮斑，低强度、慢速错峰呼吸并轻微移动。
-- 落位层当前块创建四个亮斑，相邻已拼块各创建两个，按距离增加约 `0.07~0.23s` 延迟，完整传播约 `0.72s`。
-- 棋盘 UGUI 贴纸使用自身 Sprite Alpha Mask；托盘 SpriteRenderer 使用 SpriteMask，亮光不会溢出透明轮廓。
-- 根据用户澄清恢复旧的规则绿色斜向光带：正确落位后只在当前块播放约 `0.52s`，并与不规则邻块传播同时播放。
+- 删除每片创建两个常驻亮斑以及落位时额外创建四个或两个临时亮斑的逻辑。
+- 以完整 Piece 编号保存确定性的亮光图片、初始位置、旋转、缩放和当前归一化位置；同一 Piece 从托盘切到棋盘、切组重建后仍使用同一份状态。
+- 托盘 `SpriteRenderer` 和棋盘 UGUI 各只创建一个亮光，继续分别使用 `SpriteMask` 和 Alpha Mask 裁切到贴纸轮廓。
+- 正确落位传播改为移动当前块和相邻已拼块各自已有的单个亮光；动画结束保持白色和终点坐标，不再淡出或销毁。
+- 每次传播结束将棋盘亮光终点写回运行时状态，下一次从该位置继续。
+- 原有 `PuzzlePlacementShine.shader` 绿色斜向光带未修改，仍只在刚正确落位的当前 Piece 上播放。
 
 ## 修改文件
 
 - `Assets/Scripts/Controller/GameScene.cs`
-- `Assets/Resources/PuzzlePieceLightAdditive.shader`
-- `Assets/Resources/PuzzlePlacementShine.shader`
-- `Assets/UI/GameScene/PieceLight1.png.meta` 到 `PieceLight4.png.meta`
 - `Documents/CURRENT_TASK.md`
 - `Documents/PROJECT_CONTEXT.md`
+- `specs/spec-driven-development.md`
 
 ## 决策
 
-- 只向真正相邻且已经放置的贴纸传播，不让整张棋盘同步闪烁。
-- 四张亮斑保持原始宽高比，仅允许轻微缩放、旋转和移动。
-- 绿色斜向光带仍只作用于刚吸附的当前块；新亮斑负责常驻微光和相邻块传播，两层叠加而不是互相替代。
-- 常驻微光不锁定输入；只有现有正确落位动画继续保持输入锁定，组完成仍等待传播结束后切组。
-- 资源继续走现有 `UI/GameScene` 的 StreamingAssets 构建同步，不新增独立资源目录。
+- 四张光图按 Piece 编号确定性选择，避免托盘转棋盘或切组后随机换图。
+- 持久位置使用贴纸 Rect 的归一化坐标保存，使棋盘缩放或布局变化后仍能恢复相对位置。
+- 相邻块收集范围和约 `0.07~0.23s` 的错峰时机保持不变，只改变每片光的数量与生命周期。
+- 不再播放常驻呼吸、缩放脉冲或传播淡入淡出；单光保持可见，只执行位移。
 
 ## 验证
 
-- 视频尺寸 `720 x 1280`，时长 `6.171667s`，约 `185` 帧。
-- `Assembly-CSharp.csproj` 编译通过，`0` 警告、`0` 错误。
-- `Assembly-CSharp-Editor.csproj` 编译通过，`0` 警告、`0` 错误。
-- Unity 已完成脚本、四张 PieceLight 与新 Shader 的资源刷新；Editor.log 无 C# 或 Shader 编译错误。
-- 恢复 `PuzzlePlacementShine.shader` 后重新编译两个程序集通过，Unity Editor.log 无 Shader 错误；Shader GUID 保持原值 `7df6a79b62fe4d67a76ddfae2e56f54e`。
-- 四张图片已同步到 `Assets/StreamingAssets/UI/GameScene`，Player 可按同一路径加载。
-- 待 Unity Play Mode 验证常驻微光、落位传播、切组和恢复进度的视觉强度与节奏。
+- `dotnet build Assembly-CSharp.csproj --no-restore`：通过，`0` 警告、`0` 错误。
+- `dotnet build Assembly-CSharp-Editor.csproj --no-restore`：通过，`0` 警告、`0` 错误。
+- 当前 Unity `Editor.log` 尾部未发现 C#、Shader、PieceLight 或空引用错误，但日志时间早于本次脚本修改，不计作本次编辑器导入验证。
+- 待在 Unity Play Mode 目视确认单光数量、停留位置和二次传播的连续移动。
 
 ## 下一步
 
-1. 在 GameScene 正确放置一块与已有区域相邻的贴纸，核对当前块增强与邻块传播节奏。
+1. 在 GameScene 连续正确放置相邻 Piece，确认旧 Piece 的亮光从上一次终点继续滑动，且当前 Piece 的绿色斜向光带仍正常播放。
 
 ## 恢复提示
 
-已按参考视频实现常驻不规则微光和落位相邻传播，并恢复当前块原有绿色斜向光带；下一步在 Unity Play Mode 核对叠加后的视觉强度和节奏。
+继续 Puffies 当前任务。先阅读 AGENTS.md、Documents/WORKFLOW.md 和 Documents/CURRENT_TASK.md；按“每片一个持久 PieceLight，后续传播从上次终点继续”的规则完成 Play Mode 视觉确认。

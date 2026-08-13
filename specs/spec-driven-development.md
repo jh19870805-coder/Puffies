@@ -483,3 +483,18 @@
 - 已确认 `BuildSync` 中列出的 11 个旧资源目录和 4 个旧 StreamingAssets 根目录均不存在；已删除每次编辑器启动重复执行的一次性迁移清理，正式 UI 同步目录、菜单入口和构建前回调保持不变。
 - 全仓库孤立公开类型扫描只剩 `PackCoverShadowEffect`；该类型由 Prefab 通过 Meta GUID 引用，因此保留。私有单次引用候选均为 Unity 初始化特性回调，因此保留。
 - `Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 编译通过，均为 `0` 警告、`0` 错误；`git diff --check` 通过。
+## 2026-08-13 - Piece 单亮光持久滑动
+
+### 需求
+
+1. 每个 Piece 只从 `PieceLight1.png` 到 `PieceLight4.png` 中选择一张亮光图片，并且只显示一个光。
+2. 亮光完成传播位移后必须停留在终点，不淡出、不销毁。
+3. 已拼 Piece 后续再次被相邻传播触发时，必须从上次停留位置继续位移。
+4. 当前正确落位 Piece 原有的绿色斜向 ADD 光带必须继续播放。
+
+### 设计与验证
+
+- 以完整 Piece 编号确定性选择亮光图片，并保存归一化相对位置、旋转和缩放；托盘转棋盘及切组重建均复用该状态。
+- 移除常驻呼吸、每片双光、当前块四光、邻块双光和临时光淡出销毁；传播直接移动每片已有的单个持久光。
+- 保留相邻块筛选、错峰传播、SpriteMask/UGUI Alpha Mask 裁切和 `PuzzlePlacementShine.shader` 当前块绿色光带。
+- `Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 串行编译通过，均为 `0` 警告、`0` 错误；待 Play Mode 目视确认连续传播位置。
