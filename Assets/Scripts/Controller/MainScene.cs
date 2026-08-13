@@ -3512,7 +3512,7 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
     private const float ReferenceModelScale = 2.63f;
     private const float ReferenceModelLocalZ = 0f;
     private const float LightBandLengthScale = 7f;
-    private const float LightBandHeightScale = 1.4f;
+    private const float LightBandHeightScale = 1f;
     private const float ModelWorldDepth = -1f;
     private const float LightEffectDelay = 0.5f;
     private const float ReferenceLightEffectLocalY = 1f;
@@ -3942,6 +3942,9 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
                 continue;
             }
 
+            var localPosition = node.localPosition;
+            localPosition.x *= lengthScale;
+            node.localPosition = localPosition;
             node.localScale = Vector3.Scale(node.localScale, lightBandScale);
         }
     }
