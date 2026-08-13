@@ -60,7 +60,7 @@
 - 将 `CardPackOpeningEffect` 收敛为普通运行时控制组件，不再创建 `RawImage`、`CardPackOpeningEffectCamera` 和 `CardPackOpeningEffectRT`。
 - `Begin` 获取 `Camera.main`，将 EffectLayer 加入其 Culling Mask；Stage 直接位于主摄像机视野中，中心通过选中卡包屏幕 Rect 转换得到，缩放按主摄像机正交尺寸计算。
 - 开包背景 Canvas 继续由 Main Camera 渲染，但播放阶段将其排序降到 EffectLayer 之后；卡包前后材质使用 UI 背景之后的运行时 Render Queue，粒子 Renderer 使用更高 Sorting Order。
-- 模型使用制作方 `EffectScene001` 的基准 `Scale=2.63 / localZ=0`；划开光效 `fx_chai_w_001` 根节点使用 `(0,1,-1.5)` 和原始 `Scale=1`。其 ParticleSystem 使用 `scalingMode=Local`，因此只直接缩放 `line`、`line01`、`glow`、`glowC` 四个光带节点到 `3.5x`；`dot`、`dot01`、`glow01` 星形节点不得缩放或补偿位置。屏幕尺寸适配只缩放和移动共同 Stage，不得改变卡包模型自身比例。
+- 模型使用制作方 `EffectScene001` 的基准 `Scale=2.63 / localZ=0`；划开光效 `fx_chai_w_001` 根节点使用 `(0,1,-1.5)` 和原始 `Scale=1`。运行时只将 `line`、`line01`、`glow`、`glowC` 四个光带节点按长度 `7.0x`、高度 `1.4x` 非等比缩放；`dot`、`dot01`、`glow01` 星形节点不得缩放或补偿位置。屏幕尺寸适配只缩放和移动共同 Stage，不得改变卡包模型自身比例。
 - 初始尺寸和中心只使用正面 `mesh_skin_cardPack_NNN` 包围盒，避免背面网格影响静态封面切换。
 - `Begin` 只准备模型并将 Animator 固定在第 `0` 帧；等待一个渲染帧后调用 `StartPlayback`，但静态封面先全不透明保持 `0.06s`，再用 `0.12s SmoothStep` 淡出，以遮住动画开头的蒙皮预备变化。光效 `0.5s` 延迟和总播放时间从 `StartPlayback` 计算。
 

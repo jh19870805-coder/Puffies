@@ -3511,7 +3511,8 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
     private const int ModelVariantCount = 6;
     private const float ReferenceModelScale = 2.63f;
     private const float ReferenceModelLocalZ = 0f;
-    private const float LightBandScale = 3.5f;
+    private const float LightBandLengthScale = 7f;
+    private const float LightBandHeightScale = 1.4f;
     private const float ModelWorldDepth = -1f;
     private const float LightEffectDelay = 0.5f;
     private const float ReferenceLightEffectLocalY = 1f;
@@ -3654,7 +3655,10 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
             -1.5f);
         mLightEffectObject.transform.localRotation = Quaternion.identity;
         mLightEffectObject.transform.localScale = Vector3.one;
-        ScaleLightBandNodes(mLightEffectObject.transform, LightBandScale);
+        ScaleLightBandNodes(
+            mLightEffectObject.transform,
+            LightBandLengthScale,
+            LightBandHeightScale);
         SetLayerRecursively(mLightEffectObject, EffectLayer);
         mLightEffectObject.SetActive(false);
 
@@ -3663,7 +3667,7 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         Debug.Log(
             $"CardPackOpeningEffect: prepared variant {variant:D3} with {packTexture.name}. "
             + $"duration={mAnimationDuration:F3}s, lightDelay={LightEffectDelay:F3}s, "
-            + $"lightBandScale={LightBandScale:F1}");
+            + $"lightBandScale={LightBandLengthScale:F1}x{LightBandHeightScale:F1}");
         return true;
     }
 
@@ -3916,13 +3920,17 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         }
     }
 
-    private static void ScaleLightBandNodes(Transform effectRoot, float scale)
+    private static void ScaleLightBandNodes(
+        Transform effectRoot,
+        float lengthScale,
+        float heightScale)
     {
-        if (effectRoot == null || scale <= 0f)
+        if (effectRoot == null || lengthScale <= 0f || heightScale <= 0f)
         {
             return;
         }
 
+        var lightBandScale = new Vector3(lengthScale, heightScale, 1f);
         for (var i = 0; i < ScaledLightBandNodeNames.Length; i++)
         {
             var node = effectRoot.Find(ScaledLightBandNodeNames[i]);
@@ -3934,7 +3942,7 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
                 continue;
             }
 
-            node.localScale *= scale;
+            node.localScale = Vector3.Scale(node.localScale, lightBandScale);
         }
     }
 
