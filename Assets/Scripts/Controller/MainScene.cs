@@ -3135,6 +3135,7 @@ public class MainScene : MonoBehaviour
             mSelectedPackageStageSize,
             halfSettleDuration);
 
+        StartCoroutine(GameManager.PreloadGameScene(mSelectedBagId));
         mIsPlayingAnimation = false;
         mIsAwaitingTearSwipe = true;
         mIsTrackingTearSwipe = false;

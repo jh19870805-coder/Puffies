@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -218,6 +219,11 @@ public static class GameManager
     private static bool sIsReplaySession;
     private static bool sHasOpeningPackExitPosition;
     private static Vector2 sOpeningPackExitPositionNormalized;
+    private static int sPreloadedGameBagId;
+    private static ResourceRequest sCardBagPreloadRequest;
+    private static GameObject sPreloadedCardBagPrefab;
+    private static AsyncOperation sGameScenePreloadOperation;
+    private static bool sGameSceneActivationRequested;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     private static void Bootstrap()
@@ -237,6 +243,7 @@ public static class GameManager
         sIsReplaySession = false;
         sHasOpeningPackExitPosition = false;
         sOpeningPackExitPositionNormalized = default;
+        ResetGameScenePreloadState(clearPrefab: true);
         sIsInitialized = true;
         Debug.Log("GameManager initialized.");
     }
@@ -259,7 +266,104 @@ public static class GameManager
         SetBagId(bagId);
         sPlayGameEntranceAnimation = playEntranceAnimation;
         sIsReplaySession = isReplaySession;
+        if (sPreloadedGameBagId == bagId
+            && (sCardBagPreloadRequest != null || sGameScenePreloadOperation != null))
+        {
+            sGameSceneActivationRequested = true;
+            if (sGameScenePreloadOperation != null)
+            {
+                sGameScenePreloadOperation.allowSceneActivation = true;
+            }
+
+            return;
+        }
+
         SceneManager.LoadScene(GameDefine.SceneGame);
+    }
+
+    public static IEnumerator PreloadGameScene(int bagId)
+    {
+        if (bagId <= 0
+            || (sPreloadedGameBagId == bagId
+                && (sCardBagPreloadRequest != null || sGameScenePreloadOperation != null)))
+        {
+            yield break;
+        }
+
+        ResetGameScenePreloadState(clearPrefab: true);
+        sPreloadedGameBagId = bagId;
+        sGameSceneActivationRequested = false;
+
+        sCardBagPreloadRequest = Resources.LoadAsync<GameObject>(
+            GameDefine.FormatCardBagPrefabResourcesPath(bagId));
+        sCardBagPreloadRequest.priority = -1;
+        yield return sCardBagPreloadRequest;
+        if (sPreloadedGameBagId != bagId)
+        {
+            yield break;
+        }
+
+        sPreloadedCardBagPrefab = sCardBagPreloadRequest.asset as GameObject;
+        Debug.Log(
+            $"GameManager: card bag preload completed. bagId={bagId}, "
+            + $"loaded={sPreloadedCardBagPrefab != null}");
+        sGameScenePreloadOperation = SceneManager.LoadSceneAsync(GameDefine.SceneGame);
+        if (sGameScenePreloadOperation == null)
+        {
+            Debug.LogWarning("GameManager: failed to start GameScene preload.");
+            var shouldEnterGameScene = sGameSceneActivationRequested;
+            ResetGameScenePreloadState(clearPrefab: true);
+            if (shouldEnterGameScene)
+            {
+                SceneManager.LoadScene(GameDefine.SceneGame);
+            }
+            yield break;
+        }
+
+        sGameScenePreloadOperation.priority = -1;
+        sGameScenePreloadOperation.allowSceneActivation = sGameSceneActivationRequested;
+        while (!sGameScenePreloadOperation.isDone
+               && sGameScenePreloadOperation.progress < 0.9f)
+        {
+            if (sGameSceneActivationRequested)
+            {
+                sGameScenePreloadOperation.allowSceneActivation = true;
+            }
+
+            yield return null;
+        }
+
+        if (sGameSceneActivationRequested && !sGameScenePreloadOperation.isDone)
+        {
+            sGameScenePreloadOperation.allowSceneActivation = true;
+        }
+
+        Debug.Log(
+            $"GameManager: GameScene preload reached activation point. bagId={bagId}, "
+            + $"activationRequested={sGameSceneActivationRequested}");
+    }
+
+    public static bool TryGetPreloadedCardBagPrefab(int bagId, out GameObject prefab)
+    {
+        prefab = sPreloadedGameBagId == bagId ? sPreloadedCardBagPrefab : null;
+        return prefab != null;
+    }
+
+    public static void NotifyGameSceneLoaded()
+    {
+        ResetGameScenePreloadState(clearPrefab: true);
+    }
+
+    private static void ResetGameScenePreloadState(bool clearPrefab)
+    {
+        sPreloadedGameBagId = 0;
+        sCardBagPreloadRequest = null;
+        sGameScenePreloadOperation = null;
+        sGameSceneActivationRequested = false;
+        if (clearPrefab)
+        {
+            sPreloadedCardBagPrefab = null;
+        }
     }
 
     public static bool ConsumeGameEntranceAnimation()

@@ -240,6 +240,7 @@ public class GameScene : MonoBehaviour
 
     private void Start()
     {
+        var bootstrapStartedAt = Time.realtimeSinceStartup;
         if (!GameCommonUtility.IsSceneMatch(SceneManager.GetActiveScene(), GameDefine.SceneGame))
         {
             Destroy(gameObject);
@@ -267,6 +268,7 @@ public class GameScene : MonoBehaviour
         _isFinishTransitionStarted = false;
         _settlementPackRewardIds.Clear();
         InitializeGameplay(selectedBagId);
+        GameManager.NotifyGameSceneLoaded();
         InitializeTaskTracking();
         ConfigureReturnButton();
         ConfigureHintButton();
@@ -289,7 +291,9 @@ public class GameScene : MonoBehaviour
             FadeInActiveGroupOutline();
         }
 
-        Debug.Log("GameScene bootstrap completed.");
+        Debug.Log(
+            $"GameScene bootstrap completed in "
+            + $"{(Time.realtimeSinceStartup - bootstrapStartedAt) * 1000f:F1}ms.");
     }
 
     private void OnDestroy()
@@ -698,7 +702,12 @@ public class GameScene : MonoBehaviour
         }
 
         var resourcePath = GameDefine.FormatCardBagPrefabResourcesPath(bagId);
-        var prefab = Resources.Load<GameObject>(resourcePath);
+        var usedPreloadedPrefab = GameManager.TryGetPreloadedCardBagPrefab(
+            bagId,
+            out var preloadedPrefab);
+        var prefab = usedPreloadedPrefab
+            ? preloadedPrefab
+            : Resources.Load<GameObject>(resourcePath);
         if (prefab == null)
         {
             Debug.LogWarning($"GameScene: card bag prefab not found at Resources/{resourcePath}.");
@@ -724,7 +733,9 @@ public class GameScene : MonoBehaviour
         }
 
         _board.IsBoardAndGroovesInitialized = false;
-        Debug.Log($"GameScene: loaded card bag prefab Resources/{resourcePath}.");
+        Debug.Log(
+            $"GameScene: loaded card bag prefab Resources/{resourcePath}. "
+            + $"source={(usedPreloadedPrefab ? "preloaded" : "synchronous")}");
     }
 
     private void ApplyCardBoardBackground()

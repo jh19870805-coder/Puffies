@@ -1,5 +1,28 @@
 # Spec Driven Development
 
+## 2026-08-13 - 首次拆包进入 GameScene 预加载
+
+### 需求
+
+1. WHEN 玩家第一次完成拆包动画 THEN 系统 SHALL 避免在动画结束后才同步读取 GameScene 与当前 CardBag 资源造成明显停顿。
+2. WHEN 玩家进入等待划开状态 THEN 系统 SHALL 在不阻塞拆包表现的前提下预加载当前 CardBag Prefab 和 GameScene。
+3. WHEN 拆包动画结束 THEN 系统 SHALL 激活已经预加载的 GameScene；IF 预加载失败 THEN 系统 SHALL 回退现有同步进入路径。
+4. WHEN GameScene 激活 THEN 系统 SHALL 保持原棋盘、托盘、Piece 入场动画和玩法初始化结果。
+
+### 设计
+
+- `GameManager.PreloadGameScene` 先使用低优先级 `Resources.LoadAsync<GameObject>` 读取当前 `CardBagNNN`，再使用低优先级 `SceneManager.LoadSceneAsync` 将 GameScene 加载到 `progress>=0.9`，并通过 `allowSceneActivation=false` 保持 MainScene 可见。
+- `EnterGameScene` 对 PackId 匹配的预加载任务只设置激活请求；玩家过早划开时由静态状态保存请求，Prefab 完成后继续加载并激活场景。
+- GameScene 的 `EnsureCardBagLoaded` 优先使用预加载 Prefab，没有命中时回退 `Resources.Load`；场景初始化完成后清理静态预加载引用。
+- 不提前实例化 GameScene 对象，不修改 Collider、描边、Sprite 或入场动画；新增日志记录预加载阶段、Prefab 来源和初始化总耗时。
+
+### 验证
+
+- [x] 两个 C# 程序集顺序编译通过，均为 `0` 警告、`0` 错误。
+- [x] `git diff --check` 通过。
+- [ ] 冷 Play Mode 首次拆包验证动画结束后的切场景停顿与入场动画完整性。
+- [ ] 根据 `GameScene bootstrap completed in Nms` 确认是否仍需分帧初始化 Collider 和拖拽 Piece。
+
 ## 2026-08-12 - 首页卡包常驻呼吸特效
 
 ### 需求
