@@ -17,14 +17,14 @@
 - 常驻层为每块可见贴纸确定性创建两个不规则亮斑，低强度、慢速错峰呼吸并轻微移动。
 - 落位层当前块创建四个亮斑，相邻已拼块各创建两个，按距离增加约 `0.07~0.23s` 延迟，完整传播约 `0.72s`。
 - 棋盘 UGUI 贴纸使用自身 Sprite Alpha Mask；托盘 SpriteRenderer 使用 SpriteMask，亮光不会溢出透明轮廓。
-- 移除旧的规则绿色斜向光带及 `PuzzlePlacementShine.shader`。
+- 根据用户澄清恢复旧的规则绿色斜向光带：正确落位后只在当前块播放约 `0.52s`，并与不规则邻块传播同时播放。
 
 ## 修改文件
 
 - `Assets/Scripts/Controller/GameScene.cs`
 - `Assets/Resources/PuzzlePieceLightAdditive.shader`
+- `Assets/Resources/PuzzlePlacementShine.shader`
 - `Assets/UI/GameScene/PieceLight1.png.meta` 到 `PieceLight4.png.meta`
-- 删除 `Assets/Resources/PuzzlePlacementShine.shader`
 - `Documents/CURRENT_TASK.md`
 - `Documents/PROJECT_CONTEXT.md`
 
@@ -32,6 +32,7 @@
 
 - 只向真正相邻且已经放置的贴纸传播，不让整张棋盘同步闪烁。
 - 四张亮斑保持原始宽高比，仅允许轻微缩放、旋转和移动。
+- 绿色斜向光带仍只作用于刚吸附的当前块；新亮斑负责常驻微光和相邻块传播，两层叠加而不是互相替代。
 - 常驻微光不锁定输入；只有现有正确落位动画继续保持输入锁定，组完成仍等待传播结束后切组。
 - 资源继续走现有 `UI/GameScene` 的 StreamingAssets 构建同步，不新增独立资源目录。
 
@@ -41,6 +42,7 @@
 - `Assembly-CSharp.csproj` 编译通过，`0` 警告、`0` 错误。
 - `Assembly-CSharp-Editor.csproj` 编译通过，`0` 警告、`0` 错误。
 - Unity 已完成脚本、四张 PieceLight 与新 Shader 的资源刷新；Editor.log 无 C# 或 Shader 编译错误。
+- 恢复 `PuzzlePlacementShine.shader` 后重新编译两个程序集通过，Unity Editor.log 无 Shader 错误；Shader GUID 保持原值 `7df6a79b62fe4d67a76ddfae2e56f54e`。
 - 四张图片已同步到 `Assets/StreamingAssets/UI/GameScene`，Player 可按同一路径加载。
 - 待 Unity Play Mode 验证常驻微光、落位传播、切组和恢复进度的视觉强度与节奏。
 
@@ -50,4 +52,4 @@
 
 ## 恢复提示
 
-已按参考视频实现常驻不规则微光和落位相邻传播；下一步在 Unity Play Mode 核对视觉强度和节奏。
+已按参考视频实现常驻不规则微光和落位相邻传播，并恢复当前块原有绿色斜向光带；下一步在 Unity Play Mode 核对叠加后的视觉强度和节奏。

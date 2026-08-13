@@ -48,6 +48,8 @@ public class GameScene : MonoBehaviour
     private const float GroupTransitionDefaultHoldDuration = 0.1f;
     private const float ActiveGroupOutlineFadeDuration = 0.5f;
     private const float PieceSnapDuration = 0.12f;
+    private const float PiecePlacementShineDuration = 0.52f;
+    private const float PiecePlacementShineBandWidth = 0.045f;
     private const float PiecePlacementLightDuration = 0.72f;
     private const float PiecePlacementLightFadeInRatio = 0.22f;
     private const float PiecePlacementLightTravelPixels = 16f;
@@ -100,6 +102,8 @@ public class GameScene : MonoBehaviour
         GameDefine.UiRoot + "/BasicUI/BgCardBoard2.png";
     private const string PuzzleOutlineTintShaderResourcesPath = "PuzzleOutlineTint";
     private const string PuzzleOutlineTintMaterialName = "PuzzleOutlineTint (Runtime)";
+    private const string PiecePlacementShineShaderResourcesPath = "PuzzlePlacementShine";
+    private const string PiecePlacementShineMaterialName = "PuzzlePlacementShine (Runtime)";
     private const string PiecePlacementLightPathPrefix =
         GameDefine.UiRoot + "/GameScene/PieceLight";
     private const string PiecePlacementLightMaterialResourcesPath = "PackHighlightAdditive";
@@ -127,6 +131,11 @@ public class GameScene : MonoBehaviour
     private static readonly Color TutorialTargetOutlineColor = new Color32(80, 139, 230, 255);
     private static readonly Color InvalidDropTintColor = new Color32(255, 58, 58, 255);
     private static readonly Color StandardPuzzleOutlineColor = new Color32(0x3f, 0x42, 0x3e, 0xff);
+    private static readonly Color PiecePlacementShineColor = new Color32(112, 151, 75, 230);
+    private static readonly int ShineSweepAxisId = Shader.PropertyToID("_SweepAxis");
+    private static readonly int ShineSweepCenterId = Shader.PropertyToID("_SweepCenter");
+    private static readonly int ShineBandWidthId = Shader.PropertyToID("_BandWidth");
+    private static readonly int ShineColorId = Shader.PropertyToID("_ShineColor");
     private static readonly Vector2 TutorialStrongPromptAnchor = new Vector2(0.5f, 0.7f);
     private static readonly Vector2 TutorialStrongPromptOffset = new Vector2(-30f, -50f);
     private static readonly Vector2 TutorialHintPromptAnchor = new Vector2(0.73f, 0.76f);
@@ -230,6 +239,7 @@ public class GameScene : MonoBehaviour
     private RectTransform _loadedCardBagRect;
     private Sprite _runtimeCardBoardBackgroundSprite;
     private Material _runtimePuzzleOutlineTintMaterial;
+    private Material _runtimePiecePlacementShineMaterial;
     private readonly List<Sprite> _piecePlacementLightSprites = new List<Sprite>();
     private readonly List<AmbientPieceLightFx> _ambientPieceLights =
         new List<AmbientPieceLightFx>();
@@ -237,6 +247,7 @@ public class GameScene : MonoBehaviour
     private Material _pieceSpriteLightMaterial;
     private Coroutine _activeGroupOutlineFadeCoroutine;
     private bool _didWarnMissingPuzzleOutlineTintShader;
+    private bool _didWarnMissingPiecePlacementShineShader;
     private bool _didWarnMissingPiecePlacementLightResources;
     private float _configuredBoardScale = DefaultBoardScale;
     private Vector3 _originalCardBagLocalScale = Vector3.one;
@@ -348,6 +359,7 @@ public class GameScene : MonoBehaviour
         DestroyTutorialTipBackgroundSprite();
         DestroyRuntimeCardBoardBackgroundSprite();
         DestroyRuntimePuzzleOutlineTintMaterial();
+        DestroyRuntimePiecePlacementShineMaterial();
         ClearAmbientPieceLights();
         DestroyPiecePlacementLightSprites();
         DestroyBoardOccupancyProbes();
@@ -1704,6 +1716,46 @@ public class GameScene : MonoBehaviour
         _runtimePuzzleOutlineTintMaterial = null;
     }
 
+    private Material GetOrCreatePiecePlacementShineMaterial()
+    {
+        if (_runtimePiecePlacementShineMaterial != null)
+        {
+            return _runtimePiecePlacementShineMaterial;
+        }
+
+        var shader = Resources.Load<Shader>(PiecePlacementShineShaderResourcesPath);
+        if (shader == null)
+        {
+            if (!_didWarnMissingPiecePlacementShineShader)
+            {
+                _didWarnMissingPiecePlacementShineShader = true;
+                Debug.LogWarning(
+                    $"GameScene: piece placement shine shader is missing at "
+                    + $"Resources/{PiecePlacementShineShaderResourcesPath}.shader; "
+                    + "current-piece shine skipped.");
+            }
+
+            return null;
+        }
+
+        _runtimePiecePlacementShineMaterial = new Material(shader)
+        {
+            name = PiecePlacementShineMaterialName
+        };
+        return _runtimePiecePlacementShineMaterial;
+    }
+
+    private void DestroyRuntimePiecePlacementShineMaterial()
+    {
+        if (_runtimePiecePlacementShineMaterial == null)
+        {
+            return;
+        }
+
+        Destroy(_runtimePiecePlacementShineMaterial);
+        _runtimePiecePlacementShineMaterial = null;
+    }
+
     private bool EnsurePiecePlacementLightResources()
     {
         if (_piecePlacementLightSprites.Count == PiecePlacementLightSpriteCount
@@ -2933,6 +2985,27 @@ public class GameScene : MonoBehaviour
 
     private IEnumerator PlayPiecePlacementSuccessShine(Image grooveImage)
     {
+        var propagationComplete = false;
+        StartCoroutine(PlayPiecePlacementLightPropagation(
+            grooveImage,
+            () => propagationComplete = true));
+        yield return PlayCurrentPiecePlacementShine(grooveImage);
+        while (!propagationComplete)
+        {
+            yield return null;
+        }
+    }
+
+    private IEnumerator PlayPiecePlacementLightPropagation(
+        Image grooveImage,
+        Action onComplete)
+    {
+        yield return PlayPiecePlacementLightPropagation(grooveImage);
+        onComplete?.Invoke();
+    }
+
+    private IEnumerator PlayPiecePlacementLightPropagation(Image grooveImage)
+    {
         if (grooveImage == null || grooveImage.sprite == null)
         {
             yield break;
@@ -2969,6 +3042,139 @@ public class GameScene : MonoBehaviour
         }
 
         DestroyPiecePlacementLights(effects);
+    }
+
+    private IEnumerator PlayCurrentPiecePlacementShine(Image grooveImage)
+    {
+        if (grooveImage == null || grooveImage.sprite == null)
+        {
+            yield break;
+        }
+
+        var shineMaterial = GetOrCreatePiecePlacementShineMaterial();
+        if (shineMaterial == null)
+        {
+            yield break;
+        }
+
+        var shineObject = CreateCurrentPiecePlacementShineOverlay(
+            grooveImage,
+            shineMaterial);
+        if (shineObject == null
+            || !TryGetRectTransformScreenRect(
+                grooveImage.rectTransform,
+                out var sourceScreenRect))
+        {
+            if (shineObject != null)
+            {
+                Destroy(shineObject);
+            }
+
+            yield break;
+        }
+
+        var sweepAxis = new Vector2(-0.58f, 0.82f).normalized;
+        GetScreenRectAxisRange(
+            sourceScreenRect,
+            sweepAxis,
+            out var sweepStart,
+            out var sweepEnd);
+        sweepStart -= PiecePlacementShineBandWidth * 2f;
+        sweepEnd += PiecePlacementShineBandWidth * 2f;
+
+        shineMaterial.SetVector(ShineSweepAxisId, sweepAxis);
+        shineMaterial.SetFloat(ShineBandWidthId, PiecePlacementShineBandWidth);
+        shineMaterial.SetColor(ShineColorId, PiecePlacementShineColor);
+
+        var elapsed = 0f;
+        while (elapsed < PiecePlacementShineDuration && shineObject != null)
+        {
+            elapsed += Mathf.Min(Time.unscaledDeltaTime, GameEntranceMaxFrameDelta);
+            var progress = Mathf.Clamp01(elapsed / PiecePlacementShineDuration);
+            var eased = progress * progress * (3f - 2f * progress);
+            shineMaterial.SetFloat(
+                ShineSweepCenterId,
+                Mathf.LerpUnclamped(sweepStart, sweepEnd, eased));
+            yield return null;
+        }
+
+        if (shineObject != null)
+        {
+            Destroy(shineObject);
+        }
+    }
+
+    private static GameObject CreateCurrentPiecePlacementShineOverlay(
+        Image sourceImage,
+        Material shineMaterial)
+    {
+        if (sourceImage == null || sourceImage.sprite == null || shineMaterial == null)
+        {
+            return null;
+        }
+
+        var sourceRect = sourceImage.rectTransform;
+        var shineObject = new GameObject(
+            $"{sourceImage.gameObject.name}_PlacementShine",
+            typeof(RectTransform),
+            typeof(CanvasRenderer),
+            typeof(Image));
+        shineObject.layer = sourceImage.gameObject.layer;
+        var shineRect = shineObject.GetComponent<RectTransform>();
+        shineRect.SetParent(sourceRect.parent, false);
+        shineRect.anchorMin = sourceRect.anchorMin;
+        shineRect.anchorMax = sourceRect.anchorMax;
+        shineRect.pivot = sourceRect.pivot;
+        shineRect.anchoredPosition = sourceRect.anchoredPosition;
+        shineRect.sizeDelta = sourceRect.sizeDelta;
+        shineRect.localRotation = sourceRect.localRotation;
+        shineRect.localScale = sourceRect.localScale;
+        shineRect.SetAsLastSibling();
+
+        var shineImage = shineObject.GetComponent<Image>();
+        shineImage.sprite = sourceImage.sprite;
+        shineImage.type = sourceImage.type;
+        shineImage.preserveAspect = sourceImage.preserveAspect;
+        shineImage.useSpriteMesh = sourceImage.useSpriteMesh;
+        shineImage.fillCenter = sourceImage.fillCenter;
+        shineImage.fillMethod = sourceImage.fillMethod;
+        shineImage.fillAmount = sourceImage.fillAmount;
+        shineImage.fillClockwise = sourceImage.fillClockwise;
+        shineImage.fillOrigin = sourceImage.fillOrigin;
+        shineImage.color = Color.white;
+        shineImage.material = shineMaterial;
+        shineImage.raycastTarget = false;
+        shineImage.maskable = false;
+        return shineObject;
+    }
+
+    private static Vector2 NormalizeScreenPoint(Vector2 screenPoint)
+    {
+        return new Vector2(
+            Screen.width > 0 ? screenPoint.x / Screen.width : 0f,
+            Screen.height > 0 ? screenPoint.y / Screen.height : 0f);
+    }
+
+    private static void GetScreenRectAxisRange(
+        Rect screenRect,
+        Vector2 axis,
+        out float minimum,
+        out float maximum)
+    {
+        var bottomLeft = NormalizeScreenPoint(new Vector2(screenRect.xMin, screenRect.yMin));
+        var topLeft = NormalizeScreenPoint(new Vector2(screenRect.xMin, screenRect.yMax));
+        var topRight = NormalizeScreenPoint(new Vector2(screenRect.xMax, screenRect.yMax));
+        var bottomRight = NormalizeScreenPoint(new Vector2(screenRect.xMax, screenRect.yMin));
+        minimum = Mathf.Min(
+            Vector2.Dot(bottomLeft, axis),
+            Vector2.Dot(topLeft, axis),
+            Vector2.Dot(topRight, axis),
+            Vector2.Dot(bottomRight, axis));
+        maximum = Mathf.Max(
+            Vector2.Dot(bottomLeft, axis),
+            Vector2.Dot(topLeft, axis),
+            Vector2.Dot(topRight, axis),
+            Vector2.Dot(bottomRight, axis));
     }
 
     private List<PiecePlacementLightTarget> CollectPiecePlacementLightTargets(
