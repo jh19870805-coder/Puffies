@@ -308,6 +308,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 
 - 首页列表的卡包主体使用 `Assets/UI/PackImages/PackIconNNN.png` 静态图；`PackItem.prefab` 不嵌套 3D 卡包特效 Prefab，但包含编辑器可调的 UGUI ADD 高光贴片。
 - MainScene 主 Canvas 使用 `Screen Space - Camera`，`World Camera` 固定为场景 `Main Camera`，Plane Distance 为 `10`；`MainScene.ConfigureMainCanvas` 在运行时复用统一 Canvas 配置再次校正，确保 `PackItem` 封面、高光、尺寸图标和首页主 UI 经过同一摄像机渲染。
+- Unity 编辑器打开 `MainScene` 后，`CanvasDesignResolutionEditor` 会延迟一帧按根 `Canvas` 的世界边界自动调整 SceneView 取景；这是对 Camera Canvas 编辑体验的补偿，不修改场景 Selection、Canvas 配置或运行时行为。
 - 选中态使用独立 `Screen Space - Camera` Canvas 的 `Image` 显示同一张静态图，目标尺寸为 `600 x 680`；该 Canvas 与选择面板同样绑定 `Main Camera`，背景虚化、返回、拍照和重玩确认继续沿用现有流程。
   - 点击玩后切换到 `BgGame` 开包舞台并等待玩家轻点或横划。有效操作随机选择 `CardPackOpeningModel_001-006`，共用制作方 `CardPackAnimation.controller`；短名称正面网格的 `_MainTex` 在运行时替换为当前 `PackIconNNN`。长名称背面网格会显示制作方 `Bg01.png` 灰块，替换成封面又会形成第二层完整卡包，因此当前运行时禁用该 Renderer；FBX、骨骼、UV 和动画资源本体不修改。
 - 开包特效的混合模式和内部渲染层级归资源配置所有：`fx_chai_w_001.prefab` 保留各 ParticleSystemRenderer 自己的 `sortingOrder`，其 Material/Shader 决定 Additive 或 Alpha 混合；运行时代码不得把所有粒子 Renderer 强制改成同一排序值。卡包正反面 `test.mat`、`test01.mat` 的 Custom Render Queue 固定为 `2001` 并直接保存在 Material 中，运行时材质实例只替换动态贴图。

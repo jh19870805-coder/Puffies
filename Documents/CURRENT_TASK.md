@@ -1,49 +1,45 @@
 # 当前任务
 
-- 任务：工程冗余代码保守清理
-- 状态：已完成代码审计、清理和编译验证
+- 任务：MainScene 编辑器打开后自动显示页面
+- 状态：代码与编译验证已完成，等待 Unity 编辑器交互验证
 - 更新时间：2026-08-13
 
 ## 用户意图
 
-- 整理工程并删除能够确认不再使用的代码。
-- 不改变已经验证的卡包排序、开包动画、拼图交互、任务结算和编辑器工具行为。
+- 在 Unity 编辑器从 LoadingScene 双击打开 MainScene 时，Scene 视图应直接显示页面。
+- 不再要求额外双击 Hierarchy 中的 Canvas 才能看到 UI。
+- 不改变 MainScene 的运行时 Canvas 渲染模式和同摄像机开包特效方案。
 
 ## 工作记录
 
-- 全仓库审计 21 个 C# 脚本，结合编译结果、标识符引用、Unity 特性入口、脚本 Meta GUID 资源引用和当前场景层级筛选删除候选。
-- MainScene 当前只使用 `PackageScrollView/Content/Page_1` 与 `PackItem` 的 6 x 3 分页列表，全工程不存在旧 `Package001` 对象；删除旧列表解析、模板字段、手工横向布局和分页/旧版双分支。
-- 卡包排序入口 `CardPackDataUtility.TakeMainSceneOrderedPackIds()`、按顺序创建分页条目和现有分页布局均保留。
-- 删除 `BuildSync` 中针对已经不存在的 11 个旧资源目录和 4 个旧 StreamingAssets 根目录的一次性迁移清理；保留正式 UI 同步、编辑器菜单和构建前同步回调。
-- 孤立公开类型扫描只发现 `PackCoverShadowEffect`，但其脚本 GUID 被 Prefab 引用，因此未删除；私有单次引用候选均为 Unity 初始化特性回调，也全部保留。
+- 确认 MainScene 根 Canvas 当前为 `Screen Space - Camera` 并绑定 `Main Camera`，LoadingScene 根 Canvas 为 `Screen Space - Overlay`。
+- 页面内容、Canvas 启用状态和相机引用均正常；问题来自 Unity 在切换场景后保留旧 Scene 视图观察位置。
+- 在现有 `CanvasDesignResolutionEditor` 中监听 `EditorSceneManager.sceneOpened`。
+- 非播放模式打开 MainScene 后延迟一帧读取根 Canvas 世界四角，并让当前 SceneView 自动 Frame 到该范围。
+- 自动取景不修改 Selection、场景资源、Canvas RenderMode、Camera 或运行时逻辑。
 
 ## 修改文件
 
-- `Assets/Scripts/Controller/MainScene.cs`
-- `Assets/Scripts/Editor/BuildSync.cs`
+- `Assets/Scripts/Editor/CanvasDesignResolutionEditor.cs`
 - `Documents/CURRENT_TASK.md`
 - `Documents/PROJECT_CONTEXT.md`
-- `specs/spec-driven-development.md`
 
 ## 决策
 
-- 只有能够证明不存在 C#、Unity 序列化、菜单、构建回调或反射入口的代码才删除。
-- 不按文件大小拆分 `MainScene`、`GameScene` 或编辑器生成器；本轮目标是净删除，不做结构性重构。
-- `PackCoverShadowEffect` 等由 Unity 资源引用的组件即使没有普通 C# 调用也必须保留。
+- 保留 MainScene 的 `Screen Space - Camera`，因为开包模型、粒子、背景和 UI 需要继续由同一台 Main Camera 渲染。
+- 该行为只作用于 Unity 编辑器中打开 MainScene，不进入 Player 构建，也不改变运行时页面导航。
+- 使用 RectTransform 世界边界直接取景，不临时修改用户当前 Selection。
 
 ## 验证
 
 - `Assembly-CSharp.csproj` 编译通过，`0` 警告、`0` 错误。
 - `Assembly-CSharp-Editor.csproj` 编译通过，`0` 警告、`0` 错误。
-- 搜索确认已删除的旧列表字段、方法和 BuildSync 迁移字段、方法无残留引用。
-- 静态核对确认卡包排序仍使用 `TakeMainSceneOrderedPackIds()`，并按原索引创建分页条目。
-- `git diff --check` 通过。
+- 待在 Unity 中从 LoadingScene 双击打开 MainScene，确认无需再双击 Canvas。
 
 ## 下一步
 
-1. 在 Unity 进入 MainScene，确认首页卡包按原顺序显示并可正常翻页、点击。
-2. 后续发现新的废弃功能时，继续按 Unity 资源引用与运行入口双重核对后清理。
+1. 在 Unity 编辑器复现 LoadingScene -> MainScene 资源双击切换并确认自动取景。
 
 ## 恢复提示
 
-本轮已删除旧 `Package001` 列表兼容代码和 BuildSync 一次性旧目录清理；当前首页只支持正式分页 PackItem 列表，卡包排序逻辑完整保留。
+MainScene 页面没有丢失；其 Camera Canvas 导致 SceneView 切场景后保留旧观察位置。编辑器工具已增加 MainScene 打开后的 Canvas 自动取景，下一步编译并在 Unity 中验证。

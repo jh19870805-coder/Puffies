@@ -15,10 +15,69 @@ public static class CanvasDesignResolutionEditor
 {
     private const string ScenesRoot = "Assets/Scenes";
     private const string PrefabsRoot = "Assets";
+    private const string MainSceneName = "MainScene";
 
     static CanvasDesignResolutionEditor()
     {
         ObjectFactory.componentWasAdded += OnComponentWasAdded;
+        EditorSceneManager.sceneOpened += OnSceneOpened;
+    }
+
+    private static void OnSceneOpened(Scene scene, OpenSceneMode mode)
+    {
+        if (EditorApplication.isPlayingOrWillChangePlaymode
+            || scene.name != MainSceneName)
+        {
+            return;
+        }
+
+        EditorApplication.delayCall += () => FrameMainCanvas(scene);
+    }
+
+    private static void FrameMainCanvas(Scene scene)
+    {
+        if (!scene.IsValid() || !scene.isLoaded)
+        {
+            return;
+        }
+
+        var roots = scene.GetRootGameObjects();
+        Canvas canvas = null;
+        for (var i = 0; i < roots.Length; i++)
+        {
+            if (roots[i].name == "Canvas")
+            {
+                canvas = roots[i].GetComponent<Canvas>();
+                if (canvas != null)
+                {
+                    break;
+                }
+            }
+        }
+
+        var sceneView = SceneView.lastActiveSceneView;
+        var canvasRect = canvas != null ? canvas.transform as RectTransform : null;
+        if (sceneView == null || canvasRect == null)
+        {
+            return;
+        }
+
+        Canvas.ForceUpdateCanvases();
+        var corners = new Vector3[4];
+        canvasRect.GetWorldCorners(corners);
+        var bounds = new Bounds(corners[0], Vector3.zero);
+        for (var i = 1; i < corners.Length; i++)
+        {
+            bounds.Encapsulate(corners[i]);
+        }
+
+        if (bounds.size.sqrMagnitude <= 0.000001f)
+        {
+            return;
+        }
+
+        sceneView.Frame(bounds, instant: false);
+        sceneView.Repaint();
     }
 
     [MenuItem("Puffies/Apply Design Resolution (Current Scene)", false, 40)]
