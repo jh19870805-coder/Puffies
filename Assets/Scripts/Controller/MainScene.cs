@@ -3514,6 +3514,7 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
     private const float ReferenceModelLocalZ = 0f;
     private const float LightBandLengthScale = 7f;
     private const float LightBandHeightScale = 1f;
+    private const float StarParticleScale = 3f;
     private const float ModelWorldDepth = -1f;
     private const float LightEffectDelay = 0.5f;
     private const float ReferenceLightEffectLocalY = 1f;
@@ -3530,6 +3531,12 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         "line01",
         "glow",
         "glowC"
+    };
+    private static readonly string[] ScaledStarParticleNodeNames =
+    {
+        "dot",
+        "dot01",
+        "glow01"
     };
     private const int FrontRendererNumberLength = 3;
     private const int BackRendererNumberLength = 5;
@@ -3660,6 +3667,10 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
             mLightEffectObject.transform,
             LightBandLengthScale,
             LightBandHeightScale);
+        ScaleParticleStartSizes(
+            mLightEffectObject.transform,
+            ScaledStarParticleNodeNames,
+            StarParticleScale);
         SetLayerRecursively(mLightEffectObject, EffectLayer);
         mLightEffectObject.SetActive(false);
 
@@ -3947,6 +3958,48 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
             localPosition.x *= lengthScale;
             node.localPosition = localPosition;
             node.localScale = Vector3.Scale(node.localScale, lightBandScale);
+        }
+    }
+
+    private static void ScaleParticleStartSizes(
+        Transform effectRoot,
+        IReadOnlyList<string> nodeNames,
+        float sizeScale)
+    {
+        if (effectRoot == null || nodeNames == null || sizeScale <= 0f)
+        {
+            return;
+        }
+
+        for (var i = 0; i < nodeNames.Count; i++)
+        {
+            var node = effectRoot.Find(nodeNames[i]);
+            if (node == null)
+            {
+                Debug.LogWarning(
+                    $"CardPackOpeningEffect: star particle node is missing: {nodeNames[i]}");
+                continue;
+            }
+
+            var particleSystem = node.GetComponent<ParticleSystem>();
+            if (particleSystem == null)
+            {
+                Debug.LogWarning(
+                    $"CardPackOpeningEffect: star particle system is missing: {nodeNames[i]}");
+                continue;
+            }
+
+            var main = particleSystem.main;
+            if (main.startSize3D)
+            {
+                main.startSizeXMultiplier *= sizeScale;
+                main.startSizeYMultiplier *= sizeScale;
+                main.startSizeZMultiplier *= sizeScale;
+            }
+            else
+            {
+                main.startSizeMultiplier *= sizeScale;
+            }
         }
     }
 
