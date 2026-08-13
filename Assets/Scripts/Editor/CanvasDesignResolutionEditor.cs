@@ -15,7 +15,14 @@ public static class CanvasDesignResolutionEditor
 {
     private const string ScenesRoot = "Assets/Scenes";
     private const string PrefabsRoot = "Assets";
-    private const string MainSceneName = "MainScene";
+    private static readonly HashSet<string> UiSceneNames = new HashSet<string>
+    {
+        "LoadingScene",
+        "MainScene",
+        "GameScene",
+        "RankScene",
+        "AchieveScene"
+    };
 
     static CanvasDesignResolutionEditor()
     {
@@ -26,15 +33,16 @@ public static class CanvasDesignResolutionEditor
     private static void OnSceneOpened(Scene scene, OpenSceneMode mode)
     {
         if (EditorApplication.isPlayingOrWillChangePlaymode
-            || scene.name != MainSceneName)
+            || mode != OpenSceneMode.Single
+            || !UiSceneNames.Contains(scene.name))
         {
             return;
         }
 
-        EditorApplication.delayCall += () => FrameMainCanvas(scene);
+        EditorApplication.delayCall += () => FrameSceneCanvas(scene);
     }
 
-    private static void FrameMainCanvas(Scene scene)
+    private static void FrameSceneCanvas(Scene scene)
     {
         if (!scene.IsValid() || !scene.isLoaded)
         {
@@ -76,7 +84,9 @@ public static class CanvasDesignResolutionEditor
             return;
         }
 
-        sceneView.Frame(bounds, instant: false);
+        sceneView.rotation = Quaternion.identity;
+        sceneView.orthographic = true;
+        sceneView.Frame(bounds, instant: true);
         sceneView.Repaint();
     }
 
