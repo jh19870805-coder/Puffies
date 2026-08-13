@@ -450,3 +450,36 @@
 - 最终结构验证通过：下载根目录包含六张 `CardBagXXX.png`；六包均包含 `GameBoard.png`、`BoardTitle.png` 和预期 Piece，总 Piece 数为 `195`。
 - 根目录没有残留数字目录或 `PackTitleXXX.png`；子目录没有残留 `smooth`、`preview.png` 或 `background_base.png`。
 - 本次只整理下载目录，尚未将资源复制到 `Assets/UI/CardBags/`，也未生成或覆盖 Unity Prefab。
+## 2026-08-13 - 工程冗余代码保守清理
+
+### 需求
+
+**用户故事：** 作为项目维护者，我希望删除已经失去调用路径的冗余代码，以降低后续维护成本，同时不改变当前已经验证的游戏行为和资源配置。
+
+1. WHEN 某段代码在全仓库中只有定义且不存在 C# 调用、Unity 序列化引用、编辑器菜单入口或反射入口 THEN 系统 SHALL 允许删除该代码。
+2. IF 无法证明代码未被 Unity 场景、Prefab、动画事件、构建回调或菜单机制使用 THEN 本轮 SHALL 保留该代码。
+3. WHEN 清理完成 THEN 卡包排序、开包动画、拼图交互、任务结算和编辑器工具菜单 SHALL 保持现有行为。
+4. WHEN 工作区已有已确认修改 THEN 清理 SHALL 保留该修改，不得回滚或顺带调整其参数。
+5. WHEN 删除脚本或公开类型 THEN 系统 SHALL 同时确认对应 Meta GUID 未被场景、Prefab 或资源引用；存在引用时不得删除。
+
+### 设计
+
+- 使用编译警告、标识符全仓库引用计数、Unity YAML GUID 引用和 Git 历史共同筛选候选。
+- 优先删除类内未引用私有字段、方法和已经被现行流程完全替代的兼容分支；不因文件较大而拆分或重构。
+- Unity 生命周期函数、序列化字段、`MenuItem`、构建回调和可能由动画事件调用的方法不按普通 C# 引用计数直接删除。
+- 修改后分别编译运行时与 Editor 程序集，并执行 `git diff --check`；最终 diff 必须只包含有证据的清理、任务记录和本节 spec。
+
+### 任务
+
+- [x] 1. 建立候选清单并排除 Unity 隐式入口。
+- [x] 2. 删除确认无调用路径的冗余代码。
+- [x] 3. 编译运行时与 Editor 程序集并检查 diff。
+- [x] 4. 更新当前任务记录，写明删除内容和剩余风险。
+
+### 当前验证
+
+- MainScene 当前场景只存在 `PackageScrollView/Content/Page_1` 分页列表，全工程不存在 `Package001` 场景或 Prefab 对象；已删除旧单卡包列表解析、模板字段、横向手工布局和相关条件分支。
+- 卡包顺序仍由 `CardPackDataUtility.TakeMainSceneOrderedPackIds()` 提供，并按原索引调用 `CreatePagedPackageSlot`，6 x 3 分页与排序逻辑未修改。
+- 已确认 `BuildSync` 中列出的 11 个旧资源目录和 4 个旧 StreamingAssets 根目录均不存在；已删除每次编辑器启动重复执行的一次性迁移清理，正式 UI 同步目录、菜单入口和构建前回调保持不变。
+- 全仓库孤立公开类型扫描只剩 `PackCoverShadowEffect`；该类型由 Prefab 通过 Meta GUID 引用，因此保留。私有单次引用候选均为 Unity 初始化特性回调，因此保留。
+- `Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 编译通过，均为 `0` 警告、`0` 错误；`git diff --check` 通过。

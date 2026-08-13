@@ -22,29 +22,6 @@ public class BuildSync : IPreprocessBuildWithReport
         "RankScene"
     };
 
-    private static readonly string[] LegacyAssetFolders =
-    {
-        "Assets/ArtRes",
-        "Assets/Configs",
-        "Assets/Core",
-        "Assets/Tools",
-        "Assets/Editor",
-        "Assets/Models",
-        "Assets/Materials",
-        "Assets/Effects",
-        "Assets/Resources/CardPack",
-        "Assets/Resources/PlaneGroup",
-        "Assets/Resources/Effect"
-    };
-
-    private static readonly string[] LegacyStreamingRoots =
-    {
-        "ArtRes",
-        "Config",
-        "Configs",
-        "Textures"
-    };
-
     public int callbackOrder => 0;
 
     [InitializeOnLoadMethod]
@@ -67,8 +44,6 @@ public class BuildSync : IPreprocessBuildWithReport
     private static void RunAll(bool logOnComplete)
     {
         EnsureFolder(StreamingRoot);
-        CleanupLegacyAssetFolders();
-        RemoveLegacyStreamingRoots();
         SyncUiToStreaming();
 
         AssetDatabase.SaveAssets();
@@ -106,46 +81,6 @@ public class BuildSync : IPreprocessBuildWithReport
             }
 
             CopyDirectory(source, Path.Combine(targetRoot, folderName));
-        }
-    }
-
-    private static void RemoveLegacyStreamingRoots()
-    {
-        for (var i = 0; i < LegacyStreamingRoots.Length; i++)
-        {
-            var legacyRoot = Path.Combine(StreamingRoot, LegacyStreamingRoots[i]).Replace("\\", "/");
-            if (AssetDatabase.IsValidFolder(legacyRoot) && AssetDatabase.DeleteAsset(legacyRoot))
-            {
-                continue;
-            }
-
-            if (Directory.Exists(legacyRoot))
-            {
-                Directory.Delete(legacyRoot, true);
-            }
-
-            var legacyMeta = legacyRoot + ".meta";
-            if (File.Exists(legacyMeta))
-            {
-                File.Delete(legacyMeta);
-            }
-        }
-    }
-
-    private static void CleanupLegacyAssetFolders()
-    {
-        for (var i = 0; i < LegacyAssetFolders.Length; i++)
-        {
-            var legacyFolder = LegacyAssetFolders[i];
-            if (!AssetDatabase.IsValidFolder(legacyFolder))
-            {
-                continue;
-            }
-
-            if (AssetDatabase.DeleteAsset(legacyFolder))
-            {
-                Debug.Log($"BuildSync removed legacy folder: {legacyFolder}");
-            }
         }
     }
 

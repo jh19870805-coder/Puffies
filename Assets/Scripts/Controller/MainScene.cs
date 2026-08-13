@@ -23,7 +23,6 @@ public class MainScene : MonoBehaviour
     private const float PackageCoverHeight = 272f;
     private const float PackageHorizontalSpacing = 20f;
     private const float PackageVerticalSpacing = 20f;
-    private const float PackageContentHorizontalPadding = 16f;
     private const float DefaultPackagePageWidth = 1625f;
     private const float DefaultPackagePageHeight = 950f;
     private const int PackagesPerPageRowCount = 3;
@@ -123,7 +122,6 @@ public class MainScene : MonoBehaviour
 
     private readonly Dictionary<int, PackageEntry> mPackageSlotsById = new Dictionary<int, PackageEntry>();
     private GameObject mPackageItemTemplate;
-    private Image mLegacyPackageSlotTemplate;
     private RectTransform mPackageContentRoot;
     private RectTransform mPackagePageTemplate;
     private ScrollRect mPackageScrollRect;
@@ -158,7 +156,6 @@ public class MainScene : MonoBehaviour
     private Sprite mUsableLineOffSprite;
     private Sprite mUsableLevelOutlineSprite;
     private Sprite mUsableStickerOutlineSprite;
-    private bool mUsesPagedPackageGrid;
     private bool mIsPlayingAnimation;
     private bool mHasSwitchedToGameScene;
     private bool mIsApplyingSettingsToUi;
@@ -300,7 +297,7 @@ public class MainScene : MonoBehaviour
 
         if (!TryResolvePackageList())
         {
-            Debug.LogWarning("MainScene: package list not found. Expected PackageScrollView/Page_1 with PackItem prefab, or legacy Package001.");
+            Debug.LogWarning("MainScene: package list not found. Expected PackageScrollView/Page_1 with PackItem prefab.");
         }
         else
         {
@@ -1173,14 +1170,12 @@ public class MainScene : MonoBehaviour
     private bool TryResolvePackageList()
     {
         mPackageItemTemplate = null;
-        mLegacyPackageSlotTemplate = null;
         mPackageContentRoot = null;
         mPackagePageTemplate = null;
         mPackageScrollRect = null;
-        mUsesPagedPackageGrid = false;
         mPackageSlotsById.Clear();
 
-        return TryResolvePagedPackageList() || TryResolveLegacyPackageList();
+        return TryResolvePagedPackageList();
     }
 
     private bool TryResolvePagedPackageList()
@@ -1218,7 +1213,6 @@ public class MainScene : MonoBehaviour
             return false;
         }
 
-        mUsesPagedPackageGrid = true;
         mPackageScrollRect.horizontal = true;
         mPackageScrollRect.vertical = false;
         mPackagePageTemplate.gameObject.SetActive(true);
@@ -1226,36 +1220,9 @@ public class MainScene : MonoBehaviour
         return true;
     }
 
-    private bool TryResolveLegacyPackageList()
-    {
-        var templateObject = GameObject.Find($"{GameDefine.PackageFilePrefix}{MainPackageBagId:D3}");
-        if (templateObject == null)
-        {
-            var images = FindObjectsOfType<Image>(true);
-            for (var i = 0; i < images.Length; i++)
-            {
-                var image = images[i];
-                if (image != null && TryParsePackageObjectName(image.gameObject.name, out _))
-                {
-                    templateObject = image.gameObject;
-                    break;
-                }
-            }
-        }
-
-        if (templateObject == null || !templateObject.TryGetComponent(out mLegacyPackageSlotTemplate))
-        {
-            return false;
-        }
-
-        mPackageContentRoot = mLegacyPackageSlotTemplate.rectTransform.parent as RectTransform;
-        mLegacyPackageSlotTemplate.gameObject.SetActive(false);
-        return mPackageContentRoot != null;
-    }
-
     private void RefreshPackageList()
     {
-        if (mPackageContentRoot == null || (mPackageItemTemplate == null && mLegacyPackageSlotTemplate == null))
+        if (mPackageContentRoot == null || mPackageItemTemplate == null)
         {
             return;
         }
@@ -1272,23 +1239,18 @@ public class MainScene : MonoBehaviour
         for (var i = 0; i < unlockedPackIds.Count; i++)
         {
             var packId = unlockedPackIds[i];
-            var entry = CreatePackageSlot(packId, i);
+            var entry = CreatePagedPackageSlot(packId, i);
             if (entry.Image == null)
             {
                 continue;
             }
 
             ApplyPackageSlotVisual(entry, packId);
-            if (!mUsesPagedPackageGrid)
-            {
-                LayoutPackageSlot(entry.RectTransform, i);
-            }
-
             entry.Root.SetActive(true);
             mPackageSlotsById[packId] = entry;
         }
 
-        UpdatePackageContentWidth(unlockedPackIds.Count);
+        RefreshPackagePageLayout();
         if (mPackageScrollRect != null)
         {
             mPackageScrollRect.horizontalNormalizedPosition = 0f;
@@ -1308,7 +1270,7 @@ public class MainScene : MonoBehaviour
         }
 
         mPackageSlotsById.Clear();
-        if (!mUsesPagedPackageGrid || mPackageContentRoot == null)
+        if (mPackageContentRoot == null)
         {
             return;
         }
@@ -1351,28 +1313,6 @@ public class MainScene : MonoBehaviour
                 Destroy(child.gameObject);
             }
         }
-    }
-
-    private PackageEntry CreatePackageSlot(int packId, int index)
-    {
-        if (mUsesPagedPackageGrid)
-        {
-            return CreatePagedPackageSlot(packId, index);
-        }
-
-        var slotObject = Instantiate(mLegacyPackageSlotTemplate.gameObject, mPackageContentRoot);
-        slotObject.name = $"{GameDefine.PackageFilePrefix}{packId:D3}";
-        var image = slotObject.GetComponent<Image>();
-        EnsurePackageInteractionHandler(slotObject, image, packId);
-        return new PackageEntry
-        {
-            BagId = packId,
-            Root = slotObject,
-            Image = image,
-            HighlightRoot = FindChild(slotObject.transform, PackHighlightObjectName)?.gameObject,
-            InteractionHandler = slotObject.GetComponent<PackageInteractionHandler>(),
-            RectTransform = image != null ? image.rectTransform : null
-        };
     }
 
     private PackageEntry CreatePagedPackageSlot(int packId, int index)
@@ -1445,7 +1385,7 @@ public class MainScene : MonoBehaviour
         }
 
         entry.Image.enabled = true;
-        entry.Image.raycastTarget = !mUsesPagedPackageGrid;
+        entry.Image.raycastTarget = false;
         var packImagePath = GameDefine.FormatPackImagePath(packId);
         var packSprite = GameCommonUtility.LoadSpriteByPath(packImagePath, PixelsPerUnit);
         if (packSprite != null)
@@ -1465,11 +1405,6 @@ public class MainScene : MonoBehaviour
             GameFontUtility.ApplyDefaultFont(nameText);
             nameText.text = $"Pack {packId:D3}";
             nameText.gameObject.SetActive(false);
-        }
-
-        if (!mUsesPagedPackageGrid && entry.RectTransform != null)
-        {
-            entry.RectTransform.sizeDelta = new Vector2(PackageSlotWidth, PackageSlotHeight);
         }
 
         EnsurePackageInteractionHandler(entry.Root, entry.Image, packId);
@@ -1621,45 +1556,14 @@ public class MainScene : MonoBehaviour
         sizeImage.gameObject.SetActive(true);
     }
 
-    private void LayoutPackageSlot(RectTransform rectTransform, int index)
+    private void RefreshPackagePageLayout()
     {
-        if (rectTransform == null)
+        NormalizePagedPackageLayout();
+        Canvas.ForceUpdateCanvases();
+        if (mPackageContentRoot != null)
         {
-            return;
+            LayoutRebuilder.ForceRebuildLayoutImmediate(mPackageContentRoot);
         }
-
-        rectTransform.anchorMin = new Vector2(0f, 0.5f);
-        rectTransform.anchorMax = new Vector2(0f, 0.5f);
-        rectTransform.pivot = new Vector2(0.5f, 0.5f);
-        var x = PackageContentHorizontalPadding
-            + index * (PackageSlotWidth + PackageHorizontalSpacing)
-            + PackageSlotWidth * 0.5f;
-        rectTransform.anchoredPosition = new Vector2(x, 0f);
-    }
-
-    private void UpdatePackageContentWidth(int visibleCount)
-    {
-        if (mUsesPagedPackageGrid)
-        {
-            NormalizePagedPackageLayout();
-            Canvas.ForceUpdateCanvases();
-            if (mPackageContentRoot != null)
-            {
-                LayoutRebuilder.ForceRebuildLayoutImmediate(mPackageContentRoot);
-            }
-
-            return;
-        }
-
-        if (mPackageContentRoot == null || visibleCount <= 0)
-        {
-            return;
-        }
-
-        var contentWidth = PackageContentHorizontalPadding * 2f
-            + visibleCount * PackageSlotWidth
-            + Mathf.Max(0, visibleCount - 1) * PackageHorizontalSpacing;
-        mPackageContentRoot.sizeDelta = new Vector2(contentWidth, mPackageContentRoot.sizeDelta.y);
     }
 
     private void NormalizePagedPackageLayout()
@@ -1787,7 +1691,7 @@ public class MainScene : MonoBehaviour
             return;
         }
 
-        visualImage.raycastTarget = !mUsesPagedPackageGrid;
+        visualImage.raycastTarget = false;
         var clickImage = targetObject.GetComponent<Image>();
         if (clickImage != null)
         {
