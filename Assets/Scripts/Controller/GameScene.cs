@@ -932,7 +932,7 @@ public class GameScene : MonoBehaviour
         }
 
         _board.GrooveImagesByGroup = CollectEditorGrooveGroups();
-        SyncEditorLayoutToSprites();
+        SyncGrooveLayoutToSprites();
         _board.IsBoardAndGroovesInitialized = true;
     }
 
@@ -1079,9 +1079,8 @@ public class GameScene : MonoBehaviour
         return GameDefine.TryParsePieceObjectName(objectName, out pieceNumber);
     }
 
-    private void SyncEditorLayoutToSprites()
+    private void SyncGrooveLayoutToSprites()
     {
-        SyncImageSizeToSprite(_board.GameBoardImage);
         if (_board.GrooveImagesByGroup == null)
         {
             return;

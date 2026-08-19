@@ -498,3 +498,22 @@
 - 移除常驻呼吸、每片双光、当前块四光、邻块双光和临时光淡出销毁；传播直接移动每片已有的单个持久光。
 - 保留相邻块筛选、错峰传播、SpriteMask/UGUI Alpha Mask 裁切和 `PuzzlePlacementShine.shader` 当前块绿色光带。
 - `Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 串行编译通过，均为 `0` 警告、`0` 错误；待 Play Mode 目视确认连续传播位置。
+
+## 2026-08-19 - CardBag022 背板视觉异常调查
+
+### 需求
+
+1. CardBag022 的卡包背板必须与灰色棋盘底层视觉一致，不能在右下角呈现为另一块缩小的矩形。
+2. 修复不得误改底部黑色 `PieceBoard` 托盘。
+
+### 设计
+
+- Prefab 中 `CardBag022` 根与 `GameBoard` 均为 `2600 x 3920`，但 Unity Play Mode 实测初始化后的 `GameBoard` 被改为 `1358 x 2048`；这是 022 源图受 `maxTextureSize=2048` 降采样后的 Sprite 尺寸。
+- `SyncEditorLayoutToSprites()` 原本同时同步 GameBoard 和 Piece 槽位，错误地用 `sprite.rect.size` 覆盖 GameBoard 的原始画布 RectTransform。初始化改为只同步 Piece 槽位，GameBoard 始终保留 Prefab 设计尺寸。
+- 不修改 `PieceBoard`、022 源图、Prefab 或 TextureImporter；源图 Alpha 检查未发现会在运行时显示的内部矩形。
+
+### 验证
+
+- [x] 通过运行时 Rect 记录复现根 `2600 x 3920`、GameBoard `1358 x 2048` 的尺寸分离。
+- [x] 保留 GameBoard 的 Prefab 设计尺寸，只同步 Piece 槽位。
+- [ ] 重新执行 Unity Play Mode 捕获，确认 CardBag022 根与 GameBoard 的屏幕矩形一致。
