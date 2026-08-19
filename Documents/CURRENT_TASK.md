@@ -1,44 +1,54 @@
 # 当前任务
 
-- 任务：CardBag022 背板视觉异常
-- 状态：已修复，等待编译与 Play Mode 复验
+- 任务：CardBag010 自动生成连续定位失败
+- 状态：第二轮候选判定已修复并通过编译，等待 Unity 工具重试
 - 更新时间：2026-08-19
 
 ## 用户意图
 
-- 修复 CardBag022 游戏页面右下角出现一块明显缩小的矩形边界、未与灰色棋盘底层形成一致视觉的问题。
-- 用户所说的背板是卡包棋盘内容，不是底部黑色 `PieceBoard` 托盘。
+- 修复自动生成 `CardBag010` 时先后无法定位 `piece_011.png`、`piece_022.png` 的错误。
+- 保持已有严格定位校验，不能通过放宽全局匹配阈值把相似星空或奶白色区域放错。
 
 ## 工作记录
 
-- 已确认前一次将问题识别为 `PieceBoard` 宽度错误、随后识别为 `GameBoard.png` 源图透明区，均属于误判；未保留这两类修改。
-- 通过 Unity Play Mode 自动截图与运行时 Rect 记录确认：`CardBag022` 根保持 Prefab 设计尺寸 `2600 x 3920`，但初始化逻辑将 `GameBoard` 改成了导入 Sprite 的 `1358 x 2048`，屏幕宽高均缩小到约 `52.25%`。
-- 根因是 `SyncEditorLayoutToSprites()` 对 `GameBoard` 调用了通用 Sprite 原生尺寸同步；022 的大图受 TextureImporter `maxTextureSize=2048` 降采样，因此运行时错误覆盖了 Prefab 中正确的设计画布尺寸。
-- 初始化现改为 `SyncGrooveLayoutToSprites()`：只同步 Piece 槽位尺寸，不再修改 `GameBoard` RectTransform；所有卡包继续保留 Prefab 生成时记录的原始画布尺寸。
+- 完整错误为：Preview 最佳颜色匹配 `91.16%`、结构匹配 `91.88%`、次候选 `90.45%`；GameBoard 已挖空，无法提供颜色定位。
+- 目视确认 `piece_011.png` 是头盔顶部奶白弧线与星空区域，Preview 中存在较多相似颜色，但正确位置具有明确的局部纹理。
+- 按 Unity `GetPixels32()` 像素顺序离线复算候选：最佳位置为 Unity 坐标 `(523,1022)`，对应 Preview 左上坐标 `(523,18)`；所谓次候选为 `(515,1021)`，只偏移 `8px/1px`，属于同一匹配峰值，不是远端重复图案。
+- 生成器原来用 `7px` 搜索细化半径同时判定候选是否独立，导致第 `8px` 的同一区域邻点被误判成另一个位置。
+- 新增独立的 `14px` 候选簇半径；搜索细化范围仍保持 `7px`，只在颜色、结构和轮廓的唯一性比较中合并同一位置附近的候选。
+- `piece_011.png` 通过后，`piece_022.png` 的正确候选为 `(1023,767)`，错误次候选为 `(1024,981)`，两者纵向相距 `214px`，不能继续扩大候选簇合并。
+- `piece_022.png` 的错误次候选与已经定位的 `piece_021.png` 主体大面积重叠，而正确候选只存在正常的边缘接触。生成器现在按顺序记录已定位 Piece 的高 Alpha 占用，并在颜色、结构、轮廓和精确匹配的最终候选阶段排除与面积相近 Piece 重叠达到 `65%` 的位置。
+- Unity 首次重试后次候选由 `92.53%` 降为 `92.36%`，证明首个错误位置已过滤，但 `(989,957)` 的第三候选仍因共享边缘像素归属较早 Piece 而略低于冲突门槛。
+- 完整候选复算显示：正确位置与 `piece_021.png` 重叠 `1.92%`；错误位置 `(1024,981)`、`(989,957)` 分别重叠 `84.56%`、`65.08%`；同一正确槽位内的 `(1023,801)` 只是在低纹理区域偏移 `34px` 的采样峰值。
+- 占用图现在把共享边缘像素归属最近定位的 Piece，避免其主体覆盖率被早期邻片稀释。独立候选簇半径改为碎片短边的 `15%`，并限制在 `14~48px`；它能合并同一槽位内的宽匹配峰值，又不会跨越 CardBag010 约 `250px` 的相邻槽位。
 
 ## 修改文件
 
-- `Assets/Scripts/Controller/GameScene.cs`
+- `Assets/Scripts/Editor/CardBagPrefabGeneratorEditor.cs`
 - `Documents/CURRENT_TASK.md`
+- `Documents/PROJECT_CONTEXT.md`
 - `specs/spec-driven-development.md`
 
 ## 决策
 
-- 不再修改 `PieceBoard` 或托盘逻辑。
-- 不修改 022 源图、Prefab 或 TextureImporter；运行时必须保留 Prefab 的原始棋盘设计尺寸，不能用可能经过导入降采样的 `sprite.rect.size` 覆盖。
-- Piece 槽位仍沿用现有 Sprite 尺寸同步，避免改变切图更新后的槽位行为。
+- 不降低 `78%` 感知颜色、`1.5%` 颜色分差、`85%` 结构、`3%` 结构分差或轮廓匹配阈值。
+- 候选簇半径只负责去除同一个槽位周围的采样抖动，不扩大搜索范围，也不改变最佳坐标；动态半径始终限制在 `14~48px`。
+- 已定位 Piece 占用只排除面积相近且主体重叠的重复位置；面积差异明显的小配件覆盖大图仍允许，Piece 之间的正常边缘接触也不会被拒绝。
+- 不修改用户当前更新的 CardBag005、006、007、010 图片、Meta 或 Prefab 工作区内容。
 
 ## 验证
 
-- 修改前 Unity Play Mode 实测：根 `CardBag022=2600 x 3920`，子 `GameBoard=1358 x 2048`，准确复现约一半尺寸的异常。
-- 已确认源图 Alpha 没有运行时可见的内部矩形，资源本身无需修改。
-- 待重新编译并运行同一自动化 Play Mode 捕获，确认根与 GameBoard 屏幕矩形完全一致。
+- 离线复算 `piece_011.png`：最佳点颜色 `91.16%`、结构 `91.88%`；原次候选只距离最佳点 `8px`，使用 `14px` 簇半径后不再作为远端候选。
+- 离线复算 `piece_021.png` 到 `piece_025.png`：`piece_022.png` 正确位置为 `(1023,767)`，颜色 `93.74%`、结构 `93.49%`。应用最新占用归属和动态候选簇后，`92.53%`、`92.36%` 的主体覆盖候选被排除，`92.35%` 的同槽位偏移被合并，下一个独立候选约为 `91.66%`，与最佳点相差 `2.08%`；其余三个 Piece 的最佳位置均保持唯一。
+- `dotnet build Assembly-CSharp.csproj --no-restore`：通过，`0` 警告、`0` 错误。
+- `dotnet build Assembly-CSharp-Editor.csproj --no-restore`：通过，`0` 警告、`0` 错误。
+- 待在 Unity 生成窗口重新生成 `CardBag010`，确认全部 25 个 Piece 均成功定位并生成 Prefab。
 
 ## 下一步
 
-1. 运行 C# 编译和 Unity Play Mode 视觉复验。
-2. 确认无回归后提交并推送全部改动。
+1. 等 Unity 完成本轮脚本重载后，在 **Puffies -> Generate CardBag Prefabs From Images** 中重新选择并生成 `CardBag010`，确认全部 25 个 Piece 均成功定位。
+2. 生成成功后执行 **Puffies -> Bake Outline Masks**，再目视检查分组和位置。
 
 ## 恢复提示
 
-继续 Puffies 当前任务。先阅读 `AGENTS.md`、`Documents/WORKFLOW.md` 和 `Documents/CURRENT_TASK.md`；验证 GameScene 不再用降采样后的 Sprite 原生尺寸覆盖 GameBoard 的 Prefab 设计尺寸。
+继续 Puffies 当前任务。先阅读 `AGENTS.md`、`Documents/WORKFLOW.md` 和 `Documents/CURRENT_TASK.md`；重试 CardBag010 自动生成，确认 `piece_011.png` 的同位置邻点和 `piece_022.png` 的已占用重复候选均被正确处理。
