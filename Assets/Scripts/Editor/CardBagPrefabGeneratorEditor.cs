@@ -35,6 +35,9 @@ public static class CardBagPrefabGeneratorEditor
     private const int PerceptualCoarseStride = 6;
     private const int PerceptualFallbackStride = 1;
     private const int PerceptualRefineRadius = 7;
+    private const int MinimumPerceptualCandidateClusterRadius = PerceptualRefineRadius * 2;
+    private const int MaximumPerceptualCandidateClusterRadius = 48;
+    private const float PerceptualCandidateClusterSizeRatio = 0.15f;
     private const int PerceptualCoarseSampleCount = 12;
     private const int PerceptualVerificationSampleCount = 128;
     private const int PerceptualCandidateCount = 48;
@@ -825,6 +828,7 @@ public static class CardBagPrefabGeneratorEditor
             Dictionary<int, ColorOccurrence> gameBoardColorIndex = null;
             var useGameBoardReference = false;
             var placements = new List<PiecePlacement>(piecePaths.Count);
+            var placementOccupancy = new PlacementOccupancy(boardWidth, boardHeight);
             for (var i = 0; i < piecePaths.Count; i++)
             {
                 using (var piece = RawTexture.Load(piecePaths[i]))
@@ -839,7 +843,8 @@ public static class CardBagPrefabGeneratorEditor
                             gameBoardColorIndex,
                             piecePaths[i],
                             "GameBoard fallback",
-                            null);
+                            null,
+                            placementOccupancy);
                         referenceName = "GameBoard fallback";
                     }
                     else
@@ -852,7 +857,8 @@ public static class CardBagPrefabGeneratorEditor
                                 previewColorIndex,
                                 piecePaths[i],
                                 "Preview",
-                                previewOutlineMap);
+                                previewOutlineMap,
+                                placementOccupancy);
                             referenceName = "Preview";
                         }
                         catch (InvalidOperationException previewError)
@@ -870,7 +876,8 @@ public static class CardBagPrefabGeneratorEditor
                                     gameBoardColorIndex,
                                     piecePaths[i],
                                     "GameBoard fallback",
-                                    null);
+                                    null,
+                                    placementOccupancy);
                                 referenceName = "GameBoard fallback";
                                 if (placement.Score >= 0.995f
                                     && placement.EquivalentBestCount == 1)
@@ -891,6 +898,7 @@ public static class CardBagPrefabGeneratorEditor
                     placement.AssetPath = piecePaths[i];
                     placement.ObjectName = ResolveExplicitPieceObjectName(piecePaths[i]);
                     placements.Add(placement);
+                    placementOccupancy.Add(piece, placement);
                     Debug.Log(
                         $"CardBag matcher: {Path.GetFileName(piecePaths[i])} -> " +
                         $"{placement.ObjectName ?? "automatic group pending"}, " +
@@ -1420,10 +1428,13 @@ public static class CardBagPrefabGeneratorEditor
         Dictionary<int, ColorOccurrence> boardColorIndex,
         string piecePath,
         string referenceName,
-        bool[] outlineProximityMap)
+        bool[] outlineProximityMap,
+        PlacementOccupancy placementOccupancy)
     {
         var transparentPlacement = FindPlacementPass(board, piece, boardColorIndex, true);
-        if (transparentPlacement.Score >= 0.995f && transparentPlacement.EquivalentBestCount == 1)
+        if (transparentPlacement.Score >= 0.995f
+            && transparentPlacement.EquivalentBestCount == 1
+            && !placementOccupancy.HasConflictingOverlap(piece, transparentPlacement))
         {
             return transparentPlacement;
         }
@@ -1432,6 +1443,7 @@ public static class CardBagPrefabGeneratorEditor
         var perceptualPlacement = FindPerceptualPlacement(
             board,
             piece,
+            placementOccupancy,
             transparentPlacement,
             placement);
         if (perceptualPlacement.Score >= MinimumPerceptualMatch
@@ -1461,7 +1473,8 @@ public static class CardBagPrefabGeneratorEditor
         var outlinePlacement = FindOutlinePlacement(
             board,
             piece,
-            outlineProximityMap);
+            outlineProximityMap,
+            placementOccupancy);
         if (outlinePlacement.Score >= MinimumOutlineMatch
             && outlinePlacement.EquivalentBestCount == 1)
         {
@@ -1499,12 +1512,21 @@ public static class CardBagPrefabGeneratorEditor
                 $"occurs only once in the {referenceName}. Check the source images if this warning becomes frequent.");
         }
 
+        if (placementOccupancy.HasConflictingOverlap(piece, placement))
+        {
+            throw new InvalidOperationException(
+                $"CardBag generator: {piecePath} only matched a position that overlaps an already " +
+                "placed Piece with a similar opaque area. Check for repeated artwork or an " +
+                "incorrectly replaced cut image.");
+        }
+
         return placement;
     }
 
     private static PiecePlacement FindPerceptualPlacement(
         RawTexture board,
         RawTexture piece,
+        PlacementOccupancy placementOccupancy,
         params PiecePlacement[] exactCandidates)
     {
         if (piece.Width > board.Width || piece.Height > board.Height)
@@ -1541,6 +1563,7 @@ public static class CardBagPrefabGeneratorEditor
             allSamples,
             verificationSamples,
             coarseSamples,
+            placementOccupancy,
             exactCandidates,
             PerceptualCoarseStride);
         if (placement.Score >= MinimumPerceptualMatch
@@ -1555,6 +1578,7 @@ public static class CardBagPrefabGeneratorEditor
             allSamples,
             verificationSamples,
             coarseSamples,
+            placementOccupancy,
             exactCandidates,
             PerceptualFallbackStride);
     }
@@ -1565,11 +1589,13 @@ public static class CardBagPrefabGeneratorEditor
         IReadOnlyList<PixelSample> allSamples,
         IReadOnlyList<PixelSample> verificationSamples,
         IReadOnlyList<PixelSample> coarseSamples,
+        PlacementOccupancy placementOccupancy,
         IReadOnlyList<PiecePlacement> exactCandidates,
         int coarseStride)
     {
         var maxOriginX = board.Width - piece.Width;
         var maxOriginY = board.Height - piece.Height;
+        var candidateClusterRadius = GetCandidateClusterRadius(piece);
         var coarseCandidates = new List<PerceptualCandidate>(PerceptualCandidateCount);
         for (var originY = 0; originY <= maxOriginY; originY += coarseStride)
         {
@@ -1654,13 +1680,22 @@ public static class CardBagPrefabGeneratorEditor
             return PiecePlacement.Invalid;
         }
 
+        finalists.RemoveAll(candidate =>
+            placementOccupancy.HasConflictingOverlap(
+                piece,
+                candidate.OriginX,
+                candidate.OriginY));
+        if (finalists.Count == 0)
+        {
+            return PiecePlacement.Invalid;
+        }
+
         var best = finalists[0];
         var secondBestScore = -1f;
         for (var i = 1; i < finalists.Count; i++)
         {
             var candidate = finalists[i];
-            if (Mathf.Abs(candidate.OriginX - best.OriginX) <= PerceptualRefineRadius
-                && Mathf.Abs(candidate.OriginY - best.OriginY) <= PerceptualRefineRadius)
+            if (IsSameCandidateCluster(candidate, best, candidateClusterRadius))
             {
                 continue;
             }
@@ -1699,14 +1734,21 @@ public static class CardBagPrefabGeneratorEditor
         for (var i = 0; i < refinedCandidates.Count; i++)
         {
             var candidate = refinedCandidates[i];
+            if (placementOccupancy.HasConflictingOverlap(
+                    piece,
+                    candidate.OriginX,
+                    candidate.OriginY))
+            {
+                continue;
+            }
+
             var candidateStructuralScore = ScoreStructuralPlacement(
                 board,
                 piece,
                 allSamples,
                 candidate.OriginX,
                 candidate.OriginY);
-            if (Mathf.Abs(candidate.OriginX - best.OriginX) <= PerceptualRefineRadius
-                && Mathf.Abs(candidate.OriginY - best.OriginY) <= PerceptualRefineRadius)
+            if (IsSameCandidateCluster(candidate, best, candidateClusterRadius))
             {
                 bestNearbyStructuralScore = Mathf.Max(
                     bestNearbyStructuralScore,
@@ -1944,7 +1986,8 @@ public static class CardBagPrefabGeneratorEditor
     private static PiecePlacement FindOutlinePlacement(
         RawTexture preview,
         RawTexture piece,
-        bool[] outlineProximityMap)
+        bool[] outlineProximityMap,
+        PlacementOccupancy placementOccupancy)
     {
         if (outlineProximityMap == null
             || outlineProximityMap.Length != preview.Pixels.Length
@@ -1963,6 +2006,7 @@ public static class CardBagPrefabGeneratorEditor
         boundarySamples = ReduceSamples(boundarySamples, OutlineBoundarySampleCount);
         var maximumOriginX = preview.Width - piece.Width;
         var maximumOriginY = preview.Height - piece.Height;
+        var candidateClusterRadius = GetCandidateClusterRadius(piece);
         var coarseCandidates = new List<PerceptualCandidate>(PerceptualCandidateCount);
         for (var originY = 0; originY <= maximumOriginY; originY += OutlineCoarseStride)
         {
@@ -2023,6 +2067,16 @@ public static class CardBagPrefabGeneratorEditor
             return PiecePlacement.Invalid;
         }
 
+        refinedCandidates.RemoveAll(candidate =>
+            placementOccupancy.HasConflictingOverlap(
+                piece,
+                candidate.OriginX,
+                candidate.OriginY));
+        if (refinedCandidates.Count == 0)
+        {
+            return PiecePlacement.Invalid;
+        }
+
         var best = refinedCandidates[0];
         var secondBestScore = -1f;
         var visitedDistantOrigins = new HashSet<int>();
@@ -2037,8 +2091,16 @@ public static class CardBagPrefabGeneratorEditor
             {
                 for (var originX = minimumX; originX <= maximumX; originX++)
                 {
-                    if (Mathf.Abs(originX - best.OriginX) <= PerceptualRefineRadius
-                        && Mathf.Abs(originY - best.OriginY) <= PerceptualRefineRadius)
+                    if (IsSameCandidateCluster(
+                            originX,
+                            originY,
+                            best,
+                            candidateClusterRadius))
+                    {
+                        continue;
+                    }
+
+                    if (placementOccupancy.HasConflictingOverlap(piece, originX, originY))
                     {
                         continue;
                     }
@@ -2077,6 +2139,34 @@ public static class CardBagPrefabGeneratorEditor
             AnchorBoardOccurrenceCount = 0,
             SecondBestScore = Mathf.Max(0f, secondBestScore)
         };
+    }
+
+    private static bool IsSameCandidateCluster(
+        PerceptualCandidate candidate,
+        PerceptualCandidate best,
+        int radius)
+    {
+        return IsSameCandidateCluster(candidate.OriginX, candidate.OriginY, best, radius);
+    }
+
+    private static bool IsSameCandidateCluster(
+        int originX,
+        int originY,
+        PerceptualCandidate best,
+        int radius)
+    {
+        return Mathf.Abs(originX - best.OriginX) <= radius
+               && Mathf.Abs(originY - best.OriginY) <= radius;
+    }
+
+    private static int GetCandidateClusterRadius(RawTexture piece)
+    {
+        var sizeBasedRadius = Mathf.RoundToInt(
+            Mathf.Min(piece.Width, piece.Height) * PerceptualCandidateClusterSizeRatio);
+        return Mathf.Clamp(
+            sizeBasedRadius,
+            MinimumPerceptualCandidateClusterRadius,
+            MaximumPerceptualCandidateClusterRadius);
     }
 
     private static List<PixelSample> BuildAlphaBoundarySamples(RawTexture piece)
@@ -2747,6 +2837,123 @@ public static class CardBagPrefabGeneratorEditor
                     "Source folders with no recognized piece PNGs: "
                     + string.Join(", ", EmptySourceFolders));
             }
+        }
+    }
+
+    private sealed class PlacementOccupancy
+    {
+        private readonly int _width;
+        private readonly int _height;
+        private readonly int[] _owners;
+        private readonly List<int> _opaqueCounts = new List<int>();
+
+        public PlacementOccupancy(int width, int height)
+        {
+            _width = width;
+            _height = height;
+            _owners = new int[width * height];
+            for (var i = 0; i < _owners.Length; i++)
+            {
+                _owners[i] = -1;
+            }
+        }
+
+        public void Add(RawTexture piece, PiecePlacement placement)
+        {
+            if (!IsPlacementInsideBoard(piece, placement.OriginX, placement.OriginY))
+            {
+                return;
+            }
+
+            var owner = _opaqueCounts.Count;
+            var opaqueCount = 0;
+            for (var y = 0; y < piece.Height; y++)
+            {
+                for (var x = 0; x < piece.Width; x++)
+                {
+                    if (piece.Pixels[y * piece.Width + x].a < UpdateOverlapAlphaThreshold)
+                    {
+                        continue;
+                    }
+
+                    opaqueCount++;
+                    var boardIndex = (placement.OriginY + y) * _width + placement.OriginX + x;
+                    // Shared edge pixels belong to the latest placement so its full mask can
+                    // reject a later candidate that incorrectly covers most of that Piece.
+                    _owners[boardIndex] = owner;
+                }
+            }
+
+            _opaqueCounts.Add(opaqueCount);
+        }
+
+        public bool HasConflictingOverlap(RawTexture piece, PiecePlacement placement)
+        {
+            return placement != null
+                   && placement.Score >= 0f
+                   && HasConflictingOverlap(piece, placement.OriginX, placement.OriginY);
+        }
+
+        public bool HasConflictingOverlap(RawTexture piece, int originX, int originY)
+        {
+            if (_opaqueCounts.Count == 0
+                || !IsPlacementInsideBoard(piece, originX, originY))
+            {
+                return false;
+            }
+
+            var opaqueCount = 0;
+            var overlapCounts = new Dictionary<int, int>();
+            for (var y = 0; y < piece.Height; y++)
+            {
+                for (var x = 0; x < piece.Width; x++)
+                {
+                    if (piece.Pixels[y * piece.Width + x].a < UpdateOverlapAlphaThreshold)
+                    {
+                        continue;
+                    }
+
+                    opaqueCount++;
+                    var owner = _owners[(originY + y) * _width + originX + x];
+                    if (owner < 0)
+                    {
+                        continue;
+                    }
+
+                    overlapCounts.TryGetValue(owner, out var overlapCount);
+                    overlapCounts[owner] = overlapCount + 1;
+                }
+            }
+
+            foreach (var pair in overlapCounts)
+            {
+                var ownerOpaqueCount = _opaqueCounts[pair.Key];
+                var smallerOpaqueArea = Mathf.Min(opaqueCount, ownerOpaqueCount);
+                var largerOpaqueArea = Mathf.Max(opaqueCount, ownerOpaqueCount);
+                if (smallerOpaqueArea <= 0)
+                {
+                    continue;
+                }
+
+                var overlapRatio = pair.Value / (float)smallerOpaqueArea;
+                var areaSimilarity = smallerOpaqueArea / (float)largerOpaqueArea;
+                if (overlapRatio >= MaximumUpdateOverlapRatio
+                    && areaSimilarity >= MinimumDuplicateAreaSimilarity)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private bool IsPlacementInsideBoard(RawTexture piece, int originX, int originY)
+        {
+            return piece != null
+                   && originX >= 0
+                   && originY >= 0
+                   && originX + piece.Width <= _width
+                   && originY + piece.Height <= _height;
         }
     }
 
