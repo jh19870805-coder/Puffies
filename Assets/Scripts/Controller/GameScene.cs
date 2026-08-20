@@ -14,7 +14,7 @@ public class GameScene : MonoBehaviour
     private const float WorldGameplayDepth = -0.5f;
     private const float GamePageCameraPadding = 0.3f;
     private const float DraggableLeftPadding = 0.2f;
-    private const float DraggableHorizontalSpacingPixels = 20f;
+    private const float DraggableHorizontalSpacingPixels = 40f;
     private const float TrayPieceReflowDuration = 0.5f;
     private const float PieceTrayMaxHeightRatio = 0.9f;
     private const float SnapDistanceMin = 0.2f;
@@ -1243,25 +1243,23 @@ public class GameScene : MonoBehaviour
                && !float.IsInfinity(scale.z);
     }
 
-    private Vector3 CalculateTrayScaleForPiece(
+    private static Vector3 CalculateTrayScaleForPiece(
         SpriteRenderer pieceRenderer,
-        Bounds hostBounds,
-        Vector3 dragScale)
+        Bounds hostBounds)
     {
-        var boardScale = dragScale / _configuredBoardScale;
         if (pieceRenderer == null || pieceRenderer.sprite == null)
         {
-            return boardScale;
+            return Vector3.one;
         }
 
-        var scaledHeight = pieceRenderer.sprite.bounds.size.y * boardScale.y;
+        var originalHeight = pieceRenderer.sprite.bounds.size.y;
         var maxHeight = Mathf.Max(0.0001f, hostBounds.size.y * PieceTrayMaxHeightRatio);
-        if (scaledHeight <= maxHeight)
+        if (originalHeight <= maxHeight)
         {
-            return boardScale;
+            return Vector3.one;
         }
 
-        return boardScale * (maxHeight / scaledHeight);
+        return Vector3.one * (maxHeight / originalHeight);
     }
 
     private SpriteRenderer CreatePieceBackground()
@@ -1376,9 +1374,7 @@ public class GameScene : MonoBehaviour
             }
 
             var dragScale = CalculatePieceScaleOnBoard(grooveImage, pieceRenderer);
-            var trayScale = Vector3.Min(
-                CalculateTrayScaleForPiece(pieceRenderer, hostBounds, dragScale),
-                dragScale);
+            var trayScale = CalculateTrayScaleForPiece(pieceRenderer, hostBounds);
             pieceRenderer.transform.localScale = trayScale;
             var pieceCollider = CreateSpriteOverlapCollider(
                 pieceRenderer.gameObject,

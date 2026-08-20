@@ -299,10 +299,12 @@
 4. WHEN 玩家从托盘拿起一个 Piece AND 其后方存在仍在托盘的同组 Piece THEN 系统 SHALL 仅将这些后序 Piece 向前补位，前序 Piece、桌面 Piece、Y 坐标和缩放保持不变。
 5. WHEN 托盘 Piece 需要补位或回收重排 THEN 系统 SHALL 使用 `0.5s` 缓动移动到目标位置，不得瞬移。
 6. WHEN Piece 因错误放置返回原托盘位置 THEN 系统 SHALL 同步恢复其他托盘 Piece 的固定间距布局。
+7. WHEN 创建托盘 Piece THEN 系统 SHALL 先以 Sprite 原尺寸比较其高度与托盘高度 `90%`；IF 原尺寸高度超过该上限 THEN 等比缩小到上限，ELSE 保持原尺寸。
 
 ### 设计
 
-- 保留现有 `DraggableHorizontalSpacingPixels=20`，将其作为所有卡包共用的设计像素间距。
+- `DraggableHorizontalSpacingPixels` 从 `20` 调整为 `40`，作为所有卡包共用的设计像素间距；初始布局、拿起补位和回收重排统一使用该值。
+- 托盘比例以 `localScale=Vector3.one` 的 Sprite 原始高度为计算基准，不再除以棋盘 `BoardScale`，也不再与棋盘 `DragScale` 取较小值；棋盘吸附仍使用独立的 `DragScale`。
 - PieceBoard 的托盘中心从根 Canvas 设计坐标直接换算到屏幕和游戏世界坐标，避免相机适配后首帧 Canvas 世界角点尚未刷新；Piece 继续使用实际 `SpriteRenderer.bounds.center` 校正最终世界坐标。
 - 在 `TryBeginDrag` 中触发后序 Piece 补位；队尾没有移动目标时不启动协程。
 - 新增单一托盘 Piece 重排协程，使用 `Time.unscaledDeltaTime` 和 `Mathf.SmoothStep` 在 `0.5s` 内只插值世界 X 坐标。
@@ -315,11 +317,13 @@
 - [x] 2. 将拿起后的后序补位改为统一 `0.5s` 缓动，并保证队尾不刷新。
 - [x] 3. 将托盘回收重排接入相同固定间距与缓动逻辑。
 - [x] 4. 更新长期规则和当前任务记录。
-- [ ] 5. 编译并验证初始布局、队尾、非队尾和回收分支。
+- [x] 5. 将托盘缩放改为仅对超过托盘高度 `90%` 的原尺寸 Piece 等比缩小。
+- [ ] 6. 编译并验证初始布局、队尾、非队尾和回收分支。
 
 ### 当前验证
 
-- 静态检查确认所有布局入口共用 `DraggableHorizontalSpacingPixels=20`。
+- 静态检查确认所有布局入口共用 `DraggableHorizontalSpacingPixels=40`。
+- 静态检查确认托盘比例不再依赖 `_configuredBoardScale` 或棋盘 `DragScale`。
 - 拿起补位只收集编号大于当前 Piece、仍在托盘且不是当前拖拽对象的状态；队尾目标列表为空时不启动协程。
 - 初始布局与点击后的重排共用由 Canvas 设计坐标换算的托盘中心，并使用 `SpriteRenderer.bounds.center` 计算 Piece 实际渲染中心偏移；托盘重排目标继续保持同一 Y 和缩放。
 - 运行时与编辑器 `dotnet build` 顺序通过，均为 `0` 警告、`0` 错误。
