@@ -30,13 +30,13 @@ Material:
     m_Ints: []
     m_Floats:
     - _ColorMask: 15
-    - _PaddingX: 40
-    - _PaddingY: 140
-    - _ShadowBlurX: 10
-    - _ShadowBlurY: 32
+    - _PaddingX: 0
+    - _PaddingY: 0
+    - _ShadowBlurX: 2
+    - _ShadowBlurY: 2
     - _ShadowOffsetX: 0
-    - _ShadowOffsetY: -170
-    - _ShadowSpread: 8
+    - _ShadowOffsetY: 0
+    - _ShadowSpread: 0
     - _Stencil: 0
     - _StencilComp: 8
     - _StencilOp: 0
@@ -45,5 +45,5 @@ Material:
     - _UseUIAlphaClip: 0
     m_Colors:
     - _Color: {r: 1, g: 1, b: 1, a: 1}
-    - _ShadowColor: {r: 0.078, g: 0.098, b: 0.106, a: 0.7}
+    - _ShadowColor: {r: 0.044025064, g: 0.038902648, b: 0.038902648, a: 1}
   m_BuildTextureStacks: []

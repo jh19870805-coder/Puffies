@@ -7,7 +7,7 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: IngameCoverShadow02
+  m_Name: IngameCoverShadow04
   m_Shader: {fileID: 4800000, guid: 4d980df4dacf411b9ebfaad8ed98d746, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
@@ -34,8 +34,8 @@ Material:
     - _PaddingY: 105
     - _ShadowBlurX: 0
     - _ShadowBlurY: 0
-    - _ShadowOffsetX: 6
-    - _ShadowOffsetY: -6
+    - _ShadowOffsetX: 16
+    - _ShadowOffsetY: -16
     - _ShadowSpread: 4
     - _Stencil: 0
     - _StencilComp: 8
@@ -45,5 +45,5 @@ Material:
     - _UseUIAlphaClip: 0
     m_Colors:
     - _Color: {r: 1, g: 1, b: 1, a: 1}
-    - _ShadowColor: {r: 0.07799999, g: 0.09799997, b: 0.10599997, a: 0.39215687}
+    - _ShadowColor: {r: 0.078, g: 0.098, b: 0.106, a: 0.7}
   m_BuildTextureStacks: []
