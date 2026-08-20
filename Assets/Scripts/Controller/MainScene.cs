@@ -3418,8 +3418,9 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
     private const float ReferenceModelScale = 2.63f;
     private const float ReferenceModelLocalZ = 0f;
     private const float ModelWorldDepth = -1f;
+    private const float ModelVisibleDuration = 1.6f;
     private const float LightEffectDelay = 0.5f;
-    private const float LightEffectDuration = 3.0333333f;
+    private const float LightEffectVisibleDuration = 1.1f;
     private const uint LightEffectRandomSeed = 1u;
     private const float FallbackAnimationDuration = 1.8333334f;
     private const string ModelPathFormat = "Effects/CardPack/Models/CardPackOpeningModel_{0:D3}";
@@ -3615,8 +3616,8 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         var elapsed = Mathf.Max(0f, Time.time - mPlaybackStartTime);
         var lightStarted = false;
         var playbackDuration = Mathf.Max(
-            mAnimationDuration,
-            LightEffectDelay + LightEffectDuration);
+            Mathf.Min(mAnimationDuration, ModelVisibleDuration),
+            LightEffectDelay + LightEffectVisibleDuration);
         while (elapsed < playbackDuration)
         {
             elapsed += Time.deltaTime;
