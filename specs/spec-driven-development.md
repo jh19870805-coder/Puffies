@@ -518,6 +518,30 @@
 - [x] 保留 GameBoard 的 Prefab 设计尺寸，只同步 Piece 槽位。
 - [x] Unity 2022.3.62f2c1 Play Mode 复验：CardBag022 根与 GameBoard 均为 `2600 x 3920`，运行时矩形一致。
 
+## 2026-08-20 - 本地工程卡顿与缓存清理
+
+### 目标
+
+1. 清理不参与版本控制、可以安全重建的 Unity 编译缓存、临时文件和 IDE 缓存。
+2. 压缩 Git 松散对象，减少 SourceTree 和 Git 刷新的本地负担。
+3. 不删除项目资源、用户设置或能显著缩短 Unity 资源导入时间的有效缓存。
+
+### 诊断与边界
+
+- 上次无窗口验证卡住的直接原因是受限环境中的 Unity 进程未完成项目初始化，并遇到遗留 `Temp/UnityLockfile`；授权启动后 Play Mode 验证正常完成，不是游戏代码死循环。
+- 清理前 `Library` 约 `9.33 GiB`，其中 `Bee` 约 `4.99 GiB`、`Artifacts` 约 `2.64 GiB`、`PackageCache` 约 `1.65 GiB`、`BurstCache` 约 `114 MiB`。
+- 删除 `Library/Bee`、`BurstCache`、`ShaderCache`、`ScriptAssemblies`、`PlayerDataCache`、`BuildPlayerData`、`TempArtifacts`；这些属于可重建编译或构建缓存。
+- 保留 `Library/Artifacts` 和 `Library/PackageCache`，避免下次打开 Unity 触发完整资源和 Package 重导入。
+- 清理根目录 `Temp`、`Logs`、`obj`、`.vs`，并使用 Git 自带维护命令压缩松散对象；不改写 Git 历史。
+- `Assets`、`Packages`、`ProjectSettings`、`UserSettings`、`特效资源` 和 `美术切图` 不在清理范围。
+
+### 验证
+
+- [x] `Library` 从约 `9.33 GiB` 降至 `4.28 GiB`，释放约 `5.05 GiB`；保留的主要内容为 `Artifacts` 和 `PackageCache`。
+- [x] Git 松散对象从 `635` 个降为 `0`，`git fsck --full` 和 `git diff --check` 均通过；`git status` 实测约 `42 ms`。
+- [x] SourceTree、Unity、Bee 和本轮遗留编译服务均已退出；工作区只保留 `.gitignore` 与本规格记录两项预期修改。
+- [ ] 下次手动打开 Unity 时等待一次脚本与构建缓存重建，并确认编辑器正常进入工程；不在本轮预生成已主动清理的缓存。
+
 ## 2026-08-19 - CardBag010 同位置候选误判修复
 
 ### 需求
