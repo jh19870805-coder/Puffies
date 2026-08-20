@@ -31,6 +31,14 @@
 - 实现过程中发现新的稳定事实时，更新 `PROJECT_CONTEXT.md`。
 - 修改代码、场景、资源、配置或行为后，在同一轮更新 `CURRENT_TASK.md`。
 
+## 本地缓存维护
+
+- 使用仓库根目录 `ProjectMaintenance.ps1` 统一审计和清理 Unity、IDE 与 Git 本地缓存。
+- 默认或 `-Audit` 只输出容量报告；`-Clean` 只在脚本内阈值达到时删除白名单缓存。
+- 每台 Windows 设备执行一次 `-InstallScheduledTask`，注册每周日 `03:00` 的 `Puffies Project Maintenance` 任务；错过时间后由 Windows 尽快补跑。
+- 计划任务属于本机配置，不随 Git 同步。新设备读取 `AGENTS.md` 后应先审计，再检查并注册本机任务。
+- 完整规则、阈值、保护进程和禁止删除范围记录在 `specs/spec-driven-development.md` 的“本地工程卡顿与缓存清理”章节。
+
 ## Git 操作
 
 - 完成功能修改后不要自动创建提交或推送，默认将修改保留在工作区，等待用户检查或继续调整。

@@ -53,6 +53,7 @@ Desktop.ini
 # ===========================
 # Crash reports
 # ===========================
+*.log
 *.stackdump
 # ===========================
 # IMPORTANT: .meta files MUST be tracked
