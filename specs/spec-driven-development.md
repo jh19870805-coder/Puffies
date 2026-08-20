@@ -516,7 +516,7 @@
 
 - [x] 通过运行时 Rect 记录复现根 `2600 x 3920`、GameBoard `1358 x 2048` 的尺寸分离。
 - [x] 保留 GameBoard 的 Prefab 设计尺寸，只同步 Piece 槽位。
-- [ ] 重新执行 Unity Play Mode 捕获，确认 CardBag022 根与 GameBoard 的屏幕矩形一致。
+- [x] Unity 2022.3.62f2c1 Play Mode 复验：CardBag022 根与 GameBoard 均为 `2600 x 3920`，运行时矩形一致。
 
 ## 2026-08-19 - CardBag010 同位置候选误判修复
 
