@@ -147,6 +147,7 @@ public class GameScene : MonoBehaviour
     private sealed class PiecePlacementLightFx
     {
         public AmbientPieceLightFx Light;
+        public int AnimationVersion;
         public float Delay;
         public float Lifetime;
         public Vector2 StartPosition;
@@ -163,6 +164,7 @@ public class GameScene : MonoBehaviour
         public SpriteMask SpriteMask;
         public Transform Transform;
         public RectTransform SourceRect;
+        public int AnimationVersion;
     }
 
     private sealed class PieceLightState
@@ -200,6 +202,7 @@ public class GameScene : MonoBehaviour
     private Coroutine _trayPieceReflowCoroutine;
     private bool _isTrayPieceReflowAnimating;
     private int _piecePlacementAnimationCount;
+    private int _piecePlacementDragBlockCount;
     private Coroutine _loosePieceReminderShakeCoroutine;
     private readonly List<DraggablePieceState> _loosePieceReminderStates =
         new List<DraggablePieceState>();
@@ -238,6 +241,7 @@ public class GameScene : MonoBehaviour
     private Sprite _runtimeCardBoardBackgroundSprite;
     private Material _runtimePuzzleOutlineTintMaterial;
     private Material _runtimePiecePlacementShineMaterial;
+    private readonly List<Material> _activePiecePlacementShineMaterials = new List<Material>();
     private readonly List<Sprite> _piecePlacementLightSprites = new List<Sprite>();
     private readonly List<AmbientPieceLightFx> _ambientPieceLights =
         new List<AmbientPieceLightFx>();
@@ -1742,6 +1746,15 @@ public class GameScene : MonoBehaviour
 
     private void DestroyRuntimePiecePlacementShineMaterial()
     {
+        for (var i = 0; i < _activePiecePlacementShineMaterials.Count; i++)
+        {
+            if (_activePiecePlacementShineMaterials[i] != null)
+            {
+                Destroy(_activePiecePlacementShineMaterials[i]);
+            }
+        }
+
+        _activePiecePlacementShineMaterials.Clear();
         if (_runtimePiecePlacementShineMaterial == null)
         {
             return;
@@ -1749,6 +1762,17 @@ public class GameScene : MonoBehaviour
 
         Destroy(_runtimePiecePlacementShineMaterial);
         _runtimePiecePlacementShineMaterial = null;
+    }
+
+    private void DestroyPiecePlacementShineMaterial(Material material)
+    {
+        if (material == null)
+        {
+            return;
+        }
+
+        _activePiecePlacementShineMaterials.Remove(material);
+        Destroy(material);
     }
 
     private bool EnsurePiecePlacementLightResources()
@@ -2176,7 +2200,7 @@ public class GameScene : MonoBehaviour
 
     private void TryBeginDrag(Vector2 screenPosition)
     {
-        if (_isGameFinished || _isPiecePlacementAnimating || _isTrayPieceReflowAnimating)
+        if (_isGameFinished || IsPiecePlacementDragBlocked || _isTrayPieceReflowAnimating)
         {
             return;
         }
@@ -2231,7 +2255,7 @@ public class GameScene : MonoBehaviour
         }
 
         if (!_isGameFinished
-            && !_isPiecePlacementAnimating
+            && !IsPiecePlacementDragBlocked
             && !_isTrayPieceReflowAnimating
             && FindDraggablePieceAt(screenPosition) != null)
         {
@@ -2757,11 +2781,24 @@ public class GameScene : MonoBehaviour
     private void BeginPiecePlacementAnimation()
     {
         _piecePlacementAnimationCount++;
+        _piecePlacementDragBlockCount++;
         _isPiecePlacementAnimating = true;
     }
 
-    private void EndPiecePlacementAnimation()
+    private bool IsPiecePlacementDragBlocked => _piecePlacementDragBlockCount > 0;
+
+    private void ReleasePiecePlacementDragBlock()
     {
+        _piecePlacementDragBlockCount = Mathf.Max(0, _piecePlacementDragBlockCount - 1);
+    }
+
+    private void EndPiecePlacementAnimation(bool dragBlockAlreadyReleased = false)
+    {
+        if (!dragBlockAlreadyReleased)
+        {
+            ReleasePiecePlacementDragBlock();
+        }
+
         _piecePlacementAnimationCount = Mathf.Max(0, _piecePlacementAnimationCount - 1);
         _isPiecePlacementAnimating = _piecePlacementAnimationCount > 0;
     }
@@ -2963,8 +3000,14 @@ public class GameScene : MonoBehaviour
         }
 
         CommitPlacedPieceToBoardImage(state);
+        ReleasePiecePlacementDragBlock();
         yield return PlayPiecePlacementSuccessShine(state.GrooveImage);
-        EndPiecePlacementAnimation();
+        EndPiecePlacementAnimation(dragBlockAlreadyReleased: true);
+
+        if (_isPiecePlacementAnimating)
+        {
+            yield break;
+        }
 
         var didAdvanceGroup = TryAdvanceGroup();
         if (!didAdvanceGroup && _tutorialStage == TutorialStage.TwoPiecePractice)
@@ -3033,8 +3076,10 @@ public class GameScene : MonoBehaviour
 
         for (var i = 0; i < effects.Count; i++)
         {
-            UpdatePiecePlacementLight(effects[i], PiecePlacementLightDuration);
-            StorePieceLightPosition(effects[i]?.Light);
+            if (UpdatePiecePlacementLight(effects[i], PiecePlacementLightDuration))
+            {
+                StorePieceLightPosition(effects[i]?.Light);
+            }
         }
     }
 
@@ -3045,11 +3090,17 @@ public class GameScene : MonoBehaviour
             yield break;
         }
 
-        var shineMaterial = GetOrCreatePiecePlacementShineMaterial();
-        if (shineMaterial == null)
+        var shineMaterialTemplate = GetOrCreatePiecePlacementShineMaterial();
+        if (shineMaterialTemplate == null)
         {
             yield break;
         }
+
+        var shineMaterial = new Material(shineMaterialTemplate)
+        {
+            name = $"{PiecePlacementShineMaterialName} Instance"
+        };
+        _activePiecePlacementShineMaterials.Add(shineMaterial);
 
         var shineObject = CreateCurrentPiecePlacementShineOverlay(
             grooveImage,
@@ -3063,6 +3114,8 @@ public class GameScene : MonoBehaviour
             {
                 Destroy(shineObject);
             }
+
+            DestroyPiecePlacementShineMaterial(shineMaterial);
 
             yield break;
         }
@@ -3096,6 +3149,8 @@ public class GameScene : MonoBehaviour
         {
             Destroy(shineObject);
         }
+
+        DestroyPiecePlacementShineMaterial(shineMaterial);
     }
 
     private static GameObject CreateCurrentPiecePlacementShineOverlay(
@@ -3288,9 +3343,11 @@ public class GameScene : MonoBehaviour
         }
 
         var lightRect = light.Transform as RectTransform;
+        light.AnimationVersion++;
         effects.Add(new PiecePlacementLightFx
         {
             Light = light,
+            AnimationVersion = light.AnimationVersion,
             Delay = targetDelay,
             Lifetime = targetIndex == 0 ? 0.48f : 0.42f,
             StartPosition = lightRect != null
@@ -3335,17 +3392,18 @@ public class GameScene : MonoBehaviour
         return Mathf.Lerp(minimum, maximum, (float)random.NextDouble());
     }
 
-    private static void UpdatePiecePlacementLight(PiecePlacementLightFx effect, float elapsed)
+    private static bool UpdatePiecePlacementLight(PiecePlacementLightFx effect, float elapsed)
     {
-        if (effect?.Light?.Transform == null)
+        if (effect?.Light?.Transform == null
+            || effect.AnimationVersion != effect.Light.AnimationVersion)
         {
-            return;
+            return false;
         }
 
         var progress = Mathf.Clamp01((elapsed - effect.Delay) / effect.Lifetime);
         if (elapsed < effect.Delay)
         {
-            return;
+            return true;
         }
 
         var easedTravel = 1f - Mathf.Pow(1f - progress, 2f);
@@ -3362,6 +3420,8 @@ public class GameScene : MonoBehaviour
                 position.y,
                 localPosition.z);
         }
+
+        return true;
     }
 
     private AmbientPieceLightFx FindActivePieceLight(int pieceNumber)
