@@ -21,6 +21,7 @@ public static class CardBagPrefabGeneratorEditor
     private const string LegacyGameBoardFileName = "background_base.png";
     private const string BoardTitleFileName = "BoardTitle.png";
     private const string PendingRequestRelativePath = "Temp/PuffiesCardBagGenerator.request";
+    private const string PendingHierarchyRequestRelativePath = "Temp/PuffiesCardBagHierarchy.request";
     private const byte OpaqueThreshold = 128;
     private const int MaxVerificationSamples = 512;
     private const float MinimumPixelMatch = 0.98f;
@@ -668,6 +669,15 @@ public static class CardBagPrefabGeneratorEditor
 
     private static void ProcessPendingRequest()
     {
+        var hierarchyRequestPath = Path.Combine(
+            GetProjectRoot(),
+            PendingHierarchyRequestRelativePath);
+        if (File.Exists(hierarchyRequestPath))
+        {
+            File.Delete(hierarchyRequestPath);
+            CardBagHierarchyEditor.ApplyAll(logResult: true);
+        }
+
         var requestPath = Path.Combine(GetProjectRoot(), PendingRequestRelativePath);
         if (!File.Exists(requestPath))
         {
@@ -967,10 +977,17 @@ public static class CardBagPrefabGeneratorEditor
                     $"{boardWidth}x{boardHeight}. Regenerate the level when the board canvas size changes.");
             }
 
+            if (!CardBagHierarchyEditor.ValidateHierarchy(root, out var hierarchyValidationError))
+            {
+                throw new InvalidOperationException(
+                    $"CardBag updater: {hierarchyValidationError} "
+                    + "Run Puffies/Apply CardBag Hierarchy before updating Piece layouts.");
+            }
+
             var placementByPath = placements.ToDictionary(
                 placement => placement.AssetPath,
                 StringComparer.OrdinalIgnoreCase);
-            var imageByPath = MapExistingPieceImages(gameBoard, placementByPath, prefabPath);
+            var imageByPath = MapExistingPieceImages(root, placementByPath, prefabPath);
             var updates = new List<PieceRectUpdate>(placements.Count);
             for (var i = 0; i < placements.Count; i++)
             {
@@ -1048,11 +1065,11 @@ public static class CardBagPrefabGeneratorEditor
     }
 
     private static Dictionary<string, Image> MapExistingPieceImages(
-        GameObject gameBoard,
+        GameObject root,
         IReadOnlyDictionary<string, PiecePlacement> placementByPath,
         string prefabPath)
     {
-        var pieceImages = gameBoard
+        var pieceImages = root
             .GetComponentsInChildren<Image>(true)
             .Where(image => IsPieceObjectName(image.gameObject.name))
             .ToList();
@@ -2502,9 +2519,8 @@ public static class CardBagPrefabGeneratorEditor
         List<PiecePlacement> placements,
         string prefabPath)
     {
-        var rootBackground = LoadSprite(RootBackgroundPath);
         var boardSprite = LoadSprite(boardPath);
-        var root = CreateImageObject(bagName, null, rootBackground, Color.white);
+        var root = CreateImageObject(bagName, null, null, Color.white);
         try
         {
             SetRect(root.rectTransform, Vector2.zero, new Vector2(boardWidth, boardHeight));
@@ -2515,7 +2531,7 @@ public static class CardBagPrefabGeneratorEditor
             if (File.Exists(ToAbsolutePath(titlePath)))
             {
                 var titleSprite = LoadSprite(titlePath);
-                var boardTitle = CreateImageObject("BoardTitle", gameBoard.transform, titleSprite, Color.white);
+                var boardTitle = CreateImageObject("BoardTitle", root.transform, titleSprite, Color.white);
                 var titleSize = titleSprite.rect.size;
                 SetRect(
                     boardTitle.rectTransform,
@@ -2529,13 +2545,28 @@ public static class CardBagPrefabGeneratorEditor
                 var sprite = LoadSprite(placement.AssetPath);
                 var image = CreateImageObject(
                     placement.ObjectName,
-                    gameBoard.transform,
+                    root.transform,
                     sprite,
                     new Color(1f, 1f, 1f, 0f));
                 var position = new Vector2(
                     placement.OriginX + placement.Width * 0.5f - boardWidth * 0.5f,
                     placement.OriginY + placement.Height * 0.5f - boardHeight * 0.5f);
                 SetRect(image.rectTransform, position, new Vector2(placement.Width, placement.Height));
+            }
+
+            if (!CardBagHierarchyEditor.ApplyToHierarchy(
+                    root.gameObject,
+                    out _,
+                    out var hierarchySetupError))
+            {
+                throw new InvalidOperationException(hierarchySetupError);
+            }
+
+            if (!CardBagHierarchyEditor.ValidateHierarchy(
+                    root.gameObject,
+                    out var hierarchyValidationError))
+            {
+                throw new InvalidOperationException(hierarchyValidationError);
             }
 
             if (!CardBagShadowMaterialEditor.ApplyToHierarchy(
@@ -3344,6 +3375,465 @@ internal sealed class CardBagPrefabGeneratorWindow : EditorWindow
         }
 
         EditorUtility.DisplayDialog("CardBag Layout Update Finished", message, "OK");
+    }
+}
+
+public static class CardBagHierarchyEditor
+{
+    private const string PrefabRoot = "Assets/Resources/CardBagPrefabs";
+    private const string DefaultBackgroundPath = "Assets/UI/BasicUI/BgCardBoard1.png";
+    private const string BoardTitleObjectName = "BoardTitle";
+    private const string BoardBackgroundPrefix = "BoardBg";
+
+    [MenuItem("Puffies/Apply CardBag Hierarchy")]
+    public static void ApplyAllFromMenu()
+    {
+        ApplyAll(logResult: true);
+    }
+
+    internal static void ApplyAll(bool logResult)
+    {
+        var prefabGuids = AssetDatabase.FindAssets("t:Prefab CardBag", new[] { PrefabRoot });
+        var prefabPaths = prefabGuids
+            .Select(AssetDatabase.GUIDToAssetPath)
+            .Where(path => Regex.IsMatch(
+                Path.GetFileNameWithoutExtension(path),
+                @"^CardBag\d{3}$",
+                RegexOptions.CultureInvariant))
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .ToArray();
+        var changedPrefabs = 0;
+        var changedObjects = 0;
+        var failedPrefabs = 0;
+
+        for (var i = 0; i < prefabPaths.Length; i++)
+        {
+            var prefabPath = prefabPaths[i];
+            var prefabRoot = PrefabUtility.LoadPrefabContents(prefabPath);
+            try
+            {
+                if (!ApplyToHierarchy(prefabRoot, out var changedCount, out var error))
+                {
+                    failedPrefabs++;
+                    Debug.LogError($"{prefabPath}: {error}");
+                    continue;
+                }
+
+                if (!ValidateHierarchy(prefabRoot, out error))
+                {
+                    failedPrefabs++;
+                    Debug.LogError($"{prefabPath}: {error}");
+                    continue;
+                }
+
+                PrefabUtility.SaveAsPrefabAsset(prefabRoot, prefabPath, out var success);
+                if (!success)
+                {
+                    failedPrefabs++;
+                    Debug.LogError($"CardBag hierarchy setup: failed to save {prefabPath}.");
+                    continue;
+                }
+
+                changedPrefabs++;
+                changedObjects += changedCount;
+            }
+            finally
+            {
+                PrefabUtility.UnloadPrefabContents(prefabRoot);
+            }
+        }
+
+        AssetDatabase.SaveAssets();
+        AssetDatabase.Refresh();
+        if (logResult)
+        {
+            Debug.Log(
+                $"CardBag hierarchy setup completed. prefabs={prefabPaths.Length}, "
+                + $"changedPrefabs={changedPrefabs}, changes={changedObjects}, "
+                + $"failed={failedPrefabs}.");
+        }
+    }
+
+    internal static bool ApplyToHierarchy(
+        GameObject root,
+        out int changedCount,
+        out string error)
+    {
+        changedCount = 0;
+        error = string.Empty;
+        if (root == null)
+        {
+            error = "CardBag hierarchy setup: prefab root is null.";
+            return false;
+        }
+
+        var rootRect = root.GetComponent<RectTransform>();
+        var rootImage = root.GetComponent<Image>();
+        if (rootRect == null || rootImage == null)
+        {
+            error = $"CardBag hierarchy setup: {root.name} must have RectTransform and Image components.";
+            return false;
+        }
+
+        var boardMatches = root
+            .GetComponentsInChildren<Transform>(true)
+            .Where(item => item.gameObject.name == GameDefine.GameBoardObjectName)
+            .ToArray();
+        if (boardMatches.Length != 1)
+        {
+            error = $"CardBag hierarchy setup: {root.name} must contain exactly one "
+                    + $"{GameDefine.GameBoardObjectName}; found {boardMatches.Length}.";
+            return false;
+        }
+
+        var gameBoard = boardMatches[0] as RectTransform;
+        if (gameBoard == null)
+        {
+            error = $"CardBag hierarchy setup: {root.name}/{GameDefine.GameBoardObjectName} "
+                    + "has no RectTransform.";
+            return false;
+        }
+
+        var backgroundTexture = AssetDatabase.LoadAssetAtPath<Texture2D>(DefaultBackgroundPath);
+        if (backgroundTexture == null || backgroundTexture.width <= 0 || backgroundTexture.height <= 0)
+        {
+            error = $"CardBag hierarchy setup: failed to load background texture {DefaultBackgroundPath}.";
+            return false;
+        }
+
+        var titles = root
+            .GetComponentsInChildren<Transform>(true)
+            .Where(item => item.gameObject.name == BoardTitleObjectName)
+            .Cast<RectTransform>()
+            .ToList();
+        if (titles.Count > 1)
+        {
+            error = $"CardBag hierarchy setup: {root.name} contains multiple {BoardTitleObjectName} nodes.";
+            return false;
+        }
+
+        var pieces = root
+            .GetComponentsInChildren<Image>(true)
+            .Where(image => GameDefine.TryParsePieceObjectName(image.gameObject.name, out _))
+            .OrderBy(image => GetPieceNumber(image.gameObject.name))
+            .Select(image => image.rectTransform)
+            .ToList();
+        var oldBackgrounds = root
+            .GetComponentsInChildren<Transform>(true)
+            .Where(item => item != root.transform
+                           && item.gameObject.name.StartsWith(
+                               BoardBackgroundPrefix,
+                               StringComparison.Ordinal))
+            .Select(item => item.gameObject)
+            .ToList();
+
+        if (rootImage.sprite != null)
+        {
+            rootImage.sprite = null;
+            changedCount++;
+        }
+
+        for (var i = 0; i < titles.Count; i++)
+        {
+            ReparentToRoot(titles[i], rootRect);
+            changedCount++;
+        }
+
+        ReparentToRoot(gameBoard, rootRect);
+        changedCount++;
+        for (var i = 0; i < pieces.Count; i++)
+        {
+            ReparentToRoot(pieces[i], rootRect);
+            changedCount++;
+        }
+
+        for (var i = 0; i < oldBackgrounds.Count; i++)
+        {
+            UnityEngine.Object.DestroyImmediate(oldBackgrounds[i]);
+            changedCount++;
+        }
+
+        var backgrounds = CreateBackgroundTiles(rootRect, gameBoard, backgroundTexture);
+        changedCount += backgrounds.Count;
+
+        var siblingIndex = 0;
+        if (titles.Count == 1)
+        {
+            titles[0].SetSiblingIndex(siblingIndex++);
+        }
+
+        for (var i = 0; i < backgrounds.Count; i++)
+        {
+            backgrounds[i].SetSiblingIndex(siblingIndex++);
+        }
+
+        gameBoard.SetSiblingIndex(siblingIndex++);
+        for (var i = 0; i < pieces.Count; i++)
+        {
+            pieces[i].SetSiblingIndex(siblingIndex++);
+        }
+
+        EditorUtility.SetDirty(rootImage);
+        EditorUtility.SetDirty(rootRect);
+        return true;
+    }
+
+    internal static bool ValidateHierarchy(GameObject root, out string error)
+    {
+        error = string.Empty;
+        if (root == null)
+        {
+            error = "CardBag hierarchy validation: prefab root is null.";
+            return false;
+        }
+
+        var rootRect = root.GetComponent<RectTransform>();
+        var rootImage = root.GetComponent<Image>();
+        if (rootRect == null || rootImage == null || rootImage.sprite != null)
+        {
+            error = $"CardBag hierarchy validation: {root.name} must have an Image with Source Image None.";
+            return false;
+        }
+
+        var gameBoard = root
+            .GetComponentsInChildren<Image>(true)
+            .FirstOrDefault(image => image.gameObject.name == GameDefine.GameBoardObjectName);
+        if (gameBoard == null || gameBoard.transform.parent != root.transform)
+        {
+            error = $"CardBag hierarchy validation: {root.name}/GameBoard must be a direct child.";
+            return false;
+        }
+
+        var backgroundTexture = AssetDatabase.LoadAssetAtPath<Texture2D>(DefaultBackgroundPath);
+        if (backgroundTexture == null)
+        {
+            error = $"CardBag hierarchy validation: failed to load {DefaultBackgroundPath}.";
+            return false;
+        }
+
+        GetBoardBounds(
+            rootRect,
+            gameBoard.rectTransform,
+            out var left,
+            out var right,
+            out var bottom,
+            out var top);
+        var boardWidth = right - left;
+        var boardHeight = top - bottom;
+        var columnCount = Mathf.CeilToInt(boardWidth / backgroundTexture.width);
+        var rowCount = Mathf.CeilToInt(boardHeight / backgroundTexture.height);
+        var expectedBackgroundCount = columnCount * rowCount;
+        var backgrounds = root
+            .GetComponentsInChildren<RawImage>(true)
+            .Where(image => image.transform.parent == root.transform
+                            && image.gameObject.name.StartsWith(
+                                BoardBackgroundPrefix,
+                                StringComparison.Ordinal))
+            .OrderBy(image => image.transform.GetSiblingIndex())
+            .ToArray();
+        if (backgrounds.Length != expectedBackgroundCount)
+        {
+            error = $"CardBag hierarchy validation: {root.name} requires "
+                    + $"{expectedBackgroundCount} BoardBg tiles, found {backgrounds.Length}.";
+            return false;
+        }
+
+        var expectedChildren = new List<Transform>();
+        var boardTitle = root
+            .GetComponentsInChildren<Image>(true)
+            .FirstOrDefault(image => image.gameObject.name == BoardTitleObjectName);
+        if (boardTitle != null)
+        {
+            if (boardTitle.transform.parent != root.transform)
+            {
+                error = $"CardBag hierarchy validation: {root.name}/BoardTitle must be a direct child.";
+                return false;
+            }
+
+            expectedChildren.Add(boardTitle.transform);
+        }
+
+        expectedChildren.AddRange(backgrounds.Select(image => image.transform));
+        expectedChildren.Add(gameBoard.transform);
+        var pieces = root
+            .GetComponentsInChildren<Image>(true)
+            .Where(image => GameDefine.TryParsePieceObjectName(image.gameObject.name, out _))
+            .OrderBy(image => GetPieceNumber(image.gameObject.name))
+            .ToArray();
+        for (var i = 0; i < pieces.Length; i++)
+        {
+            if (pieces[i].transform.parent != root.transform)
+            {
+                error = $"CardBag hierarchy validation: {root.name}/{pieces[i].gameObject.name} "
+                        + "must be a direct child.";
+                return false;
+            }
+
+            expectedChildren.Add(pieces[i].transform);
+        }
+
+        if (root.transform.childCount != expectedChildren.Count)
+        {
+            error = $"CardBag hierarchy validation: {root.name} has unexpected child nodes; "
+                    + $"expected {expectedChildren.Count}, found {root.transform.childCount}.";
+            return false;
+        }
+
+        for (var i = 0; i < expectedChildren.Count; i++)
+        {
+            if (root.transform.GetChild(i) != expectedChildren[i])
+            {
+                error = $"CardBag hierarchy validation: {root.name} child order is invalid at index {i}; "
+                        + $"expected {expectedChildren[i].name}, found {root.transform.GetChild(i).name}.";
+                return false;
+            }
+        }
+
+        var tileIndex = 0;
+        for (var row = 0; row < rowCount; row++)
+        {
+            var yOffset = row * backgroundTexture.height;
+            var visibleHeight = Mathf.Min(backgroundTexture.height, boardHeight - yOffset);
+            for (var column = 0; column < columnCount; column++)
+            {
+                var xOffset = column * backgroundTexture.width;
+                var visibleWidth = Mathf.Min(backgroundTexture.width, boardWidth - xOffset);
+                var background = backgrounds[tileIndex];
+                var expectedName = $"{BoardBackgroundPrefix}{tileIndex + 1:D2}";
+                var expectedPosition = new Vector2(
+                    left + xOffset + visibleWidth * 0.5f,
+                    top - yOffset - visibleHeight * 0.5f);
+                var expectedSize = new Vector2(visibleWidth, visibleHeight);
+                var expectedUv = new Rect(
+                    0f,
+                    1f - visibleHeight / backgroundTexture.height,
+                    visibleWidth / backgroundTexture.width,
+                    visibleHeight / backgroundTexture.height);
+                if (background.gameObject.name != expectedName
+                    || background.texture != backgroundTexture
+                    || !Approximately(background.rectTransform.anchoredPosition, expectedPosition)
+                    || !Approximately(background.rectTransform.sizeDelta, expectedSize)
+                    || !Approximately(background.uvRect, expectedUv))
+                {
+                    error = $"CardBag hierarchy validation: {root.name}/{expectedName} "
+                            + "does not match the expected texture, position, size or crop.";
+                    return false;
+                }
+
+                tileIndex++;
+            }
+        }
+
+        return true;
+    }
+
+    private static List<RectTransform> CreateBackgroundTiles(
+        RectTransform root,
+        RectTransform gameBoard,
+        Texture2D texture)
+    {
+        GetBoardBounds(root, gameBoard, out var left, out var right, out var bottom, out var top);
+        var boardWidth = right - left;
+        var boardHeight = top - bottom;
+        var columnCount = Mathf.CeilToInt(boardWidth / texture.width);
+        var rowCount = Mathf.CeilToInt(boardHeight / texture.height);
+        var result = new List<RectTransform>(columnCount * rowCount);
+        var tileIndex = 1;
+
+        for (var row = 0; row < rowCount; row++)
+        {
+            var yOffset = row * texture.height;
+            var visibleHeight = Mathf.Min(texture.height, boardHeight - yOffset);
+            for (var column = 0; column < columnCount; column++)
+            {
+                var xOffset = column * texture.width;
+                var visibleWidth = Mathf.Min(texture.width, boardWidth - xOffset);
+                var tileObject = new GameObject(
+                    $"{BoardBackgroundPrefix}{tileIndex:D2}",
+                    typeof(RectTransform),
+                    typeof(CanvasRenderer),
+                    typeof(RawImage));
+                var tileRect = tileObject.GetComponent<RectTransform>();
+                tileRect.SetParent(root, false);
+                SetRect(
+                    tileRect,
+                    new Vector2(
+                        left + xOffset + visibleWidth * 0.5f,
+                        top - yOffset - visibleHeight * 0.5f),
+                    new Vector2(visibleWidth, visibleHeight));
+
+                var rawImage = tileObject.GetComponent<RawImage>();
+                rawImage.texture = texture;
+                rawImage.color = Color.white;
+                rawImage.raycastTarget = false;
+                rawImage.uvRect = new Rect(
+                    0f,
+                    1f - visibleHeight / texture.height,
+                    visibleWidth / texture.width,
+                    visibleHeight / texture.height);
+                result.Add(tileRect);
+                tileIndex++;
+            }
+        }
+
+        return result;
+    }
+
+    private static void GetBoardBounds(
+        RectTransform root,
+        RectTransform gameBoard,
+        out float left,
+        out float right,
+        out float bottom,
+        out float top)
+    {
+        var corners = new Vector3[4];
+        gameBoard.GetWorldCorners(corners);
+        var bottomLeft = root.InverseTransformPoint(corners[0]);
+        var topRight = root.InverseTransformPoint(corners[2]);
+        left = Mathf.Min(bottomLeft.x, topRight.x);
+        right = Mathf.Max(bottomLeft.x, topRight.x);
+        bottom = Mathf.Min(bottomLeft.y, topRight.y);
+        top = Mathf.Max(bottomLeft.y, topRight.y);
+    }
+
+    private static bool Approximately(Vector2 left, Vector2 right)
+    {
+        return (left - right).sqrMagnitude <= 0.0001f;
+    }
+
+    private static bool Approximately(Rect left, Rect right)
+    {
+        return Approximately(left.position, right.position)
+               && Approximately(left.size, right.size);
+    }
+
+    private static void ReparentToRoot(RectTransform child, RectTransform root)
+    {
+        if (child == null || child.parent == root)
+        {
+            return;
+        }
+
+        child.SetParent(root, true);
+    }
+
+    private static int GetPieceNumber(string objectName)
+    {
+        return GameDefine.TryParsePieceObjectName(objectName, out var pieceNumber)
+            ? pieceNumber
+            : int.MaxValue;
+    }
+
+    private static void SetRect(RectTransform rect, Vector2 position, Vector2 size)
+    {
+        rect.anchorMin = new Vector2(0.5f, 0.5f);
+        rect.anchorMax = new Vector2(0.5f, 0.5f);
+        rect.pivot = new Vector2(0.5f, 0.5f);
+        rect.anchoredPosition = position;
+        rect.sizeDelta = size;
+        rect.localRotation = Quaternion.identity;
+        rect.localScale = Vector3.one;
     }
 }
 

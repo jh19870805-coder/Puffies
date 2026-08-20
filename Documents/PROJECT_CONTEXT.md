@@ -214,7 +214,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 - GameScene 在推进任务前先持久化任务权益，且仅在任务推进保存成功后尝试发放，避免任务进度保存失败时重复发包。
 - MainScene 设置以集合/键 `GameSettings/Runtime` 保存在 `AppRecords`：音乐音量、音效音量和窗口模式。
 - MainScene 辅助选项开关同样保存在 `GameSettings/Runtime`，字段为 `UsableOption1`、`UsableOption2` 和 `UsableOption3`。
-- `UsableOption1` 是关卡描边开关，`UsableOption2` 是贴纸描边开关，两者新建设置时都默认关闭；`UsableOption3` 是高对比度并默认关闭。已持久化的用户选择优先。关卡描边关闭时 GameScene 保留现有当前阶段连接区域，打开时改为显示当前待拼组的完整合并外边界；贴纸描边关闭时不显示单块轮廓，打开时叠加当前组每块凹槽的独立轮廓。PanelUsable 的 `ImgContentBg` 按高对比度状态显示 `MainSetHigh1/2.png`；`ImgContentLine` 在描边全关、仅关卡描边、贴纸描边打开时分别显示 `MainSetLine1/2/3.png`，两项同时打开使用信息更完整的 `MainSetLine3.png`。GameScene 的 CardBag 根背景在高对比度关闭时使用 `UI/BasicUI/BgCardBoard1.png`，打开时使用 `BgCardBoard2.png`；运行时只替换根 `Image.sprite`，不改变 Prefab 布局。烘焙棋盘描边通过 Alpha-only UGUI Shader 固定输出 `#3f423e`，不随高对比度切换颜色；提示按钮的绿色滚动虚线在高对比度时改用 `#b1d702`，新手引导专用蓝色虚线不变。
+- `UsableOption1` 是关卡描边开关，`UsableOption2` 是贴纸描边开关，两者新建设置时都默认关闭；`UsableOption3` 是高对比度并默认关闭。已持久化的用户选择优先。关卡描边关闭时 GameScene 保留现有当前阶段连接区域，打开时改为显示当前待拼组的完整合并外边界；贴纸描边关闭时不显示单块轮廓，打开时叠加当前组每块凹槽的独立轮廓。PanelUsable 的 `ImgContentBg` 按高对比度状态显示 `MainSetHigh1/2.png`；`ImgContentLine` 在描边全关、仅关卡描边、贴纸描边打开时分别显示 `MainSetLine1/2/3.png`，两项同时打开使用信息更完整的 `MainSetLine3.png`。GameScene 的 `BoardBgXX RawImage` 在高对比度关闭时统一使用 `UI/BasicUI/BgCardBoard1.png`，打开时统一替换为 `BgCardBoard2.png`；CardBag 根 `Image.sprite` 始终为空，运行时不改变背景块布局或 UV。烘焙棋盘描边通过 Alpha-only UGUI Shader 固定输出 `#3f423e`，不随高对比度切换颜色；提示按钮的绿色滚动虚线在高对比度时改用 `#b1d702`，新手引导专用蓝色虚线不变。
 - MainScene 和 GameScene 引用相同 `TaskItem.prefab` GUID。场景 Override 只定位根节点（`MainScene`：`10,508`；`GameScene`：`-6,455`）；子节点布局和视觉必须在共享 Prefab 中修改。
 - 共享 TaskItem 子节点名称为 `TaskContent`、`TextProgress`、`ProgressMask`、`BagIcon` 和 `BagBg`。任务 UI 绑定代码应相对 TaskItem 实例解析这些名称，不得使用场景专属后缀。
 - `TaskProgressUIUtility` 是两个 TaskItem 实例共用的运行时绑定。三类任务文案分别为“完成任意拼图包，收集 N 分”“从任意拼图包中收集 N 个贴纸”和“完成 N 个 S/M 尺寸的拼图包”；`TextProgress` 显示当前值与任务实例目标值，可见 `ProgressMask` 宽度使用两者比值并限制在有效范围。`BagIcon` 始终使用共享 Prefab 中配置的固定 Sprite，运行时不得按任务奖励或卡包编号替换。
@@ -258,6 +258,8 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 
 所有 `Assets/Resources/CardBagPrefabs/CardBagNNN.prefab` 采用统一投影状态规则：`GameBoard` 和 `BoardTitle` 在 Prefab 中绑定 `IngameCoverShadow01`；Prefab 内的正式 `PieceGGII` 是棋盘凹槽，只在正确拼入后显示，固定绑定 `IngameCoverShadow03`；这些 Image 都必须带 `PackCoverShadowEffect`。GameScene 从凹槽纹理创建世界空间 SpriteRenderer 作为玩家操作的实际碎片：初始托盘为 04，每次拿起时刷新包含配置棋盘比例的实际 `DragScale/BoardScale` 并切回 04；松手后未正确吸附、桌面放置或错误回弹为 02，正确吸附时为 03；提交后销毁运行时碎片并显示同样使用 03 的凹槽 Image。未完成凹槽只通过隐藏或 Alpha 0 控制，不能切回 04。SpriteRenderer 使用运行时 FullRect Sprite、材质克隆和 `PACK_SHADOW_SPRITE_RENDERER` 变体按 Sprite PPU 扩展渲染顶点；Scale 统一在切换 FullRect 后计算，Piece Collider 和 Groove Probe 则始终从原始凹槽 Sprite 创建，投影网格不得改变精确碰撞轮廓。该处理不改变凹槽、吸附尺寸或四个美术材质资产的参数。新建 CardBag Prefab 时生成器自动应用该规则；现有资源可通过 `Puffies -> Apply CardBag Shadow Materials` 重建绑定。
 
+所有 `CardBagNNN.prefab` 使用扁平制作层级：根 `Image.sprite` 必须为 `None`，直属子节点依次为可选 `BoardTitle`、`BoardBgXX`、`GameBoard`、按正式编号升序的 `PieceGGII`。`BoardBgXX` 是不接收射线的 `RawImage`，默认引用 `BgCardBoard1.png`，按从上到下、每行从左到右从 GameBoard 左上角二维平铺；最后一行和最后一列同时缩小 Rect 并调整 UV，只显示 GameBoard 范围内的纹理且不得拉伸。高对比度运行时统一将这些 RawImage 的纹理替换为 `BgCardBoard2.png`，不再给 CardBag 根 Image 设置背景 Sprite。现有资源可通过 `Puffies -> Apply CardBag Hierarchy` 重建并校验该结构。
+
 1. 场景中只保留一个模板对象：`Package001`。
 2. 在 `CardPacks.csv` 增加一行（`PackId`、临时 `PackSize`、临时 `StickerCount`、`ChapterId`、正数 `BoardScale`、手工 `Series`、`AutoUpdate=1`），随后执行配置更新工具按实际片数同步 `PackSize`、`StickerCount` 和 `BoardScale`。需要手工固定这三个值时将该行 `AutoUpdate` 改为 `0`；工具始终保留 `Series` 原值。
 3. 在 `UI/PackImages/` 下按 `PackIconNNN.png` 命名增加对应封面。`GameDefine.FormatPackImagePath` 将 PackId `1` 映射到 `UI/PackImages/PackIcon001.png`。
@@ -267,8 +269,8 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 ### 拼图
 
 1. 在 `Assets/Resources/CardBagPrefabs/` 下创建 `CardBagNNN` Prefab，`NNN` 与 `PackId` 一致。
-2. Prefab 内放置一个名为 `GameBoard` 的子对象。
-3. 在 `GameBoard` 下用 Image 对象添加分组碎片，名称严格使用 `PieceGGII`：`GG` 和 `II` 都是两位数字且范围为 `01..99`。例如第 1 组使用 `Piece0101`、`Piece0102`...，第 2 组使用 `Piece0201`、`Piece0202`...。
+2. Prefab 根 Image 不设置 Source Image；根下放置直属的 `BoardTitle`、自动平铺的 `BoardBgXX`、`GameBoard` 和全部 Piece，顺序不得改变。
+3. 分组凹槽使用直属根节点的 Image，名称严格使用 `PieceGGII`：`GG` 和 `II` 都是两位数字且范围为 `01..99`。例如第 1 组使用 `Piece0101`、`Piece0102`...，第 2 组使用 `Piece0201`、`Piece0202`...。
 4. 源贴图放在 `Assets/UI/CardBags/CardBagNNN/`，标准切图名继续使用 `piece_001.png`、`piece_002.png`...；需要在源文件名中显式携带正式分组时使用 `Piece0101.png` 或 `Pieces0101.png` 格式。
 5. 不使用 `PieceGroup` 父节点；分组严格读取 `PieceGGII` 的前两位 `GG`，组内排序读取后两位 `II`。
 6. 不创建 Package JSON；运行时数据来自已加载 Prefab 的 Image。
@@ -293,7 +295,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 - 感知颜色匹配会验证透明像素轮次与不透明像素轮次中“精确 RGB 锚点唯一”的定位结果；该位置本身达到 `78%` 感知匹配率时才加入候选种子，避免重复图案中的偶然同色像素误导定位。首轮 `6px` 感知匹配仍不通过时才使用 `1px` 逐像素网格回退，覆盖细线和高对比图案偏移一个像素即失配的情况。逐像素回退优先执行最低 `78%`、候选差值至少 `1.5%` 的颜色校验；颜色受整批调色影响时，只有颜色仍达到 `65%`、原坐标的 RGB 边缘梯度达到 `85%`，且该结构区域领先远端候选至少 `3%` 才允许生成。搜索细化半径保持 `7px`；颜色、结构和轮廓的独立候选比较按 Piece 短边 `15%` 计算位置簇半径，并限制为 `14~48px`，避免同一槽位的宽匹配峰值被误判成远端重复位置，同时不合并相邻槽位。整包生成会记录已定位 Piece 的高 Alpha 占用，共享边缘像素归属最近定位的 Piece；面积相近的候选若与任一已定位 Piece 主体重叠达到 `65%`，会在精确、颜色、结构和轮廓最终候选阶段被排除，正常边缘接触和面积差异明显的小配件覆盖不受影响。结构校验只验证颜色定位得到的原坐标，不使用结构最高点移动 Piece。颜色与结构均失败且 Preview 包含青色分割边界时，最后使用 Piece Alpha 外边界匹配 Preview 边界邻域；该回退不用于 GameBoard，要求轮廓匹配至少 `75%` 且领先独立远端候选至少 `8%`，不能通过最佳点附近候选占满列表来绕过唯一性校验。
 - GameBoard 回退的首个 Piece 达到至少 `99.5%` 且位置唯一后，本卡包后续 Piece 统一使用 GameBoard，日志明确记录参考图。参考图颜色索引保存颜色次数和首次像素下标；唯一颜色锚点直接计算候选位置，不遍历整张画布。
 - `PieceGGII.png` 或 `PiecesGGII.png` 中的四位 `GGII` 直接成为正式对象编号并作为人工覆盖规则。全部使用标准 `piece_###.png` 时，生成器按位置从上到下分带、每行最多两个空间组，每组最多 14 片；偶数行从左到右编号，奇数行从右到左编号，形成蛇形组序，组内始终按中心点从左到右编号。最终 Hierarchy 按 `PieceGGII` 升序创建。标准名与显式正式名不得在同一卡包内混用。
-- 生成结构为 `CardBagNNN/GameBoard/BoardTitle` 和 `CardBagNNN/GameBoard/PieceGGII`；棋盘标题与全部碎片统一归属 `GameBoard`。
+- 生成结构为扁平的 `CardBagNNN/BoardTitle`、`CardBagNNN/BoardBgXX`、`CardBagNNN/GameBoard` 和 `CardBagNNN/PieceGGII`。根 Image 不设置 Sprite；生成器按 GameBoard 尺寸自动创建、平铺并裁切默认使用 `BgCardBoard1.png` 的 `BoardBgXX RawImage`，保存前校验直属父级、顺序、数量、位置、尺寸和 UV。
 - 窗口默认只选择资源完整且尚无 Prefab 的卡包。选择已有 Prefab 时显示 `Overwrite`，执行前必须确认；覆盖会替换已有层级和手工 Piece 分组。
 - 批量生成逐个隔离失败并汇总结果，负责创建带正式自动分组的 Prefab，但不自动烘焙描边；生成时会删除该包可能残留的旧描边。完成生成后执行 **Bake Outline Masks**。
 - 同一窗口的 **Update Existing Piece Layouts** 用于切图更新后的局部校准。它复用 Preview/GameBoard 定位算法，通过现有 Piece 的 Sprite 资源路径映射节点，只更新 `RectTransform.anchoredPosition` 与 `sizeDelta`；不重建层级、不改变手工分组、Image 参数、影子、旋转缩放或描边资源，也不会自动烘焙描边。更新采用整包事务：源 PNG 与现有 Piece 数量或引用不一致、定位不唯一，或两张有效面积相近的切图在目标位置的高 Alpha 区域重叠达到 `65%` 时，该 Prefab 在保存前失败，避免重复切图覆盖正确布局；面积明显较小且位于大切图内部的独立配件允许更新。
@@ -365,6 +367,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 | Puffies -> Bake Outline Masks | 为每个 CardBag Prefab 重建各分组外边界描边 |
 | Puffies -> Generate CardBag Prefabs From Images | 扫描完整背景和透明碎图；窗口可选择完整生成 CardBag Prefab，或仅按效果图更新现有 Piece 的位置与原生尺寸 |
 | Puffies -> Update Pack Sizes From Piece Counts | 扫描 CardBag 源资源的碎片 PNG 数量并同步更新 `CardPacks.csv/PackSize`、`StickerCount` 与 `BoardScale`；跳过 `AutoUpdate=0` 的行，并始终保留手工 `Series` 内容 |
+| Puffies -> Apply CardBag Hierarchy | 将全部 CardBag Prefab 规范化为直属根节点的标题、背景块、棋盘和 Piece；按棋盘尺寸重建并裁切 `BoardBgXX`，保存前严格校验结构与 UV |
 | Puffies -> Apply CardBag Shadow Materials | 为全部 CardBag Prefab 的 GameBoard/BoardTitle 绑定 01、凹槽 Piece 绑定 03，并补齐投影网格组件 |
 
 ---

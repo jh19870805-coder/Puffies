@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -853,12 +854,26 @@ public class GameScene : MonoBehaviour
 
     private void ApplyCardBoardBackground()
     {
-        var backgroundImage = _loadedCardBagRoot != null
+        var rootImage = _loadedCardBagRoot != null
             ? _loadedCardBagRoot.GetComponent<Image>()
             : null;
-        if (backgroundImage == null)
+        if (rootImage == null)
         {
-            Debug.LogWarning("GameScene: loaded CardBag root has no background Image.");
+            Debug.LogWarning("GameScene: loaded CardBag root has no Image component.");
+            return;
+        }
+
+        rootImage.sprite = null;
+        var backgroundImages = _loadedCardBagRoot
+            .GetComponentsInChildren<RawImage>(true)
+            .Where(image => image.transform.parent == _loadedCardBagRoot.transform
+                            && image.gameObject.name.StartsWith(
+                                "BoardBg",
+                                StringComparison.Ordinal))
+            .ToArray();
+        if (backgroundImages.Length == 0)
+        {
+            Debug.LogWarning("GameScene: loaded CardBag has no BoardBg RawImage nodes.");
             return;
         }
 
@@ -877,7 +892,10 @@ public class GameScene : MonoBehaviour
 
         DestroyRuntimeCardBoardBackgroundSprite();
         _runtimeCardBoardBackgroundSprite = sprite;
-        backgroundImage.sprite = sprite;
+        for (var i = 0; i < backgroundImages.Length; i++)
+        {
+            backgroundImages[i].texture = sprite.texture;
+        }
     }
 
     private void DestroyRuntimeCardBoardBackgroundSprite()
@@ -1105,13 +1123,19 @@ public class GameScene : MonoBehaviour
         _isPieceBoardHidden = false;
     }
 
-    private static Image FindSceneImage(string objectName)
+    private Image FindSceneImage(string objectName)
     {
-        var sceneObject = GameObject.Find(objectName);
-        return sceneObject != null ? sceneObject.GetComponent<Image>() : null;
+        if (_loadedCardBagRoot == null)
+        {
+            return null;
+        }
+
+        return _loadedCardBagRoot
+            .GetComponentsInChildren<Image>(true)
+            .FirstOrDefault(image => image.gameObject.name == objectName);
     }
 
-    private static List<List<Image>> CollectEditorGrooveGroups()
+    private List<List<Image>> CollectEditorGrooveGroups()
     {
         var sortedGrooves = CollectSortedEditorPieceGrooves();
         for (var i = 0; i < sortedGrooves.Count; i++)
@@ -1188,10 +1212,12 @@ public class GameScene : MonoBehaviour
                    out _);
     }
 
-    private static List<Image> CollectSortedEditorPieceGrooves()
+    private List<Image> CollectSortedEditorPieceGrooves()
     {
         var groovesByNumber = new Dictionary<int, Image>();
-        var images = UnityEngine.Object.FindObjectsOfType<Image>(true);
+        var images = _loadedCardBagRoot != null
+            ? _loadedCardBagRoot.GetComponentsInChildren<Image>(true)
+            : Array.Empty<Image>();
         for (var i = 0; i < images.Length; i++)
         {
             var image = images[i];
