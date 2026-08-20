@@ -1,50 +1,63 @@
 # 当前任务
 
-- 任务：卡包编号迁移完整性检查与收尾
-- 状态：资源迁移主体已核对，待补齐配置并完成 Unity 验证
+- 任务：Piece 滑光期间允许继续拿取托盘碎片
+- 状态：代码与编译验证完成，等待 Play Mode 目视验证
 - 更新时间：2026-08-20
 
 ## 用户意图
 
-- 将原 CardBag007 插入到 CardBag005 前，原 005、006 顺延为 006、007。
-- 将原 CardBag010 迁移为 CardBag023，并重新制作新的 CardBag010。
-- 确认源切图、Prefab、预览图、列表图标、描边和 `CardPacks.csv` 没有遗漏或编号错位。
+- 正确 Piece 完成吸附并开始播放绿色光带和亮光传播后，允许玩家立即拿取托盘上的下一块 Piece。
+- 多个 Piece 的滑光允许并发，但不能因此提前或重复触发切组、结算。
 
-## 已完成核对
+## 工作记录
 
-- 当前分支为 `develop`，HEAD 为 `a1aed11 添加自动清理任务`，与 `origin/develop` 一致。
-- 通过 Git Blob、Sprite GUID 和资源尺寸对比确认迁移主体：旧 007 -> 新 005、旧 005 -> 新 006、旧 006 -> 新 007、旧 010 -> 新 023；新 010 是重新制作的内容。
-- `Assets/UI/CardBags` 源 PNG、`Previews`、`PackImages`、CardBag Prefab 的 Sprite GUID 和 Meta GUID 唯一性未发现编号遗漏。
-- 当前源碎片数和 Prefab 节点数一致：005=19、006=29、007=35、010=25、023=28。
-- 当前 Prefab 分组数：005=4、006=4、007=5、010=2、017=6、023=5；均使用正式 `PieceGGII` 命名。
-- 当前工作区已经重新生成 005、007、010、017、023 对应组数的描边。006 目录比 Prefab 多一套 `Group05`，属于待清理的旧残留，不能作为有效第五组使用。
-- CardBag017 当前实际为 `1316 x 1316`、38 片、6 组；稳定项目事实已同步修正。
+- 新增独立的 Piece 拖拽阻塞计数；正确 Piece 的 `0.12s` 吸附阶段仍阻塞拖拽，提交棋盘后立即释放该计数。
+- 原有完整落位流程计数继续覆盖绿色光带和邻块亮光传播，因此提示、测试完成、松动 Piece 提醒及切组时序不受影响。
+- 当多个正确落位流程并发时，先结束的流程不检查切组；最后结束的流程才统一检查一次切组或结算。
+- 每个并发绿色光带使用独立 Material 实例，避免共享 `_SweepCenter` 导致不同 Piece 的光带位置互相覆盖。
+- 同一持久亮光被新的传播再次命中时，新传播从当前可见位置接管；旧传播停止写入该亮光，最终位置只由最新传播保存。
+- 错误 Piece 回弹仍全程阻塞新拖拽，托盘 `0.5s` 补位期间的既有交互限制未修改。
 
-## 配置待办
+## 修改文件
 
-- `Assets/Resources/Configs/CardPacks.csv` 当前只有 22 行，最大 PackId 为 22，尚未添加 CardBag023。
-- 迁移后的自动字段应更新为：005=`PackSize 1 / StickerCount 19 / BoardScale 0.75`；006=`2 / 29 / 0.78`；007=`3 / 35 / 1.10`；010=`2 / 25 / 0.78`。
-- 需要先手工增加 `23,23,2,28,2,0.78,,1`，再运行 `Puffies -> Update Pack Sizes From Piece Counts`。当前工具只更新已有配置行，不会为无配置的源目录自动创建 PackId 23。
-- 编号和配置调整会改变本地卡包状态映射。完成后测试前删除 `LocalData.db` 与 `LocalData.json`，按开发阶段规则重新初始化本地数据。
+- `Assets/Scripts/Controller/GameScene.cs`
+- `Documents/CURRENT_TASK.md`
+- `Documents/PROJECT_CONTEXT.md`
+- `specs/spec-driven-development.md`
 
-## 待确认
+## 决策
 
-- `Assets/UI/CardBags/CardBag005/BoardTitle.png` 与 `美术切图/游戏内包头/PackTitle005.png` 尺寸同为 `1300 x 164`，但文件内容不同；006、007、010、023 的对应包头一致。修改前需要确认 CardBag005 应以哪一份为准。
-- 当前大量描边 PNG 有 Unity 重新烘焙产生的修改，并新增 007/010/017/023 描边文件；这些都是现有工作区内容，不回滚、不覆盖。
+- 只放开托盘 Piece 的拖拽入口和悬停光标；提示按钮、测试完成和松动 Piece 提醒仍以完整落位流程为锁。
+- 不缩短或取消绿色光带、亮光传播，也不改变吸附、持久化、分组和结算数据。
+- 并发材质实例由 `GameScene` 统一跟踪和销毁，避免场景退出时残留运行时 Material。
+
+## 验证
+
+- `dotnet build Assembly-CSharp.csproj --no-restore`：通过，`0` 警告、`0` 错误。
+- `git diff --check`：通过，仅提示工作区行尾将在 Git 后续处理时转换为 CRLF。
+- 静态确认错误回弹的拖拽阻塞与完整流程计数成对增减；正确吸附只提前释放一次拖拽阻塞，并在滑光结束后释放一次完整流程计数。
+- 静态确认每个绿色光带 Material 实例在正常结束、创建失败和场景销毁三条路径均会清理。
+- 待在 Play Mode 连续快速放置至少两块 Piece，确认前一块滑光期间可拿取下一块，且最后一块只触发一次切组或结算。
+
+## 关联待办：卡包编号迁移
+
+- 已核对资源迁移主体：旧 007 -> 新 005、旧 005 -> 新 006、旧 006 -> 新 007、旧 010 -> 新 023；新 010 为重新制作内容。
+- 当前源碎片数和 Prefab 节点数一致：005=19、006=29、007=35、010=25、023=28；Prefab 分组数分别为 4、4、5、2、5，均使用正式 `PieceGGII` 命名。
+- `CardPacks.csv` 当前仍只有 22 行，需补齐 005=`1/19/0.75`、006=`2/29/0.78`、007=`3/35/1.10`、010=`2/25/0.78`，并新增 `23,23,2,28,2,0.78,,1`。
+- CardBag006 描边目录比 Prefab 多一套无效 `Group05`，需要清理；其他本轮新烘焙描边保留并在 Unity 中检查。
+- `CardBag005/BoardTitle.png` 与 `美术切图/游戏内包头/PackTitle005.png` 内容不同，修改前需确认采用哪一份。
+- 配置修改后，测试前删除 `LocalData.db` 与 `LocalData.json`，按开发阶段规则重新初始化本地数据。
 
 ## 本机维护同步
 
-- 已运行 `ProjectMaintenance.ps1 -Audit`：`Library=4.95 GiB`、`Library/Bee=192.65 MiB`、临时目录 `10.70 MiB`、磁盘可用 `543.01 GiB`。
-- Git 松散对象为 `9546 / 1023.85 MiB`，已达到维护阈值；检查时 Unity 与 `UnityCrashHandler64` 正在运行，未在本轮执行即时清理。
-- 当前设备已安装计划任务 `Puffies Project Maintenance`，状态为 `Ready`，实际脚本路径为 `E:\MyWork\UnityProjects\Puffies\ProjectMaintenance.ps1`，下次运行时间为 2026-08-23 03:00。
+- 当前设备已经安装每周日 `03:00` 运行的 `Puffies Project Maintenance`，脚本路径为 `E:\MyWork\UnityProjects\Puffies\ProjectMaintenance.ps1`。
+- 最近审计发现 Git 松散对象达到维护阈值；检查时 Unity 正在运行，因此未执行即时清理。
 
 ## 下一步
 
-1. 确认 CardBag005 包头采用工程内现有文件还是美术切图目录版本。
-2. 补齐 `CardPacks.csv` 的 005/006/007/010/023，并运行尺寸更新工具复核。
-3. 删除 CardBag006 无效的旧 `Group05` 描边，保留并检查其他本轮新烘焙描边。
-4. 删除旧本地数据，在 Unity 中验证 005/006/007/010/023 的列表、开包、关卡加载、分组和描边。
+1. 在 Play Mode 验证连续快速放置与最后一块切组。
+2. 完成当前交互验证后，确认 CardBag005 包头来源并继续卡包编号迁移收尾。
 
 ## 恢复提示
 
-继续 Puffies 工程。先阅读 `AGENTS.md`、`Documents/WORKFLOW.md` 和本文件；不要回滚当前描边修改。先确认 CardBag005 包头来源，再补齐 `CardPacks.csv` 和 CardBag006 残留描边，最后清理本地数据并执行 Unity 验证。
+继续 Puffies 当前任务。先阅读 `AGENTS.md`、`Documents/WORKFLOW.md` 和本文件；先验证正确 Piece 开始滑光后可继续拿取托盘 Piece，并且并发滑光结束后只触发一次切组或结算。随后处理本文件记录的卡包编号迁移待办，不要回滚现有描边资源。
