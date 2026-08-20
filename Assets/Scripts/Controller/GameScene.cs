@@ -1432,6 +1432,24 @@ public class GameScene : MonoBehaviour
         return scale;
     }
 
+    private static Vector3 LimitPieceScaleToTray(
+        Vector3 pieceScale,
+        Vector3 trayLimitScale)
+    {
+        if (!IsFinitePositiveScale(pieceScale))
+        {
+            return ClampTrayPieceScale(trayLimitScale);
+        }
+
+        trayLimitScale = ClampTrayPieceScale(trayLimitScale);
+        var limitFactor = Mathf.Min(
+            1f,
+            Mathf.Min(
+                trayLimitScale.x / pieceScale.x,
+                trayLimitScale.y / pieceScale.y));
+        return ClampTrayPieceScale(pieceScale * limitFactor);
+    }
+
     private SpriteRenderer CreatePieceBackground()
     {
         if (_board.GameBoardImage == null)
@@ -1547,19 +1565,21 @@ public class GameScene : MonoBehaviour
                 continue;
             }
 
-            var dragScale = pieceRenderer.transform.localScale;
-            var boardScale = CalculatePieceScaleOnBoard(grooveImage, pieceRenderer);
-            var trayScale = CalculateTrayScaleForPiece(
-                pieceRenderer,
-                hostBounds,
-                trayDesignHeight);
-            pieceRenderer.transform.localScale = trayScale;
             var pieceCollider = CreateSpriteOverlapCollider(
                 pieceRenderer.gameObject,
-                pieceRenderer.sprite);
+                grooveImage.sprite);
             ApplyPieceRendererShadow(pieceRenderer, PieceShadowStyle.Initial);
+            var dragScale = CalculatePieceScaleOnBoard(grooveImage, pieceRenderer);
+            var boardScale = dragScale;
+            var trayScale = LimitPieceScaleToTray(
+                dragScale,
+                CalculateTrayScaleForPiece(
+                    pieceRenderer,
+                    hostBounds,
+                    trayDesignHeight));
+            pieceRenderer.transform.localScale = trayScale;
             var grooveProbeCollider = CreateGrooveOverlapProbe(
-                pieceRenderer.sprite,
+                grooveImage.sprite,
                 root.transform,
                 $"GrooveProbe_{groupIndex}_{i}");
             _drag.CurrentGroupDraggables.Add(new DraggablePieceState
@@ -2650,10 +2670,13 @@ public class GameScene : MonoBehaviour
             state.TrayScale = ClampTrayPieceScale(
                 state.PieceRenderer.transform.localScale);
         }
-        state.BoardScale = CalculatePieceScaleOnBoard(
+
+        state.DragScale = CalculatePieceScaleOnBoard(
             state.GrooveImage,
             state.PieceRenderer);
+        state.BoardScale = state.DragScale;
         state.PieceRenderer.transform.localScale = state.DragScale;
+        ApplyPieceRendererShadow(state.PieceRenderer, PieceShadowStyle.Initial);
         state.PieceRenderer.sortingOrder = PieceSortingOrder + 100;
         if (state.IsOnTray)
         {

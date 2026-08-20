@@ -321,8 +321,8 @@
 4. WHEN 玩家从托盘拿起一个 Piece AND 其后方存在仍在托盘的同组 Piece THEN 系统 SHALL 仅将这些后序 Piece 向前补位，前序 Piece、桌面 Piece、Y 坐标和缩放保持不变。
 5. WHEN 托盘 Piece 需要补位或回收重排 THEN 系统 SHALL 使用 `0.5s` 缓动移动到目标位置，不得瞬移。
 6. WHEN Piece 因错误放置返回原托盘位置 THEN 系统 SHALL 同步恢复其他托盘 Piece 的固定间距布局。
-7. WHEN 创建托盘 Piece THEN 系统 SHALL 先以 Sprite 原尺寸比较其高度与托盘高度 `90%`；IF 原尺寸高度超过该上限 THEN 等比缩小到上限，ELSE 固定使用 `TrayScale=1`；任何托盘 Piece 的 Scale 均不得超过 `1`。
-8. WHEN Piece 从托盘拿起进入拖拽 THEN 系统 SHALL 立即从 `TrayScale` 恢复为 Piece Renderer 创建时保存的资源原始 `DragScale`；不得在点击时使用对应凹槽比例重新计算或覆盖 `DragScale`。
+7. WHEN 创建托盘 Piece THEN 系统 SHALL 以配置缩放后的凹槽实际显示比例作为 `DragScale`，并将 `TrayScale` 设为该比例与托盘高度 `90%` 容纳上限中的等比较小值；任何托盘 Piece 的 Scale 均不得超过 `1`。
+8. WHEN Piece 从托盘拿起进入拖拽 THEN 系统 SHALL 按当前凹槽屏幕矩形刷新 `DragScale/BoardScale` 并立即恢复该目标比例；该比例包含 `CardPacks.csv/BoardScale` 且允许超过 `1`，不得继续使用托盘缩小比例。
 9. WHEN 拿起后的 Piece 因直接命中托盘、错误回弹、被其他 Piece 顶回或窗口失焦而回归托盘 THEN 系统 SHALL 恢复本次拿起前保存的同一个 `TrayScale`；更新 `DragScale` 不得覆盖 `TrayScale`，回托盘也不得保留或写回 `DragScale`。
 10. WHEN 托盘 Piece 播放首次入场或切组入场动画 THEN 系统 SHALL 全程保持最终 `TrayScale`，不得通过缩放过冲临时超过目标比例或 `1`。
 11. WHEN 玩家松开 Piece AND Piece 的屏幕渲染边界仍与托盘原始区域相交 THEN 系统 SHALL 优先将 Piece 自动放回托盘布局位置并恢复其他 Piece 排列，即使鼠标没有移动或松手点未落入托盘矩形。
@@ -336,7 +336,7 @@
 ### 设计
 
 - `DraggableHorizontalSpacingPixels` 从 `20` 调整为 `40`，作为所有卡包共用的设计像素间距；初始布局、拿起补位和回收重排统一使用该值。
-- 托盘比例以 Sprite 和 `PieceBoard` 的设计高度为计算基准，不再除以棋盘 `BoardScale`，也不再与棋盘 `DragScale` 取较小值；棋盘吸附仍使用独立的 `DragScale`。相机为活动拼图组自动拉近或拉远后，不补偿托盘 Piece 的屏幕尺寸，避免 `TrayScale` 超过 `1`。
+- `DragScale/BoardScale` 使用 SpriteRenderer 与凹槽的屏幕矩形直接校准；`TrayScale` 再按同一目标比例与 `PieceBoard` 高度 `90%` 上限等比取小，并硬限制为 `<=1`。
 - PieceBoard 的托盘中心从根 Canvas 设计坐标直接换算到屏幕和游戏世界坐标，避免相机适配后首帧 Canvas 世界角点尚未刷新；Piece 继续使用实际 `SpriteRenderer.bounds.center` 校正最终世界坐标。
 - 在 `TryBeginDrag` 中触发后序 Piece 补位；队尾没有移动目标时不启动协程。
 - 新增单一托盘 Piece 重排协程，使用 `Time.unscaledDeltaTime` 和 `Mathf.SmoothStep` 在 `0.5s` 内只插值世界 X 坐标。
@@ -354,21 +354,21 @@
 - [x] 2. 将拿起后的后序补位改为统一 `0.5s` 缓动，并保证队尾不刷新。
 - [x] 3. 将托盘回收重排接入相同固定间距与缓动逻辑。
 - [x] 4. 更新长期规则和当前任务记录。
-- [x] 5. 将托盘缩放改为仅对超过托盘高度 `90%` 的原尺寸 Piece 等比缩小。
+- [x] 5. 将托盘缩放改为配置目标比例与托盘高度 `90%` 容纳上限中的等比较小值。
 - [ ] 6. 编译并验证初始布局、队尾、非队尾和回收分支。
 
 ### 当前验证
 
 - 静态检查确认所有布局入口共用 `DraggableHorizontalSpacingPixels=40`。
-- 静态检查确认托盘比例不再依赖 `_configuredBoardScale` 或棋盘 `DragScale`。
+- 静态检查确认托盘比例以 `DragScale` 为目标，并且只在目标超过 `1` 或 Piece 高度超过托盘 `90%` 时继续等比缩小。
 - 拿起补位只收集编号大于当前 Piece、仍在托盘且不是当前拖拽对象的状态；队尾目标列表为空时不启动协程。
 - 初始布局与点击后的重排共用由 Canvas 设计坐标换算的托盘中心，并使用 `SpriteRenderer.bounds.center` 计算 Piece 实际渲染中心偏移；托盘重排目标继续保持同一 Y 和缩放。
 - 运行时与编辑器 `dotnet build` 顺序通过，均为 `0` 警告、`0` 错误。
 
 ### 2026-08-20 回归修正
 
-- [x] 明确“保持原尺寸”是 `TrayScale=1`，不允许为了维持屏幕尺寸而通过相机补偿放大 Piece。
-- [x] 改用托盘设计高度和 Sprite 原始设计高度判断 `90%`：小 Piece 返回 `1`，大 Piece 仅按高度比缩小，结果硬限制为 `<=1`。
+- [x] 明确拿起后的“原尺寸”是配置缩放后与凹槽实际显示一致的 `DragScale/BoardScale`，该值允许超过 `1`；托盘内仍硬限制为 `<=1`。
+- [x] 改用配置目标比例和托盘设计高度共同计算 `TrayScale`：先按 Sprite 原始设计高度限制到托盘 `90%`，再与 `DragScale` 等比取小。
 - [x] 移除首次入场 `1.12` 和切组入场 `1.08` 的临时放大，保留位移、旋转和淡入。
 - [x] 增加 Piece 渲染边界与托盘原始区域的松手相交判定，修复原地拿起再松手后停留重叠。
 - [x] 增加溢出托盘 Piece 的空白区域横向滑动、首尾边界限制及位置同步。
@@ -376,13 +376,13 @@
 - [x] 增加拖拽过程中的 Piece 完整可视边界限制。
 - [x] 撤销误加到棋盘目标 Scale 的最大轴 `<=1` 钳制，恢复托盘 Piece 拿起后的原始游戏尺寸；托盘 `TrayScale<=1` 与 `90%` 上限保持不变。
 - [x] 在托盘 Scale 创建、拿起前快照、直接回收、错误回弹和布局入口统一增加等比 `<=1` 校验，保证 `DragScale` 与 `TrayScale` 不会互相覆盖。
-- [x] 将凹槽匹配比例拆为独立 `BoardScale`：拿起和桌面使用资源原始 `DragScale`，凹槽探针与正确吸附动画使用 `BoardScale`，回托盘使用 `TrayScale`。
+- [x] 让 `DragScale/BoardScale` 共用凹槽屏幕矩形校准结果：拿起、桌面、凹槽探针和正确吸附使用同一目标尺寸，回托盘使用 `TrayScale`。
 - [ ] 在 Play Mode 使用实际横向溢出分组验证空白起手、Piece 起手、首尾边界、拿取补位和错误回收。
 - [ ] 在 Play Mode 分别验证托盘 Piece、外部 Piece 和托盘滑动手势的失焦恢复。
 - [ ] 在 Play Mode 使用宽、高和不规则 Piece 验证窗口四边限制，并验证仅 Piece 边缘与托盘相交时仍会回到原位。
 - [x] 运行时与 Editor 程序集编译通过，并完成基础比例与相机拉远比例的公式样例验证。
-- [x] 确认棋盘目标 Scale 的所有返回路径恢复原始计算结果；占用探针和正确吸附动画使用 `BoardScale`，错误回弹到桌面使用资源原始 `DragScale`，回托盘使用 `TrayScale`。
-- [ ] 在至少一个相机拉远的卡包中目视验证小 Piece 的 `TrayScale=1`、大 Piece 只缩小且所有托盘 Piece 的 Scale 均不超过 `1`。
+- [x] 确认棋盘目标 Scale 的所有返回路径使用未钳制的屏幕校准结果；占用探针、正确吸附和桌面 Piece 使用同一目标尺寸，回托盘使用 `TrayScale`。
+- [ ] 在 `CardBag021` 目视验证配置 `BoardScale=1.1` 时拿起尺寸与凹槽一致、托盘 Scale 不超过 `1`，并验证配置小于 `1` 的卡包不会在拿起时反向放大。
 - Unity `2022.3.62f2c1` 无界面编译和完整资源导入通过，返回码为 `0`，日志中无 C# 错误或警告。
 - `git diff --check` 通过；Unity 未修改场景、Prefab 或资源。
 - 待在 Play Mode 分别拿起队首、中间、队尾 Piece，并测试错误返回和桌面回收的实际视觉节奏。
