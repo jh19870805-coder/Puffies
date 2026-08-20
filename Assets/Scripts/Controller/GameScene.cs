@@ -59,6 +59,10 @@ public class GameScene : MonoBehaviour
     private const float PiecePlacementLightDistanceMultiplier = 3f;
     private const float PiecePlacementLightDurationMultiplier = 2f;
     private const float PiecePlacementLightMiddleStretch = 0.34f;
+    private const float PieceLightMaximumWidthRatio = 0.7f;
+    private const float PieceLightMaximumAspect = 2.45f;
+    private const float PieceLightAlternateStyleChance = 0.42f;
+    private const float PieceLightAlternateStyleMaxErrorDelta = 0.32f;
     private const int PiecePlacementLightSpriteCount = 4;
     private const int PiecePlacementLightMaxAffectedPieces = 7;
     private const float InvalidDropReturnDuration = 0.3f;
@@ -431,6 +435,7 @@ public class GameScene : MonoBehaviour
 
     private void Update()
     {
+        EnsureDraggablePieceLights();
         UpdatePieceLightSorting();
         UpdatePieceHintAnimation();
         UpdateLoosePieceReminder();
@@ -716,6 +721,10 @@ public class GameScene : MonoBehaviour
                 var color = pieceTargetColors[i];
                 color.a *= pieceT;
                 renderer.color = color;
+                if (pieceT >= 1f)
+                {
+                    EnsureDraggablePieceLight(_drag.CurrentGroupDraggables[i]);
+                }
             }
 
             yield return null;
@@ -750,6 +759,7 @@ public class GameScene : MonoBehaviour
             renderer.transform.localScale = pieceTargetScales[i];
             renderer.transform.rotation = pieceTargetRotations[i];
             renderer.color = pieceTargetColors[i];
+            EnsureDraggablePieceLight(_drag.CurrentGroupDraggables[i]);
         }
 
         _isEntranceAnimating = false;
@@ -1623,7 +1633,6 @@ public class GameScene : MonoBehaviour
                 IsOnTray = true,
                 IsPlaced = false
             });
-            AddAmbientDraggablePieceLights(pieceRenderer, grooveImage);
         }
 
         AddAmbientLightsForCompletedGroups(groupIndex);
@@ -2317,8 +2326,8 @@ public class GameScene : MonoBehaviour
         spriteMask.isCustomRangeActive = true;
         spriteMask.frontSortingLayerID = sourceRenderer.sortingLayerID;
         spriteMask.backSortingLayerID = sourceRenderer.sortingLayerID;
-        spriteMask.frontSortingOrder = sourceRenderer.sortingOrder + 1;
-        spriteMask.backSortingOrder = sourceRenderer.sortingOrder + 1;
+        spriteMask.frontSortingOrder = sourceRenderer.sortingOrder + 2;
+        spriteMask.backSortingOrder = sourceRenderer.sortingOrder;
         var sprite = _piecePlacementLightSprites[state.SpriteIndex];
         var lightObject = new GameObject("PieceLight");
         lightObject.transform.SetParent(sourceRenderer.transform, false);
@@ -2345,6 +2354,51 @@ public class GameScene : MonoBehaviour
             SpriteMask = spriteMask,
             Transform = lightObject.transform
         });
+    }
+
+    private void EnsureDraggablePieceLights()
+    {
+        if (_isEntranceAnimating || _isGroupTransitionAnimating)
+        {
+            return;
+        }
+
+        for (var i = 0; i < _drag.CurrentGroupDraggables.Count; i++)
+        {
+            EnsureDraggablePieceLight(_drag.CurrentGroupDraggables[i]);
+        }
+    }
+
+    private void EnsureDraggablePieceLight(DraggablePieceState state)
+    {
+        var renderer = state?.PieceRenderer;
+        if (state == null
+            || state.IsPlaced
+            || renderer == null
+            || !renderer.gameObject.activeInHierarchy
+            || HasAmbientDraggablePieceLight(renderer))
+        {
+            return;
+        }
+
+        AddAmbientDraggablePieceLights(renderer, state.GrooveImage);
+    }
+
+    private bool HasAmbientDraggablePieceLight(SpriteRenderer sourceRenderer)
+    {
+        for (var i = 0; i < _ambientPieceLights.Count; i++)
+        {
+            var effect = _ambientPieceLights[i];
+            if (effect != null
+                && effect.SourceRenderer == sourceRenderer
+                && effect.Renderer != null
+                && effect.Transform != null)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private bool EnsurePieceSpriteLightMaterial()
@@ -2382,24 +2436,32 @@ public class GameScene : MonoBehaviour
         pieceSize = new Vector2(
             Mathf.Max(1f, Mathf.Abs(pieceSize.x)),
             Mathf.Max(1f, Mathf.Abs(pieceSize.y)));
+        var random = new System.Random(pieceNumber * 486187739);
         var referenceSize = Mathf.Sqrt(pieceSize.x * pieceSize.y);
-        var targetWidth = Mathf.Min(
-            Mathf.Clamp(referenceSize * 0.22f, 18f, 82f),
-            pieceSize.x * 0.54f);
         var pieceAspect = pieceSize.x / pieceSize.y;
+        var widePieceFactor = Mathf.InverseLerp(0.72f, 2.1f, pieceAspect);
+        var lengthVariation = RandomRange(random, 0.92f, 1.24f)
+                              * Mathf.Lerp(1f, 1.22f, widePieceFactor);
+        var maximumWidthRatio = Mathf.Lerp(
+            0.54f,
+            PieceLightMaximumWidthRatio,
+            widePieceFactor);
+        var targetWidth = Mathf.Min(
+            Mathf.Clamp(referenceSize * 0.22f * lengthVariation, 18f, 108f),
+            pieceSize.x * maximumWidthRatio);
         var desiredAspect = Mathf.Clamp(
-            1.15f + Mathf.Max(0f, pieceAspect - 0.65f) * 0.42f,
-            1.15f,
-            1.85f);
+            (1.15f + Mathf.Max(0f, pieceAspect - 0.65f) * 0.48f)
+            * RandomRange(random, 0.94f, 1.18f),
+            1.1f,
+            PieceLightMaximumAspect);
         var targetHeight = Mathf.Min(
             targetWidth / desiredAspect,
             Mathf.Min(pieceSize.y * 0.34f, 42f));
         targetHeight = Mathf.Max(8f, targetHeight);
         targetWidth = Mathf.Min(targetWidth, targetHeight * desiredAspect);
         targetWidth = Mathf.Max(10f, targetWidth);
-        var spriteIndex = SelectPieceLightSpriteIndex(desiredAspect);
+        var spriteIndex = SelectPieceLightSpriteIndex(desiredAspect, random);
         var lightSprite = _piecePlacementLightSprites[spriteIndex];
-        var random = new System.Random(pieceNumber * 486187739);
         var normalizedPosition = CalculateUpperLeftPieceLightPosition(
             sourceImage != null ? sourceImage.sprite : null);
         normalizedPosition += new Vector2(
@@ -2411,7 +2473,7 @@ public class GameScene : MonoBehaviour
         {
             SpriteIndex = spriteIndex,
             NormalizedPosition = normalizedPosition,
-            Rotation = RandomRange(random, -14f, -4f),
+            Rotation = RandomRange(random, -18f, 4f),
             Scale = new Vector2(
                 targetWidth / Mathf.Max(1f, lightSprite.rect.width),
                 targetHeight / Mathf.Max(1f, lightSprite.rect.height))
@@ -2420,10 +2482,12 @@ public class GameScene : MonoBehaviour
         return state;
     }
 
-    private int SelectPieceLightSpriteIndex(float targetAspect)
+    private int SelectPieceLightSpriteIndex(float targetAspect, System.Random random)
     {
         var bestIndex = 0;
         var bestError = float.PositiveInfinity;
+        var alternateIndex = -1;
+        var alternateError = float.PositiveInfinity;
         for (var i = 0; i < _piecePlacementLightSprites.Count; i++)
         {
             var sprite = _piecePlacementLightSprites[i];
@@ -2438,9 +2502,26 @@ public class GameScene : MonoBehaviour
                 / Mathf.Max(0.001f, targetAspect)));
             if (error < bestError)
             {
+                alternateError = bestError;
+                alternateIndex = bestIndex;
                 bestError = error;
                 bestIndex = i;
+                continue;
             }
+
+            if (error < alternateError)
+            {
+                alternateError = error;
+                alternateIndex = i;
+            }
+        }
+
+        if (alternateIndex >= 0
+            && alternateError <= bestError + PieceLightAlternateStyleMaxErrorDelta
+            && random != null
+            && random.NextDouble() < PieceLightAlternateStyleChance)
+        {
+            return alternateIndex;
         }
 
         return bestIndex;
@@ -2521,8 +2602,8 @@ public class GameScene : MonoBehaviour
                             effect.SourceRenderer.sortingLayerID;
                         effect.SpriteMask.backSortingLayerID =
                             effect.SourceRenderer.sortingLayerID;
-                        effect.SpriteMask.frontSortingOrder = sortingOrder;
-                        effect.SpriteMask.backSortingOrder = sortingOrder;
+                        effect.SpriteMask.frontSortingOrder = sortingOrder + 1;
+                        effect.SpriteMask.backSortingOrder = sortingOrder - 1;
                     }
                 }
             }
@@ -4826,6 +4907,10 @@ public class GameScene : MonoBehaviour
                 var color = pieceTargetColors[i];
                 color.a *= progress;
                 renderer.color = color;
+                if (progress >= 1f)
+                {
+                    EnsureDraggablePieceLight(_drag.CurrentGroupDraggables[i]);
+                }
             }
 
             yield return null;
@@ -4843,6 +4928,7 @@ public class GameScene : MonoBehaviour
             renderer.transform.localScale = pieceTargetScales[i];
             renderer.transform.rotation = pieceTargetRotations[i];
             renderer.color = pieceTargetColors[i];
+            EnsureDraggablePieceLight(_drag.CurrentGroupDraggables[i]);
         }
 
         if (wasTutorialActive)
