@@ -51,7 +51,10 @@ public class GameScene : MonoBehaviour
     private const float PiecePlacementShineDuration = 0.52f;
     private const float PiecePlacementShineBandWidth = 0.045f;
     private const float PiecePlacementLightDuration = 0.72f;
-    private const float PiecePlacementLightTravelPixels = 16f;
+    private const float PiecePlacementLightPushPhaseRatio = 0.22f;
+    private const float PiecePlacementLightMinBendPixels = 6f;
+    private const float PiecePlacementLightMaxBendPixels = 14f;
+    private const float PiecePlacementLightMiddleStretch = 0.34f;
     private const int PiecePlacementLightSpriteCount = 4;
     private const int PiecePlacementLightMaxAffectedPieces = 7;
     private const float InvalidDropReturnDuration = 0.3f;
@@ -150,8 +153,10 @@ public class GameScene : MonoBehaviour
         public int AnimationVersion;
         public float Delay;
         public float Lifetime;
-        public Vector2 StartPosition;
-        public Vector2 Travel;
+        public Vector2 StartBendOffset;
+        public float StartMiddleStretch;
+        public Vector2 BendDirection;
+        public float BendDistance;
     }
 
     private sealed class AmbientPieceLightFx
@@ -163,7 +168,7 @@ public class GameScene : MonoBehaviour
         public SpriteRenderer SourceRenderer;
         public SpriteMask SpriteMask;
         public Transform Transform;
-        public RectTransform SourceRect;
+        public PieceLightDeformEffect Deformer;
         public int AnimationVersion;
     }
 
@@ -172,7 +177,7 @@ public class GameScene : MonoBehaviour
         public int SpriteIndex;
         public Vector2 NormalizedPosition;
         public float Rotation;
-        public float Scale;
+        public Vector2 Scale;
     }
 
     private struct PiecePlacementLightTarget
@@ -1889,7 +1894,7 @@ public class GameScene : MonoBehaviour
         }
 
         RemoveActivePieceLight(pieceNumber);
-        var state = GetOrCreatePieceLightState(pieceNumber);
+        var state = GetOrCreatePieceLightState(pieceNumber, sourceImage);
         var maskObject = CreatePiecePlacementLightMask(sourceImage);
         if (maskObject == null)
         {
@@ -1914,7 +1919,7 @@ public class GameScene : MonoBehaviour
             sourceImage.rectTransform.rect.width * state.NormalizedPosition.x,
             sourceImage.rectTransform.rect.height * state.NormalizedPosition.y);
         lightRect.localRotation = Quaternion.Euler(0f, 0f, state.Rotation);
-        lightRect.localScale = Vector3.one * state.Scale;
+        lightRect.localScale = new Vector3(state.Scale.x, state.Scale.y, 1f);
 
         var lightImage = lightObject.GetComponent<Image>();
         lightImage.sprite = sprite;
@@ -1922,13 +1927,14 @@ public class GameScene : MonoBehaviour
         lightImage.color = Color.white;
         lightImage.raycastTarget = false;
         lightImage.maskable = true;
+        var deformer = lightObject.AddComponent<PieceLightDeformEffect>();
         _ambientPieceLights.Add(new AmbientPieceLightFx
         {
             PieceNumber = pieceNumber,
             Root = maskObject,
             Image = lightImage,
             Transform = lightRect,
-            SourceRect = sourceImage.rectTransform
+            Deformer = deformer
         });
     }
 
@@ -1951,7 +1957,7 @@ public class GameScene : MonoBehaviour
         }
 
         RemoveActivePieceLight(pieceNumber);
-        var state = GetOrCreatePieceLightState(pieceNumber);
+        var state = GetOrCreatePieceLightState(pieceNumber, sourceImage);
         var sourceBounds = sourceRenderer.sprite.bounds;
         var maskObject = new GameObject("AmbientPieceLightMask");
         maskObject.transform.SetParent(sourceRenderer.transform, false);
@@ -1971,7 +1977,7 @@ public class GameScene : MonoBehaviour
             sourceBounds.center.y + sourceBounds.size.y * state.NormalizedPosition.y,
             -0.01f);
         lightObject.transform.localRotation = Quaternion.Euler(0f, 0f, state.Rotation);
-        lightObject.transform.localScale = Vector3.one * state.Scale;
+        lightObject.transform.localScale = new Vector3(state.Scale.x, state.Scale.y, 1f);
 
         var lightRenderer = lightObject.AddComponent<SpriteRenderer>();
         lightRenderer.sprite = sprite;
@@ -2013,25 +2019,129 @@ public class GameScene : MonoBehaviour
         return true;
     }
 
-    private PieceLightState GetOrCreatePieceLightState(int pieceNumber)
+    private PieceLightState GetOrCreatePieceLightState(int pieceNumber, Image sourceImage)
     {
         if (_pieceLightStates.TryGetValue(pieceNumber, out var state))
         {
             return state;
         }
 
+        var pieceSize = sourceImage != null
+            ? sourceImage.rectTransform.rect.size
+            : Vector2.one;
+        pieceSize = new Vector2(
+            Mathf.Max(1f, Mathf.Abs(pieceSize.x)),
+            Mathf.Max(1f, Mathf.Abs(pieceSize.y)));
+        var referenceSize = Mathf.Sqrt(pieceSize.x * pieceSize.y);
+        var targetWidth = Mathf.Min(
+            Mathf.Clamp(referenceSize * 0.22f, 18f, 82f),
+            pieceSize.x * 0.54f);
+        var pieceAspect = pieceSize.x / pieceSize.y;
+        var desiredAspect = Mathf.Clamp(
+            1.15f + Mathf.Max(0f, pieceAspect - 0.65f) * 0.42f,
+            1.15f,
+            1.85f);
+        var targetHeight = Mathf.Min(
+            targetWidth / desiredAspect,
+            Mathf.Min(pieceSize.y * 0.34f, 42f));
+        targetHeight = Mathf.Max(8f, targetHeight);
+        targetWidth = Mathf.Min(targetWidth, targetHeight * desiredAspect);
+        targetWidth = Mathf.Max(10f, targetWidth);
+        var spriteIndex = SelectPieceLightSpriteIndex(desiredAspect);
+        var lightSprite = _piecePlacementLightSprites[spriteIndex];
         var random = new System.Random(pieceNumber * 486187739);
+        var normalizedPosition = CalculateUpperLeftPieceLightPosition(
+            sourceImage != null ? sourceImage.sprite : null);
+        normalizedPosition += new Vector2(
+            RandomRange(random, -0.018f, 0.018f),
+            RandomRange(random, -0.012f, 0.018f));
+        normalizedPosition.x = Mathf.Clamp(normalizedPosition.x, -0.34f, -0.1f);
+        normalizedPosition.y = Mathf.Clamp(normalizedPosition.y, 0.1f, 0.34f);
         state = new PieceLightState
         {
-            SpriteIndex = random.Next(PiecePlacementLightSpriteCount),
-            NormalizedPosition = new Vector2(
-                RandomRange(random, -0.3f, 0.3f),
-                RandomRange(random, -0.3f, 0.3f)),
-            Rotation = RandomRange(random, -24f, 24f),
-            Scale = RandomRange(random, 0.82f, 1.12f)
+            SpriteIndex = spriteIndex,
+            NormalizedPosition = normalizedPosition,
+            Rotation = RandomRange(random, -14f, -4f),
+            Scale = new Vector2(
+                targetWidth / Mathf.Max(1f, lightSprite.rect.width),
+                targetHeight / Mathf.Max(1f, lightSprite.rect.height))
         };
         _pieceLightStates[pieceNumber] = state;
         return state;
+    }
+
+    private int SelectPieceLightSpriteIndex(float targetAspect)
+    {
+        var bestIndex = 0;
+        var bestError = float.PositiveInfinity;
+        for (var i = 0; i < _piecePlacementLightSprites.Count; i++)
+        {
+            var sprite = _piecePlacementLightSprites[i];
+            if (sprite == null || sprite.rect.height <= 0.001f)
+            {
+                continue;
+            }
+
+            var spriteAspect = sprite.rect.width / sprite.rect.height;
+            var error = Mathf.Abs(Mathf.Log(
+                Mathf.Max(0.001f, spriteAspect)
+                / Mathf.Max(0.001f, targetAspect)));
+            if (error < bestError)
+            {
+                bestError = error;
+                bestIndex = i;
+            }
+        }
+
+        return bestIndex;
+    }
+
+    private static Vector2 CalculateUpperLeftPieceLightPosition(Sprite sprite)
+    {
+        var fallback = new Vector2(-0.22f, 0.22f);
+        if (sprite == null
+            || sprite.bounds.size.x <= 0.001f
+            || sprite.bounds.size.y <= 0.001f)
+        {
+            return fallback;
+        }
+
+        var bestPosition = fallback;
+        var bestScore = float.NegativeInfinity;
+        var foundPoint = false;
+        var path = new List<Vector2>();
+        var shapeCount = sprite.GetPhysicsShapeCount();
+        for (var shapeIndex = 0; shapeIndex < shapeCount; shapeIndex++)
+        {
+            path.Clear();
+            sprite.GetPhysicsShape(shapeIndex, path);
+            for (var pointIndex = 0; pointIndex < path.Count; pointIndex++)
+            {
+                var point = path[pointIndex];
+                var normalized = new Vector2(
+                    (point.x - sprite.bounds.center.x) / sprite.bounds.size.x,
+                    (point.y - sprite.bounds.center.y) / sprite.bounds.size.y);
+                var score = normalized.y - normalized.x;
+                if (score <= bestScore)
+                {
+                    continue;
+                }
+
+                bestScore = score;
+                bestPosition = normalized;
+                foundPoint = true;
+            }
+        }
+
+        if (!foundPoint)
+        {
+            return fallback;
+        }
+
+        bestPosition = Vector2.Lerp(bestPosition, Vector2.zero, 0.34f);
+        return new Vector2(
+            Mathf.Clamp(bestPosition.x, -0.34f, -0.1f),
+            Mathf.Clamp(bestPosition.y, 0.1f, 0.34f));
     }
 
     private void UpdatePieceLightSorting()
@@ -3076,10 +3186,7 @@ public class GameScene : MonoBehaviour
 
         for (var i = 0; i < effects.Count; i++)
         {
-            if (UpdatePiecePlacementLight(effects[i], PiecePlacementLightDuration))
-            {
-                StorePieceLightPosition(effects[i]?.Light);
-            }
+            UpdatePiecePlacementLight(effects[i], PiecePlacementLightDuration);
         }
     }
 
@@ -3330,7 +3437,7 @@ public class GameScene : MonoBehaviour
         }
 
         var direction = targetIndex == 0
-            ? Vector2.right
+            ? new Vector2(0.82f, -0.57f).normalized
             : (target.ScreenRect.center - sourceScreenRect.center).normalized;
         var maxDistance = Mathf.Max(
             sourceScreenRect.width,
@@ -3342,7 +3449,16 @@ public class GameScene : MonoBehaviour
             direction = Vector2.right;
         }
 
-        var lightRect = light.Transform as RectTransform;
+        if (light.Deformer == null || light.Image == null)
+        {
+            return;
+        }
+
+        var lightSize = light.Image.rectTransform.rect.size;
+        var bendDistance = Mathf.Clamp(
+            Mathf.Min(Mathf.Abs(lightSize.x), Mathf.Abs(lightSize.y)) * 0.28f,
+            PiecePlacementLightMinBendPixels,
+            PiecePlacementLightMaxBendPixels);
         light.AnimationVersion++;
         effects.Add(new PiecePlacementLightFx
         {
@@ -3350,10 +3466,10 @@ public class GameScene : MonoBehaviour
             AnimationVersion = light.AnimationVersion,
             Delay = targetDelay,
             Lifetime = targetIndex == 0 ? 0.48f : 0.42f,
-            StartPosition = lightRect != null
-                ? lightRect.anchoredPosition
-                : (Vector2)light.Transform.localPosition,
-            Travel = direction * PiecePlacementLightTravelPixels
+            StartBendOffset = light.Deformer.BendOffset,
+            StartMiddleStretch = light.Deformer.MiddleStretch,
+            BendDirection = direction,
+            BendDistance = bendDistance
         });
     }
 
@@ -3395,6 +3511,7 @@ public class GameScene : MonoBehaviour
     private static bool UpdatePiecePlacementLight(PiecePlacementLightFx effect, float elapsed)
     {
         if (effect?.Light?.Transform == null
+            || effect.Light.Deformer == null
             || effect.AnimationVersion != effect.Light.AnimationVersion)
         {
             return false;
@@ -3406,21 +3523,35 @@ public class GameScene : MonoBehaviour
             return true;
         }
 
-        var easedTravel = 1f - Mathf.Pow(1f - progress, 2f);
-        var position = effect.StartPosition + effect.Travel * easedTravel;
-        if (effect.Light.Transform is RectTransform lightRect)
+        Vector2 bendOffset;
+        float middleStretch;
+        if (progress <= PiecePlacementLightPushPhaseRatio)
         {
-            lightRect.anchoredPosition = position;
+            var pushProgress = Mathf.SmoothStep(
+                0f,
+                1f,
+                progress / PiecePlacementLightPushPhaseRatio);
+            bendOffset = Vector2.LerpUnclamped(
+                effect.StartBendOffset,
+                effect.BendDirection * effect.BendDistance,
+                pushProgress);
+            middleStretch = Mathf.LerpUnclamped(
+                effect.StartMiddleStretch,
+                PiecePlacementLightMiddleStretch,
+                pushProgress);
         }
         else
         {
-            var localPosition = effect.Light.Transform.localPosition;
-            effect.Light.Transform.localPosition = new Vector3(
-                position.x,
-                position.y,
-                localPosition.z);
+            var reboundProgress = Mathf.Clamp01(
+                (progress - PiecePlacementLightPushPhaseRatio)
+                / (1f - PiecePlacementLightPushPhaseRatio));
+            var response = Mathf.Cos(reboundProgress * Mathf.PI * 3f)
+                           * Mathf.Pow(1f - reboundProgress, 2f);
+            bendOffset = effect.BendDirection * effect.BendDistance * response;
+            middleStretch = Mathf.Abs(response) * PiecePlacementLightMiddleStretch;
         }
 
+        effect.Light.Deformer.SetDeformation(bendOffset, middleStretch);
         return true;
     }
 
@@ -3438,23 +3569,6 @@ public class GameScene : MonoBehaviour
         }
 
         return null;
-    }
-
-    private void StorePieceLightPosition(AmbientPieceLightFx light)
-    {
-        if (light?.Transform == null
-            || !_pieceLightStates.TryGetValue(light.PieceNumber, out var state))
-        {
-            return;
-        }
-
-        if (light.Transform is RectTransform lightRect && light.SourceRect != null)
-        {
-            var size = light.SourceRect.rect.size;
-            state.NormalizedPosition = new Vector2(
-                size.x > 0.001f ? lightRect.anchoredPosition.x / size.x : 0f,
-                size.y > 0.001f ? lightRect.anchoredPosition.y / size.y : 0f);
-        }
     }
 
     private int CountUnplacedTrayPieces()
@@ -7004,6 +7118,91 @@ public class GameScene : MonoBehaviour
     private void OnReturnButtonClicked()
     {
         GameManager.EnterMainScene();
+    }
+}
+
+internal sealed class PieceLightDeformEffect : BaseMeshEffect
+{
+    private const int HorizontalSegmentCount = 8;
+
+    public Vector2 BendOffset { get; private set; }
+    public float MiddleStretch { get; private set; }
+
+    public void SetDeformation(Vector2 bendOffset, float middleStretch)
+    {
+        middleStretch = Mathf.Clamp(middleStretch, 0f, 0.8f);
+        if ((BendOffset - bendOffset).sqrMagnitude <= 0.000001f
+            && Mathf.Abs(MiddleStretch - middleStretch) <= 0.0001f)
+        {
+            return;
+        }
+
+        BendOffset = bendOffset;
+        MiddleStretch = middleStretch;
+        if (graphic != null)
+        {
+            graphic.SetVerticesDirty();
+        }
+    }
+
+    public override void ModifyMesh(VertexHelper vertexHelper)
+    {
+        if (!IsActive() || vertexHelper == null || graphic == null)
+        {
+            return;
+        }
+
+        var image = graphic as Image;
+        var sprite = image != null ? image.overrideSprite : null;
+        if (sprite == null)
+        {
+            return;
+        }
+
+        var rect = graphic.rectTransform.rect;
+        var outerUv = UnityEngine.Sprites.DataUtility.GetOuterUV(sprite);
+        var color = graphic.color;
+        vertexHelper.Clear();
+
+        for (var segment = 0; segment <= HorizontalSegmentCount; segment++)
+        {
+            var normalizedX = segment / (float)HorizontalSegmentCount;
+            var middleWeight = Mathf.Sin(normalizedX * Mathf.PI);
+            var x = Mathf.LerpUnclamped(rect.xMin, rect.xMax, normalizedX)
+                    + BendOffset.x * middleWeight;
+            var centerY = rect.center.y + BendOffset.y * middleWeight;
+            var halfHeight = rect.height * 0.5f
+                             * (1f + MiddleStretch * middleWeight);
+            var uvX = Mathf.LerpUnclamped(outerUv.x, outerUv.z, normalizedX);
+
+            vertexHelper.AddVert(CreateVertex(
+                new Vector2(x, centerY - halfHeight),
+                new Vector2(uvX, outerUv.y),
+                color));
+            vertexHelper.AddVert(CreateVertex(
+                new Vector2(x, centerY + halfHeight),
+                new Vector2(uvX, outerUv.w),
+                color));
+        }
+
+        for (var segment = 0; segment < HorizontalSegmentCount; segment++)
+        {
+            var leftBottom = segment * 2;
+            var leftTop = leftBottom + 1;
+            var rightBottom = leftBottom + 2;
+            var rightTop = leftBottom + 3;
+            vertexHelper.AddTriangle(leftBottom, leftTop, rightTop);
+            vertexHelper.AddTriangle(leftBottom, rightTop, rightBottom);
+        }
+    }
+
+    private static UIVertex CreateVertex(Vector2 position, Vector2 uv, Color color)
+    {
+        var vertex = UIVertex.simpleVert;
+        vertex.position = position;
+        vertex.uv0 = uv;
+        vertex.color = color;
+        return vertex;
     }
 }
 
