@@ -322,15 +322,16 @@
 5. WHEN 托盘 Piece 需要补位或回收重排 THEN 系统 SHALL 使用 `0.5s` 缓动移动到目标位置，不得瞬移。
 6. WHEN Piece 因错误放置返回原托盘位置 THEN 系统 SHALL 同步恢复其他托盘 Piece 的固定间距布局。
 7. WHEN 创建托盘 Piece THEN 系统 SHALL 先以 Sprite 原尺寸比较其高度与托盘高度 `90%`；IF 原尺寸高度超过该上限 THEN 等比缩小到上限，ELSE 固定使用 `TrayScale=1`；任何托盘 Piece 的 Scale 均不得超过 `1`。
-8. WHEN Piece 离开托盘进入拖拽、桌面或棋盘状态 THEN 系统 SHALL 使用独立的棋盘目标 Scale，且 X/Y 最大缩放轴不得超过 `1`；IF 槽位匹配结果超过 `1` THEN 系统 SHALL 等比缩小整个 Scale，使最大轴等于 `1`，不得放大或拉伸变形。
-9. WHEN 托盘 Piece 播放首次入场或切组入场动画 THEN 系统 SHALL 全程保持最终 `TrayScale`，不得通过缩放过冲临时超过目标比例或 `1`。
-10. WHEN 玩家松开 Piece AND Piece 的屏幕渲染边界仍与托盘原始区域相交 THEN 系统 SHALL 优先将 Piece 自动放回托盘布局位置并恢复其他 Piece 排列，即使鼠标没有移动或松手点未落入托盘矩形。
-11. WHEN 当前托盘 Piece 横向范围超出托盘可视宽度 AND 玩家从托盘内未命中 Piece 的空白区域开始横向拖动 THEN 系统 SHALL 平移全部仍在托盘上的 Piece，以浏览屏幕外碎片。
-12. WHEN 横向滑动托盘 Piece THEN 系统 SHALL 固定黑色托盘、棋盘和桌面 Piece，并将内容限制在首块左边缘与末块右边缘形成的有效滚动范围内，不允许整组越过托盘左右内边界。
-13. WHEN 指针起点命中 Piece THEN 系统 SHALL 优先执行现有 Piece 拿取，不得启动托盘滑动；IF 托盘内容未溢出 THEN 空白区域拖动 SHALL 不移动 Piece。
-14. WHEN 玩家正在拖拽托盘 Piece AND 游戏窗口失去焦点或应用暂停 THEN 系统 SHALL 立即取消拖拽，将 Piece 恢复为 `TrayScale` 并重新排回托盘，不得停在屏幕边缘或与其他 Piece 重叠。
-15. WHEN 玩家正在拖拽桌面或错误棋盘 Piece AND 游戏窗口失去焦点或应用暂停 THEN 系统 SHALL 将 Piece 恢复到本次拿起前的位置；WHEN 玩家正在横向滑动托盘 THEN 系统 SHALL 结束手势并保留当前合法滑动位置。
-16. WHEN 玩家拖动选中的 Piece THEN 系统 SHALL 按 Piece 当前完整渲染边界将其限制在游戏可视区域内；即使指针移出窗口，Piece 的任一边缘也不得移出可视边界。
+8. WHEN Piece 从托盘拿起进入拖拽 THEN 系统 SHALL 立即从 `TrayScale` 恢复为 Piece Renderer 创建时保存的资源原始 `DragScale`；不得在点击时使用对应凹槽比例重新计算或覆盖 `DragScale`。
+9. WHEN 拿起后的 Piece 因直接命中托盘、错误回弹、被其他 Piece 顶回或窗口失焦而回归托盘 THEN 系统 SHALL 恢复本次拿起前保存的同一个 `TrayScale`；更新 `DragScale` 不得覆盖 `TrayScale`，回托盘也不得保留或写回 `DragScale`。
+10. WHEN 托盘 Piece 播放首次入场或切组入场动画 THEN 系统 SHALL 全程保持最终 `TrayScale`，不得通过缩放过冲临时超过目标比例或 `1`。
+11. WHEN 玩家松开 Piece AND Piece 的屏幕渲染边界仍与托盘原始区域相交 THEN 系统 SHALL 优先将 Piece 自动放回托盘布局位置并恢复其他 Piece 排列，即使鼠标没有移动或松手点未落入托盘矩形。
+12. WHEN 当前托盘 Piece 横向范围超出托盘可视宽度 AND 玩家从托盘内未命中 Piece 的空白区域开始横向拖动 THEN 系统 SHALL 平移全部仍在托盘上的 Piece，以浏览屏幕外碎片。
+13. WHEN 横向滑动托盘 Piece THEN 系统 SHALL 固定黑色托盘、棋盘和桌面 Piece，并将内容限制在首块左边缘与末块右边缘形成的有效滚动范围内，不允许整组越过托盘左右内边界。
+14. WHEN 指针起点命中 Piece THEN 系统 SHALL 优先执行现有 Piece 拿取，不得启动托盘滑动；IF 托盘内容未溢出 THEN 空白区域拖动 SHALL 不移动 Piece。
+15. WHEN 玩家正在拖拽托盘 Piece AND 游戏窗口失去焦点或应用暂停 THEN 系统 SHALL 立即取消拖拽，将 Piece 恢复为 `TrayScale` 并重新排回托盘，不得停在屏幕边缘或与其他 Piece 重叠。
+16. WHEN 玩家正在拖拽桌面或错误棋盘 Piece AND 游戏窗口失去焦点或应用暂停 THEN 系统 SHALL 将 Piece 恢复到本次拿起前的位置；WHEN 玩家正在横向滑动托盘 THEN 系统 SHALL 结束手势并保留当前合法滑动位置。
+17. WHEN 玩家拖动选中的 Piece THEN 系统 SHALL 按 Piece 当前完整渲染边界将其限制在游戏可视区域内；即使指针移出窗口，Piece 的任一边缘也不得移出可视边界。
 
 ### 设计
 
@@ -373,11 +374,14 @@
 - [x] 增加溢出托盘 Piece 的空白区域横向滑动、首尾边界限制及位置同步。
 - [x] 增加窗口失焦与应用暂停时的拖拽取消和合法位置恢复。
 - [x] 增加拖拽过程中的 Piece 完整可视边界限制。
+- [x] 撤销误加到棋盘目标 Scale 的最大轴 `<=1` 钳制，恢复托盘 Piece 拿起后的原始游戏尺寸；托盘 `TrayScale<=1` 与 `90%` 上限保持不变。
+- [x] 在托盘 Scale 创建、拿起前快照、直接回收、错误回弹和布局入口统一增加等比 `<=1` 校验，保证 `DragScale` 与 `TrayScale` 不会互相覆盖。
+- [x] 将凹槽匹配比例拆为独立 `BoardScale`：拿起和桌面使用资源原始 `DragScale`，凹槽探针与正确吸附动画使用 `BoardScale`，回托盘使用 `TrayScale`。
 - [ ] 在 Play Mode 使用实际横向溢出分组验证空白起手、Piece 起手、首尾边界、拿取补位和错误回收。
 - [ ] 在 Play Mode 分别验证托盘 Piece、外部 Piece 和托盘滑动手势的失焦恢复。
 - [ ] 在 Play Mode 使用宽、高和不规则 Piece 验证窗口四边限制，并验证仅 Piece 边缘与托盘相交时仍会回到原位。
 - [x] 运行时与 Editor 程序集编译通过，并完成基础比例与相机拉远比例的公式样例验证。
-- [x] 将棋盘目标 Scale 的所有返回路径统一限制为最大轴 `<=1`，并确认占用探针、错误回弹和吸附动画复用同一结果。
+- [x] 确认棋盘目标 Scale 的所有返回路径恢复原始计算结果；占用探针和正确吸附动画使用 `BoardScale`，错误回弹到桌面使用资源原始 `DragScale`，回托盘使用 `TrayScale`。
 - [ ] 在至少一个相机拉远的卡包中目视验证小 Piece 的 `TrayScale=1`、大 Piece 只缩小且所有托盘 Piece 的 Scale 均不超过 `1`。
 - Unity `2022.3.62f2c1` 无界面编译和完整资源导入通过，返回码为 `0`，日志中无 C# 错误或警告。
 - `git diff --check` 通过；Unity 未修改场景、Prefab 或资源。

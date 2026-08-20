@@ -15,6 +15,7 @@ public sealed class DraggablePieceState
     public Vector3 StartPosition;
     public Vector3 TrayScale;
     public Vector3 DragScale;
+    public Vector3 BoardScale;
     public bool IsOnTray;
     public bool IsPlaced;
 }

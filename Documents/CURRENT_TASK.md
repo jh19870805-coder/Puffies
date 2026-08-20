@@ -1,18 +1,20 @@
 # 当前任务
 
-- 任务：缩短开包滑光结束后的场景切换等待
-- 状态：已按可见动画时长修正，等待 Play Mode 目视验证
+- 任务：恢复托盘 Piece 拿起后的原始游戏尺寸
+- 状态：已撤销错误的棋盘缩放钳制，等待 Play Mode 目视验证
 - 更新时间：2026-08-20
 
 ## 用户意图
 
+- Piece 在托盘内继续使用 `TrayScale` 与托盘高度 `90%` 上限；从托盘拿起时必须恢复 Piece 资源创建时保存的原始尺寸，不能按凹槽比例改变拿起尺寸；松手后只要回归托盘，就必须恢复本次拿起前保存的同一个 `TrayScale`。
+- 最大 Scale 不超过 `1` 的限制只适用于托盘生成和托盘布局，不适用于拿起后的拖拽、桌面或棋盘目标 Scale。
 - 开包滑光主要画面结束后应尽快进入 GameScene，不能继续停留到 Timeline 控制轨道的空尾结束。
 - 缩短等待不得修改 `fx_chai_w_001` 的粒子参数、场景位置、材质、随机种子或原生播放效果。
 - Piece 原始高度不超过托盘高度 `90%` 时，在托盘上保持原始显示高度。
 - Piece 原始高度超过托盘高度 `90%` 时，按宽高比等比缩小到托盘高度 `90%`。
 - Piece 在托盘生成和回收后的 `TrayScale` 最大只能为 `1`，不得通过相机补偿放大。
 - 托盘缩放不能随活动组相机适配或棋盘 `BoardScale` 改变。
-- Piece 离开托盘进入拖拽、桌面或棋盘状态后，棋盘目标缩放最大轴不能超过 `1`，不得放大。
+- Piece 离开托盘进入拖拽或桌面状态后使用资源原始 `DragScale`，不继承托盘缩小比例；凹槽尺寸匹配只使用独立 `BoardScale`。
 - Piece 松手时只要自身屏幕边界仍与托盘原始区域相交，就必须优先回到托盘布局位置；不能停在原地与其他 Piece 重叠。
 - Piece 被鼠标选中并移动时，完整渲染边界必须始终留在游戏可视区域内，不能从窗口四边露出或移出。
 - 当前组 Piece 横向排列超出托盘可视宽度时，允许从托盘内未命中 Piece 的空白区域按住并左右滑动，查看和选择屏幕外 Piece。
@@ -20,6 +22,10 @@
 
 ## 工作记录
 
+- 历史提交 `c2eb4da` 在修正托盘比例时，同时给 `CalculatePieceScaleOnBoard` 的全部返回路径增加了最大轴 `<=1` 的钳制；撤销后又错误地继续把该凹槽匹配结果当作拿起比例，导致凹槽比例小于托盘比例时点击 Piece 会缩小。
+- 已将尺寸状态拆为三套：`TrayScale` 保存托盘比例，`DragScale` 在 Piece 创建时保存资源原始比例，`BoardScale` 才按凹槽屏幕矩形计算。拿起只赋值 `DragScale`，凹槽探针和吸附动画使用 `BoardScale`。
+- 已逐项核对回托盘路径：直接命中托盘、错误回弹、被正确 Piece 顶回和窗口失焦回收均只读取已保存的 `state.TrayScale`；拿起时更新 `DragScale` 不会覆盖 `TrayScale`。
+- 为避免后续路径再次破坏两套比例，新增托盘 Scale 强制不变量：拿起前从 Renderer 当前显示值保存 `TrayScale` 并按最大轴等比钳制到 `<=1`；直接回收、错误回弹和每次托盘布局前都会再次校验该保存值，任何路径都不能把 `DragScale` 写回托盘。
 - 原实现以 `LightEffectDelay 0.5s + LightEffectDuration 3.033s` 作为切换下限，模型动画仅 `1.833s`，因此即使滑光主体已经消失，仍会固定等待到 `3.533s`。
 - Unity Editor 日志显示 CardBag 与 GameScene 通常在开包播放前已预加载到可激活点；14 次 GameScene 初始化平均约 `141ms`，主要停留来自固定动画等待而非加载。
 - `fx_chai_w_001` 主要子粒子的启动延迟不超过约 `0.1s`、可见寿命约 `0.1~1.0s`；首次缩短后仍有轻微停顿，按 Play Mode 观感将切换点继续提前到模型主要可见动作 `1.6s` 与 `0.5s + 1.1s` 滑光窗口中的较晚项，最终为 `1.6s`。
@@ -33,7 +39,7 @@
 - 滑动范围按当前 Piece 合并边界与托盘左右内边界实时计算，首块和末块分别构成左右硬边界；Piece 拖拽优先于托盘滑动，切组、结算和销毁会清理滑动状态。
 - 新增 `OnApplicationFocus(false)` 与 `OnApplicationPause(true)` 统一取消入口。失焦不模拟普通松手，避免把屏幕边缘位置误判为自由放置；托盘 Piece 直接恢复 `TrayScale` 并即时重新布局，不依赖失焦后的协程帧更新，外部 Piece 直接恢复 `_dragStartPosition`。
 - 棋盘吸附继续使用独立 `DragScale`，托盘缩放不继承 `BoardScale`，现有 X 间距、上下居中和重排动画不变。
-- `CalculatePieceScaleOnBoard` 的屏幕匹配、棋盘比例回退和异常尺寸回退现已统一经过最大轴 `<=1` 的等比钳制；初始化、拿起刷新、占用探针、错误回弹和吸附动画共用该结果。
+- `CalculatePieceScaleOnBoard` 的结果只写入 `BoardScale`，供凹槽探针和正确吸附使用；错误回弹到桌面使用资源原始 `DragScale`，回托盘使用 `TrayScale`。
 
 ## 修改文件
 
@@ -45,22 +51,25 @@
 
 ## 决策
 
+- “从托盘拿起恢复原始大小”定义为 Piece 创建时 Renderer 的原始 `localScale`，当前通常为 `Vector3.one`；不得使用凹槽匹配结果替代。正确吸附需要的尺寸差异由独立 `BoardScale` 在吸附动画中处理。
+- `TrayScale<=1` 只约束黑色托盘内的创建、入场、重排和回收；`DragScale` 不再经过最大轴 `<=1` 的钳制。
+- 托盘 Scale 钳制按最大轴统一等比缩小，不分别裁切 X/Y，保证不会因为防止超过 `1` 而改变 Piece 宽高比。
 - `3.033s` 继续作为制作方 Timeline 的资源轨道事实保留，但不再直接作为玩家切场景的等待时长；运行时以主要可见生命周期决定交互节奏。
 - 不使用 `ParticleSystem.IsAlive()` 判断结束，因为场景光效根 ParticleSystem 为循环模式；采用明确可调的 `LightEffectVisibleDuration`，模型则等待到主要可见动作结束，不再等待 Clip 最后约 `0.23s` 的静止尾段。
 - “原尺寸”定义为设计分辨率下的显示高度，不定义为固定 `localScale=1`。
 - 90% 判断和缩放比例均使用稳定的设计尺寸，托盘 `TrayScale` 不使用当前相机下的世界高度补偿。
 - 保留没有 `PieceBoard` 时的旧世界高度回退，避免影响兼容的 `PieceBgRenderer` 路径。
-- 棋盘 Scale 超过 `1` 时按最大轴统一缩小，不分别裁切 X/Y，避免改变 Piece 宽高比；`BoardScale` 和已放置 UGUI 层级不在本次调整范围内。
 - 拖拽边界沿用松手阶段已有的游戏背景世界边界计算，避免拖动与松手使用两套窗口范围；不修改鼠标到 Piece 的抓取偏移。
 
 ## 验证
 
+- 静态检查确认 `DragScale` 只在 Piece 创建时保存 Renderer 原始比例；`TryBeginDrag` 只刷新 `BoardScale` 并把 Renderer 设置为已保存的 `DragScale`，点击不再使用凹槽比例改变尺寸；`CalculateTrayScaleForPiece` 仍保持托盘比例不超过 `1`。
+- 静态检查确认拿起前、直接回托盘、错误回弹和托盘布局均经过 `ClampTrayPieceScale`；该方法只约束 `TrayScale`，不会处理 `DragScale`。
 - 静态计算：原始切换下限为 `3.533s`；本次切换下限为 `max(min(1.833s, 1.6s), 0.5s + 1.1s) = 1.6s`，比上一版再缩短约 `0.23s`，累计缩短约 `1.93s`。
 - `dotnet build Assembly-CSharp.csproj --no-restore`：通过，`0` 警告、`0` 错误。
 - `dotnet build Assembly-CSharp-Editor.csproj --no-restore`：通过，`0` 警告、`0` 错误。
 - 公式样例：托盘设计高度 `350`、上限 `315`；原高 `285` 的 Piece 目标仍为 `285`，原高 `395` 的 Piece 目标为 `315`。
 - 公式结果始终不大于 `1`：原高 `285` 的 Piece 为 `1`，原高 `395` 的 Piece 为 `315/395≈0.797`。
-- 棋盘 Scale 样例：`(1.25,1.25)` 变为 `(1,1)`，`(1.2,0.8)` 等比变为 `(1,0.667)`，`(0.75,0.8)` 保持不变。
 - 静态检查确认 `UpdateDragging` 在每次写入鼠标目标位置后按完整 Piece 边界执行 `ClampPieceToTableBounds`；松手时仍先执行托盘相交回收。
 - 当前机器未运行 Unity，仍需 Play Mode 目视确认实际 Sprite 和托盘画面。
 
@@ -84,18 +93,18 @@
 
 ## 下一步
 
-1. 在 MainScene 完整播放一次开包流程，确认滑光主体和模型撕包结束后立即衔接 GameScene，且没有提前切断仍明显可见的光效；如仍偏慢或偏快，再小幅联调 `ModelVisibleDuration` 与 `LightEffectVisibleDuration`。
-2. 在 CardBag022 或其他相机明显拉远的组中，同时观察一个原高小于 `315` 和一个大于 `315` 的 Piece。
-3. 确认小 Piece 的 `TrayScale=1`，大 Piece 只会缩小到托盘 `90%`，所有托盘 Piece 的 Scale 均不超过 `1` 且上下居中。
+1. 在托盘中分别拿起一个未缩小的小 Piece 和一个按 `90%` 上限缩小的大 Piece，确认两者拿起后都恢复为 Piece Renderer 创建时保存的资源原始尺寸，大 Piece 不再保持托盘缩小比例，点击时也不会因凹槽比例而缩小。
+2. 将 Piece 放到桌面、错误棋盘位置并再次拿起，确认 `DragScale` 连续且正确吸附时不跳变。
+3. 在 MainScene 完整播放一次开包流程，确认滑光主体和模型撕包结束后立即衔接 GameScene，且没有提前切断仍明显可见的光效；如仍偏慢或偏快，再小幅联调 `ModelVisibleDuration` 与 `LightEffectVisibleDuration`。
 4. 将宽、高和不规则 Piece 分别拖向窗口上、下、左、右四边，确认完整渲染边界始终留在游戏可视区域内且抓取点不跳动。
 5. 原地拿起托盘 Piece 后不移动鼠标直接松手，再测试仅 Piece 边缘与托盘相交但鼠标已在托盘外的情况，确认两者都自动回到原托盘位置，后序 Piece 恢复布局且没有重叠。
 6. 使用一组横向超出屏幕的 Piece，从托盘空白处左右拖动，确认能看到首尾 Piece、不能越界，且点中 Piece 时仍是拿取而不是滑动。
 7. 滑动到中间位置后拿取、正确放置和错误回托盘各一块，确认当前位置、补位和回收布局连续。
 8. 拿起托盘 Piece 后将鼠标移出窗口并切换焦点，确认 Piece 自动回到原托盘位置且其他 Piece 恢复固定间距；同样验证托盘滑动会正常结束。
 9. 从桌面 Piece 开始拖拽后切换窗口，确认 Piece 回到拿起前的桌面位置。
-10. 拿起 Piece 后确认棋盘最大缩放轴也不超过 `1`；放到桌面、错误棋盘位置并回托盘，确认棋盘 Scale 与托盘 Scale 正确切换。
+10. 放到桌面、错误棋盘位置并回托盘，确认原始游戏尺寸与托盘 Scale 正确切换。
 11. 顺带确认棋盘与托盘的 `10%` 间距。
 
 ## 恢复提示
 
-继续 Puffies 当前任务。先阅读 `AGENTS.md`、`Documents/WORKFLOW.md` 和本文件；先在 MainScene Play Mode 验证开包滑光和模型结束后能否自然衔接 GameScene，确认切换点后再继续托盘 Piece 与棋盘间距验证。随后处理本文件记录的卡包编号迁移待办，不要回滚现有描边资源。
+继续 Puffies 当前任务。先阅读 `AGENTS.md`、`Documents/WORKFLOW.md` 和本文件；先在 GameScene Play Mode 验证托盘 Piece 拿起后恢复 Piece Renderer 创建时保存的资源原始尺寸，同时确认托盘内仍遵守 `90%` 与 `TrayScale<=1`。随后验证开包切换时机和棋盘间距，不要回滚现有描边资源。
