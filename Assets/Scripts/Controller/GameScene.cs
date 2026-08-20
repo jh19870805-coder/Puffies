@@ -386,6 +386,22 @@ public class GameScene : MonoBehaviour
         HintDashedOutlineGraphic.ClearPathCache();
     }
 
+    private void OnApplicationFocus(bool hasFocus)
+    {
+        if (!hasFocus)
+        {
+            CancelActivePointerInteraction();
+        }
+    }
+
+    private void OnApplicationPause(bool isPaused)
+    {
+        if (isPaused)
+        {
+            CancelActivePointerInteraction();
+        }
+    }
+
     private void Update()
     {
         UpdatePieceLightSorting();
@@ -2464,10 +2480,12 @@ public class GameScene : MonoBehaviour
         }
 
         var world = ToGameplayWorld(screenPosition);
-        _drag.DraggingPiece.PieceRenderer.transform.position = new Vector3(
+        var renderer = _drag.DraggingPiece.PieceRenderer;
+        renderer.transform.position = new Vector3(
             world.x + _drag.DragOffset.x,
             world.y + _drag.DragOffset.y,
             WorldGameplayDepth);
+        renderer.transform.position = ClampPieceToTableBounds(renderer);
     }
 
     private bool TryBeginTrayScroll(Vector2 screenPosition)
@@ -2661,6 +2679,36 @@ public class GameScene : MonoBehaviour
         RestorePiecePlacementTutorialPresentation(state);
     }
 
+    private void CancelActivePointerInteraction()
+    {
+        EndTrayScroll();
+        var state = _drag.DraggingPiece;
+        _drag.DraggingPiece = null;
+        if (state?.PieceRenderer == null)
+        {
+            GameCursorUtility.SetDefault();
+            return;
+        }
+
+        state.PieceRenderer.sortingOrder = PieceSortingOrder;
+        if (state.IsOnTray)
+        {
+            ReturnPieceToTray(
+                state,
+                wasOnTray: true,
+                animateLayout: false);
+        }
+        else
+        {
+            state.PieceRenderer.transform.position = _dragStartPosition;
+            state.PieceRenderer.transform.localScale = state.DragScale;
+            Physics2D.SyncTransforms();
+            RestorePiecePlacementTutorialPresentation(state);
+        }
+
+        GameCursorUtility.SetDefault();
+    }
+
     private bool IsLoosePiecePlacementAllowed(DraggablePieceState state)
     {
         if (state?.PieceRenderer == null || _board.GameBoardImage == null)
@@ -2724,7 +2772,10 @@ public class GameScene : MonoBehaviour
         return pieceBottomScreenY >= trayScreenRect.yMax;
     }
 
-    private void ReturnPieceToTray(DraggablePieceState state, bool wasOnTray)
+    private void ReturnPieceToTray(
+        DraggablePieceState state,
+        bool wasOnTray,
+        bool animateLayout = true)
     {
         if (state?.PieceRenderer == null)
         {
@@ -2747,12 +2798,12 @@ public class GameScene : MonoBehaviour
         if (wasOnTray)
         {
             state.PieceRenderer.transform.localScale = state.TrayScale;
-            LayoutTrayPieces(animate: true);
+            LayoutTrayPieces(animate: animateLayout);
             RestorePiecePlacementTutorialPresentation(state);
             return;
         }
 
-        LayoutTrayPieces(animate: true, excludedState: state);
+        LayoutTrayPieces(animate: animateLayout, excludedState: state);
         var trayPosition = state.StartPosition;
         StartCoroutine(PlayInvalidDropReturnAnimation(state, trayPosition));
     }

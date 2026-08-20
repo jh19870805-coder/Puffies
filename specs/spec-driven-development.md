@@ -306,6 +306,9 @@
 11. WHEN 当前托盘 Piece 横向范围超出托盘可视宽度 AND 玩家从托盘内未命中 Piece 的空白区域开始横向拖动 THEN 系统 SHALL 平移全部仍在托盘上的 Piece，以浏览屏幕外碎片。
 12. WHEN 横向滑动托盘 Piece THEN 系统 SHALL 固定黑色托盘、棋盘和桌面 Piece，并将内容限制在首块左边缘与末块右边缘形成的有效滚动范围内，不允许整组越过托盘左右内边界。
 13. WHEN 指针起点命中 Piece THEN 系统 SHALL 优先执行现有 Piece 拿取，不得启动托盘滑动；IF 托盘内容未溢出 THEN 空白区域拖动 SHALL 不移动 Piece。
+14. WHEN 玩家正在拖拽托盘 Piece AND 游戏窗口失去焦点或应用暂停 THEN 系统 SHALL 立即取消拖拽，将 Piece 恢复为 `TrayScale` 并重新排回托盘，不得停在屏幕边缘或与其他 Piece 重叠。
+15. WHEN 玩家正在拖拽桌面或错误棋盘 Piece AND 游戏窗口失去焦点或应用暂停 THEN 系统 SHALL 将 Piece 恢复到本次拿起前的位置；WHEN 玩家正在横向滑动托盘 THEN 系统 SHALL 结束手势并保留当前合法滑动位置。
+16. WHEN 玩家拖动选中的 Piece THEN 系统 SHALL 按 Piece 当前完整渲染边界将其限制在游戏可视区域内；即使指针移出窗口，Piece 的任一边缘也不得移出可视边界。
 
 ### 设计
 
@@ -319,6 +322,8 @@
 - 松手回收同时检查指针位置和 Piece 的屏幕渲染矩形；Piece 与缓存的托盘原始屏幕矩形只要存在正面积相交，就沿用 `ReturnPieceToTray` 和现有 `0.5s` 重排流程。
 - 托盘滑动使用独立输入状态和起始位置快照。开始时合并全部 `IsOnTray` Piece 的 `SpriteRenderer.bounds`，按托盘世界边界及既有内边距计算左右最大位移；移动时只更新这些 Piece 的 X 和 `StartPosition`，不改变 Y、Scale、旋转或 Piece 状态。
 - 输入起始阶段先调用现有 Piece 命中检测，未命中时才尝试托盘滑动。切组、结算和对象销毁统一清理滑动状态；不增加惯性或回弹。
+- `OnApplicationFocus(false)` 与 `OnApplicationPause(true)` 共用取消入口。取消逻辑不调用普通 `EndDragging`，避免失焦前最后一个屏幕边缘坐标进入吸附或自由放置判定；托盘恢复使用即时布局，不依赖失焦后的协程帧更新；重复收到失焦和暂停事件必须保持幂等。
+- `UpdateDragging` 先保留现有鼠标世界坐标与抓取偏移，再复用松手阶段的 `ClampPieceToTableBounds`；该方法按当前 `SpriteRenderer.bounds` 与游戏背景世界边界计算四边偏移，因此限制完整 Piece 而不是中心点。
 
 ### 任务
 
@@ -344,7 +349,11 @@
 - [x] 移除首次入场 `1.12` 和切组入场 `1.08` 的临时放大，保留位移、旋转和淡入。
 - [x] 增加 Piece 渲染边界与托盘原始区域的松手相交判定，修复原地拿起再松手后停留重叠。
 - [x] 增加溢出托盘 Piece 的空白区域横向滑动、首尾边界限制及位置同步。
+- [x] 增加窗口失焦与应用暂停时的拖拽取消和合法位置恢复。
+- [x] 增加拖拽过程中的 Piece 完整可视边界限制。
 - [ ] 在 Play Mode 使用实际横向溢出分组验证空白起手、Piece 起手、首尾边界、拿取补位和错误回收。
+- [ ] 在 Play Mode 分别验证托盘 Piece、外部 Piece 和托盘滑动手势的失焦恢复。
+- [ ] 在 Play Mode 使用宽、高和不规则 Piece 验证窗口四边限制，并验证仅 Piece 边缘与托盘相交时仍会回到原位。
 - [x] 运行时与 Editor 程序集编译通过，并完成基础比例与相机拉远比例的公式样例验证。
 - [x] 将棋盘目标 Scale 的所有返回路径统一限制为最大轴 `<=1`，并确认占用探针、错误回弹和吸附动画复用同一结果。
 - [ ] 在至少一个相机拉远的卡包中目视验证小 Piece 的 `TrayScale=1`、大 Piece 只缩小且所有托盘 Piece 的 Scale 均不超过 `1`。
