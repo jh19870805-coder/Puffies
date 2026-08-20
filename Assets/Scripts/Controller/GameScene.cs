@@ -13,6 +13,7 @@ public class GameScene : MonoBehaviour
     private const float DefaultBoardScale = 1f;
     private const float WorldGameplayDepth = -0.5f;
     private const float GamePageCameraPadding = 0.3f;
+    private const float MaxBoardToTrayGapViewportRatio = 0.1f;
     private const float DraggableLeftPadding = 0.2f;
     private const float DraggableHorizontalSpacingPixels = 40f;
     private const float TrayPieceReflowDuration = 0.5f;
@@ -6387,6 +6388,65 @@ public class GameScene : MonoBehaviour
         _loadedCardBagRect.anchoredPosition = _originalCardBagAnchoredPosition
             + targetLocalCenter
             - groupLocalCenter;
+        Canvas.ForceUpdateCanvases();
+        ClampBoardToTrayGap(camera, parentRect, eventCamera);
+    }
+
+    private void ClampBoardToTrayGap(
+        Camera camera,
+        RectTransform cardBagParent,
+        Camera eventCamera)
+    {
+        var isTrayVisible = _board.PieceBoardRect != null
+            ? _board.PieceBoardRect.gameObject.activeInHierarchy && !_isPieceBoardHidden
+            : _board.PieceBgRenderer != null
+              && _board.PieceBgRenderer.gameObject.activeInHierarchy
+              && !_isPieceBgHidden;
+        if (_loadedCardBagRect == null
+            || _board.GameBoardImage == null
+            || cardBagParent == null
+            || !isTrayVisible
+            || !TryGetPieceTrayScreenRect(camera, out var trayScreenRect))
+        {
+            return;
+        }
+
+        var boardScreenRect = GetRectTransformScreenRect(
+            _board.GameBoardImage.rectTransform,
+            camera);
+        var backgroundScreenRect = _board.BackgroundRect != null
+            ? GetRectTransformScreenRect(_board.BackgroundRect, camera)
+            : Rect.MinMaxRect(0f, 0f, Screen.width, Screen.height);
+        if (boardScreenRect.height <= 0f || backgroundScreenRect.height <= 0f)
+        {
+            return;
+        }
+
+        var currentGap = boardScreenRect.yMin - trayScreenRect.yMax;
+        var maxGap = backgroundScreenRect.height * MaxBoardToTrayGapViewportRatio;
+        var excessGap = currentGap - maxGap;
+        if (excessGap <= 0.5f)
+        {
+            return;
+        }
+
+        var currentScreenPoint = boardScreenRect.center;
+        var targetScreenPoint = currentScreenPoint - Vector2.up * excessGap;
+        if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                cardBagParent,
+                currentScreenPoint,
+                eventCamera,
+                out var currentLocalPoint)
+            || !RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                cardBagParent,
+                targetScreenPoint,
+                eventCamera,
+                out var targetLocalPoint))
+        {
+            return;
+        }
+
+        _loadedCardBagRect.anchoredPosition += targetLocalPoint - currentLocalPoint;
         Canvas.ForceUpdateCanvases();
     }
 
