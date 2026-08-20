@@ -53,10 +53,11 @@ public class GameScene : MonoBehaviour
     private const float PieceSnapDuration = 0.12f;
     private const float PiecePlacementShineDuration = 0.52f;
     private const float PiecePlacementShineBandWidth = 0.045f;
-    private const float PiecePlacementLightDuration = 0.72f;
     private const float PiecePlacementLightPushPhaseRatio = 0.22f;
     private const float PiecePlacementLightMinBendPixels = 6f;
     private const float PiecePlacementLightMaxBendPixels = 14f;
+    private const float PiecePlacementLightDistanceMultiplier = 3f;
+    private const float PiecePlacementLightDurationMultiplier = 2f;
     private const float PiecePlacementLightMiddleStretch = 0.34f;
     private const int PiecePlacementLightSpriteCount = 4;
     private const int PiecePlacementLightMaxAffectedPieces = 7;
@@ -3725,8 +3726,16 @@ public class GameScene : MonoBehaviour
             yield break;
         }
 
+        var animationDuration = 0f;
+        for (var i = 0; i < effects.Count; i++)
+        {
+            animationDuration = Mathf.Max(
+                animationDuration,
+                effects[i].Delay + effects[i].Lifetime);
+        }
+
         var elapsed = 0f;
-        while (elapsed < PiecePlacementLightDuration)
+        while (elapsed < animationDuration)
         {
             elapsed += Mathf.Min(Time.unscaledDeltaTime, GameEntranceMaxFrameDelta);
             for (var i = 0; i < effects.Count; i++)
@@ -3739,7 +3748,7 @@ public class GameScene : MonoBehaviour
 
         for (var i = 0; i < effects.Count; i++)
         {
-            UpdatePiecePlacementLight(effects[i], PiecePlacementLightDuration);
+            UpdatePiecePlacementLight(effects[i], animationDuration);
         }
     }
 
@@ -4011,14 +4020,15 @@ public class GameScene : MonoBehaviour
         var bendDistance = Mathf.Clamp(
             Mathf.Min(Mathf.Abs(lightSize.x), Mathf.Abs(lightSize.y)) * 0.28f,
             PiecePlacementLightMinBendPixels,
-            PiecePlacementLightMaxBendPixels);
+            PiecePlacementLightMaxBendPixels) * PiecePlacementLightDistanceMultiplier;
         light.AnimationVersion++;
         effects.Add(new PiecePlacementLightFx
         {
             Light = light,
             AnimationVersion = light.AnimationVersion,
             Delay = targetDelay,
-            Lifetime = targetIndex == 0 ? 0.48f : 0.42f,
+            Lifetime = (targetIndex == 0 ? 0.48f : 0.42f)
+                       * PiecePlacementLightDurationMultiplier,
             StartBendOffset = light.Deformer.BendOffset,
             StartMiddleStretch = light.Deformer.MiddleStretch,
             BendDirection = direction,
