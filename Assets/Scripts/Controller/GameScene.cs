@@ -110,6 +110,11 @@ public class GameScene : MonoBehaviour
     private const string PiecePlacementLightMaterialResourcesPath = "PackHighlightAdditive";
     private const string PiecePlacementSpriteLightShaderResourcesPath =
         "PuzzlePieceLightAdditive";
+    private const string BoardShadowMaterialResourcesPath = "IngameCoverShadow01";
+    private const string LoosePieceShadowMaterialResourcesPath = "IngameCoverShadow02";
+    private const string PlacedPieceShadowMaterialResourcesPath = "IngameCoverShadow03";
+    private const string DefaultPieceShadowMaterialResourcesPath = "IngameCoverShadow04";
+    private const string SpriteRendererShadowKeyword = "PACK_SHADOW_SPRITE_RENDERER";
     private const string DraggableGroupRootObjectName = "DraggableGroupPieces";
     private const string BoardOccupancyProbeRootObjectName = "BoardOccupancyProbes";
     private const string ActiveGroupOutlineRootObjectName = "ActiveGroupOutline";
@@ -137,6 +142,7 @@ public class GameScene : MonoBehaviour
     private static readonly int ShineSweepCenterId = Shader.PropertyToID("_SweepCenter");
     private static readonly int ShineBandWidthId = Shader.PropertyToID("_BandWidth");
     private static readonly int ShineColorId = Shader.PropertyToID("_ShineColor");
+    private static readonly int SpritePixelsPerUnitId = Shader.PropertyToID("_SpritePixelsPerUnit");
     private static readonly Vector2 TutorialStrongPromptAnchor = new Vector2(0.5f, 0.7f);
     private static readonly Vector2 TutorialStrongPromptOffset = new Vector2(-30f, -50f);
     private static readonly Vector2 TutorialHintPromptAnchor = new Vector2(0.73f, 0.76f);
@@ -147,6 +153,13 @@ public class GameScene : MonoBehaviour
         StrongPlacement,
         TwoPiecePractice,
         HintIntroduction
+    }
+
+    private enum PieceShadowStyle
+    {
+        Initial,
+        Loose,
+        Placed
     }
 
     private sealed class PiecePlacementLightFx
@@ -263,6 +276,17 @@ public class GameScene : MonoBehaviour
         new Dictionary<int, PieceLightState>();
     private Material _piecePlacementLightMaterial;
     private Material _pieceSpriteLightMaterial;
+    private Material _boardShadowMaterial;
+    private Material _defaultPieceShadowMaterial;
+    private Material _loosePieceShadowMaterial;
+    private Material _placedPieceShadowMaterial;
+    private Material _runtimeDefaultPieceShadowMaterial;
+    private Material _runtimeLoosePieceShadowMaterial;
+    private Material _runtimePlacedPieceShadowMaterial;
+    private readonly Dictionary<Sprite, Sprite> _fullRectPieceShadowSprites =
+        new Dictionary<Sprite, Sprite>();
+    private readonly HashSet<Sprite> _runtimeFullRectPieceShadowSprites = new HashSet<Sprite>();
+    private MaterialPropertyBlock _pieceShadowPropertyBlock;
     private Coroutine _activeGroupOutlineFadeCoroutine;
     private bool _didWarnMissingPuzzleOutlineTintShader;
     private bool _didWarnMissingPiecePlacementShineShader;
@@ -379,6 +403,7 @@ public class GameScene : MonoBehaviour
         DestroyRuntimeCardBoardBackgroundSprite();
         DestroyRuntimePuzzleOutlineTintMaterial();
         DestroyRuntimePiecePlacementShineMaterial();
+        DestroyRuntimePieceShadowResources();
         ClearAmbientPieceLights();
         DestroyPiecePlacementLightSprites();
         DestroyBoardOccupancyProbes();
@@ -964,8 +989,91 @@ public class GameScene : MonoBehaviour
         }
 
         _board.GrooveImagesByGroup = CollectEditorGrooveGroups();
+        ApplyCardBagUiShadowMaterials();
         SyncGrooveLayoutToSprites();
         _board.IsBoardAndGroovesInitialized = true;
+    }
+
+    private void ApplyCardBagUiShadowMaterials()
+    {
+        if (!EnsureCardBagShadowMaterials() || _loadedCardBagRoot == null)
+        {
+            return;
+        }
+
+        var images = _loadedCardBagRoot.GetComponentsInChildren<Image>(true);
+        for (var i = 0; i < images.Length; i++)
+        {
+            var image = images[i];
+            if (image == null)
+            {
+                continue;
+            }
+
+            if (image.gameObject.name == GameDefine.GameBoardObjectName
+                || image.gameObject.name == "BoardTitle")
+            {
+                ApplyUiShadowMaterial(image, _boardShadowMaterial);
+                continue;
+            }
+
+            if (TryParsePieceObjectName(image.gameObject.name, out _))
+            {
+                ApplyUiShadowMaterial(image, _placedPieceShadowMaterial);
+            }
+        }
+    }
+
+    private static void ApplyUiShadowMaterial(Image image, Material material)
+    {
+        if (image == null || material == null)
+        {
+            return;
+        }
+
+        image.material = material;
+        if (image.GetComponent<PackCoverShadowEffect>() == null)
+        {
+            image.gameObject.AddComponent<PackCoverShadowEffect>();
+        }
+    }
+
+    private void ApplyPlacedPieceImageShadow(Image image)
+    {
+        if (!EnsureCardBagShadowMaterials())
+        {
+            return;
+        }
+
+        ApplyUiShadowMaterial(image, _placedPieceShadowMaterial);
+    }
+
+    private bool EnsureCardBagShadowMaterials()
+    {
+        if (_boardShadowMaterial == null)
+        {
+            _boardShadowMaterial = Resources.Load<Material>(BoardShadowMaterialResourcesPath);
+        }
+
+        if (_defaultPieceShadowMaterial == null)
+        {
+            _defaultPieceShadowMaterial = Resources.Load<Material>(DefaultPieceShadowMaterialResourcesPath);
+        }
+
+        if (_loosePieceShadowMaterial == null)
+        {
+            _loosePieceShadowMaterial = Resources.Load<Material>(LoosePieceShadowMaterialResourcesPath);
+        }
+
+        if (_placedPieceShadowMaterial == null)
+        {
+            _placedPieceShadowMaterial = Resources.Load<Material>(PlacedPieceShadowMaterialResourcesPath);
+        }
+
+        return _boardShadowMaterial != null
+               && _defaultPieceShadowMaterial != null
+               && _loosePieceShadowMaterial != null
+               && _placedPieceShadowMaterial != null;
     }
 
     private static RectTransform FindBackgroundRect()
@@ -1424,6 +1532,7 @@ public class GameScene : MonoBehaviour
             if (IsGroovePersistedAsPlaced(grooveImage))
             {
                 grooveImage.gameObject.SetActive(true);
+                ApplyPlacedPieceImageShadow(grooveImage);
                 SetImageAlpha(grooveImage, 1f);
                 AddAmbientBoardPieceLights(grooveImage);
                 continue;
@@ -1448,6 +1557,7 @@ public class GameScene : MonoBehaviour
             var pieceCollider = CreateSpriteOverlapCollider(
                 pieceRenderer.gameObject,
                 pieceRenderer.sprite);
+            ApplyPieceRendererShadow(pieceRenderer, PieceShadowStyle.Initial);
             var grooveProbeCollider = CreateGrooveOverlapProbe(
                 pieceRenderer.sprite,
                 root.transform,
@@ -1487,6 +1597,134 @@ public class GameScene : MonoBehaviour
             PieceSortingOrder,
             parent,
             forceCreate: true);
+    }
+
+    private void ApplyPieceRendererShadow(SpriteRenderer renderer, PieceShadowStyle style)
+    {
+        if (renderer == null || renderer.sprite == null || !EnsureCardBagShadowMaterials())
+        {
+            return;
+        }
+
+        var material = GetOrCreatePieceRendererShadowMaterial(style);
+        if (material == null)
+        {
+            return;
+        }
+
+        renderer.sprite = GetOrCreateFullRectShadowSprite(renderer.sprite);
+        renderer.sharedMaterial = material;
+        if (_pieceShadowPropertyBlock == null)
+        {
+            _pieceShadowPropertyBlock = new MaterialPropertyBlock();
+        }
+
+        renderer.GetPropertyBlock(_pieceShadowPropertyBlock);
+        _pieceShadowPropertyBlock.SetFloat(
+            SpritePixelsPerUnitId,
+            Mathf.Max(1f, renderer.sprite.pixelsPerUnit));
+        renderer.SetPropertyBlock(_pieceShadowPropertyBlock);
+        _pieceShadowPropertyBlock.Clear();
+    }
+
+    private Material GetOrCreatePieceRendererShadowMaterial(PieceShadowStyle style)
+    {
+        switch (style)
+        {
+            case PieceShadowStyle.Loose:
+                return GetOrCreatePieceRendererShadowMaterial(
+                    _loosePieceShadowMaterial,
+                    ref _runtimeLoosePieceShadowMaterial);
+            case PieceShadowStyle.Placed:
+                return GetOrCreatePieceRendererShadowMaterial(
+                    _placedPieceShadowMaterial,
+                    ref _runtimePlacedPieceShadowMaterial);
+            default:
+                return GetOrCreatePieceRendererShadowMaterial(
+                    _defaultPieceShadowMaterial,
+                    ref _runtimeDefaultPieceShadowMaterial);
+        }
+    }
+
+    private static Material GetOrCreatePieceRendererShadowMaterial(
+        Material source,
+        ref Material runtimeMaterial)
+    {
+        if (runtimeMaterial != null || source == null)
+        {
+            return runtimeMaterial;
+        }
+
+        runtimeMaterial = new Material(source)
+        {
+            name = $"{source.name} (SpriteRenderer Runtime)"
+        };
+        runtimeMaterial.EnableKeyword(SpriteRendererShadowKeyword);
+        return runtimeMaterial;
+    }
+
+    private Sprite GetOrCreateFullRectShadowSprite(Sprite source)
+    {
+        if (source == null || _runtimeFullRectPieceShadowSprites.Contains(source))
+        {
+            return source;
+        }
+
+        if (_fullRectPieceShadowSprites.TryGetValue(source, out var existing)
+            && existing != null)
+        {
+            return existing;
+        }
+
+        var rect = source.rect;
+        if (rect.width <= 0f || rect.height <= 0f || source.texture == null)
+        {
+            return source;
+        }
+
+        var pivot = new Vector2(source.pivot.x / rect.width, source.pivot.y / rect.height);
+        var fullRectSprite = Sprite.Create(
+            source.texture,
+            rect,
+            pivot,
+            source.pixelsPerUnit,
+            0,
+            SpriteMeshType.FullRect,
+            source.border);
+        fullRectSprite.name = $"{source.name} (Shadow FullRect Runtime)";
+        _fullRectPieceShadowSprites[source] = fullRectSprite;
+        _runtimeFullRectPieceShadowSprites.Add(fullRectSprite);
+        return fullRectSprite;
+    }
+
+    private void DestroyRuntimePieceShadowResources()
+    {
+        DestroyRuntimeMaterial(ref _runtimeDefaultPieceShadowMaterial);
+        DestroyRuntimeMaterial(ref _runtimeLoosePieceShadowMaterial);
+        DestroyRuntimeMaterial(ref _runtimePlacedPieceShadowMaterial);
+
+        foreach (var sprite in _runtimeFullRectPieceShadowSprites)
+        {
+            if (sprite != null)
+            {
+                Destroy(sprite);
+            }
+        }
+
+        _runtimeFullRectPieceShadowSprites.Clear();
+        _fullRectPieceShadowSprites.Clear();
+        _pieceShadowPropertyBlock = null;
+    }
+
+    private static void DestroyRuntimeMaterial(ref Material material)
+    {
+        if (material == null)
+        {
+            return;
+        }
+
+        Destroy(material);
+        material = null;
     }
 
     private static Collider2D CreateGrooveOverlapProbe(
@@ -1563,6 +1801,8 @@ public class GameScene : MonoBehaviour
                     continue;
                 }
 
+                ApplyPlacedPieceImageShadow(grooveImage);
+
                 if (isCompletedGroup)
                 {
                     grooveImage.gameObject.SetActive(true);
@@ -1571,7 +1811,8 @@ public class GameScene : MonoBehaviour
                 else if (isActiveGroup)
                 {
                     grooveImage.gameObject.SetActive(true);
-                    SetImageAlpha(grooveImage, IsGroovePersistedAsPlaced(grooveImage) ? 1f : 0f);
+                    var isPlaced = IsGroovePersistedAsPlaced(grooveImage);
+                    SetImageAlpha(grooveImage, isPlaced ? 1f : 0f);
                 }
                 else
                 {
@@ -2638,6 +2879,7 @@ public class GameScene : MonoBehaviour
                 releaseScreenPosition.Value,
                 state.PieceRenderer))
         {
+            ApplyPieceRendererShadow(state.PieceRenderer, PieceShadowStyle.Loose);
             ReturnPieceToTray(state, wasOnTray);
             return;
         }
@@ -2650,6 +2892,7 @@ public class GameScene : MonoBehaviour
             <= CalculateSnapDistance(state);
         if (isWithinSnapDistance)
         {
+            ApplyPieceRendererShadow(state.PieceRenderer, PieceShadowStyle.Placed);
             state.IsOnTray = false;
             var displacedPieces = CollectLoosePiecesOverlappingCollider(
                 state,
@@ -2670,6 +2913,7 @@ public class GameScene : MonoBehaviour
             return;
         }
 
+        ApplyPieceRendererShadow(state.PieceRenderer, PieceShadowStyle.Loose);
         state.PieceRenderer.transform.localScale = state.DragScale;
         state.PieceRenderer.transform.position = ClampPieceToTableBounds(state.PieceRenderer);
         Physics2D.SyncTransforms();
@@ -3317,6 +3561,7 @@ public class GameScene : MonoBehaviour
         }
 
         state.GrooveImage.gameObject.SetActive(true);
+        ApplyPlacedPieceImageShadow(state.GrooveImage);
         SetImageAlpha(state.GrooveImage, 1f);
         RemoveAmbientLightsForRoot(state.PieceRenderer.gameObject);
         AddAmbientBoardPieceLights(state.GrooveImage);
@@ -4787,6 +5032,7 @@ public class GameScene : MonoBehaviour
             }
 
             grooveImage.gameObject.SetActive(true);
+            ApplyPlacedPieceImageShadow(grooveImage);
             SetImageAlpha(grooveImage, 1f);
         }
     }

@@ -256,6 +256,8 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 
 `PackItem` 不再包含 `PackShadow` Image，也不再读取封面像素或在 CPU 生成阴影 Texture/Sprite。`PackCover` 直接引用 `Assets/Resources/PackCoverShadow.mat`；对应 UGUI Shader 根据当前封面 Alpha 在同一次绘制中合成投影和原封面，并按源贴图像素提供颜色/透明度、X/Y 偏移、X/Y 模糊、扩散及 X/Y 渲染留白参数。`PackCoverShadowEffect` 只在 UGUI 网格生成阶段围绕 `PackCover` 自身矩形中心提供 Shader 所需留白，并在 Material 留白参数变化时刷新网格；不能在 Shader 顶点阶段围绕 Canvas 原点直接缩放。MainScene 只替换封面 Sprite，不覆盖 Material。美术统一在该 Material 中调整投影；阴影被裁切时先增大 `Render Padding X/Y`。
 
+所有 `Assets/Resources/CardBagPrefabs/CardBagNNN.prefab` 采用统一投影状态规则：`GameBoard` 和 `BoardTitle` 在 Prefab 中绑定 `IngameCoverShadow01`；Prefab 内的正式 `PieceGGII` 是棋盘凹槽，只在正确拼入后显示，固定绑定 `IngameCoverShadow03`；这些 Image 都必须带 `PackCoverShadowEffect`。GameScene 从凹槽纹理创建世界空间 SpriteRenderer 作为玩家操作的实际碎片：初始托盘和首次拿起前为 04，松手后未正确吸附、桌面放置或错误回弹为 02，正确吸附时为 03；提交后销毁运行时碎片并显示同样使用 03 的凹槽 Image。未完成凹槽只通过隐藏或 Alpha 0 控制，不能切回 04。SpriteRenderer 使用运行时 FullRect Sprite、材质克隆和 `PACK_SHADOW_SPRITE_RENDERER` 变体按 Sprite PPU 扩展渲染顶点；该处理只扩展投影画面，不改变碰撞体、凹槽、吸附尺寸或四个美术材质资产的参数。新建 CardBag Prefab 时生成器自动应用该规则；现有资源可通过 `Puffies -> Apply CardBag Shadow Materials` 重建绑定。
+
 1. 场景中只保留一个模板对象：`Package001`。
 2. 在 `CardPacks.csv` 增加一行（`PackId`、临时 `PackSize`、临时 `StickerCount`、`ChapterId`、正数 `BoardScale`、手工 `Series`、`AutoUpdate=1`），随后执行配置更新工具按实际片数同步 `PackSize`、`StickerCount` 和 `BoardScale`。需要手工固定这三个值时将该行 `AutoUpdate` 改为 `0`；工具始终保留 `Series` 原值。
 3. 在 `UI/PackImages/` 下按 `PackIconNNN.png` 命名增加对应封面。`GameDefine.FormatPackImagePath` 将 PackId `1` 映射到 `UI/PackImages/PackIcon001.png`。
@@ -363,6 +365,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 | Puffies -> Bake Outline Masks | 为每个 CardBag Prefab 重建各分组外边界描边 |
 | Puffies -> Generate CardBag Prefabs From Images | 扫描完整背景和透明碎图；窗口可选择完整生成 CardBag Prefab，或仅按效果图更新现有 Piece 的位置与原生尺寸 |
 | Puffies -> Update Pack Sizes From Piece Counts | 扫描 CardBag 源资源的碎片 PNG 数量并同步更新 `CardPacks.csv/PackSize`、`StickerCount` 与 `BoardScale`；跳过 `AutoUpdate=0` 的行，并始终保留手工 `Series` 内容 |
+| Puffies -> Apply CardBag Shadow Materials | 为全部 CardBag Prefab 的 GameBoard/BoardTitle 绑定 01、凹槽 Piece 绑定 03，并补齐投影网格组件 |
 
 ---
 

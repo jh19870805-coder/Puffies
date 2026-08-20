@@ -2538,6 +2538,14 @@ public static class CardBagPrefabGeneratorEditor
                 SetRect(image.rectTransform, position, new Vector2(placement.Width, placement.Height));
             }
 
+            if (!CardBagShadowMaterialEditor.ApplyToHierarchy(
+                    root.gameObject,
+                    out _,
+                    out var shadowSetupError))
+            {
+                throw new InvalidOperationException(shadowSetupError);
+            }
+
             Directory.CreateDirectory(ToAbsolutePath(PrefabRoot));
             PrefabUtility.SaveAsPrefabAsset(root.gameObject, prefabPath, out var success);
             if (!success)
@@ -3336,6 +3344,151 @@ internal sealed class CardBagPrefabGeneratorWindow : EditorWindow
         }
 
         EditorUtility.DisplayDialog("CardBag Layout Update Finished", message, "OK");
+    }
+}
+
+public static class CardBagShadowMaterialEditor
+{
+    private const string ShadowPrefabRoot = "Assets/Resources/CardBagPrefabs";
+    private const string BoardShadowMaterialPath = "Assets/Resources/IngameCoverShadow01.mat";
+    private const string LoosePieceShadowMaterialPath = "Assets/Resources/IngameCoverShadow02.mat";
+    private const string PlacedPieceShadowMaterialPath = "Assets/Resources/IngameCoverShadow03.mat";
+    private const string DefaultPieceShadowMaterialPath = "Assets/Resources/IngameCoverShadow04.mat";
+
+    [MenuItem("Puffies/Apply CardBag Shadow Materials")]
+    public static void ApplyAllFromMenu()
+    {
+        ApplyAll(logResult: true);
+    }
+
+    internal static bool ApplyToHierarchy(GameObject root, out int changedCount, out string error)
+    {
+        changedCount = 0;
+        error = string.Empty;
+        if (root == null)
+        {
+            error = "CardBag shadow setup: prefab root is null.";
+            return false;
+        }
+
+        if (!TryLoadMaterials(out var boardMaterial, out var placedPieceMaterial, out error))
+        {
+            return false;
+        }
+
+        var images = root.GetComponentsInChildren<Image>(true);
+        for (var i = 0; i < images.Length; i++)
+        {
+            var image = images[i];
+            if (image == null)
+            {
+                continue;
+            }
+
+            Material expectedMaterial;
+            if (image.gameObject.name == GameDefine.GameBoardObjectName
+                || image.gameObject.name == "BoardTitle")
+            {
+                expectedMaterial = boardMaterial;
+            }
+            else if (GameDefine.TryParsePieceObjectName(image.gameObject.name, out _))
+            {
+                expectedMaterial = placedPieceMaterial;
+            }
+            else
+            {
+                continue;
+            }
+
+            if (image.material != expectedMaterial)
+            {
+                image.material = expectedMaterial;
+                changedCount++;
+            }
+
+            if (image.GetComponent<PackCoverShadowEffect>() == null)
+            {
+                image.gameObject.AddComponent<PackCoverShadowEffect>();
+                changedCount++;
+            }
+        }
+
+        return true;
+    }
+
+    private static void ApplyAll(bool logResult)
+    {
+        var prefabGuids = AssetDatabase.FindAssets("t:Prefab CardBag", new[] { ShadowPrefabRoot });
+        Array.Sort(prefabGuids, StringComparer.Ordinal);
+        var changedPrefabs = 0;
+        var changedObjects = 0;
+        var failedPrefabs = 0;
+
+        for (var i = 0; i < prefabGuids.Length; i++)
+        {
+            var prefabPath = AssetDatabase.GUIDToAssetPath(prefabGuids[i]);
+            var prefabRoot = PrefabUtility.LoadPrefabContents(prefabPath);
+            try
+            {
+                if (!ApplyToHierarchy(prefabRoot, out var changedCount, out var error))
+                {
+                    failedPrefabs++;
+                    Debug.LogError($"{prefabPath}: {error}");
+                    continue;
+                }
+
+                if (changedCount <= 0)
+                {
+                    continue;
+                }
+
+                PrefabUtility.SaveAsPrefabAsset(prefabRoot, prefabPath, out var success);
+                if (!success)
+                {
+                    failedPrefabs++;
+                    Debug.LogError($"CardBag shadow setup: failed to save {prefabPath}.");
+                    continue;
+                }
+
+                changedPrefabs++;
+                changedObjects += changedCount;
+            }
+            finally
+            {
+                PrefabUtility.UnloadPrefabContents(prefabRoot);
+            }
+        }
+
+        AssetDatabase.SaveAssets();
+        AssetDatabase.Refresh();
+        if (logResult)
+        {
+            Debug.Log(
+                $"CardBag shadow setup completed. prefabs={prefabGuids.Length}, "
+                + $"changedPrefabs={changedPrefabs}, changes={changedObjects}, failed={failedPrefabs}.");
+        }
+    }
+
+    private static bool TryLoadMaterials(
+        out Material boardMaterial,
+        out Material placedPieceMaterial,
+        out string error)
+    {
+        boardMaterial = AssetDatabase.LoadAssetAtPath<Material>(BoardShadowMaterialPath);
+        var loosePieceMaterial = AssetDatabase.LoadAssetAtPath<Material>(LoosePieceShadowMaterialPath);
+        placedPieceMaterial = AssetDatabase.LoadAssetAtPath<Material>(PlacedPieceShadowMaterialPath);
+        var defaultPieceMaterial = AssetDatabase.LoadAssetAtPath<Material>(DefaultPieceShadowMaterialPath);
+        if (boardMaterial != null
+            && loosePieceMaterial != null
+            && placedPieceMaterial != null
+            && defaultPieceMaterial != null)
+        {
+            error = string.Empty;
+            return true;
+        }
+
+        error = "CardBag shadow setup: one or more IngameCoverShadow01-04 materials are missing.";
+        return false;
     }
 }
 #endif

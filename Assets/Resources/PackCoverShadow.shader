@@ -12,6 +12,7 @@ Shader "Puffies/UI/PackCoverShadow"
         _ShadowSpread ("Shadow Spread (Pixels)", Range(0, 50)) = 8
         _PaddingX ("Render Padding X (Pixels)", Range(0, 200)) = 40
         _PaddingY ("Render Padding Y (Pixels)", Range(0, 240)) = 140
+        [HideInInspector] _SpritePixelsPerUnit ("Sprite Pixels Per Unit", Float) = 100
         _StencilComp ("Stencil Comparison", Float) = 8
         _Stencil ("Stencil ID", Float) = 0
         _StencilOp ("Stencil Operation", Float) = 0
@@ -58,6 +59,7 @@ Shader "Puffies/UI/PackCoverShadow"
             #pragma target 2.0
             #pragma multi_compile_local _ UNITY_UI_CLIP_RECT
             #pragma multi_compile_local _ UNITY_UI_ALPHACLIP
+            #pragma multi_compile_local _ PACK_SHADOW_SPRITE_RENDERER
 
             #include "UnityCG.cginc"
             #include "UnityUI.cginc"
@@ -91,6 +93,7 @@ Shader "Puffies/UI/PackCoverShadow"
             float _ShadowSpread;
             float _PaddingX;
             float _PaddingY;
+            float _SpritePixelsPerUnit;
             float4 _ClipRect;
 
             fixed IsInsideSprite(float2 uv)
@@ -133,6 +136,14 @@ Shader "Puffies/UI/PackCoverShadow"
                 float2 paddingRatio = float2(_PaddingX, _PaddingY) * _MainTex_TexelSize.xy;
                 float2 expansion = 1.0 + paddingRatio * 2.0;
                 output.localPosition = input.vertex;
+
+                #ifdef PACK_SHADOW_SPRITE_RENDERER
+                float2 cornerDirection = step(0.5, input.texcoord) * 2.0 - 1.0;
+                output.localPosition.xy += cornerDirection
+                    * float2(_PaddingX, _PaddingY)
+                    / max(_SpritePixelsPerUnit, 1.0);
+                #endif
+
                 output.vertex = UnityObjectToClipPos(output.localPosition);
                 output.contentUv = input.texcoord * expansion - paddingRatio;
                 output.color = input.color * _Color;
