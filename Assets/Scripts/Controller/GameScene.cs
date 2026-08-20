@@ -579,7 +579,7 @@ public class GameScene : MonoBehaviour
                 0f);
             pieceStarts[i].z = pieceTargets[i].z;
             renderer.transform.position = pieceStarts[i];
-            renderer.transform.localScale = pieceTargetScales[i] * 1.12f;
+            renderer.transform.localScale = pieceTargetScales[i];
             renderer.transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Sin(angle) * 18f);
             var color = pieceTargetColors[i];
             color.a = 0f;
@@ -656,10 +656,7 @@ public class GameScene : MonoBehaviour
                     pieceStarts[i],
                     pieceTargets[i],
                     pieceT);
-                renderer.transform.localScale = Vector3.LerpUnclamped(
-                    pieceTargetScales[i] * 1.12f,
-                    pieceTargetScales[i],
-                    pieceT);
+                renderer.transform.localScale = pieceTargetScales[i];
                 renderer.transform.rotation = Quaternion.SlerpUnclamped(
                     Quaternion.Euler(0f, 0f, Mathf.Sin(i * 137.5f * Mathf.Deg2Rad) * 18f),
                     pieceTargetRotations[i],
@@ -1171,12 +1168,12 @@ public class GameScene : MonoBehaviour
                 pieceRenderer,
                 out var screenMatchedScale))
         {
-            return screenMatchedScale;
+            return ClampBoardPieceScale(screenMatchedScale);
         }
 
         if (grooveImage == null || grooveImage.sprite == null || Camera.main == null)
         {
-            return Vector3.one * GetBoardToSpriteScaleFactor();
+            return ClampBoardPieceScale(Vector3.one * GetBoardToSpriteScaleFactor());
         }
 
         var sprite = grooveImage.sprite;
@@ -1191,13 +1188,31 @@ public class GameScene : MonoBehaviour
             || grooveWorldSize.x <= 0.001f
             || grooveWorldSize.y <= 0.001f)
         {
-            return Vector3.one * GetBoardToSpriteScaleFactor();
+            return ClampBoardPieceScale(Vector3.one * GetBoardToSpriteScaleFactor());
         }
 
-        return new Vector3(
+        return ClampBoardPieceScale(new Vector3(
             grooveWorldSize.x / spriteWorldSize.x,
             grooveWorldSize.y / spriteWorldSize.y,
-            1f);
+            1f));
+    }
+
+    private static Vector3 ClampBoardPieceScale(Vector3 scale)
+    {
+        if (!IsFinitePositiveScale(scale))
+        {
+            return Vector3.one;
+        }
+
+        var largestAxis = Mathf.Max(scale.x, scale.y);
+        if (largestAxis <= 1f)
+        {
+            scale.z = 1f;
+            return scale;
+        }
+
+        var reduction = 1f / largestAxis;
+        return new Vector3(scale.x * reduction, scale.y * reduction, 1f);
     }
 
     private static bool TryCalculatePieceScaleFromScreenRect(
@@ -1255,21 +1270,34 @@ public class GameScene : MonoBehaviour
 
     private static Vector3 CalculateTrayScaleForPiece(
         SpriteRenderer pieceRenderer,
-        Bounds hostBounds)
+        Bounds hostBounds,
+        float trayDesignHeight)
     {
         if (pieceRenderer == null || pieceRenderer.sprite == null)
         {
             return Vector3.one;
         }
 
-        var originalHeight = pieceRenderer.sprite.bounds.size.y;
-        var maxHeight = Mathf.Max(0.0001f, hostBounds.size.y * PieceTrayMaxHeightRatio);
-        if (originalHeight <= maxHeight)
+        var originalWorldHeight = pieceRenderer.sprite.bounds.size.y;
+        if (originalWorldHeight <= 0.0001f)
         {
             return Vector3.one;
         }
 
-        return Vector3.one * (maxHeight / originalHeight);
+        if (trayDesignHeight > 0.0001f)
+        {
+            var originalDesignHeight = originalWorldHeight * PixelsPerUnit;
+            var maxDesignHeight = trayDesignHeight * PieceTrayMaxHeightRatio;
+            var scale = Mathf.Min(1f, maxDesignHeight / originalDesignHeight);
+            return Vector3.one * scale;
+        }
+
+        var maxWorldHeight = Mathf.Max(
+            0.0001f,
+            hostBounds.size.y * PieceTrayMaxHeightRatio);
+        return originalWorldHeight <= maxWorldHeight
+            ? Vector3.one
+            : Vector3.one * (maxWorldHeight / originalWorldHeight);
     }
 
     private SpriteRenderer CreatePieceBackground()
@@ -1356,6 +1384,9 @@ public class GameScene : MonoBehaviour
 
         var root = new GameObject(DraggableGroupRootObjectName);
         var hostBounds = GetPieceTrayBounds();
+        var trayDesignHeight = _board.PieceBoardRect != null
+            ? Mathf.Abs(_board.PieceBoardRect.rect.height)
+            : 0f;
 
         for (var i = 0; i < grooveGroup.Count; i++)
         {
@@ -1384,7 +1415,10 @@ public class GameScene : MonoBehaviour
             }
 
             var dragScale = CalculatePieceScaleOnBoard(grooveImage, pieceRenderer);
-            var trayScale = CalculateTrayScaleForPiece(pieceRenderer, hostBounds);
+            var trayScale = CalculateTrayScaleForPiece(
+                pieceRenderer,
+                hostBounds,
+                trayDesignHeight);
             pieceRenderer.transform.localScale = trayScale;
             var pieceCollider = CreateSpriteOverlapCollider(
                 pieceRenderer.gameObject,
@@ -4149,7 +4183,7 @@ public class GameScene : MonoBehaviour
                 0f);
             pieceStarts[i].z = pieceTargets[i].z;
             renderer.transform.position = pieceStarts[i];
-            renderer.transform.localScale = pieceTargetScales[i] * 1.08f;
+            renderer.transform.localScale = pieceTargetScales[i];
             var hiddenColor = pieceTargetColors[i];
             hiddenColor.a = 0f;
             renderer.color = hiddenColor;
@@ -4255,10 +4289,7 @@ public class GameScene : MonoBehaviour
                     pieceStarts[i],
                     pieceTargets[i],
                     progress);
-                renderer.transform.localScale = Vector3.LerpUnclamped(
-                    pieceTargetScales[i] * 1.08f,
-                    pieceTargetScales[i],
-                    progress);
+                renderer.transform.localScale = pieceTargetScales[i];
                 renderer.transform.rotation = Quaternion.SlerpUnclamped(
                     Quaternion.Euler(0f, 0f, Mathf.Sin(i * 137.5f * Mathf.Deg2Rad) * 12f),
                     pieceTargetRotations[i],
