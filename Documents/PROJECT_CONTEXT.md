@@ -343,6 +343,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 - `.vscode/extensions.json` 提供编辑器推荐；扩展程序和 .NET SDK 需要在每台设备上单独安装。
 - 在新设备上，Codex 应先检查这些前置条件；缺失时请求安装授权，然后再排查 Unity C# 项目加载错误。
 - `Assembly-CSharp*.csproj` 由 Unity 生成，不得为了兼容 VS Code 手工转换或修改。
+- 本地缓存由根目录 `ProjectMaintenance.ps1` 维护：默认只审计，`-Clean` 达到阈值才删除白名单缓存；每台 Windows 设备需单独执行一次 `-InstallScheduledTask`，注册每周日 `03:00` 的本地任务。Git 会同步脚本与规则，但不会同步 Windows 计划任务。
 
 ---
 

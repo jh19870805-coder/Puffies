@@ -525,6 +525,32 @@
 1. 清理不参与版本控制、可以安全重建的 Unity 编译缓存、临时文件和 IDE 缓存。
 2. 压缩 Git 松散对象，减少 SourceTree 和 Git 刷新的本地负担。
 3. 不删除项目资源、用户设置或能显著缩短 Unity 资源导入时间的有效缓存。
+4. 将清理规则固化为仓库脚本，并在每台 Windows 开发设备注册相同的每周本地计划任务。
+
+### 长期任务需求
+
+1. WHEN 执行脚本但未指定操作 THEN 脚本 SHALL 只审计容量并输出报告，不删除任何内容。
+2. WHEN `Library >= 10 GiB`、`Library/Bee >= 4 GiB`、临时目录合计 `>= 500 MiB` 或工程磁盘可用空间 `< 25 GiB` THEN `-Clean` SHALL 只删除白名单中的可重建缓存。
+3. WHEN Git 松散对象数量 `>= 500` 或松散对象体积 `>= 256 MiB` THEN `-Clean` SHALL 执行使用默认安全保留期的 `git gc`，不得执行 `--prune=now` 或改写历史。
+4. IF Unity、Bee、脚本编译或 Git 操作正在运行 THEN 脚本 SHALL 跳过可能冲突的维护并记录原因。
+5. WHEN 在新设备拉取仓库 THEN Codex SHALL 通过 `AGENTS.md` 和工作流发现该维护规则，先执行审计，并在本机计划任务缺失时请求必要权限后注册。
+6. WHEN 注册计划任务 THEN 系统 SHALL 每周日 `03:00` 执行阈值清理，并在错过运行时间后尽快补跑。
+
+### 长期任务设计
+
+- 根目录 `ProjectMaintenance.ps1` 是唯一执行入口，保持目录扁平；阈值、白名单、审计、清理、任务安装和卸载集中在同一文件。
+- 支持 `-Audit`、`-Clean`、`-InstallScheduledTask`、`-UninstallScheduledTask`，无参数等同于 `-Audit`；多个操作参数同时出现时报错。
+- 自动清理白名单固定为 `Library/Bee`、`BurstCache`、`ShaderCache`、`ScriptAssemblies`、`PlayerDataCache`、`BuildPlayerData`、`TempArtifacts` 以及根目录 `Temp`、`Logs`、`obj`、`.vs` 和 `debug.log`。
+- `Library/Artifacts`、`Library/PackageCache`、`Assets`、`Packages`、`ProjectSettings`、`UserSettings`、`特效资源` 和 `美术切图` 永不自动删除；完整 `Library` 清理不提供自动入口。
+- 删除前将每个绝对路径限制在仓库根目录并拒绝目录连接或符号链接；任务日志保存到被 Git 忽略的 `UserSettings/ProjectMaintenance.log`。
+- Windows 计划任务名固定为 `Puffies Project Maintenance`，按当前设备的脚本绝对路径注册，因此脚本和规则可通过 Git 跨设备同步，但每台设备仍需本地注册一次。
+
+### 实施任务
+
+- [x] 实现容量审计、阈值判定、安全删除和 Git 维护。
+- [x] 实现 Windows 每周计划任务安装、状态校验和卸载。
+- [x] 更新 `AGENTS.md`、工作流、项目上下文和当前任务记录。
+- [x] 验证默认审计无写入、低于阈值不清理、计划任务动作与本机路径正确。
 
 ### 诊断与边界
 
@@ -541,6 +567,10 @@
 - [x] Git 松散对象从 `635` 个降为 `0`，`git fsck --full` 和 `git diff --check` 均通过；`git status` 实测约 `42 ms`。
 - [x] SourceTree、Unity、Bee 和本轮遗留编译服务均已退出；工作区只保留 `.gitignore` 与本规格记录两项预期修改。
 - [ ] 下次手动打开 Unity 时等待一次脚本与构建缓存重建，并确认编辑器正常进入工程；不在本轮预生成已主动清理的缓存。
+- [x] `ProjectMaintenance.ps1` 在 Windows PowerShell 5.1 中通过语法解析；默认审计报告 `Library=4.28 GiB`、`Bee=0`、临时目录 `0`、磁盘可用空间约 `589.84 GiB`，未达到清理阈值。
+- [x] 使用逻辑大小 `501 MiB` 的 NTFS 稀疏文件触发临时目录阈值：脚本只删除 `Temp` 并报告释放 `501 MiB`；`Library/Artifacts`、`Library/PackageCache`、`Assets`、`Packages`、`ProjectSettings` 和 `UserSettings` 均保留。
+- [x] 本机计划任务 `Puffies Project Maintenance` 已注册为每周日 `03:00`、`StartWhenAvailable=True`，动作固定为当前仓库脚本绝对路径与 `-Clean`。
+- [x] 计划任务已手工触发试跑，返回结果 `0`；低于阈值时只记录“未达到清理阈值”，没有删除文件。
 
 ## 2026-08-19 - CardBag010 同位置候选误判修复
 

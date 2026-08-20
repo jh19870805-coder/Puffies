@@ -24,6 +24,15 @@
 
 不要为了绕过编辑器项目加载错误而修改 Unity 生成的 `Assembly-CSharp*.csproj`。Unity 2022.3 生成的是旧格式项目文件，需要 Microsoft Unity VS Code 扩展，或使用现有的 `dotnet.preferCSharpExtension` 兼容设置。
 
+## 本地缓存长期维护
+
+- 仓库根目录 `ProjectMaintenance.ps1` 是 Puffies 本地缓存审计和安全清理的唯一入口。
+- 每次在新设备首次打开本仓库时，先运行 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\ProjectMaintenance.ps1 -Audit`。
+- 使用 `Get-ScheduledTask -TaskName "Puffies Project Maintenance"` 检查本机每周任务；任务缺失时，请求必要的系统权限并运行 `ProjectMaintenance.ps1 -InstallScheduledTask`。
+- Git 只能同步脚本和规则，不能同步 Windows 计划任务本身；每台设备必须单独注册一次。
+- 自动维护只允许执行脚本内的白名单清理。不得自行扩大路径、删除整个 `Library`、删除 `Artifacts`/`PackageCache`，也不得使用 `git gc --prune=now`。
+- 若用户只要求查看容量，使用 `-Audit`；只有用户明确要求立即按阈值维护，或由已注册的每周任务运行时，才使用 `-Clean`。
+
 ## 代码目录偏好
 
 - 源码目录优先保持浅层、扁平，只使用少量有明确含义的文件夹。
