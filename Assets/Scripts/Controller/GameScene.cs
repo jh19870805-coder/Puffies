@@ -18,6 +18,7 @@ public class GameScene : MonoBehaviour
     private const float DraggableHorizontalSpacingPixels = 40f;
     private const float TrayPieceReflowDuration = 0.5f;
     private const float PieceTrayMaxHeightRatio = 0.9f;
+    private const float TrayScrollBoundsEpsilon = 0.001f;
     private const float SnapDistanceMin = 0.2f;
     private const float SnapDistanceMax = 0.8f;
     private const float SnapDistanceSizeRatio = 0.22f;
@@ -207,6 +208,13 @@ public class GameScene : MonoBehaviour
     private Coroutine _pieceTraySlideCoroutine;
     private Coroutine _trayPieceReflowCoroutine;
     private bool _isTrayPieceReflowAnimating;
+    private readonly List<DraggablePieceState> _trayScrollStates =
+        new List<DraggablePieceState>();
+    private readonly List<Vector3> _trayScrollStartPositions = new List<Vector3>();
+    private bool _isTrayScrolling;
+    private float _trayScrollStartWorldX;
+    private float _trayScrollMinDeltaX;
+    private float _trayScrollMaxDeltaX;
     private int _piecePlacementAnimationCount;
     private int _piecePlacementDragBlockCount;
     private Coroutine _loosePieceReminderShakeCoroutine;
@@ -361,6 +369,7 @@ public class GameScene : MonoBehaviour
 
     private void OnDestroy()
     {
+        EndTrayScroll();
         StopLoosePieceReminderShake();
         StopTrayPieceReflow();
         GameCursorUtility.SetDefault();
@@ -1557,6 +1566,7 @@ public class GameScene : MonoBehaviour
 
     private void ClearCurrentDraggableGroup()
     {
+        EndTrayScroll();
         StopLoosePieceReminderShake();
         StopTrayPieceReflow();
         ClearPieceHint();
@@ -2358,6 +2368,7 @@ public class GameScene : MonoBehaviour
         var state = FindDraggablePieceAt(screenPosition);
         if (state == null)
         {
+            TryBeginTrayScroll(screenPosition);
             return;
         }
 
@@ -2393,7 +2404,7 @@ public class GameScene : MonoBehaviour
 
     private void RefreshCursorForPointer(Vector2 screenPosition)
     {
-        if (_drag.DraggingPiece != null)
+        if (_drag.DraggingPiece != null || _isTrayScrolling)
         {
             GameCursorUtility.SetPieceDrag();
             return;
@@ -2401,11 +2412,16 @@ public class GameScene : MonoBehaviour
 
         if (!_isGameFinished
             && !IsPiecePlacementDragBlocked
-            && !_isTrayPieceReflowAnimating
-            && FindDraggablePieceAt(screenPosition) != null)
+            && !_isTrayPieceReflowAnimating)
         {
-            GameCursorUtility.SetPieceHover();
-            return;
+            var hoveredPiece = FindDraggablePieceAt(screenPosition);
+            if (hoveredPiece != null
+                || (IsPointerInVisiblePieceTray(screenPosition)
+                    && TryGetTrayScrollLimits(out _, out _)))
+            {
+                GameCursorUtility.SetPieceHover();
+                return;
+            }
         }
 
         GameCursorUtility.SetDefault();
@@ -2436,6 +2452,12 @@ public class GameScene : MonoBehaviour
 
     private void UpdateDragging(Vector2 screenPosition)
     {
+        if (_isTrayScrolling)
+        {
+            UpdateTrayScroll(screenPosition);
+            return;
+        }
+
         if (_drag.DraggingPiece == null || _drag.DraggingPiece.PieceRenderer == null)
         {
             return;
@@ -2448,8 +2470,135 @@ public class GameScene : MonoBehaviour
             WorldGameplayDepth);
     }
 
+    private bool TryBeginTrayScroll(Vector2 screenPosition)
+    {
+        if (!IsPointerInVisiblePieceTray(screenPosition)
+            || !TryGetTrayScrollLimits(out var minDeltaX, out var maxDeltaX))
+        {
+            return false;
+        }
+
+        _trayScrollStates.Clear();
+        _trayScrollStartPositions.Clear();
+        for (var i = 0; i < _drag.CurrentGroupDraggables.Count; i++)
+        {
+            var state = _drag.CurrentGroupDraggables[i];
+            if (state == null
+                || state.IsPlaced
+                || !state.IsOnTray
+                || state.PieceRenderer == null)
+            {
+                continue;
+            }
+
+            _trayScrollStates.Add(state);
+            _trayScrollStartPositions.Add(state.PieceRenderer.transform.position);
+        }
+
+        if (_trayScrollStates.Count == 0)
+        {
+            return false;
+        }
+
+        _isTrayScrolling = true;
+        _trayScrollStartWorldX = ToGameplayWorld(screenPosition).x;
+        _trayScrollMinDeltaX = minDeltaX;
+        _trayScrollMaxDeltaX = maxDeltaX;
+        StopLoosePieceReminderShake();
+        return true;
+    }
+
+    private void UpdateTrayScroll(Vector2 screenPosition)
+    {
+        var pointerWorldX = ToGameplayWorld(screenPosition).x;
+        var deltaX = Mathf.Clamp(
+            pointerWorldX - _trayScrollStartWorldX,
+            _trayScrollMinDeltaX,
+            _trayScrollMaxDeltaX);
+        for (var i = 0; i < _trayScrollStates.Count; i++)
+        {
+            var state = _trayScrollStates[i];
+            if (state?.PieceRenderer == null || state.IsPlaced || !state.IsOnTray)
+            {
+                continue;
+            }
+
+            var position = _trayScrollStartPositions[i];
+            position.x += deltaX;
+            state.PieceRenderer.transform.position = position;
+            state.StartPosition = position;
+        }
+    }
+
+    private void EndTrayScroll()
+    {
+        _isTrayScrolling = false;
+        _trayScrollStates.Clear();
+        _trayScrollStartPositions.Clear();
+    }
+
+    private bool IsPointerInVisiblePieceTray(Vector2 screenPosition)
+    {
+        return !IsPieceTrayHidden()
+               && TryGetPieceTrayDropScreenRect(out var trayScreenRect)
+               && trayScreenRect.Contains(screenPosition);
+    }
+
+    private bool TryGetTrayScrollLimits(out float minDeltaX, out float maxDeltaX)
+    {
+        minDeltaX = 0f;
+        maxDeltaX = 0f;
+        if (IsPieceTrayHidden())
+        {
+            return false;
+        }
+
+        var trayBounds = GetPieceTrayBounds();
+        var hasContentBounds = false;
+        var contentBounds = default(Bounds);
+        for (var i = 0; i < _drag.CurrentGroupDraggables.Count; i++)
+        {
+            var state = _drag.CurrentGroupDraggables[i];
+            if (state == null
+                || state.IsPlaced
+                || !state.IsOnTray
+                || state.PieceRenderer == null)
+            {
+                continue;
+            }
+
+            if (!hasContentBounds)
+            {
+                contentBounds = state.PieceRenderer.bounds;
+                hasContentBounds = true;
+            }
+            else
+            {
+                contentBounds.Encapsulate(state.PieceRenderer.bounds);
+            }
+        }
+
+        if (!hasContentBounds || trayBounds.size.x <= DraggableLeftPadding * 2f)
+        {
+            return false;
+        }
+
+        var viewportMinX = trayBounds.min.x + DraggableLeftPadding;
+        var viewportMaxX = trayBounds.max.x - DraggableLeftPadding;
+        minDeltaX = Mathf.Min(0f, viewportMaxX - contentBounds.max.x);
+        maxDeltaX = Mathf.Max(0f, viewportMinX - contentBounds.min.x);
+        return minDeltaX < -TrayScrollBoundsEpsilon
+               || maxDeltaX > TrayScrollBoundsEpsilon;
+    }
+
     private void EndDragging(Vector2? releaseScreenPosition = null)
     {
+        if (_isTrayScrolling)
+        {
+            EndTrayScroll();
+            return;
+        }
+
         if (_drag.DraggingPiece == null || _drag.DraggingPiece.PieceRenderer == null)
         {
             return;
@@ -2461,7 +2610,9 @@ public class GameScene : MonoBehaviour
         var wasOnTray = state.IsOnTray;
 
         if (releaseScreenPosition.HasValue
-            && ShouldReturnPieceToTray(releaseScreenPosition.Value))
+            && ShouldReturnPieceToTray(
+                releaseScreenPosition.Value,
+                state.PieceRenderer))
         {
             ReturnPieceToTray(state, wasOnTray);
             return;
@@ -2966,14 +3117,25 @@ public class GameScene : MonoBehaviour
         }
     }
 
-    private bool ShouldReturnPieceToTray(Vector2 releaseScreenPosition)
+    private bool ShouldReturnPieceToTray(
+        Vector2 releaseScreenPosition,
+        SpriteRenderer pieceRenderer)
     {
         if (!TryGetPieceTrayDropScreenRect(out var trayScreenRect))
         {
             return false;
         }
 
-        return trayScreenRect.Contains(releaseScreenPosition);
+        if (trayScreenRect.Contains(releaseScreenPosition))
+        {
+            return true;
+        }
+
+        return TryGetRendererScreenRect(
+                   pieceRenderer,
+                   Camera.main,
+                   out var pieceScreenRect)
+               && trayScreenRect.Overlaps(pieceScreenRect);
     }
 
     private bool TryGetPieceTrayDropScreenRect(out Rect screenRect)
