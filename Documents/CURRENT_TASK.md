@@ -6,6 +6,7 @@
 
 ## 用户意图
 
+- Piece 完整处于棋盘灰色拼图区内部时允许自由放置；只有同时压到灰色区域与 GameBoard 非灰色区域、即横跨灰色边缘时才判定放错并回归托盘。与自己的凹槽相交但未达到吸附标准仍判定放错；正确吸附、托盘优先、已拼块和外部 Piece 防重叠、其他棋盘空位与桌面自由放置规则保持不变。
 - 正确吸附 Piece 后，当前块及相邻已拼块上的常驻光点移动距离调整为原来的 3 倍。
 - 光点移动时间调整为原来的 2 倍。
 - 每块拼图片完成落入托盘后才创建常驻光点；入场聚集和飞行阶段不显示。历史已拼 Piece 初始化时同样存在。
@@ -14,6 +15,7 @@
 
 ## 工作记录
 
+- 已撤销把整片灰色未完成区域设为禁放区的错误实现。棋盘灰色边缘改为双侧判定：Piece 必须同时与未完成 Groove Physics Shape 和 GameBoard 不透明 Physics Shape 相交才视为横跨边缘；只命中任一侧继续允许。正确吸附仍在自由放置之前处理，并显式恢复自身凹槽相交但未吸附时的错误回弹。
 - 附带统一 Unity 编辑器菜单显示名称：Prefab 生成入口为 `Generate CardBag Prefabs`，描边入口为 `Bake CardBag Outlines`，配置更新入口为 `Update CardBag Configs`；同步修改代码提示和相关文档，不改变工具执行逻辑与排列优先级。
 - 已从 `Puffies` 菜单移除不再需要的 `Apply CardBag Hierarchy` 手工入口；保留新卡包生成、脚本重载处理和布局更新校验仍依赖的内部层级规范化代码。布局更新遇到非标准结构时，提示改为通过 `Generate CardBag Prefabs` 重新生成对应 Prefab。
 - `Apply CardBag Shadow Materials` 菜单已改名为 `Apply CardBag Shadows`，优先级设为 `23`，固定显示在优先级 `22` 的 `Update CardBag Configs` 下方。
@@ -41,6 +43,7 @@
 
 ## 决策
 
+- 灰色拼图区内部本身不是禁放区。灰色边缘定义为未完成 Groove 区域与 GameBoard 不透明区域的交界；只有 Piece 实际轮廓同时覆盖两侧才拒绝。GameBoard 缺少可用 Physics Shape 时该新增检查安全放行，不改变原有自由放置规则。
 - “移动距离”只作用于 `PieceLightDeformEffect` 的 `BendDistance`，不移动 Piece、光点根节点或常驻初始位置。
 - “移动时间”只放大单个光点的推出和回弹生命周期，不放大相邻块的错峰启动延迟。
 - 常驻光点的多变性只调整现有四张 Sprite 的稳定选择、非等比缩放和旋转，不创建新纹理、不改变 Piece 图片本身。
@@ -48,6 +51,8 @@
 
 ## 验证
 
+- 静态检查确认松手处理顺序仍为托盘回收、正确吸附、外部 Piece 重叠/棋盘合法性；新增灰色边缘双侧检查仅位于棋盘内自由放置分支，只有同时命中灰区和非灰区才复用 `ReturnPieceAfterInvalidDrop`，完整位于任一侧均放行。
+- 本轮 `dotnet build Assembly-CSharp.csproj --no-restore` 与 `dotnet build Assembly-CSharp-Editor.csproj --no-restore`：通过，均为 `0` 警告、`0` 错误。
 - 静态检查确认三个新菜单名称各只有一个 `MenuItem` 入口，旧菜单名称已从代码提示与相关文档移除；工具方法和菜单优先级未修改。
 - 静态检查确认 `Apply CardBag Hierarchy` 不再注册 Unity 菜单，内部 `ApplyAll`、`ApplyToHierarchy` 与 `ValidateHierarchy` 调用链继续保留。
 - 静态检查确认 `Apply CardBag Shadows` 使用菜单优先级 `23`，与 `Update CardBag Configs` 的优先级 `22` 连续排列。

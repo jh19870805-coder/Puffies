@@ -123,6 +123,7 @@ public class GameScene : MonoBehaviour
     private const string SpriteRendererShadowKeyword = "PACK_SHADOW_SPRITE_RENDERER";
     private const string DraggableGroupRootObjectName = "DraggableGroupPieces";
     private const string BoardOccupancyProbeRootObjectName = "BoardOccupancyProbes";
+    private const string GameBoardOpaqueProbeObjectName = "GameBoardOpaqueProbe";
     private const string ActiveGroupOutlineRootObjectName = "ActiveGroupOutline";
     private const string LevelOutlineLayerObjectName = "LevelOutline";
     private const string StickerOutlineLayerObjectName = "StickerOutlines";
@@ -224,6 +225,7 @@ public class GameScene : MonoBehaviour
     private Rect _pieceTrayDropNormalizedScreenRect;
     private bool _hasPieceTrayDropNormalizedScreenRect;
     private Transform _boardOccupancyProbeRoot;
+    private Collider2D _gameBoardOpaqueProbe;
     private Coroutine _pieceTraySlideCoroutine;
     private Coroutine _trayPieceReflowCoroutine;
     private bool _isTrayPieceReflowAnimating;
@@ -3049,6 +3051,7 @@ public class GameScene : MonoBehaviour
         state.PieceRenderer.transform.position = ClampPieceToTableBounds(state.PieceRenderer);
         Physics2D.SyncTransforms();
         if (DoesPieceOverlapLoosePiece(state)
+            || CollidersOverlap(state.PieceCollider, state.GrooveProbeCollider)
             || !IsLoosePiecePlacementAllowed(state))
         {
             ReturnPieceAfterInvalidDrop(state, wasOnTray);
@@ -3119,7 +3122,8 @@ public class GameScene : MonoBehaviour
                                && pieceBounds.max.y <= boardBounds.max.y;
         if (fullyInsideBoard)
         {
-            return !DoesPieceOverlapOccupiedBoardArea(state);
+            return !DoesPieceOverlapOccupiedBoardArea(state)
+                   && !DoesPieceCrossUnfilledBoardBoundary(state);
         }
 
         var fullyLeftOfBoard = pieceBounds.max.x <= boardBounds.min.x;
@@ -3192,12 +3196,42 @@ public class GameScene : MonoBehaviour
 
     private bool DoesPieceOverlapOccupiedBoardArea(DraggablePieceState movingState)
     {
+        return DoesPieceOverlapBoardArea(movingState, occupiedArea: true);
+    }
+
+    private bool DoesPieceCrossUnfilledBoardBoundary(DraggablePieceState movingState)
+    {
+        if (!DoesPieceOverlapBoardArea(movingState, occupiedArea: false))
+        {
+            return false;
+        }
+
+        var gameBoardProbe = GetOrCreateGameBoardOpaqueProbe();
+        if (gameBoardProbe == null || _board.GameBoardImage == null)
+        {
+            return false;
+        }
+
+        var probeTransform = gameBoardProbe.transform;
+        probeTransform.position = GetGrooveSnapPosition(
+            _board.GameBoardImage.rectTransform,
+            Camera.main);
+        probeTransform.rotation = _board.GameBoardImage.rectTransform.rotation;
+        probeTransform.localScale = CalculatePieceScaleOnBoard(_board.GameBoardImage);
+        Physics2D.SyncTransforms();
+        return CollidersOverlap(movingState.PieceCollider, gameBoardProbe);
+    }
+
+    private bool DoesPieceOverlapBoardArea(
+        DraggablePieceState movingState,
+        bool occupiedArea)
+    {
         if (movingState?.PieceCollider == null || _board.GrooveImagesByGroup == null)
         {
             return false;
         }
 
-        var occupiedProbes = new List<Collider2D>();
+        var areaProbes = new List<Collider2D>();
         for (var groupIndex = 0; groupIndex < _board.GrooveImagesByGroup.Count; groupIndex++)
         {
             var group = _board.GrooveImagesByGroup[groupIndex];
@@ -3210,9 +3244,14 @@ public class GameScene : MonoBehaviour
             {
                 var grooveImage = group[i];
                 if (grooveImage == null
-                    || grooveImage.sprite == null
-                    || !grooveImage.gameObject.activeInHierarchy
-                    || grooveImage.color.a <= 0.001f)
+                    || grooveImage.sprite == null)
+                {
+                    continue;
+                }
+
+                var isOccupied = grooveImage.gameObject.activeInHierarchy
+                                 && grooveImage.color.a > 0.001f;
+                if (isOccupied != occupiedArea)
                 {
                     continue;
                 }
@@ -3229,14 +3268,14 @@ public class GameScene : MonoBehaviour
                     Camera.main);
                 probeTransform.rotation = grooveImage.rectTransform.rotation;
                 probeTransform.localScale = CalculatePieceScaleOnBoard(grooveImage);
-                occupiedProbes.Add(probe);
+                areaProbes.Add(probe);
             }
         }
 
         Physics2D.SyncTransforms();
-        for (var i = 0; i < occupiedProbes.Count; i++)
+        for (var i = 0; i < areaProbes.Count; i++)
         {
-            if (CollidersOverlap(movingState.PieceCollider, occupiedProbes[i]))
+            if (CollidersOverlap(movingState.PieceCollider, areaProbes[i]))
             {
                 return true;
             }
@@ -3272,9 +3311,37 @@ public class GameScene : MonoBehaviour
         return probe;
     }
 
+    private Collider2D GetOrCreateGameBoardOpaqueProbe()
+    {
+        if (_gameBoardOpaqueProbe != null)
+        {
+            return _gameBoardOpaqueProbe;
+        }
+
+        var sprite = _board.GameBoardImage != null
+            ? _board.GameBoardImage.sprite
+            : null;
+        if (sprite == null || sprite.GetPhysicsShapeCount() <= 0)
+        {
+            return null;
+        }
+
+        if (_boardOccupancyProbeRoot == null)
+        {
+            var rootObject = new GameObject(BoardOccupancyProbeRootObjectName);
+            _boardOccupancyProbeRoot = rootObject.transform;
+        }
+
+        var probeObject = new GameObject(GameBoardOpaqueProbeObjectName);
+        probeObject.transform.SetParent(_boardOccupancyProbeRoot, false);
+        _gameBoardOpaqueProbe = CreateSpriteOverlapCollider(probeObject, sprite);
+        return _gameBoardOpaqueProbe;
+    }
+
     private void DestroyBoardOccupancyProbes()
     {
         _boardOccupancyProbes.Clear();
+        _gameBoardOpaqueProbe = null;
         if (_boardOccupancyProbeRoot == null)
         {
             return;
