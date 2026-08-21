@@ -15,6 +15,9 @@
 ## 工作记录
 
 - 附带统一 Unity 编辑器菜单显示名称：Prefab 生成入口为 `Generate CardBag Prefabs`，描边入口为 `Bake CardBag Outlines`，配置更新入口为 `Update CardBag Configs`；同步修改代码提示和相关文档，不改变工具执行逻辑与排列优先级。
+- 已从 `Puffies` 菜单移除不再需要的 `Apply CardBag Hierarchy` 手工入口；保留新卡包生成、脚本重载处理和布局更新校验仍依赖的内部层级规范化代码。布局更新遇到非标准结构时，提示改为通过 `Generate CardBag Prefabs` 重新生成对应 Prefab。
+- `Apply CardBag Shadow Materials` 菜单已改名为 `Apply CardBag Shadows`，优先级设为 `23`，固定显示在优先级 `22` 的 `Update CardBag Configs` 下方。
+- `Update CardBag Configs` 的 `AutoUpdate` 语义已收窄为只控制 `BoardScale`：所有匹配源资源的配置行仍更新 `StickerCount` 和 `PackSize`，`AutoUpdate=0` 仅保留手工棋盘缩放。结果窗口不再显示“整行跳过”，改为列出保留 `BoardScale` 的 PackId。
 - `PieceLight1-4` 光点形变推出距离在原 `6~14px` 结果上乘 3，实际范围为 `18~42px`。
 - 当前吸附块的光点运动时长从 `0.48s` 改为 `0.96s`；相邻已拼块从 `0.42s` 改为 `0.84s`。
 - 相邻光点原有 `0.07~0.23s` 错峰延迟保持不变。
@@ -46,6 +49,11 @@
 ## 验证
 
 - 静态检查确认三个新菜单名称各只有一个 `MenuItem` 入口，旧菜单名称已从代码提示与相关文档移除；工具方法和菜单优先级未修改。
+- 静态检查确认 `Apply CardBag Hierarchy` 不再注册 Unity 菜单，内部 `ApplyAll`、`ApplyToHierarchy` 与 `ValidateHierarchy` 调用链继续保留。
+- 静态检查确认 `Apply CardBag Shadows` 使用菜单优先级 `23`，与 `Update CardBag Configs` 的优先级 `22` 连续排列。
+- 静态检查确认 `AutoUpdate=0` 不再提前跳过配置行；`PackSize` 和 `StickerCount` 在两种取值下共用同一更新路径，只有 `BoardScale` 写入受该字段控制。
+- 当前 `AutoUpdate=0` 的 CardBag001（8 片、XS、手工 `BoardScale=1.3`）和 CardBag018（196 片、XXXL、手工 `BoardScale=0.7`）已核对：新逻辑会继续同步片数和尺寸，同时保留这两个手工缩放值。
+- `dotnet build Assembly-CSharp-Editor.csproj --no-restore`：通过，`0` 警告、`0` 错误。
 - `dotnet build Assembly-CSharp.csproj --no-restore`：通过，`0` 警告、`0` 错误。
 - 临时运行时诊断日志和临时 Shader 增亮已删除，`PuzzlePieceLightAdditive.shader` 保持原有美术参数。
 - 代码路径确认：首次入场使用 `pieceT >= 1` 创建对应 Piece 光点；切组入场使用 `progress >= 1` 创建；两个动画标记有效期间通用补建直接返回。

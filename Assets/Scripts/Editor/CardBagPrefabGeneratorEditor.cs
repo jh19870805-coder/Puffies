@@ -353,15 +353,13 @@ public static class CardBagPrefabGeneratorEditor
                     $"Card pack size updater: AutoUpdate must be 0 or 1 at CSV line {row.LineNumber}.");
             }
 
-            if (autoUpdate == 0)
-            {
-                result.SkippedPackIds.Add(packId);
-                outputRows.Add(values);
-                continue;
-            }
-
             if (pieceCountsByPackId.TryGetValue(packId, out var pieceCount))
             {
+                if (autoUpdate == 0)
+                {
+                    result.PreservedBoardScalePackIds.Add(packId);
+                }
+
                 var size = ResolvePackSize(pieceCount);
                 var boardScale = ResolveBoardScale(size);
                 var oldSizeValue = values[packSizeColumn];
@@ -378,20 +376,28 @@ public static class CardBagPrefabGeneratorEditor
                     oldStickerCountValue?.Trim(),
                     newStickerCountValue,
                     StringComparison.Ordinal);
-                var boardScaleChanged = !string.Equals(
-                    oldBoardScaleValue?.Trim(),
-                    newBoardScaleValue,
-                    StringComparison.Ordinal);
+                var boardScaleChanged = autoUpdate != 0
+                                        && !string.Equals(
+                                            oldBoardScaleValue?.Trim(),
+                                            newBoardScaleValue,
+                                            StringComparison.Ordinal);
                 if (sizeChanged || stickerCountChanged || boardScaleChanged)
                 {
                     values[packSizeColumn] = newSizeValue;
                     values[stickerCountColumn] = newStickerCountValue;
-                    values[boardScaleColumn] = newBoardScaleValue;
+                    if (autoUpdate != 0)
+                    {
+                        values[boardScaleColumn] = newBoardScaleValue;
+                    }
+
+                    var boardScaleChange = autoUpdate == 0
+                        ? $"BoardScale preserved at {oldBoardScaleValue} (AutoUpdate=0)"
+                        : $"BoardScale {oldBoardScaleValue} -> {newBoardScaleValue}";
                     result.Changes.Add(
                         $"CardBag{packId:D3}: {pieceCount} pieces, "
                         + $"PackSize {oldSizeValue} -> {newSizeValue} ({size}), "
                         + $"StickerCount {oldStickerCountValue} -> {newStickerCountValue}, "
-                        + $"BoardScale {oldBoardScaleValue} -> {newBoardScaleValue}");
+                        + boardScaleChange);
                     configChanged = true;
                 }
 
@@ -981,7 +987,8 @@ public static class CardBagPrefabGeneratorEditor
             {
                 throw new InvalidOperationException(
                     $"CardBag updater: {hierarchyValidationError} "
-                    + "Run Puffies/Apply CardBag Hierarchy before updating Piece layouts.");
+                    + "Regenerate the CardBag prefab with Puffies/Generate CardBag Prefabs "
+                    + "before updating Piece layouts.");
             }
 
             var placementByPath = placements.ToDictionary(
@@ -2767,7 +2774,7 @@ public static class CardBagPrefabGeneratorEditor
         public bool AddedStickerCountColumn { get; set; }
         public bool AddedSeriesColumn { get; set; }
         public List<string> Changes { get; } = new List<string>();
-        public List<int> SkippedPackIds { get; } = new List<int>();
+        public List<int> PreservedBoardScalePackIds { get; } = new List<int>();
         public List<int> ConfigsWithoutSource { get; } = new List<int>();
         public List<int> SourcesWithoutConfig { get; } = new List<int>();
         public List<string> EmptySourceFolders { get; } = new List<string>();
@@ -2777,7 +2784,8 @@ public static class CardBagPrefabGeneratorEditor
             var builder = new StringBuilder();
             builder.AppendLine($"Scanned: {ScannedPackCount}");
             builder.AppendLine($"Updated: {Changes.Count}");
-            builder.AppendLine($"Skipped (AutoUpdate=0): {SkippedPackIds.Count}");
+            builder.AppendLine(
+                $"BoardScale preserved (AutoUpdate=0): {PreservedBoardScalePackIds.Count}");
             if (AddedAutoUpdateColumn)
             {
                 builder.AppendLine("Added AutoUpdate column with default value 1.");
@@ -2817,7 +2825,7 @@ public static class CardBagPrefabGeneratorEditor
             var builder = new StringBuilder();
             builder.AppendLine(
                 $"Card pack size updater finished. scanned={ScannedPackCount}, "
-                + $"updated={Changes.Count}, skipped={SkippedPackIds.Count}");
+                + $"updated={Changes.Count}, boardScalePreserved={PreservedBoardScalePackIds.Count}");
             if (AddedAutoUpdateColumn)
             {
                 builder.AppendLine(
@@ -2845,12 +2853,12 @@ public static class CardBagPrefabGeneratorEditor
 
         private void AppendWarnings(StringBuilder builder)
         {
-            if (SkippedPackIds.Count > 0)
+            if (PreservedBoardScalePackIds.Count > 0)
             {
                 builder.AppendLine();
                 builder.AppendLine(
-                    "Rows skipped because AutoUpdate=0: "
-                    + string.Join(", ", SkippedPackIds.Select(id => id.ToString("D3"))));
+                    "BoardScale preserved because AutoUpdate=0; PackSize and StickerCount still update: "
+                    + string.Join(", ", PreservedBoardScalePackIds.Select(id => id.ToString("D3"))));
             }
 
             if (ConfigsWithoutSource.Count > 0)
@@ -3385,12 +3393,6 @@ public static class CardBagHierarchyEditor
     private const string BoardTitleObjectName = "BoardTitle";
     private const string BoardBackgroundPrefix = "BoardBg";
 
-    [MenuItem("Puffies/Apply CardBag Hierarchy")]
-    public static void ApplyAllFromMenu()
-    {
-        ApplyAll(logResult: true);
-    }
-
     internal static void ApplyAll(bool logResult)
     {
         var prefabGuids = AssetDatabase.FindAssets("t:Prefab CardBag", new[] { PrefabRoot });
@@ -3845,7 +3847,7 @@ public static class CardBagShadowMaterialEditor
     private const string PlacedPieceShadowMaterialPath = "Assets/Resources/IngameCoverShadow03.mat";
     private const string DefaultPieceShadowMaterialPath = "Assets/Resources/IngameCoverShadow04.mat";
 
-    [MenuItem("Puffies/Apply CardBag Shadow Materials")]
+    [MenuItem("Puffies/Apply CardBag Shadows", false, 23)]
     public static void ApplyAllFromMenu()
     {
         ApplyAll(logResult: true);

@@ -400,14 +400,14 @@
 5. WHEN 贴纸数量介于 `86..125`（含边界）THEN 系统 SHALL 将卡包定义为 `XL`。
 6. WHEN 贴纸数量介于 `126..170`（含边界）THEN 系统 SHALL 将卡包定义为 `XXL`。
 7. WHEN 贴纸数量大于 `170` THEN 系统 SHALL 将卡包定义为 `XXXL`。
-8. WHEN 配置更新工具处理 `AutoUpdate=1` 的现有卡包 THEN 系统 SHALL 按新尺寸重写 `PackSize`，并继续使用既有尺寸到 `BoardScale` 的映射更新棋盘缩放。
+8. WHEN 配置更新工具处理有标准 Piece 源资源的现有卡包 THEN 系统 SHALL 始终按实际片数重写 `StickerCount` 和 `PackSize`；IF `AutoUpdate=1` THEN 系统 SHALL 继续使用既有尺寸到 `BoardScale` 的映射更新棋盘缩放，ELSE 系统 SHALL 保留该行手工填写的 `BoardScale`。
 9. WHEN 验证尺寸边界 THEN 系统 SHALL 覆盖 `19/20/30/31/55/56/85/86/125/126/170/171`，确保区间无断档或重叠。
 
 ### 设计
 
 - 修改唯一尺寸判定入口 `CardBagPrefabGeneratorEditor.ResolvePackSize`，依次使用 `<20`、`<31`、`<56`、`<86`、`<126`、`<171` 判断七档尺寸。
 - 不修改 `CardPackSize` 枚举值、尺寸图标映射、基础分表或既有 `ResolveBoardScale` 映射。
-- 根据 `CardPacks.csv/StickerCount` 立即更新当前 `AutoUpdate=1` 行，使现有配置与后续工具生成结果一致。
+- 根据标准 Piece 源资源更新所有配置行的 `StickerCount` 和 `PackSize`；只对 `AutoUpdate=1` 行同步 `BoardScale`，`AutoUpdate=0` 行保留手工棋盘缩放。
 - 本次不修改 SQLite 结构或 JSON 结构；已持久化卡包记录的运行时尺寸由配置读取，不需要删除本地数据。
 
 ### 任务
@@ -421,6 +421,7 @@
 
 - 22 个 `CardBagNNN` 源目录的标准 Piece 数量与 `CardPacks.csv/StickerCount` 全部一致。
 - 22 行 `AutoUpdate=1` 配置按新分档和既有 `BoardScale` 映射检查，零不一致。
+- `AutoUpdate=0` 的 CardBag001 与 CardBag018 已核对实际 Piece 数量、`StickerCount` 和 `PackSize`；工具逻辑继续更新后两者，但分别保留手工 `BoardScale=1.3` 与 `0.7`。
 - 边界映射结果为：`19=XS`、`20/30=S`、`31/55=M`、`56/85=L`、`86/125=XL`、`126/170=XXL`、`171=XXXL`。
 - `git diff --check` 通过。
 - 当前 Unity `2022.3.62f2c1` 实例刷新后重新生成 `Assembly-CSharp-Editor.dll`；Editor.log 最近记录中 C# 错误和警告均为 `0`，无配置导入异常。
