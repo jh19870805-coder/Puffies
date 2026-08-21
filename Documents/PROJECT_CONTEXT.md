@@ -324,7 +324,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 
 ### 卡包展示与开包表现
 
-- 首页列表的卡包主体使用 `Assets/UI/PackImages/PackIconNNN.png` 静态图；`PackItem.prefab` 不嵌套 3D 卡包特效 Prefab，但包含编辑器可调的 UGUI ADD 高光贴片。
+- 首页列表的卡包主体使用 `Assets/UI/PackImages/PackIconNNN.png` 静态图；`PackItem.prefab` 不嵌套 3D 卡包特效 Prefab，但包含编辑器可调的 UGUI ADD 高光贴片。列表适配时保持 `PackHighlight02~05` 的内部美术布局不变，只把 `PackHighlight` 根节点按封面从原始尺寸到列表尺寸的比例整体缩放，确保子高光位置和尺寸同步变化，不得只改根 Rect 尺寸。
 - MainScene 主 Canvas 使用 `Screen Space - Camera`，`World Camera` 固定为场景 `Main Camera`，Plane Distance 为 `10`；`MainScene.ConfigureMainCanvas` 在运行时复用统一 Canvas 配置再次校正，确保 `PackItem` 封面、高光、尺寸图标和首页主 UI 经过同一摄像机渲染。
 - Unity 编辑器单独打开 Loading、Main、Game、Rank 或 Achieve 场景后，`CanvasDesignResolutionEditor` 会延迟一帧按根 `Canvas` 的世界边界，将 SceneView 恢复为正交正视并自动取景；这避免 Camera Canvas 与 Overlay Canvas 之间切换时继承歪斜视角，不修改场景 Selection、Canvas 配置或运行时行为。`EffectScene001` 不参与自动取景，以保留制作方的三维编辑视角。
 - 选中态使用独立 `Screen Space - Camera` Canvas 的 `Image` 显示同一张静态图，目标尺寸为 `600 x 680`；该 Canvas 与选择面板同样绑定 `Main Camera`，背景虚化、返回、拍照和重玩确认继续沿用现有流程。

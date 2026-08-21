@@ -2363,7 +2363,7 @@ public class MainScene : MonoBehaviour
             coverImage.preserveAspect = true;
             var coverRect = coverImage.rectTransform;
             ScaleOverlayWithCover(sizeImage != null ? sizeImage.rectTransform : null, coverRect.sizeDelta);
-            ScaleOverlayWithCover(highlightRect, coverRect.sizeDelta);
+            ScaleHighlightWithCover(highlightRect, coverRect.sizeDelta);
             coverRect.anchorMin = new Vector2(0.5f, 0.5f);
             coverRect.anchorMax = new Vector2(0.5f, 0.5f);
             coverRect.pivot = new Vector2(0.5f, 0.5f);
@@ -2395,6 +2395,22 @@ public class MainScene : MonoBehaviour
         overlayRect.anchoredPosition = Vector2.Scale(overlayRect.anchoredPosition, scale);
         overlayRect.sizeDelta = Vector2.Scale(overlayRect.sizeDelta, scale);
         overlayRect.localScale = Vector3.one;
+    }
+
+    private static void ScaleHighlightWithCover(
+        RectTransform highlightRect,
+        Vector2 sourceCoverSize)
+    {
+        if (highlightRect == null || sourceCoverSize.x <= 0f || sourceCoverSize.y <= 0f)
+        {
+            return;
+        }
+
+        var scale = new Vector2(
+            PackageCoverWidth / sourceCoverSize.x,
+            PackageCoverHeight / sourceCoverSize.y);
+        highlightRect.anchoredPosition = Vector2.Scale(highlightRect.anchoredPosition, scale);
+        highlightRect.localScale = new Vector3(scale.x, scale.y, 1f);
     }
 
     private static RectTransform FindFirstGridPage(Transform root)
