@@ -8,6 +8,7 @@
 |------|------|
 | [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) | 稳定需求、架构、场景、数据、资源、构建规则和命名 |
 | [CURRENT_TASK.md](CURRENT_TASK.md) | 当前任务、状态、决策、验证结果和下一步 |
+| [TODO.md](TODO.md) | 已经想到但尚未进入当前开发的功能和优化 |
 | [WORKFLOW.md](WORKFLOW.md) | 本工作流 |
 | [../AGENTS.md](../AGENTS.md) | 仓库级 AI 协作说明 |
 
