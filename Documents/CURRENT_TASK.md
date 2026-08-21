@@ -1,103 +1,88 @@
 # 当前任务
 
-- 任务：拼图片常驻光点与吸附回弹样式调整
-- 状态：代码已完成并通过编译，等待 GameScene 目视验证
+- 任务：描边烘焙全局质量修复
+- 状态：问题与实施顺序已记录，等待另一台设备继续修改代码
 - 更新时间：2026-08-21
 
 ## 用户意图
 
-- 托盘最左 Piece 到托盘左边界使用固定世界间隙，并在原 `0.2` 基础上扩大 3 倍为 `0.6`；托盘横向滑动的左右安全边距沿用同一值。
-- 托盘 Piece 左右可见间距必须真正按 `40` 设计像素显示；不能只修改常量后因 GameScene 相机自适配而在屏幕上被缩小，首次布局、拿起补位和回收重排必须一致。
-- CardBag010 的正确吸附 Piece 也必须显示与其他卡包一致的 `IngameCoverShadow03` 投影；修复不能改变 Piece 的棋盘尺寸、位置、缩放或碰撞。
-- Piece 完整处于棋盘灰色拼图区内部时允许自由放置；只有同时压到灰色区域与 GameBoard 非灰色区域、即横跨灰色边缘时才判定放错并回归托盘。与自己的凹槽相交但未达到吸附标准仍判定放错；正确吸附、托盘优先、已拼块和外部 Piece 防重叠、其他棋盘空位与桌面自由放置规则保持不变。
-- 正确吸附 Piece 后，当前块及相邻已拼块上的常驻光点移动距离调整为原来的 3 倍。
-- 光点移动时间调整为原来的 2 倍。
-- 每块拼图片完成落入托盘后才创建常驻光点；入场聚集和飞行阶段不显示。历史已拼 Piece 初始化时同样存在。
-- 光点推出、弯曲和回弹的全过程不能出现矩形硬边或明显切口，边缘必须保持透明虚化。
-- 同组 Piece 的光点样式要有明显差异；继续复用现有四种资源，并让同一 Piece 跨托盘、棋盘和重进关卡保持一致。
-- 不改变绿色斜向 ADD 滑光和其他拼图反馈。
+- 系统性解决烘焙描边在实际游戏中仍会出现断裂、错误线段和边界归属错误的问题。
+- 修复应适用于全部现有及后续 `CardBagNNN`，不能逐卡包手工修图。
+- 保持现有分阶段显示规则、关卡描边和贴纸描边开关，以及运行时加载方式不变。
 
-## 工作记录
+## 已确认问题
 
-- `DraggableLeftPadding` 已从固定 `0.2` 世界单位调整为固定 `0.6` 世界单位；初始布局的最左 Piece 和托盘横向滚动左右限制继续共用该安全边距，不影响 Piece 之间的 40 设计像素间距。
-- 已定位托盘间距虽然是 `DraggableHorizontalSpacingPixels=40`，但此前始终按 `40 / PPU = 0.4` 固定世界单位使用；`FitCameraToActiveGroup` 改变正交相机尺寸时，Piece 会根据屏幕凹槽重新计算世界缩放，固定世界间距却不会同步变化，导致实际屏幕间距明显小于 40 设计像素。现改为使用 `PieceBoard` 在根 Canvas 中的设计宽度与其当前世界宽度计算换算比例；首次排列和拿起后的后序补位共用同一世界间距，回收重排继续走首次排列路径。
-- 已确认 CardBag010 的 25 个正式 Piece 均绑定 `IngameCoverShadow03` 并挂有 `PackCoverShadowEffect`，运行时正确吸附后也会重新应用 03；缺影不是 Prefab 漏绑或吸附流程覆盖。CardBag010 的 25 张 `249 x 249` Piece PNG 均为全不透明矩形，而 CardBag009/011 的 Piece 平均约有 `25.7%/28.6%` 透明区域；03 原先 `PaddingX/Y=0`，因此全不透明 Piece 的 2px Alpha 投影全部落在 UGUI 网格外并被裁掉。现将 03 的 X/Y 留白改为与现有 `BlurX/Y=2` 一致的 `2px`，不改变颜色、透明度、模糊、偏移、Piece RectTransform 或碰撞。
-- 已撤销把整片灰色未完成区域设为禁放区的错误实现。棋盘灰色边缘改为双侧判定：Piece 必须同时与未完成 Groove Physics Shape 和 GameBoard 不透明 Physics Shape 相交才视为横跨边缘；只命中任一侧继续允许。正确吸附仍在自由放置之前处理，并显式恢复自身凹槽相交但未吸附时的错误回弹。
-- 附带统一 Unity 编辑器菜单显示名称：Prefab 生成入口为 `Generate CardBag Prefabs`，描边入口为 `Bake CardBag Outlines`，配置更新入口为 `Update CardBag Configs`；同步修改代码提示和相关文档，不改变工具执行逻辑与排列优先级。
-- 已从 `Puffies` 菜单移除不再需要的 `Apply CardBag Hierarchy` 手工入口；保留新卡包生成、脚本重载处理和布局更新校验仍依赖的内部层级规范化代码。布局更新遇到非标准结构时，提示改为通过 `Generate CardBag Prefabs` 重新生成对应 Prefab。
-- `Apply CardBag Shadow Materials` 菜单已改名为 `Apply CardBag Shadows`，优先级设为 `23`，固定显示在优先级 `22` 的 `Update CardBag Configs` 下方。
-- `Update CardBag Configs` 的 `AutoUpdate` 语义已收窄为只控制 `BoardScale`：所有匹配源资源的配置行仍更新 `StickerCount` 和 `PackSize`，`AutoUpdate=0` 仅保留手工棋盘缩放。结果窗口不再显示“整行跳过”，改为列出保留 `BoardScale` 的 PackId。
-- `PieceLight1-4` 光点形变推出距离在原 `6~14px` 结果上乘 3，实际范围为 `18~42px`。
-- 当前吸附块的光点运动时长从 `0.48s` 改为 `0.96s`；相邻已拼块从 `0.42s` 改为 `0.84s`。
-- 相邻光点原有 `0.07~0.23s` 错峰延迟保持不变。
-- 光点传播协程不再使用固定 `0.72s` 收尾时间，改为按所有光点中最大的 `Delay + Lifetime` 等待，避免运动结束后空等或提前切组。
-- `CreateDraggableGroup` 不再提前创建托盘光点；首次入场和切组入场均在每块 Piece 的落地进度达到 `1` 时单独创建，避免多个 Piece 聚在起点时光点重叠。
-- 入场和切组动画期间暂停通用补建；动画结束后，`Update` 仍只对“活动、未放置且确实缺少光点”的 Piece 幂等补建，直接启动 GameScene 和异常漏失场景仍可恢复。
-- 托盘 `SpriteMask` 的自定义排序范围明确设置为 Piece 本体 `sortingOrder` 到 `sortingOrder + 2`，光点固定处于中间的 `sortingOrder + 1`，避免光点落在遮罩范围边界上被全部裁掉。
-- 样式继续复用 `PieceLight1-4.png`，改为按 Piece 正式编号稳定轮换圆环、斜光、长弧和圆角框；不再通过比例评分让相近尺寸集中选择同一两张资源。
-- 四张光点不再被非等比压成统一目标宽高比，改为保留各自原始比例并按 Piece 可用宽高整体缩小；不同资源使用各自的稳定旋转区间，进一步保留轮廓差异。
-- `PackHighlightAdditive.shader` 与 `PuzzlePieceLightAdditive.shader` 均增加 9 点预乘 Alpha 柔化和纹理边界 3 像素渐隐；棋盘 UGUI 与托盘 SpriteRenderer 在回弹形变时使用相同柔边规则。
-- 所有变化使用 Piece 正式编号作为随机种子；同一 Piece 在托盘、棋盘和重新进入关卡时保持相同 Sprite、长度、旋转和位置。
-- 绿色 ADD 滑光的 `0.52s` 时长、Shader、颜色、宽度和扫光范围均未修改。
+1. 当前组最终外轮廓来自 `GameBoard` 挖空，已完成组接触边来自 Piece Alpha；两套蒙版栅格不完全重合时，真实交点附近可能出现几像素断口。
+2. 边界归属如果只依赖最近距离，会把切线方向或边界另一侧的相邻区域误判为当前组，表现为端点延长、多余尾巴或错误描边。
+3. 为修补断口而跨组件强制连线会制造长斜线或梯状短线。内部独立接触边本来可以不连接最终外轮廓，不能把所有组件都拉向外边界。
+4. 默认 `GroupNN.png` 必须严格排除同组 Piece 接缝、当前组与未来组之间的边、已完成组的无关边界，以及之前阶段的整张描边；否则会出现棋盘中间不应存在的线。
+5. 当前烘焙器只记录每张输出的非透明像素总数，没有检查孤立短线、异常分支、断裂组件、过长桥接或边界归属，因此“烘焙成功且没有异常”不能证明结果正确。
+6. `ContactSearchRadius=6`、`FinalBoundaryAssignmentRadius=12`、法线采样、桥接长度和线宽都是固定源像素值；不同 GameBoard 分辨率下实际视觉尺度不同，需要验证固定阈值是否会造成小图误连或大图断裂，不能未经数据验证直接改为更大常量。
 
-## 修改文件
+## 当前实现事实
 
-- `Assets/Resources/IngameCoverShadow03.mat`
-- `Assets/Resources/PackHighlightAdditive.shader`
-- `Assets/Resources/PuzzlePieceLightAdditive.shader`
-- `Assets/Scripts/Controller/GameScene.cs`
-- `Assets/Scripts/Editor/CardBagPrefabGeneratorEditor.cs`
+- 编辑器入口为 **Puffies -> Bake CardBag Outlines**，核心代码在 `Assets/Scripts/Editor/PuzzleOutlineBakerEditor.cs`。
+- `GroupNN.png` 使用当前组最终外边界和与低编号已完成组的接触边；`GroupNN_Level.png` 是当前组并集外边界；`GroupNN_Stickers.png` 是当前组各 Piece 边界并集。
+- 现有代码已经加入局部法线方向校验：最终外轮廓要求当前组位于内侧，已完成组接触边要求当前组位于旧组边界外侧。
+- 现有桥接只允许沿真实边界走廊修补最多 `4px` 的栅格断口；这属于已有保护，不能视为全卡包验证完成。
+- 2026-08-20 的描边相关提交主要重新生成了输出 PNG，没有继续修改 `PuzzleOutlineBakerEditor.cs`，因此系统性风险仍需单独处理。
+- 运行时只显示烘焙结果，不实时识别轮廓；项目没有运行时描边第三方插件、Renderer Feature 或运行时轮廓 Shader。
+
+## 需求与验收标准
+
+1. WHEN 烘焙任意正式分组卡包 THEN 系统 SHALL 为每张默认连接图输出可审计的边界组件统计，并识别孤立短线、异常分支和超过允许长度的桥接。
+2. WHEN 当前组外轮廓与已完成组接触边在真实几何交点相遇 THEN 系统 SHALL 只修补栅格化造成的微小断口，最终显示连续且不得新增跨区域连线。
+3. IF 两段边界属于不同独立组件且没有真实交点 THEN 系统 SHALL 保持它们独立，不得为了视觉连续而强制连接。
+4. WHEN 判断最终外轮廓或接触边归属 THEN 系统 SHALL 同时校验距离、目标所在法线方向和对应组身份，切线邻近不得延长端点。
+5. WHEN 生成 `GroupNN.png` THEN 系统 SHALL 只包含当前组最终外边界和与低编号已完成组的真实接触边，不得包含同组接缝、未来组边界或已完成组无关边界。
+6. WHEN 对不同分辨率 GameBoard 烘焙 THEN 系统 SHALL 使用经过样本验证的尺度规则，保证判定半径和输出线宽的屏幕视觉一致性。
+7. WHEN 自动质量检查失败 THEN 烘焙器 SHALL 明确报告 CardBag、Group、异常类型、像素位置或组件边界，不得只输出总像素数后视为成功。
+
+## 建议实施顺序
+
+- [ ] 1. 先为现有输出增加只读拓扑诊断：8 邻域连通组件、组件像素数、端点/分支点、最小包围盒、组件间最短距离和桥接像素来源。
+- [ ] 2. 对全部 CardBag 生成诊断报告，优先定位实际出现断裂或错误线段的 `CardBagNNN/GroupNN`，保存可复现样本。
+- [ ] 3. 将默认连接图拆成“当前最终外轮廓”“已完成组接触边”“桥接补点”三个可单独诊断的中间蒙版，确认错误发生在哪一步。
+- [ ] 4. 使用真实交点邻域和组身份约束桥接；保持最大 `4px` 和边界走廊限制，禁止跨独立组件寻路。
+- [ ] 5. 用至少一张低分辨率、一张普通分辨率和 CardBag022 高分辨率棋盘评估固定像素阈值；必要时改为受上下限约束的分辨率比例值。
+- [ ] 6. 加入自动失败或警告门槛，并在输出日志中提供可定位信息。
+- [ ] 7. 重新烘焙全部正式 CardBag，编译运行时与 Editor 程序集，并在 Play Mode 逐组核对默认、关卡和贴纸三种描边。
+
+## 不得回归
+
+- 不得恢复运行时实时识别轮廓。
+- 不得通过增大搜索半径或全局膨胀掩盖断口。
+- 不得叠加上一组整张 `GroupNN.png`。
+- 不得修改 CardBag Prefab 的 Transform、Canvas 尺寸、Piece 分组或 Sprite 引用。
+- 缺少描边资源时仍只警告，不得阻止 Piece 创建和正常游戏。
+
+## 关联文件
+
 - `Assets/Scripts/Editor/PuzzleOutlineBakerEditor.cs`
-- `Documents/CURRENT_TASK.md`
-- `Documents/GAME_DESIGN_REQUIREMENTS.md`
+- `Assets/Resources/Generated/PuzzleOutlines/CardBagNNN/GroupNN.png`
+- `Assets/Resources/Generated/PuzzleOutlines/CardBagNNN/GroupNN_Level.png`
+- `Assets/Resources/Generated/PuzzleOutlines/CardBagNNN/GroupNN_Stickers.png`
 - `Documents/PROJECT_CONTEXT.md`
 - `specs/spec-driven-development.md`
-- `specs/puzzle-outline.md`
 
-## 决策
+## 当前验证状态
 
-- 灰色拼图区内部本身不是禁放区。灰色边缘定义为未完成 Groove 区域与 GameBoard 不透明区域的交界；只有 Piece 实际轮廓同时覆盖两侧才拒绝。GameBoard 缺少可用 Physics Shape 时该新增检查安全放行，不改变原有自由放置规则。
-- “移动距离”只作用于 `PieceLightDeformEffect` 的 `BendDistance`，不移动 Piece、光点根节点或常驻初始位置。
-- “移动时间”只放大单个光点的推出和回弹生命周期，不放大相邻块的错峰启动延迟。
-- 常驻光点的多变性只调整现有四张 Sprite 的稳定选择、等比缩放和旋转，不创建新纹理、不改变 Piece 图片本身。
-- 柔边在两条常驻光点材质路径内实现；不修改 `PuzzlePlacementShine.shader`，因此绿色斜向 ADD 滑光保持原样。
-- 切组和结算继续等待全部光点反馈完成，但等待时长以真实动画结束时间为准。
+- 已核对当前烘焙算法包含法线方向校验和受限 `4px` 桥接。
+- 已核对烘焙日志目前只有输出像素数量，没有拓扑质量门禁。
+- 尚未完成全 CardBag 诊断、问题组清单、算法修改和重新烘焙。
+- 本轮只记录任务，没有修改 `PuzzleOutlineBakerEditor.cs` 或任何描边 PNG。
 
-## 验证
+## 工作区提醒
 
-- 静态检查确认初始排列使用 `hostBounds.min.x + 0.6` 确定最左 Piece 边缘，托盘滚动范围使用同一 `0.6` 作为左右安全边距；该值为固定世界单位，不经过设计像素换算。
-- 静态检查确认托盘间距不再固定使用 `DraggableHorizontalSpacingPixels / PixelsPerUnit`；首次布局通过当前 `PieceBoard` 设计宽度与世界宽度换算 40 设计像素，拿起补位复用同一方法，回收重排仍调用统一 `LayoutTrayPieces`。尚需在不同卡包及发生相机自适配的组中目视确认间距。
-- 静态核对 CardBag009/010/011 的 Prefab：正式 Piece 数量分别为 `36/25/33`，03 材质绑定数量分别为 `36/25/33`，不存在 CardBag010 漏绑；投影组件数量均覆盖全部 Piece。材质留白仅扩展渲染网格，不修改 RectTransform、Sprite、吸附坐标或 Physics Shape。仍需在 GameScene 目视确认 CardBag010 正确吸附后的 2px 投影清晰度。
-- 静态检查确认松手处理顺序仍为托盘回收、正确吸附、外部 Piece 重叠/棋盘合法性；新增灰色边缘双侧检查仅位于棋盘内自由放置分支，只有同时命中灰区和非灰区才复用 `ReturnPieceAfterInvalidDrop`，完整位于任一侧均放行。
-- 本轮 `dotnet build Assembly-CSharp.csproj --no-restore` 与 `dotnet build Assembly-CSharp-Editor.csproj --no-restore`：通过，均为 `0` 警告、`0` 错误。
-- 静态检查确认三个新菜单名称各只有一个 `MenuItem` 入口，旧菜单名称已从代码提示与相关文档移除；工具方法和菜单优先级未修改。
-- 静态检查确认 `Apply CardBag Hierarchy` 不再注册 Unity 菜单，内部 `ApplyAll`、`ApplyToHierarchy` 与 `ValidateHierarchy` 调用链继续保留。
-- 静态检查确认 `Apply CardBag Shadows` 使用菜单优先级 `23`，与 `Update CardBag Configs` 的优先级 `22` 连续排列。
-- 静态检查确认 `AutoUpdate=0` 不再提前跳过配置行；`PackSize` 和 `StickerCount` 在两种取值下共用同一更新路径，只有 `BoardScale` 写入受该字段控制。
-- 当前 `AutoUpdate=0` 的 CardBag001（8 片、XS、手工 `BoardScale=1.3`）和 CardBag018（196 片、XXXL、手工 `BoardScale=0.7`）已核对：新逻辑会继续同步片数和尺寸，同时保留这两个手工缩放值。
-- `dotnet build Assembly-CSharp-Editor.csproj --no-restore`：通过，`0` 警告、`0` 错误。
-- `dotnet build Assembly-CSharp.csproj --no-restore`：通过，`0` 警告、`0` 错误。
-- 临时运行时诊断日志和临时 Shader 增亮已删除，`PuzzlePieceLightAdditive.shader` 保持原有美术参数。
-- 代码路径确认：首次入场使用 `pieceT >= 1` 创建对应 Piece 光点；切组入场使用 `progress >= 1` 创建；两个动画标记有效期间通用补建直接返回。
-- 代码差异确认只涉及光点常驻样式、距离、时长和传播协程收尾计算。
-- 当前 Unity Editor 已刷新，Editor 日志未发现本轮 C# 编译错误。
-- 本轮两份常驻光点 Shader 已由 Unity 刷新，Editor 日志未发现 Shader 编译错误；仍需 Play Mode 目视确认最弯曲阶段的边缘衰减。
-- 尚未在 GameScene 目视验证 3 倍位移是否超出小型 Piece 的可见裁切范围。
-
-## 关联待办
-
-- CardBag 扁平层级与棋盘背景平铺已完成结构校验，仍需在普通/高对比模式下目视检查背景接缝。
-- Piece 拿起尺寸与 01/02/03/04 投影状态仍需完整 Play Mode 回归。
+- 当前工作区只有本轮三份任务/规格文档处于未提交状态，`PuzzleOutlineBakerEditor.cs` 和描边 PNG 均未修改。
+- 本任务记录尚未提交或推送；另一台设备只有在对应提交推送后才能通过 Git 读取。
 
 ## 下一步
 
-1. 重新进入 GameScene，确认最左 Piece 到托盘左边界的固定世界间隙为原来的 3 倍；托盘溢出后横向滑动到两端时，左右安全边距一致。
-2. 进入 Piece 数量较多且触发相机自适配的组，确认托盘相邻 Piece 的屏幕间距明显为 40 设计像素；拿起非队尾 Piece 后，后序 Piece 保持同样间距完成补位。
-3. 在 CardBag010 正确吸附几块方形 Piece，确认其四周能看到 03 的轻投影，且 Piece 尺寸、位置和拼接缝没有变化。
-4. 进入 GameScene 后确认 Piece 聚集和飞向托盘期间没有光点；每块 Piece 落稳后才出现一个常驻光点，并能明显区分圆环、斜光、长弧和圆角框。
-5. 连续拼入当前块和邻接块，确认光点推出距离明显增大、回弹完整且不会永久偏移；重点检查最弯曲和反向回弹阶段没有矩形硬边，窄小 Piece 也没有被 Alpha Mask 裁掉过多。
-6. 完成一组最后一块，确认系统等待光点结束后正常切组且没有额外静止停顿。
+1. 在另一台设备拉取包含本记录的最新提交。
+2. 先运行全卡包拓扑诊断并形成具体异常组清单，再修改烘焙算法。
+3. 修复后重新烘焙全部描边资源，并完成 Play Mode 分组切换回归。
 
 ## 恢复提示
 
-继续 Puffies 当前任务。先阅读 `AGENTS.md`、`Documents/WORKFLOW.md` 和本文件；在 GameScene 验证托盘 Piece 落稳后才创建常驻光点、四种轮廓差异、回弹全过程柔边，以及正确吸附后的 3 倍移动距离、2 倍运动时长和切组等待。不要自动提交，用户明确要求提交时再提交并推送。
+继续 Puffies 的“描边烘焙全局质量修复”。先阅读 `AGENTS.md`、`Documents/WORKFLOW.md`、`Documents/CURRENT_TASK.md` 和 `specs/spec-driven-development.md` 中“描边烘焙全局质量修复”章节；先增加诊断并定位实际异常组，不要直接放宽搜索半径或批量重烘焙来掩盖问题。未经用户明确要求不要自动提交；用户要求提交时同时推送。
