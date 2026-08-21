@@ -13,7 +13,8 @@
 - 正确吸附 Piece 后，当前块及相邻已拼块上的常驻光点移动距离调整为原来的 3 倍。
 - 光点移动时间调整为原来的 2 倍。
 - 每块拼图片完成落入托盘后才创建常驻光点；入场聚集和飞行阶段不显示。历史已拼 Piece 初始化时同样存在。
-- 光点样式需要有稳定的多变性，并根据不同 Piece 的宽高适当拉长，优先体现现有光点资源中的弧形轮廓。
+- 光点推出、弯曲和回弹的全过程不能出现矩形硬边或明显切口，边缘必须保持透明虚化。
+- 同组 Piece 的光点样式要有明显差异；继续复用现有四种资源，并让同一 Piece 跨托盘、棋盘和重进关卡保持一致。
 - 不改变绿色斜向 ADD 滑光和其他拼图反馈。
 
 ## 工作记录
@@ -33,14 +34,17 @@
 - `CreateDraggableGroup` 不再提前创建托盘光点；首次入场和切组入场均在每块 Piece 的落地进度达到 `1` 时单独创建，避免多个 Piece 聚在起点时光点重叠。
 - 入场和切组动画期间暂停通用补建；动画结束后，`Update` 仍只对“活动、未放置且确实缺少光点”的 Piece 幂等补建，直接启动 GameScene 和异常漏失场景仍可恢复。
 - 托盘 `SpriteMask` 的自定义排序范围明确设置为 Piece 本体 `sortingOrder` 到 `sortingOrder + 2`，光点固定处于中间的 `sortingOrder + 1`，避免光点落在遮罩范围边界上被全部裁掉。
-- 样式继续复用 `PieceLight1-4.png`：按 Piece 宽高计算目标比例，并在误差允许时以稳定的 `42%` 概率选择次匹配样式，避免相近尺寸总是使用同一张图。
-- 宽 Piece 的光点目标长度额外增加，最大可占 Piece 宽度 `70%`，目标宽高比上限从 `1.85` 放宽到 `2.45`；旋转范围从 `-14~-4` 调整为 `-18~4`，使 `PieceLight2/3` 的弧形更容易显现。
+- 样式继续复用 `PieceLight1-4.png`，改为按 Piece 正式编号稳定轮换圆环、斜光、长弧和圆角框；不再通过比例评分让相近尺寸集中选择同一两张资源。
+- 四张光点不再被非等比压成统一目标宽高比，改为保留各自原始比例并按 Piece 可用宽高整体缩小；不同资源使用各自的稳定旋转区间，进一步保留轮廓差异。
+- `PackHighlightAdditive.shader` 与 `PuzzlePieceLightAdditive.shader` 均增加 9 点预乘 Alpha 柔化和纹理边界 3 像素渐隐；棋盘 UGUI 与托盘 SpriteRenderer 在回弹形变时使用相同柔边规则。
 - 所有变化使用 Piece 正式编号作为随机种子；同一 Piece 在托盘、棋盘和重新进入关卡时保持相同 Sprite、长度、旋转和位置。
 - 绿色 ADD 滑光的 `0.52s` 时长、Shader、颜色、宽度和扫光范围均未修改。
 
 ## 修改文件
 
 - `Assets/Resources/IngameCoverShadow03.mat`
+- `Assets/Resources/PackHighlightAdditive.shader`
+- `Assets/Resources/PuzzlePieceLightAdditive.shader`
 - `Assets/Scripts/Controller/GameScene.cs`
 - `Assets/Scripts/Editor/CardBagPrefabGeneratorEditor.cs`
 - `Assets/Scripts/Editor/PuzzleOutlineBakerEditor.cs`
@@ -55,7 +59,8 @@
 - 灰色拼图区内部本身不是禁放区。灰色边缘定义为未完成 Groove 区域与 GameBoard 不透明区域的交界；只有 Piece 实际轮廓同时覆盖两侧才拒绝。GameBoard 缺少可用 Physics Shape 时该新增检查安全放行，不改变原有自由放置规则。
 - “移动距离”只作用于 `PieceLightDeformEffect` 的 `BendDistance`，不移动 Piece、光点根节点或常驻初始位置。
 - “移动时间”只放大单个光点的推出和回弹生命周期，不放大相邻块的错峰启动延迟。
-- 常驻光点的多变性只调整现有四张 Sprite 的稳定选择、非等比缩放和旋转，不创建新纹理、不改变 Piece 图片本身。
+- 常驻光点的多变性只调整现有四张 Sprite 的稳定选择、等比缩放和旋转，不创建新纹理、不改变 Piece 图片本身。
+- 柔边在两条常驻光点材质路径内实现；不修改 `PuzzlePlacementShine.shader`，因此绿色斜向 ADD 滑光保持原样。
 - 切组和结算继续等待全部光点反馈完成，但等待时长以真实动画结束时间为准。
 
 ## 验证
@@ -76,6 +81,7 @@
 - 代码路径确认：首次入场使用 `pieceT >= 1` 创建对应 Piece 光点；切组入场使用 `progress >= 1` 创建；两个动画标记有效期间通用补建直接返回。
 - 代码差异确认只涉及光点常驻样式、距离、时长和传播协程收尾计算。
 - 当前 Unity Editor 已刷新，Editor 日志未发现本轮 C# 编译错误。
+- 本轮两份常驻光点 Shader 已由 Unity 刷新，Editor 日志未发现 Shader 编译错误；仍需 Play Mode 目视确认最弯曲阶段的边缘衰减。
 - 尚未在 GameScene 目视验证 3 倍位移是否超出小型 Piece 的可见裁切范围。
 
 ## 关联待办
@@ -88,10 +94,10 @@
 1. 重新进入 GameScene，确认最左 Piece 到托盘左边界的固定世界间隙为原来的 3 倍；托盘溢出后横向滑动到两端时，左右安全边距一致。
 2. 进入 Piece 数量较多且触发相机自适配的组，确认托盘相邻 Piece 的屏幕间距明显为 40 设计像素；拿起非队尾 Piece 后，后序 Piece 保持同样间距完成补位。
 3. 在 CardBag010 正确吸附几块方形 Piece，确认其四周能看到 03 的轻投影，且 Piece 尺寸、位置和拼接缝没有变化。
-4. 进入 GameScene 后确认 Piece 聚集和飞向托盘期间没有光点；每块 Piece 落稳后才出现一个常驻光点，且不同 Piece 的样式、长度和角度存在变化。
-5. 连续拼入当前块和邻接块，确认光点推出距离明显增大、回弹完整且不会永久偏移；检查窄小 Piece 是否被 Alpha Mask 裁掉过多。
+4. 进入 GameScene 后确认 Piece 聚集和飞向托盘期间没有光点；每块 Piece 落稳后才出现一个常驻光点，并能明显区分圆环、斜光、长弧和圆角框。
+5. 连续拼入当前块和邻接块，确认光点推出距离明显增大、回弹完整且不会永久偏移；重点检查最弯曲和反向回弹阶段没有矩形硬边，窄小 Piece 也没有被 Alpha Mask 裁掉过多。
 6. 完成一组最后一块，确认系统等待光点结束后正常切组且没有额外静止停顿。
 
 ## 恢复提示
 
-继续 Puffies 当前任务。先阅读 `AGENTS.md`、`Documents/WORKFLOW.md` 和本文件；在 GameScene 验证托盘 Piece 落稳后才创建常驻光点、稳定多样的拉长弧形样式，以及正确吸附后的 3 倍移动距离、2 倍运动时长和切组等待。不要自动提交，用户明确要求提交时再提交并推送。
+继续 Puffies 当前任务。先阅读 `AGENTS.md`、`Documents/WORKFLOW.md` 和本文件；在 GameScene 验证托盘 Piece 落稳后才创建常驻光点、四种轮廓差异、回弹全过程柔边，以及正确吸附后的 3 倍移动距离、2 倍运动时长和切组等待。不要自动提交，用户明确要求提交时再提交并推送。

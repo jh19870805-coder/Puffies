@@ -72,8 +72,35 @@ Shader "Puffies/UI/PackHighlightAdditive"
             };
 
             sampler2D _MainTex;
+            float4 _MainTex_TexelSize;
             fixed4 _Color;
             float4 _ClipRect;
+
+            fixed4 SamplePremultiplied(float2 uv)
+            {
+                fixed4 sampleColor = tex2D(_MainTex, uv);
+                sampleColor.rgb *= sampleColor.a;
+                return sampleColor;
+            }
+
+            fixed4 SampleSoftLight(float2 uv)
+            {
+                float2 offset = _MainTex_TexelSize.xy * 1.25;
+                fixed4 color = SamplePremultiplied(uv) * 4.0;
+                color += SamplePremultiplied(uv + float2(offset.x, 0.0)) * 2.0;
+                color += SamplePremultiplied(uv - float2(offset.x, 0.0)) * 2.0;
+                color += SamplePremultiplied(uv + float2(0.0, offset.y)) * 2.0;
+                color += SamplePremultiplied(uv - float2(0.0, offset.y)) * 2.0;
+                color += SamplePremultiplied(uv + offset);
+                color += SamplePremultiplied(uv - offset);
+                color += SamplePremultiplied(uv + float2(offset.x, -offset.y));
+                color += SamplePremultiplied(uv + float2(-offset.x, offset.y));
+                color *= 0.0625;
+
+                float2 edgeDistance = min(uv, 1.0 - uv) / _MainTex_TexelSize.xy;
+                float edgeFade = smoothstep(0.0, 3.0, min(edgeDistance.x, edgeDistance.y));
+                return color * edgeFade;
+            }
 
             v2f vert(appdata_t input)
             {
@@ -89,9 +116,9 @@ Shader "Puffies/UI/PackHighlightAdditive"
 
             fixed4 frag(v2f input) : SV_Target
             {
-                fixed4 textureColor = tex2D(_MainTex, input.texcoord);
-                fixed4 color = textureColor * input.color;
-                color.rgb *= color.a;
+                fixed4 textureColor = SampleSoftLight(input.texcoord);
+                fixed4 color = textureColor;
+                color.rgb *= input.color.rgb * input.color.a;
                 color.a = 0.0;
 
                 #ifdef UNITY_UI_CLIP_RECT

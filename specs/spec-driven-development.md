@@ -705,3 +705,20 @@
 - CardBag010 的全部正式 Piece 已确认存在 03 材质与 `PackCoverShadowEffect`；根因是其 `249 x 249` 源图没有透明像素，而 03 原先没有 Render Padding，2px Alpha 投影被 UGUI 网格边界裁掉。
 - 将 `IngameCoverShadow03` 的 `PaddingX/Y` 从 `0` 调整为与 `BlurX/Y` 一致的 `2`；其他美术参数保持不变。
 - 静态验证确认该参数只驱动渲染网格留白和 Shader UV，不参与 Piece RectTransform、Scale、吸附或碰撞计算；仍需 Play Mode 目视验收投影清晰度与拼接缝。
+
+## 2026-08-21 - Piece 光点柔边与样式区分
+
+### 需求
+
+1. WHEN 常驻光点发生推出、弯曲和回弹 THEN 系统 SHALL 在整个过程中保持柔化透明边缘，不得露出矩形硬边或明显切口。
+2. WHEN 同一组中存在多个 Piece THEN 系统 SHALL 稳定使用不同的光点轮廓，圆环、斜光、长弧和圆角框四种现有资源应具有明确可见的样式差异。
+3. WHEN Piece 在托盘、棋盘及重进关卡之间切换 THEN 系统 SHALL 保持该 Piece 的光点资源、比例、旋转和位置一致。
+4. 本次修改不得改变当前 Piece 的绿色斜向 ADD 滑光 Shader、颜色、范围、`0.52s` 时长和播放时序。
+
+### 设计与任务
+
+- [x] 1. 将光点资源选择改为按 Piece 正式编号稳定轮换四种样式；资源缺失时才顺序回退。
+- [x] 2. 移除把四张光点强制压成同一目标宽高比的缩放，改为保持各自原始比例并只按 Piece 可用宽高做整体缩小。
+- [x] 3. 为 UGUI 和 SpriteRenderer 两条 ADD 光点 Shader 路径增加小范围预乘 Alpha 柔化和纹理边界渐隐。
+- [x] 4. 编译运行时与 Editor 程序集，均为 `0` 警告、`0` 错误；Unity 刷新后日志未发现 Shader 编译错误。
+- [ ] 5. 在 Play Mode 目视验证回弹全过程柔边和同组四种样式差异。

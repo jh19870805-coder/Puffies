@@ -60,9 +60,6 @@ public class GameScene : MonoBehaviour
     private const float PiecePlacementLightDurationMultiplier = 2f;
     private const float PiecePlacementLightMiddleStretch = 0.34f;
     private const float PieceLightMaximumWidthRatio = 0.7f;
-    private const float PieceLightMaximumAspect = 2.45f;
-    private const float PieceLightAlternateStyleChance = 0.42f;
-    private const float PieceLightAlternateStyleMaxErrorDelta = 0.32f;
     private const int PiecePlacementLightSpriteCount = 4;
     private const int PiecePlacementLightMaxAffectedPieces = 7;
     private const float InvalidDropReturnDuration = 0.3f;
@@ -2451,19 +2448,14 @@ public class GameScene : MonoBehaviour
         var targetWidth = Mathf.Min(
             Mathf.Clamp(referenceSize * 0.22f * lengthVariation, 18f, 108f),
             pieceSize.x * maximumWidthRatio);
-        var desiredAspect = Mathf.Clamp(
-            (1.15f + Mathf.Max(0f, pieceAspect - 0.65f) * 0.48f)
-            * RandomRange(random, 0.94f, 1.18f),
-            1.1f,
-            PieceLightMaximumAspect);
-        var targetHeight = Mathf.Min(
-            targetWidth / desiredAspect,
-            Mathf.Min(pieceSize.y * 0.34f, 42f));
-        targetHeight = Mathf.Max(8f, targetHeight);
-        targetWidth = Mathf.Min(targetWidth, targetHeight * desiredAspect);
-        targetWidth = Mathf.Max(10f, targetWidth);
-        var spriteIndex = SelectPieceLightSpriteIndex(desiredAspect, random);
+        var spriteIndex = SelectPieceLightSpriteIndex(pieceNumber);
         var lightSprite = _piecePlacementLightSprites[spriteIndex];
+        var maximumHeight = Mathf.Max(
+            8f,
+            Mathf.Min(pieceSize.y * 0.34f, 42f));
+        var uniformScale = Mathf.Min(
+            Mathf.Max(10f, targetWidth) / Mathf.Max(1f, lightSprite.rect.width),
+            maximumHeight / Mathf.Max(1f, lightSprite.rect.height));
         var normalizedPosition = CalculateUpperLeftPieceLightPosition(
             sourceImage != null ? sourceImage.sprite : null);
         normalizedPosition += new Vector2(
@@ -2475,58 +2467,46 @@ public class GameScene : MonoBehaviour
         {
             SpriteIndex = spriteIndex,
             NormalizedPosition = normalizedPosition,
-            Rotation = RandomRange(random, -18f, 4f),
-            Scale = new Vector2(
-                targetWidth / Mathf.Max(1f, lightSprite.rect.width),
-                targetHeight / Mathf.Max(1f, lightSprite.rect.height))
+            Rotation = GetPieceLightRotation(spriteIndex, random),
+            Scale = Vector2.one * uniformScale
         };
         _pieceLightStates[pieceNumber] = state;
         return state;
     }
 
-    private int SelectPieceLightSpriteIndex(float targetAspect, System.Random random)
+    private int SelectPieceLightSpriteIndex(int pieceNumber)
     {
-        var bestIndex = 0;
-        var bestError = float.PositiveInfinity;
-        var alternateIndex = -1;
-        var alternateError = float.PositiveInfinity;
-        for (var i = 0; i < _piecePlacementLightSprites.Count; i++)
+        if (_piecePlacementLightSprites.Count <= 0)
         {
-            var sprite = _piecePlacementLightSprites[i];
-            if (sprite == null || sprite.rect.height <= 0.001f)
-            {
-                continue;
-            }
+            return 0;
+        }
 
-            var spriteAspect = sprite.rect.width / sprite.rect.height;
-            var error = Mathf.Abs(Mathf.Log(
-                Mathf.Max(0.001f, spriteAspect)
-                / Mathf.Max(0.001f, targetAspect)));
-            if (error < bestError)
+        var preferredIndex = Math.Abs(pieceNumber % _piecePlacementLightSprites.Count);
+        for (var offset = 0; offset < _piecePlacementLightSprites.Count; offset++)
+        {
+            var index = (preferredIndex + offset) % _piecePlacementLightSprites.Count;
+            if (_piecePlacementLightSprites[index] != null)
             {
-                alternateError = bestError;
-                alternateIndex = bestIndex;
-                bestError = error;
-                bestIndex = i;
-                continue;
-            }
-
-            if (error < alternateError)
-            {
-                alternateError = error;
-                alternateIndex = i;
+                return index;
             }
         }
 
-        if (alternateIndex >= 0
-            && alternateError <= bestError + PieceLightAlternateStyleMaxErrorDelta
-            && random != null
-            && random.NextDouble() < PieceLightAlternateStyleChance)
-        {
-            return alternateIndex;
-        }
+        return 0;
+    }
 
-        return bestIndex;
+    private static float GetPieceLightRotation(int spriteIndex, System.Random random)
+    {
+        switch (spriteIndex)
+        {
+            case 0:
+                return RandomRange(random, -8f, 8f);
+            case 1:
+                return RandomRange(random, -18f, -6f);
+            case 2:
+                return RandomRange(random, -12f, 2f);
+            default:
+                return RandomRange(random, -4f, 8f);
+        }
     }
 
     private static Vector2 CalculateUpperLeftPieceLightPosition(Sprite sprite)

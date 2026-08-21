@@ -54,10 +54,38 @@ Shader "Puffies/Sprites/PuzzlePieceLightAdditive"
 
             #include "UnitySprites.cginc"
 
+            float4 _MainTex_TexelSize;
+
+            fixed4 SamplePremultiplied(float2 uv)
+            {
+                fixed4 sampleColor = SampleSpriteTexture(uv);
+                sampleColor.rgb *= sampleColor.a;
+                return sampleColor;
+            }
+
+            fixed4 SampleSoftLight(float2 uv)
+            {
+                float2 offset = _MainTex_TexelSize.xy * 1.25;
+                fixed4 color = SamplePremultiplied(uv) * 4.0;
+                color += SamplePremultiplied(uv + float2(offset.x, 0.0)) * 2.0;
+                color += SamplePremultiplied(uv - float2(offset.x, 0.0)) * 2.0;
+                color += SamplePremultiplied(uv + float2(0.0, offset.y)) * 2.0;
+                color += SamplePremultiplied(uv - float2(0.0, offset.y)) * 2.0;
+                color += SamplePremultiplied(uv + offset);
+                color += SamplePremultiplied(uv - offset);
+                color += SamplePremultiplied(uv + float2(offset.x, -offset.y));
+                color += SamplePremultiplied(uv + float2(-offset.x, offset.y));
+                color *= 0.0625;
+
+                float2 edgeDistance = min(uv, 1.0 - uv) / _MainTex_TexelSize.xy;
+                float edgeFade = smoothstep(0.0, 3.0, min(edgeDistance.x, edgeDistance.y));
+                return color * edgeFade;
+            }
+
             fixed4 frag(v2f IN) : SV_Target
             {
-                fixed4 color = SampleSpriteTexture(IN.texcoord) * IN.color;
-                color.rgb *= color.a;
+                fixed4 color = SampleSoftLight(IN.texcoord);
+                color.rgb *= IN.color.rgb * IN.color.a;
                 color.a = 0.0;
                 return color;
             }
