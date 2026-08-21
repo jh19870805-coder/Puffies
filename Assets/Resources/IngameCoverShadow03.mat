@@ -30,8 +30,8 @@ Material:
     m_Ints: []
     m_Floats:
     - _ColorMask: 15
-    - _PaddingX: 0
-    - _PaddingY: 0
+    - _PaddingX: 2
+    - _PaddingY: 2
     - _ShadowBlurX: 2
     - _ShadowBlurY: 2
     - _ShadowOffsetX: 0

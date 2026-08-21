@@ -691,3 +691,15 @@
 - [x] 2. 将限制接入首次建组及后续切组共用的棋盘自动适配流程。
 - [x] 3. 编译运行时和 Editor 程序集。
 - [ ] 4. 在 Play Mode 对高、宽棋盘目视验证 `10%` 上限并按实际画面微调。
+## 2026-08-21 - CardBag010 正确吸附 Piece 投影
+
+### 需求
+
+- CardBag010 的全不透明方形 Piece 正确吸附后必须显示与其他卡包一致的 `IngameCoverShadow03` 轻投影。
+- 修复不得改变 Piece 的 RectTransform、棋盘位置、缩放、吸附坐标或 Physics Shape。
+
+### 实现与验证
+
+- CardBag010 的全部正式 Piece 已确认存在 03 材质与 `PackCoverShadowEffect`；根因是其 `249 x 249` 源图没有透明像素，而 03 原先没有 Render Padding，2px Alpha 投影被 UGUI 网格边界裁掉。
+- 将 `IngameCoverShadow03` 的 `PaddingX/Y` 从 `0` 调整为与 `BlurX/Y` 一致的 `2`；其他美术参数保持不变。
+- 静态验证确认该参数只驱动渲染网格留白和 Shader UV，不参与 Piece RectTransform、Scale、吸附或碰撞计算；仍需 Play Mode 目视验收投影清晰度与拼接缝。
