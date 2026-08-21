@@ -6,6 +6,7 @@
 
 ## 用户意图
 
+- 托盘 Piece 左右可见间距必须真正按 `40` 设计像素显示；不能只修改常量后因 GameScene 相机自适配而在屏幕上被缩小，首次布局、拿起补位和回收重排必须一致。
 - CardBag010 的正确吸附 Piece 也必须显示与其他卡包一致的 `IngameCoverShadow03` 投影；修复不能改变 Piece 的棋盘尺寸、位置、缩放或碰撞。
 - Piece 完整处于棋盘灰色拼图区内部时允许自由放置；只有同时压到灰色区域与 GameBoard 非灰色区域、即横跨灰色边缘时才判定放错并回归托盘。与自己的凹槽相交但未达到吸附标准仍判定放错；正确吸附、托盘优先、已拼块和外部 Piece 防重叠、其他棋盘空位与桌面自由放置规则保持不变。
 - 正确吸附 Piece 后，当前块及相邻已拼块上的常驻光点移动距离调整为原来的 3 倍。
@@ -16,6 +17,7 @@
 
 ## 工作记录
 
+- 已定位托盘间距虽然是 `DraggableHorizontalSpacingPixels=40`，但此前始终按 `40 / PPU = 0.4` 固定世界单位使用；`FitCameraToActiveGroup` 改变正交相机尺寸时，Piece 会根据屏幕凹槽重新计算世界缩放，固定世界间距却不会同步变化，导致实际屏幕间距明显小于 40 设计像素。现改为使用 `PieceBoard` 在根 Canvas 中的设计宽度与其当前世界宽度计算换算比例；首次排列和拿起后的后序补位共用同一世界间距，回收重排继续走首次排列路径。
 - 已确认 CardBag010 的 25 个正式 Piece 均绑定 `IngameCoverShadow03` 并挂有 `PackCoverShadowEffect`，运行时正确吸附后也会重新应用 03；缺影不是 Prefab 漏绑或吸附流程覆盖。CardBag010 的 25 张 `249 x 249` Piece PNG 均为全不透明矩形，而 CardBag009/011 的 Piece 平均约有 `25.7%/28.6%` 透明区域；03 原先 `PaddingX/Y=0`，因此全不透明 Piece 的 2px Alpha 投影全部落在 UGUI 网格外并被裁掉。现将 03 的 X/Y 留白改为与现有 `BlurX/Y=2` 一致的 `2px`，不改变颜色、透明度、模糊、偏移、Piece RectTransform 或碰撞。
 - 已撤销把整片灰色未完成区域设为禁放区的错误实现。棋盘灰色边缘改为双侧判定：Piece 必须同时与未完成 Groove Physics Shape 和 GameBoard 不透明 Physics Shape 相交才视为横跨边缘；只命中任一侧继续允许。正确吸附仍在自由放置之前处理，并显式恢复自身凹槽相交但未吸附时的错误回弹。
 - 附带统一 Unity 编辑器菜单显示名称：Prefab 生成入口为 `Generate CardBag Prefabs`，描边入口为 `Bake CardBag Outlines`，配置更新入口为 `Update CardBag Configs`；同步修改代码提示和相关文档，不改变工具执行逻辑与排列优先级。
@@ -41,6 +43,7 @@
 - `Assets/Scripts/Editor/CardBagPrefabGeneratorEditor.cs`
 - `Assets/Scripts/Editor/PuzzleOutlineBakerEditor.cs`
 - `Documents/CURRENT_TASK.md`
+- `Documents/GAME_DESIGN_REQUIREMENTS.md`
 - `Documents/PROJECT_CONTEXT.md`
 - `specs/spec-driven-development.md`
 - `specs/puzzle-outline.md`
@@ -55,6 +58,7 @@
 
 ## 验证
 
+- 静态检查确认托盘间距不再固定使用 `DraggableHorizontalSpacingPixels / PixelsPerUnit`；首次布局通过当前 `PieceBoard` 设计宽度与世界宽度换算 40 设计像素，拿起补位复用同一方法，回收重排仍调用统一 `LayoutTrayPieces`。尚需在不同卡包及发生相机自适配的组中目视确认间距。
 - 静态核对 CardBag009/010/011 的 Prefab：正式 Piece 数量分别为 `36/25/33`，03 材质绑定数量分别为 `36/25/33`，不存在 CardBag010 漏绑；投影组件数量均覆盖全部 Piece。材质留白仅扩展渲染网格，不修改 RectTransform、Sprite、吸附坐标或 Physics Shape。仍需在 GameScene 目视确认 CardBag010 正确吸附后的 2px 投影清晰度。
 - 静态检查确认松手处理顺序仍为托盘回收、正确吸附、外部 Piece 重叠/棋盘合法性；新增灰色边缘双侧检查仅位于棋盘内自由放置分支，只有同时命中灰区和非灰区才复用 `ReturnPieceAfterInvalidDrop`，完整位于任一侧均放行。
 - 本轮 `dotnet build Assembly-CSharp.csproj --no-restore` 与 `dotnet build Assembly-CSharp-Editor.csproj --no-restore`：通过，均为 `0` 警告、`0` 错误。
@@ -78,10 +82,11 @@
 
 ## 下一步
 
-1. 在 CardBag010 正确吸附几块方形 Piece，确认其四周能看到 03 的轻投影，且 Piece 尺寸、位置和拼接缝没有变化。
-2. 进入 GameScene 后确认 Piece 聚集和飞向托盘期间没有光点；每块 Piece 落稳后才出现一个常驻光点，且不同 Piece 的样式、长度和角度存在变化。
-3. 连续拼入当前块和邻接块，确认光点推出距离明显增大、回弹完整且不会永久偏移；检查窄小 Piece 是否被 Alpha Mask 裁掉过多。
-4. 完成一组最后一块，确认系统等待光点结束后正常切组且没有额外静止停顿。
+1. 进入 Piece 数量较多且触发相机自适配的组，确认托盘相邻 Piece 的屏幕间距明显为 40 设计像素；拿起非队尾 Piece 后，后序 Piece 保持同样间距完成补位。
+2. 在 CardBag010 正确吸附几块方形 Piece，确认其四周能看到 03 的轻投影，且 Piece 尺寸、位置和拼接缝没有变化。
+3. 进入 GameScene 后确认 Piece 聚集和飞向托盘期间没有光点；每块 Piece 落稳后才出现一个常驻光点，且不同 Piece 的样式、长度和角度存在变化。
+4. 连续拼入当前块和邻接块，确认光点推出距离明显增大、回弹完整且不会永久偏移；检查窄小 Piece 是否被 Alpha Mask 裁掉过多。
+5. 完成一组最后一块，确认系统等待光点结束后正常切组且没有额外静止停顿。
 
 ## 恢复提示
 

@@ -4467,6 +4467,36 @@ public class GameScene : MonoBehaviour
         return new Bounds(Vector3.zero, Vector3.one);
     }
 
+    private float GetTrayHorizontalSpacingWorld(Bounds trayWorldBounds)
+    {
+        var fallbackSpacing = DraggableHorizontalSpacingPixels / PixelsPerUnit;
+        var trayRect = _board.PieceBoardRect;
+        var canvas = trayRect != null ? trayRect.GetComponentInParent<Canvas>() : null;
+        var canvasRect = canvas != null ? canvas.rootCanvas.transform as RectTransform : null;
+        if (trayRect == null
+            || canvasRect == null
+            || trayWorldBounds.size.x <= 0.0001f)
+        {
+            return fallbackSpacing;
+        }
+
+        var trayDesignBounds = RectTransformUtility.CalculateRelativeRectTransformBounds(
+            canvasRect,
+            trayRect);
+        var trayDesignWidth = Mathf.Abs(trayDesignBounds.size.x);
+        if (trayDesignWidth <= 0.0001f)
+        {
+            return fallbackSpacing;
+        }
+
+        var spacing = DraggableHorizontalSpacingPixels
+            * trayWorldBounds.size.x
+            / trayDesignWidth;
+        return spacing > 0f && !float.IsNaN(spacing) && !float.IsInfinity(spacing)
+            ? spacing
+            : fallbackSpacing;
+    }
+
     private static bool TryGetCanvasRectGameplayBounds(
         RectTransform targetRect,
         Camera gameplayCamera,
@@ -4526,7 +4556,7 @@ public class GameScene : MonoBehaviour
             return;
         }
 
-        var horizontalSpacing = DraggableHorizontalSpacingPixels / PixelsPerUnit;
+        var horizontalSpacing = GetTrayHorizontalSpacingWorld(hostBounds);
         var nextCenterX = hostBounds.min.x + DraggableLeftPadding;
         var unplaced = new List<DraggablePieceState>();
         for (var i = 0; i < _drag.CurrentGroupDraggables.Count; i++)
@@ -4597,9 +4627,10 @@ public class GameScene : MonoBehaviour
             return false;
         }
 
+        var horizontalSpacing = GetTrayHorizontalSpacingWorld(GetPieceTrayBounds());
         var shiftX = GameCommonUtility.GetPieceWidth(
             removedState.PieceRenderer,
-            removedState.TrayScale) + DraggableHorizontalSpacingPixels / PixelsPerUnit;
+            removedState.TrayScale) + horizontalSpacing;
         var states = new List<DraggablePieceState>();
         var targets = new List<Vector3>();
         for (var i = 0; i < _drag.CurrentGroupDraggables.Count; i++)

@@ -337,7 +337,7 @@
 
 ### 设计
 
-- `DraggableHorizontalSpacingPixels` 从 `20` 调整为 `40`，作为所有卡包共用的设计像素间距；初始布局、拿起补位和回收重排统一使用该值。
+- `DraggableHorizontalSpacingPixels` 从 `20` 调整为 `40`，作为所有卡包共用的设计像素间距；初始布局、拿起补位和回收重排统一使用该值。设计像素通过 `PieceBoard` 在根 Canvas 中的宽度与其当前世界宽度实时换算，不能固定按 `40 / PPU` 使用，否则正交相机自适配后屏幕间距会被缩小。
 - `DragScale/BoardScale` 使用 SpriteRenderer 与凹槽的屏幕矩形直接校准；`TrayScale` 再按同一目标比例与 `PieceBoard` 高度 `90%` 上限等比取小，并硬限制为 `<=1`。
 - PieceBoard 的托盘中心从根 Canvas 设计坐标直接换算到屏幕和游戏世界坐标，避免相机适配后首帧 Canvas 世界角点尚未刷新；Piece 继续使用实际 `SpriteRenderer.bounds.center` 校正最终世界坐标。
 - 在 `TryBeginDrag` 中触发后序 Piece 补位；队尾没有移动目标时不启动协程。
@@ -361,7 +361,7 @@
 
 ### 当前验证
 
-- 静态检查确认所有布局入口共用 `DraggableHorizontalSpacingPixels=40`。
+- 静态检查确认所有布局入口共用 `DraggableHorizontalSpacingPixels=40`，并通过 PieceBoard 设计空间到当前相机世界空间的统一换算应用。
 - 静态检查确认托盘比例以 `DragScale` 为目标，并且只在目标超过 `1` 或 Piece 高度超过托盘 `90%` 时继续等比缩小。
 - 拿起补位只收集编号大于当前 Piece、仍在托盘且不是当前拖拽对象的状态；队尾目标列表为空时不启动协程。
 - 初始布局与点击后的重排共用由 Canvas 设计坐标换算的托盘中心，并使用 `SpriteRenderer.bounds.center` 计算 Piece 实际渲染中心偏移；托盘重排目标继续保持同一 Y 和缩放。
