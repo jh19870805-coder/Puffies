@@ -14,6 +14,7 @@
 
 ## 工作记录
 
+- 附带统一 Unity 编辑器菜单显示名称：Prefab 生成入口为 `Generate CardBag Prefabs`，描边入口为 `Bake CardBag Outlines`，配置更新入口为 `Update CardBag Configs`；同步修改代码提示和相关文档，不改变工具执行逻辑与排列优先级。
 - `PieceLight1-4` 光点形变推出距离在原 `6~14px` 结果上乘 3，实际范围为 `18~42px`。
 - 当前吸附块的光点运动时长从 `0.48s` 改为 `0.96s`；相邻已拼块从 `0.42s` 改为 `0.84s`。
 - 相邻光点原有 `0.07~0.23s` 错峰延迟保持不变。
@@ -29,8 +30,11 @@
 ## 修改文件
 
 - `Assets/Scripts/Controller/GameScene.cs`
+- `Assets/Scripts/Editor/CardBagPrefabGeneratorEditor.cs`
+- `Assets/Scripts/Editor/PuzzleOutlineBakerEditor.cs`
 - `Documents/CURRENT_TASK.md`
 - `Documents/PROJECT_CONTEXT.md`
+- `specs/puzzle-outline.md`
 
 ## 决策
 
@@ -41,6 +45,7 @@
 
 ## 验证
 
+- 静态检查确认三个新菜单名称各只有一个 `MenuItem` 入口，旧菜单名称已从代码提示与相关文档移除；工具方法和菜单优先级未修改。
 - `dotnet build Assembly-CSharp.csproj --no-restore`：通过，`0` 警告、`0` 错误。
 - 临时运行时诊断日志和临时 Shader 增亮已删除，`PuzzlePieceLightAdditive.shader` 保持原有美术参数。
 - 代码路径确认：首次入场使用 `pieceT >= 1` 创建对应 Piece 光点；切组入场使用 `progress >= 1` 创建；两个动画标记有效期间通用补建直接返回。

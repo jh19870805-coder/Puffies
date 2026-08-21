@@ -65,7 +65,7 @@ public static class CardBagPrefabGeneratorEditor
         @"^piece_\d{3}$",
         RegexOptions.CultureInvariant);
 
-    [MenuItem("Puffies/Update Pack Sizes From Piece Counts", false, 22)]
+    [MenuItem("Puffies/Update CardBag Configs", false, 22)]
     public static void UpdatePackSizesFromPieceCounts()
     {
         try
@@ -87,7 +87,7 @@ public static class CardBagPrefabGeneratorEditor
         }
     }
 
-    [MenuItem("Puffies/Generate CardBag Prefabs From Images", false, 20)]
+    [MenuItem("Puffies/Generate CardBag Prefabs", false, 20)]
     public static void OpenGeneratorWindow()
     {
         CardBagPrefabGeneratorWindow.Open();
@@ -802,7 +802,7 @@ public static class CardBagPrefabGeneratorEditor
             PuzzleOutlineBakerEditor.DeleteStaleOutlines(packId);
             Debug.LogWarning(
                 $"CardBag generator: {bagName} has formal Piece groups, but outlines were not baked. " +
-                "Run Bake Outline Masks before gameplay testing.");
+                "Run Bake CardBag Outlines before gameplay testing.");
         }
 
         AssetDatabase.SaveAssets();

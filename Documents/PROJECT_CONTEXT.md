@@ -276,7 +276,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 4. 源贴图放在 `Assets/UI/CardBags/CardBagNNN/`，标准切图名继续使用 `piece_001.png`、`piece_002.png`...；需要在源文件名中显式携带正式分组时使用 `Piece0101.png` 或 `Pieces0101.png` 格式。
 5. 不使用 `PieceGroup` 父节点；分组严格读取 `PieceGGII` 的前两位 `GG`，组内排序读取后两位 `II`。
 6. 不创建 Package JSON；运行时数据来自已加载 Prefab 的 Image。
-7. 新增或修改 CardBag 后，执行 **Puffies -> Bake Outline Masks**。烘焙器优先使用 `GameBoard.png` 的透明挖空 Alpha 作为最终拼图外边界，并使用已完成 Piece 的 Alpha 作为后续组接触边；GameBoard 没有有效挖空时回退到全部 Piece Alpha 并集。每组生成三张同尺寸资源：`GroupNN.png` 是默认连接区域；`GroupNN_Level.png` 是当前组 Piece Alpha 并集的完整外边界；`GroupNN_Stickers.png` 是当前组每块 Piece Alpha 边界的并集。默认连接图第 1 组只包含自身最终拼图外边界，后续图只包含当前组最终外边界及其与低编号已完成组的接触边。接触边和最终外轮廓均使用圆形最近距离与局部边界法线判定归属，切线方向的邻近不得延长端点；相邻分组可在真实交点共享少量边界像素，不能为避免重叠而删除交点。
+7. 新增或修改 CardBag 后，执行 **Puffies -> Bake CardBag Outlines**。烘焙器优先使用 `GameBoard.png` 的透明挖空 Alpha 作为最终拼图外边界，并使用已完成 Piece 的 Alpha 作为后续组接触边；GameBoard 没有有效挖空时回退到全部 Piece Alpha 并集。每组生成三张同尺寸资源：`GroupNN.png` 是默认连接区域；`GroupNN_Level.png` 是当前组 Piece Alpha 并集的完整外边界；`GroupNN_Stickers.png` 是当前组每块 Piece Alpha 边界的并集。默认连接图第 1 组只包含自身最终拼图外边界，后续图只包含当前组最终外边界及其与低编号已完成组的接触边。接触边和最终外轮廓均使用圆形最近距离与局部边界法线判定归属，切线方向的邻近不得延长端点；相邻分组可在真实交点共享少量边界像素，不能为避免重叠而删除交点。
 8. `GameScene` 将烘焙 Sprite 的 Alpha 作为不可交互的 `GameBoard` 子 Image 显示，并通过专用 UGUI Shader 固定输出 `#3f423e`。Shader 在源纹理像素坐标上生成稳定的细粒和少量小空点，形成轻微铅笔断墨质感；纹理不随棋盘移动或缩放逐帧变化。关卡描边关闭时加载 `GroupNN.png`，打开时替换为 `GroupNN_Level.png`；贴纸描边打开时额外叠加 `GroupNN_Stickers.png`。不要在 Prefab 中手工制作描边对象，也不要为两种底板重复烘焙资源。
 9. 缺少生成 Sprite 时，运行时记录制作警告，并在无描边情况下继续游戏。交付前重新运行烘焙器。
 - 创建一组碎片时按编号从左向右排列，使用所有卡包共用的 `40` 设计像素固定间距，并以每块 Piece 的实际 `SpriteRenderer.bounds` 将渲染内容上下居中到黑色托盘。托盘缩放以配置缩放后的凹槽实际显示比例 `DragScale` 为目标，再与 Sprite 原始设计高度对应的托盘 `90%` 容纳上限等比取小，任何托盘 Piece 的缩放均不得超过 `1`；拿起后恢复完整 `DragScale`。PieceBoard 的世界边界从根 Canvas 设计坐标直接映射到当前屏幕和游戏相机，不依赖 Screen Space - Camera Canvas 在相机适配后的首个渲染帧更新世界角点，因此首次初始化与点击后的重排使用相同托盘中心。Piece 从托盘拿起时，仅仍在托盘且编号靠后的 Piece 沿 X 轴用 `0.5s SmoothStep` 向前补位；不得刷新前序 Piece、外部 Piece 或任何剩余 Piece 的 Y/缩放，拿起队尾时不启动位置刷新。拖拽 Piece 每帧跟随指针后，必须按当前完整 `SpriteRenderer.bounds` 限制在游戏背景可视边界内，不能只限制中心点，也不能改变抓取偏移。松手时首先检查鼠标或触点是否位于托盘原始区域，或 Piece 自身屏幕边界是否与该区域实际相交；任一条件满足都立即自动回托盘并恢复布局，不再检查正确吸附，因此原地拿起再松手不能停留并与其他 Piece 重叠，棋盘与托盘重叠部分也始终由托盘优先处理。两项都未命中托盘才继续正确吸附和自由放置判定。未吸附 Piece 只允许完整渲染边界停在棋盘内 Alpha 为 0、没有已拼内容占用的位置，完整落在棋盘左右两侧的桌面，或在棋盘左右边界之间完整落入棋盘底边与托盘原始顶部之间的桌面空间，并且不得与另一块外部 Piece 重叠；任何横跨棋盘边框或侵入托盘原始高度的状态均不允许停放。棋盘正上方、已拼内容轮廓上或其他外部 Piece 上松手时缓动返回本次拖拽起点。来自托盘的错误 Piece 松手后立即回弹，不预先变红或停顿；所有从桌面或棋盘外部返回托盘的 Piece（包括玩家手动拖回和被正确 Piece 顶回）都在渲染边界首次进入可见托盘区域后，以原错误红色 `70%` 强度显示反馈，到位后淡回原色。外部位置之间的错误回弹不显示托盘红色反馈。若正确目标被外部错误 Piece 占用，全部实际轮廓重叠的错误块会按编号重排并回弹到托盘，不能阻止正确 Piece。托盘即使正在隐藏或已经收下，原始屏幕区域仍作为回收热区；命中后立即恢复并启用托盘、刷新布局，再按编号计算 Piece 的托盘目标位置并回弹到托盘内部。托盘收起完成并仍有外部错误 Piece 时，每隔 `5s` 让这些 Piece 短暂抖动一次；拖拽、回弹、切组、结算或托盘重新出现时停止并重新计时。最后一块正确吸附后仍进入切组或结算。
@@ -287,7 +287,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 
 #### 无 JSON Prefab 批量生成
 
-- 菜单 **Puffies -> Generate CardBag Prefabs From Images** 打开批量窗口，扫描 `UI/CardBags/` 下严格匹配 `CardBagNNN` 的一级目录。
+- 菜单 **Puffies -> Generate CardBag Prefabs** 打开批量窗口，扫描 `UI/CardBags/` 下严格匹配 `CardBagNNN` 的一级目录。
 - 每个卡包硬性需要 `CardBagNNN/GameBoard.png`、`Previews/CardBagNNN.png` 和至少一张合法 Piece PNG；缺失项会显示在列表中并禁止选择。
 - 旧 `background_base.png` 仅用于兼容迁移：当 `GameBoard.png` 不存在时，扫描器通过 `AssetDatabase.MoveAsset` 自动改名并保留 Meta/GUID；两者同时存在时不覆盖目标文件。
 - `BoardTitle.png` 是标准资源但采用软校验。缺失时列表显示警告，仍允许生成不含 `BoardTitle` 节点的 Prefab。
@@ -299,7 +299,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 - `PieceGGII.png` 或 `PiecesGGII.png` 中的四位 `GGII` 直接成为正式对象编号并作为人工覆盖规则。全部使用标准 `piece_###.png` 时，生成器按位置从上到下分带、每行最多两个空间组，每组最多 14 片；偶数行从左到右编号，奇数行从右到左编号，形成蛇形组序，组内始终按中心点从左到右编号。最终 Hierarchy 按 `PieceGGII` 升序创建。标准名与显式正式名不得在同一卡包内混用。
 - 生成结构为扁平的 `CardBagNNN/BoardTitle`、`CardBagNNN/BoardBgXX`、`CardBagNNN/GameBoard` 和 `CardBagNNN/PieceGGII`。根 Image 不设置 Sprite；生成器按 GameBoard 尺寸自动创建、平铺并裁切默认使用 `BgCardBoard1.png` 的 `BoardBgXX RawImage`，保存前校验直属父级、顺序、数量、位置、尺寸和 UV。
 - 窗口默认只选择资源完整且尚无 Prefab 的卡包。选择已有 Prefab 时显示 `Overwrite`，执行前必须确认；覆盖会替换已有层级和手工 Piece 分组。
-- 批量生成逐个隔离失败并汇总结果，负责创建带正式自动分组的 Prefab，但不自动烘焙描边；生成时会删除该包可能残留的旧描边。完成生成后执行 **Bake Outline Masks**。
+- 批量生成逐个隔离失败并汇总结果，负责创建带正式自动分组的 Prefab，但不自动烘焙描边；生成时会删除该包可能残留的旧描边。完成生成后执行 **Bake CardBag Outlines**。
 - 同一窗口的 **Update Existing Piece Layouts** 用于切图更新后的局部校准。它复用 Preview/GameBoard 定位算法，通过现有 Piece 的 Sprite 资源路径映射节点，只更新 `RectTransform.anchoredPosition` 与 `sizeDelta`；不重建层级、不改变手工分组、Image 参数、影子、旋转缩放或描边资源，也不会自动烘焙描边。更新采用整包事务：源 PNG 与现有 Piece 数量或引用不一致、定位不唯一，或两张有效面积相近的切图在目标位置的高 Alpha 区域重叠达到 `65%` 时，该 Prefab 在保存前失败，避免重复切图覆盖正确布局；面积明显较小且位于大切图内部的独立配件允许更新。
 - `Piece001` 到 `Piece999` 的三位顺序名仅作为旧 Prefab 的制作中间状态，不属于正式命名；当前生成器不会再从标准切图创建这类名称。Prefab 中只要仍有任一三位节点，描边烘焙器仍会跳过整包，避免 `Piece100` 等顺序节点被误判为正式分组；卡包没有正式分组时删除对应旧描边目录。
 - 当前 CardBag017 为 `1316 x 1316`、38 片，已完成正式 `PieceGGII` 命名并分为 6 组；对应 6 组描边资源已在当前工作区重新生成，提交前仍需在 Unity 中检查。CardBag022 为 `2600 x 3920`、196 片，已按相邻空间区域分为 14 组、每组 14 片并使用正式 `PieceGGII` 命名；14 组默认、关卡和贴纸描边资源均已生成。运行时只按 Sprite 原生尺寸同步 Piece 槽位，不得用受 TextureImporter 降采样影响的 `sprite.rect.size` 覆盖 GameBoard 的 Prefab 设计尺寸。
@@ -366,9 +366,9 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 | Puffies -> Apply Design Resolution (Current Scene) | 为当前场景应用 Canvas 设计分辨率 |
 | Puffies -> Apply Design Resolution (All Scenes & Prefabs) | 为全部场景和 Prefab 应用 Canvas 设计分辨率 |
 | Puffies -> Setup Default Chinese Font | 设置中文字体 |
-| Puffies -> Bake Outline Masks | 为每个 CardBag Prefab 重建各分组外边界描边 |
-| Puffies -> Generate CardBag Prefabs From Images | 扫描完整背景和透明碎图；窗口可选择完整生成 CardBag Prefab，或仅按效果图更新现有 Piece 的位置与原生尺寸 |
-| Puffies -> Update Pack Sizes From Piece Counts | 扫描 CardBag 源资源的碎片 PNG 数量并同步更新 `CardPacks.csv/PackSize`、`StickerCount` 与 `BoardScale`；跳过 `AutoUpdate=0` 的行，并始终保留手工 `Series` 内容 |
+| Puffies -> Bake CardBag Outlines | 为每个 CardBag Prefab 重建各分组外边界描边 |
+| Puffies -> Generate CardBag Prefabs | 扫描完整背景和透明碎图；窗口可选择完整生成 CardBag Prefab，或仅按效果图更新现有 Piece 的位置与原生尺寸 |
+| Puffies -> Update CardBag Configs | 扫描 CardBag 源资源的碎片 PNG 数量并同步更新 `CardPacks.csv/PackSize`、`StickerCount` 与 `BoardScale`；跳过 `AutoUpdate=0` 的行，并始终保留手工 `Series` 内容 |
 | Puffies -> Apply CardBag Hierarchy | 将全部 CardBag Prefab 规范化为直属根节点的标题、背景块、棋盘和 Piece；按棋盘尺寸重建并裁切 `BoardBgXX`，保存前严格校验结构与 UV |
 | Puffies -> Apply CardBag Shadow Materials | 为全部 CardBag Prefab 的 GameBoard/BoardTitle 绑定 01、凹槽 Piece 绑定 03，并补齐投影网格组件 |
 

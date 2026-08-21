@@ -1971,7 +1971,7 @@ public class GameScene : MonoBehaviour
         {
             Debug.LogWarning(
                 $"GameScene: baked puzzle outline is missing at Resources/{levelResourcePath}. " +
-                "Run Puffies/Bake Outline Masks in the Unity Editor.");
+                "Run Puffies/Bake CardBag Outlines in the Unity Editor.");
             return;
         }
 
