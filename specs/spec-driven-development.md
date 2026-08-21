@@ -334,10 +334,12 @@
 15. WHEN 玩家正在拖拽托盘 Piece AND 游戏窗口失去焦点或应用暂停 THEN 系统 SHALL 立即取消拖拽，将 Piece 恢复为 `TrayScale` 并重新排回托盘，不得停在屏幕边缘或与其他 Piece 重叠。
 16. WHEN 玩家正在拖拽桌面或错误棋盘 Piece AND 游戏窗口失去焦点或应用暂停 THEN 系统 SHALL 将 Piece 恢复到本次拿起前的位置；WHEN 玩家正在横向滑动托盘 THEN 系统 SHALL 结束手势并保留当前合法滑动位置。
 17. WHEN 玩家拖动选中的 Piece THEN 系统 SHALL 按 Piece 当前完整渲染边界将其限制在游戏可视区域内；即使指针移出窗口，Piece 的任一边缘也不得移出可视边界。
+18. WHEN 系统排列托盘 Piece THEN 最左 Piece 左边缘 SHALL 与托盘左边界保持固定 `0.6` 世界单位间隙；WHEN 托盘内容横向溢出 THEN 左右滚动安全边距 SHALL 使用相同固定值。
 
 ### 设计
 
 - `DraggableHorizontalSpacingPixels` 从 `20` 调整为 `40`，作为所有卡包共用的设计像素间距；初始布局、拿起补位和回收重排统一使用该值。设计像素通过 `PieceBoard` 在根 Canvas 中的宽度与其当前世界宽度实时换算，不能固定按 `40 / PPU` 使用，否则正交相机自适配后屏幕间距会被缩小。
+- `DraggableLeftPadding` 从固定 `0.2` 世界单位调整为固定 `0.6`，初始左边距和托盘滚动左右限制继续共用该值。
 - `DragScale/BoardScale` 使用 SpriteRenderer 与凹槽的屏幕矩形直接校准；`TrayScale` 再按同一目标比例与 `PieceBoard` 高度 `90%` 上限等比取小，并硬限制为 `<=1`。
 - PieceBoard 的托盘中心从根 Canvas 设计坐标直接换算到屏幕和游戏世界坐标，避免相机适配后首帧 Canvas 世界角点尚未刷新；Piece 继续使用实际 `SpriteRenderer.bounds.center` 校正最终世界坐标。
 - 在 `TryBeginDrag` 中触发后序 Piece 补位；队尾没有移动目标时不启动协程。

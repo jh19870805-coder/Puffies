@@ -15,7 +15,7 @@ public class GameScene : MonoBehaviour
     private const float WorldGameplayDepth = -0.5f;
     private const float GamePageCameraPadding = 0.3f;
     private const float MaxBoardToTrayGapViewportRatio = 0.1f;
-    private const float DraggableLeftPadding = 0.2f;
+    private const float DraggableLeftPadding = 0.6f;
     private const float DraggableHorizontalSpacingPixels = 40f;
     private const float TrayPieceReflowDuration = 0.5f;
     private const float PieceTrayMaxHeightRatio = 0.9f;
