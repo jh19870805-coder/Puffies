@@ -6547,7 +6547,7 @@ public class GameScene : MonoBehaviour
             return;
         }
 
-        var target = FindHintTarget();
+        var target = FindFirstTrayHintTarget();
         if (target == null)
         {
             return;
@@ -6556,6 +6556,24 @@ public class GameScene : MonoBehaviour
         _wasHintUsed = true;
         ShowPieceHint(target);
         Debug.Log("GameScene: hint used; no-hint score bonus disabled for this game.");
+    }
+
+    private DraggablePieceState FindFirstTrayHintTarget()
+    {
+        for (var i = 0; i < _drag.CurrentGroupDraggables.Count; i++)
+        {
+            var state = _drag.CurrentGroupDraggables[i];
+            if (state != null
+                && !state.IsPlaced
+                && state.IsOnTray
+                && state.PieceRenderer != null
+                && state.GrooveRect != null)
+            {
+                return state;
+            }
+        }
+
+        return null;
     }
 
     private DraggablePieceState FindHintTarget()
