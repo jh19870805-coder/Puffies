@@ -8,7 +8,6 @@ using UnityEngine.UI;
 
 public static class PuzzleOutlineBakerEditor
 {
-    private const string OneShotBakeRequestPath = "Temp/CodexRebakePuzzleOutlines.request";
     private const string PrefabFolder = "Assets/Resources/CardBagPrefabs";
     private const string OutputRoot = "Assets/Resources/Generated/PuzzleOutlines";
     private const byte PieceAlphaThreshold = 32;
@@ -615,34 +614,6 @@ public static class PuzzleOutlineBakerEditor
         }
 
         return count;
-    }
-
-    [InitializeOnLoadMethod]
-    private static void QueueRequestedBake()
-    {
-        if (File.Exists(OneShotBakeRequestPath))
-        {
-            EditorApplication.delayCall += RunRequestedBakeWhenReady;
-        }
-    }
-
-    private static void RunRequestedBakeWhenReady()
-    {
-        if (!File.Exists(OneShotBakeRequestPath))
-        {
-            return;
-        }
-
-        if (EditorApplication.isCompiling
-            || EditorApplication.isUpdating
-            || EditorApplication.isPlayingOrWillChangePlaymode)
-        {
-            EditorApplication.delayCall += RunRequestedBakeWhenReady;
-            return;
-        }
-
-        File.Delete(OneShotBakeRequestPath);
-        BakeAll();
     }
 
     private static void DeleteObsoleteGroupOutputs(
