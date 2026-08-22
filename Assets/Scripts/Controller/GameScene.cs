@@ -23,6 +23,12 @@ public class GameScene : MonoBehaviour
     private const float SnapDistanceMin = 0.2f;
     private const float SnapDistanceMax = 0.8f;
     private const float SnapDistanceSizeRatio = 0.22f;
+    private const float LooseClusterAdjacencySizeRatio = 0.035f;
+    private const float LooseClusterAdjacencyMin = 0.015f;
+    private const float LooseClusterAdjacencyMax = 0.12f;
+    private const float LooseClusterAttachDistanceRatio = 0.24f;
+    private const float LooseClusterAttachDistanceMin = 0.18f;
+    private const float LooseClusterAttachDistanceMax = 0.7f;
     private const float PieceBgSlideDuration = 0.25f;
     private const float TaskProgressRollDuration = 0.8f;
     private const float SettlementBaseRollDuration = 1f;
@@ -199,6 +205,13 @@ public class GameScene : MonoBehaviour
         public Vector2 Scale;
     }
 
+    private sealed class LoosePieceCluster
+    {
+        public long CreatedOrder;
+        public readonly List<DraggablePieceState> Members =
+            new List<DraggablePieceState>();
+    }
+
     private struct PiecePlacementLightTarget
     {
         public Image Image;
@@ -211,6 +224,16 @@ public class GameScene : MonoBehaviour
     private readonly DragState _drag = new DragState();
     private readonly List<int> _settlementPackRewardIds = new List<int>();
     private readonly HashSet<int> _placedPieceNumbers = new HashSet<int>();
+    private readonly List<LoosePieceCluster> _loosePieceClusters =
+        new List<LoosePieceCluster>();
+    private readonly Dictionary<DraggablePieceState, LoosePieceCluster> _looseClusterByPiece =
+        new Dictionary<DraggablePieceState, LoosePieceCluster>();
+    private readonly Dictionary<DraggablePieceState, long> _loosePieceOrders =
+        new Dictionary<DraggablePieceState, long>();
+    private readonly List<DraggablePieceState> _activeDragMembers =
+        new List<DraggablePieceState>();
+    private readonly List<Vector3> _activeDragStartPositions = new List<Vector3>();
+    private long _nextLoosePieceOrder;
     private readonly Dictionary<Image, Collider2D> _boardOccupancyProbes =
         new Dictionary<Image, Collider2D>();
     private Vector3 _pieceBgOriginalPosition;
@@ -302,7 +325,9 @@ public class GameScene : MonoBehaviour
     private Vector2 _originalCardBagAnchoredPosition;
     private bool _hasOriginalCardBagAnchoredPosition;
     private DraggablePieceState _hintedPiece;
-    private Quaternion _hintedPieceBaseRotation = Quaternion.identity;
+    private readonly List<DraggablePieceState> _hintedPieces =
+        new List<DraggablePieceState>();
+    private readonly List<Quaternion> _hintedPieceBaseRotations = new List<Quaternion>();
     private float _hintShakeStartTime;
     private bool _isHintPieceShaking;
     private GameObject _pieceHintOutlineRoot;
@@ -318,7 +343,6 @@ public class GameScene : MonoBehaviour
     private GameObject _tutorialFocusRoot;
     private Sprite _tutorialArrowSprite;
     private Sprite _tutorialTipBackgroundSprite;
-    private Vector3 _dragStartPosition;
 
     private bool IsTutorialActive => _tutorialStage != TutorialStage.None;
 
@@ -2020,6 +2044,7 @@ public class GameScene : MonoBehaviour
         StopTrayPieceReflow();
         ClearPieceHint();
         _drag.DraggingPiece = null;
+        ClearLoosePieceClusters();
         _drag.CurrentGroupDraggables.Clear();
         ClearActiveGroupOutline();
 
@@ -2885,26 +2910,34 @@ public class GameScene : MonoBehaviour
 
         var world = ToGameplayWorld(screenPosition);
         _drag.DraggingPiece = state;
-        _dragStartPosition = state.PieceRenderer.transform.position;
         _drag.DragOffset = state.PieceRenderer.transform.position - world;
-        if (state == _hintedPiece)
+        PopulateActiveDragMembers(state);
+        RestoreHintedPieceRotationsIfDragging();
+        for (var i = 0; i < _activeDragMembers.Count; i++)
         {
-            state.PieceRenderer.transform.rotation = _hintedPieceBaseRotation;
+            var member = _activeDragMembers[i];
+            var renderer = member?.PieceRenderer;
+            if (renderer == null)
+            {
+                continue;
+            }
+
+            member.DragScale = CalculatePieceScaleOnBoard(
+                member.GrooveImage,
+                renderer);
+            member.BoardScale = member.DragScale;
+            if (member.IsOnTray)
+            {
+                member.TrayScale = CalculateTrayScaleForPiece(
+                    renderer,
+                    GetPieceTrayBounds(),
+                    member.DragScale);
+            }
+
+            renderer.transform.localScale = member.DragScale;
+            ApplyPieceRendererShadow(renderer, PieceShadowStyle.Initial);
+            renderer.sortingOrder = PieceSortingOrder + 100 + i;
         }
-        state.DragScale = CalculatePieceScaleOnBoard(
-            state.GrooveImage,
-            state.PieceRenderer);
-        state.BoardScale = state.DragScale;
-        if (state.IsOnTray)
-        {
-            state.TrayScale = CalculateTrayScaleForPiece(
-                state.PieceRenderer,
-                GetPieceTrayBounds(),
-                state.DragScale);
-        }
-        state.PieceRenderer.transform.localScale = state.DragScale;
-        ApplyPieceRendererShadow(state.PieceRenderer, PieceShadowStyle.Initial);
-        state.PieceRenderer.sortingOrder = PieceSortingOrder + 100;
         if (state.IsOnTray)
         {
             CompactFollowingTrayPieces(state);
@@ -2977,12 +3010,27 @@ public class GameScene : MonoBehaviour
         }
 
         var world = ToGameplayWorld(screenPosition);
-        var renderer = _drag.DraggingPiece.PieceRenderer;
-        renderer.transform.position = new Vector3(
+        var anchorRenderer = _drag.DraggingPiece.PieceRenderer;
+        var anchorPosition = new Vector3(
             world.x + _drag.DragOffset.x,
             world.y + _drag.DragOffset.y,
             WorldGameplayDepth);
-        renderer.transform.position = ClampPieceToTableBounds(renderer);
+        var anchorStart = _activeDragStartPositions.Count > 0
+            ? _activeDragStartPositions[0]
+            : anchorRenderer.transform.position;
+        var delta = anchorPosition - anchorStart;
+        for (var i = 0; i < _activeDragMembers.Count; i++)
+        {
+            var renderer = _activeDragMembers[i]?.PieceRenderer;
+            if (renderer == null || i >= _activeDragStartPositions.Count)
+            {
+                continue;
+            }
+
+            renderer.transform.position = _activeDragStartPositions[i] + delta;
+        }
+
+        ClampActiveDragMembersToTableBounds();
     }
 
     private bool TryBeginTrayScroll(Vector2 screenPosition)
@@ -3120,78 +3168,114 @@ public class GameScene : MonoBehaviour
         }
 
         var state = _drag.DraggingPiece;
+        var dragMembers = new List<DraggablePieceState>(_activeDragMembers);
+        var dragStartPositions = new List<Vector3>(_activeDragStartPositions);
+        if (dragMembers.Count == 0)
+        {
+            dragMembers.Add(state);
+            dragStartPositions.Add(state.PieceRenderer.transform.position);
+        }
+
         _drag.DraggingPiece = null;
-        state.PieceRenderer.sortingOrder = PieceSortingOrder;
         var wasOnTray = state.IsOnTray;
+        SetPieceSortingOrders(dragMembers, PieceSortingOrder);
 
         if (releaseScreenPosition.HasValue
-            && ShouldReturnPieceToTray(
-                releaseScreenPosition.Value,
-                state.PieceRenderer))
+            && ShouldReturnPiecesToTray(releaseScreenPosition.Value, dragMembers))
         {
-            ApplyPieceRendererShadow(state.PieceRenderer, PieceShadowStyle.Loose);
-            ReturnPieceToTray(state, wasOnTray);
+            ReturnDragMembersToTray(dragMembers, wasOnTray);
+            ClearActiveDragMembers();
             return;
         }
 
-        var groovePosition = GetGrooveSnapPosition(state.GrooveRect, Camera.main);
-        UpdateGrooveOverlapProbe(state, groovePosition);
-        Physics2D.SyncTransforms();
-        var isWithinSnapDistance = state.GrooveRect != null
-            && Vector3.Distance(state.PieceRenderer.transform.position, groovePosition)
-            <= CalculateSnapDistance(state);
-        if (isWithinSnapDistance)
+        if (TryGetClusterBoardSnapTargets(dragMembers, out var groovePositions))
         {
-            ApplyPieceRendererShadow(state.PieceRenderer, PieceShadowStyle.Placed);
-            state.IsOnTray = false;
-            var displacedPieces = CollectLoosePiecesOverlappingCollider(
-                state,
-                state.GrooveProbeCollider);
+            var draggedSet = new HashSet<DraggablePieceState>(dragMembers);
+            var displacedPieces = CollectLoosePiecesOverlappingGrooves(
+                dragMembers,
+                draggedSet);
             if (displacedPieces.Count > 0)
             {
+                DetachPiecesFromLooseClusters(displacedPieces);
                 ReturnLoosePiecesToTray(displacedPieces);
             }
 
-            state.IsPlaced = true;
-            if (state == _hintedPiece)
+            if (dragMembers.Any(member => _hintedPieces.Contains(member)))
             {
                 ClearPieceHint();
             }
+
+            DetachPiecesFromLooseClusters(dragMembers);
             StartGameplayTimerIfNeeded();
-            RecordPlacedPiece(state);
-            StartCoroutine(PlayPieceSnapAnimation(state, groovePosition));
+            for (var i = 0; i < dragMembers.Count; i++)
+            {
+                var member = dragMembers[i];
+                if (member?.PieceRenderer == null)
+                {
+                    continue;
+                }
+
+                ApplyPieceRendererShadow(member.PieceRenderer, PieceShadowStyle.Placed);
+                member.IsOnTray = false;
+                member.IsPlaced = true;
+                RecordPlacedPiece(member);
+                StartCoroutine(PlayPieceSnapAnimation(member, groovePositions[i]));
+            }
+
+            ClearActiveDragMembers();
             return;
         }
 
-        ApplyPieceRendererShadow(state.PieceRenderer, PieceShadowStyle.Loose);
-        state.PieceRenderer.transform.localScale = state.DragScale;
-        state.PieceRenderer.transform.position = ClampPieceToTableBounds(state.PieceRenderer);
+        SetLoosePiecePresentation(dragMembers);
         Physics2D.SyncTransforms();
-        if (DoesPieceOverlapLoosePiece(state)
-            || CollidersOverlap(state.PieceCollider, state.GrooveProbeCollider)
-            || !IsLoosePiecePlacementAllowed(state))
+        if (!IsTutorialActive && TryAttachLoosePieces(dragMembers))
         {
-            ReturnPieceAfterInvalidDrop(state, wasOnTray);
+            ClearActiveDragMembers();
             return;
         }
 
-        state.IsOnTray = false;
+        var ignoredMembers = new HashSet<DraggablePieceState>(dragMembers);
+        if (!IsLooseClusterPlacementAllowed(dragMembers, ignoredMembers))
+        {
+            ReturnDragMembersAfterInvalidDrop(
+                dragMembers,
+                dragStartPositions,
+                wasOnTray);
+            ClearActiveDragMembers();
+            return;
+        }
+
+        for (var i = 0; i < dragMembers.Count; i++)
+        {
+            var member = dragMembers[i];
+            if (member == null)
+            {
+                continue;
+            }
+
+            member.IsOnTray = false;
+            RegisterLoosePiece(member);
+        }
 
         RestorePiecePlacementTutorialPresentation(state);
+        ClearActiveDragMembers();
     }
 
     private void CancelActivePointerInteraction()
     {
         EndTrayScroll();
         var state = _drag.DraggingPiece;
+        var dragMembers = new List<DraggablePieceState>(_activeDragMembers);
+        var dragStartPositions = new List<Vector3>(_activeDragStartPositions);
         _drag.DraggingPiece = null;
         if (state?.PieceRenderer == null)
         {
+            ClearActiveDragMembers();
             GameCursorUtility.SetDefault();
             return;
         }
 
-        state.PieceRenderer.sortingOrder = PieceSortingOrder;
+        SetPieceSortingOrders(dragMembers, PieceSortingOrder);
         if (state.IsOnTray)
         {
             ReturnPieceToTray(
@@ -3201,13 +3285,789 @@ public class GameScene : MonoBehaviour
         }
         else
         {
-            state.PieceRenderer.transform.position = _dragStartPosition;
-            state.PieceRenderer.transform.localScale = state.DragScale;
+            for (var i = 0; i < dragMembers.Count; i++)
+            {
+                var member = dragMembers[i];
+                if (member?.PieceRenderer == null || i >= dragStartPositions.Count)
+                {
+                    continue;
+                }
+
+                member.PieceRenderer.transform.position = dragStartPositions[i];
+                member.PieceRenderer.transform.localScale = member.DragScale;
+                ApplyPieceRendererShadow(member.PieceRenderer, PieceShadowStyle.Loose);
+            }
             Physics2D.SyncTransforms();
             RestorePiecePlacementTutorialPresentation(state);
         }
 
+        ClearActiveDragMembers();
         GameCursorUtility.SetDefault();
+    }
+
+    private void PopulateActiveDragMembers(DraggablePieceState anchor)
+    {
+        ClearActiveDragMembers();
+        if (anchor == null)
+        {
+            return;
+        }
+
+        _activeDragMembers.Add(anchor);
+        if (!IsTutorialActive
+            && _looseClusterByPiece.TryGetValue(anchor, out var cluster))
+        {
+            for (var i = 0; i < cluster.Members.Count; i++)
+            {
+                var member = cluster.Members[i];
+                if (member != null && member != anchor && !member.IsPlaced)
+                {
+                    _activeDragMembers.Add(member);
+                }
+            }
+        }
+
+        for (var i = 0; i < _activeDragMembers.Count; i++)
+        {
+            var renderer = _activeDragMembers[i]?.PieceRenderer;
+            _activeDragStartPositions.Add(
+                renderer != null ? renderer.transform.position : Vector3.zero);
+        }
+    }
+
+    private void ClearActiveDragMembers()
+    {
+        _activeDragMembers.Clear();
+        _activeDragStartPositions.Clear();
+    }
+
+    private void RestoreHintedPieceRotationsIfDragging()
+    {
+        for (var i = 0; i < _hintedPieces.Count && i < _hintedPieceBaseRotations.Count; i++)
+        {
+            var hinted = _hintedPieces[i];
+            if (hinted?.PieceRenderer != null && _activeDragMembers.Contains(hinted))
+            {
+                hinted.PieceRenderer.transform.rotation = _hintedPieceBaseRotations[i];
+            }
+        }
+    }
+
+    private static void SetPieceSortingOrders(
+        IReadOnlyList<DraggablePieceState> states,
+        int sortingOrder)
+    {
+        for (var i = 0; i < states.Count; i++)
+        {
+            if (states[i]?.PieceRenderer != null)
+            {
+                states[i].PieceRenderer.sortingOrder = sortingOrder;
+            }
+        }
+    }
+
+    private void ClampActiveDragMembersToTableBounds()
+    {
+        if (_activeDragMembers.Count == 0 || !TryGetTableBounds(out var tableBounds))
+        {
+            return;
+        }
+
+        var hasBounds = false;
+        var clusterBounds = default(Bounds);
+        for (var i = 0; i < _activeDragMembers.Count; i++)
+        {
+            var renderer = _activeDragMembers[i]?.PieceRenderer;
+            if (renderer == null)
+            {
+                continue;
+            }
+
+            if (!hasBounds)
+            {
+                clusterBounds = renderer.bounds;
+                hasBounds = true;
+            }
+            else
+            {
+                clusterBounds.Encapsulate(renderer.bounds);
+            }
+        }
+
+        if (!hasBounds)
+        {
+            return;
+        }
+
+        var delta = new Vector3(
+            CalculateBoundsClampOffset(
+                clusterBounds.min.x,
+                clusterBounds.max.x,
+                tableBounds.min.x,
+                tableBounds.max.x,
+                clusterBounds.center.x,
+                tableBounds.center.x),
+            CalculateBoundsClampOffset(
+                clusterBounds.min.y,
+                clusterBounds.max.y,
+                tableBounds.min.y,
+                tableBounds.max.y,
+                clusterBounds.center.y,
+                tableBounds.center.y),
+            0f);
+        if (delta.sqrMagnitude <= 0.000001f)
+        {
+            return;
+        }
+
+        for (var i = 0; i < _activeDragMembers.Count; i++)
+        {
+            var renderer = _activeDragMembers[i]?.PieceRenderer;
+            if (renderer != null)
+            {
+                renderer.transform.position += delta;
+            }
+        }
+    }
+
+    private bool TryGetTableBounds(out Bounds tableBounds)
+    {
+        var camera = Camera.main;
+        if (_board.BackgroundRect != null && camera != null)
+        {
+            tableBounds = GameCommonUtility.GetRectTransformCameraWorldBounds(
+                _board.BackgroundRect,
+                camera,
+                WorldGameplayDepth);
+            return tableBounds.size.sqrMagnitude > 0f;
+        }
+
+        var bottomLeft = ToGameplayWorld(Vector2.zero);
+        var topRight = ToGameplayWorld(new Vector2(Screen.width, Screen.height));
+        tableBounds = new Bounds(
+            (bottomLeft + topRight) * 0.5f,
+            new Vector3(
+                Mathf.Abs(topRight.x - bottomLeft.x),
+                Mathf.Abs(topRight.y - bottomLeft.y),
+                0f));
+        return tableBounds.size.sqrMagnitude > 0f;
+    }
+
+    private bool ShouldReturnPiecesToTray(
+        Vector2 releaseScreenPosition,
+        IReadOnlyList<DraggablePieceState> states)
+    {
+        for (var i = 0; i < states.Count; i++)
+        {
+            var renderer = states[i]?.PieceRenderer;
+            if (renderer != null
+                && ShouldReturnPieceToTray(releaseScreenPosition, renderer))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void ReturnDragMembersToTray(
+        List<DraggablePieceState> states,
+        bool anchorWasOnTray)
+    {
+        if (states == null || states.Count == 0)
+        {
+            return;
+        }
+
+        if (states.Any(state => _hintedPieces.Contains(state)))
+        {
+            ClearPieceHint();
+        }
+
+        DetachPiecesFromLooseClusters(states);
+        for (var i = 0; i < states.Count; i++)
+        {
+            if (states[i]?.PieceRenderer != null)
+            {
+                ApplyPieceRendererShadow(states[i].PieceRenderer, PieceShadowStyle.Loose);
+            }
+        }
+
+        if (states.Count == 1 && anchorWasOnTray)
+        {
+            ReturnPieceToTray(states[0], wasOnTray: true);
+            return;
+        }
+
+        ReturnLoosePiecesToTray(states);
+    }
+
+    private bool TryGetClusterBoardSnapTargets(
+        IReadOnlyList<DraggablePieceState> states,
+        out List<Vector3> groovePositions)
+    {
+        groovePositions = new List<Vector3>(states.Count);
+        var bestDelta = Vector3.zero;
+        var bestDistance = float.PositiveInfinity;
+        DraggablePieceState closestState = null;
+        for (var i = 0; i < states.Count; i++)
+        {
+            var state = states[i];
+            if (state?.PieceRenderer == null || state.GrooveRect == null)
+            {
+                groovePositions.Clear();
+                return false;
+            }
+
+            var groovePosition = GetGrooveSnapPosition(state.GrooveRect, Camera.main);
+            groovePositions.Add(groovePosition);
+            UpdateGrooveOverlapProbe(state, groovePosition);
+            var distance = Vector3.Distance(state.PieceRenderer.transform.position, groovePosition);
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                bestDelta = groovePosition - state.PieceRenderer.transform.position;
+                closestState = state;
+            }
+        }
+
+        if (closestState == null || bestDistance > CalculateSnapDistance(closestState))
+        {
+            return false;
+        }
+
+        for (var i = 0; i < states.Count; i++)
+        {
+            var shiftedPosition = states[i].PieceRenderer.transform.position + bestDelta;
+            if (Vector3.Distance(shiftedPosition, groovePositions[i]) > CalculateSnapDistance(states[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private List<DraggablePieceState> CollectLoosePiecesOverlappingGrooves(
+        IReadOnlyList<DraggablePieceState> states,
+        HashSet<DraggablePieceState> ignoredStates)
+    {
+        var result = new HashSet<DraggablePieceState>();
+        for (var i = 0; i < states.Count; i++)
+        {
+            var state = states[i];
+            if (state == null)
+            {
+                continue;
+            }
+
+            UpdateGrooveOverlapProbe(
+                state,
+                GetGrooveSnapPosition(state.GrooveRect, Camera.main));
+        }
+
+        Physics2D.SyncTransforms();
+        for (var i = 0; i < states.Count; i++)
+        {
+            var state = states[i];
+            if (state == null)
+            {
+                continue;
+            }
+
+            var overlaps = CollectLoosePiecesOverlappingCollider(
+                state,
+                state.GrooveProbeCollider,
+                ignoredStates);
+            for (var overlapIndex = 0; overlapIndex < overlaps.Count; overlapIndex++)
+            {
+                var overlap = overlaps[overlapIndex];
+                if (_looseClusterByPiece.TryGetValue(overlap, out var cluster))
+                {
+                    for (var memberIndex = 0; memberIndex < cluster.Members.Count; memberIndex++)
+                    {
+                        if (cluster.Members[memberIndex] != null
+                            && !ignoredStates.Contains(cluster.Members[memberIndex]))
+                        {
+                            result.Add(cluster.Members[memberIndex]);
+                        }
+                    }
+                }
+                else
+                {
+                    result.Add(overlap);
+                }
+            }
+        }
+
+        return result.ToList();
+    }
+
+    private void SetLoosePiecePresentation(IReadOnlyList<DraggablePieceState> states)
+    {
+        for (var i = 0; i < states.Count; i++)
+        {
+            var state = states[i];
+            if (state?.PieceRenderer == null)
+            {
+                continue;
+            }
+
+            ApplyPieceRendererShadow(state.PieceRenderer, PieceShadowStyle.Loose);
+            state.PieceRenderer.transform.localScale = state.DragScale;
+        }
+    }
+
+    private bool IsLooseClusterPlacementAllowed(
+        IReadOnlyList<DraggablePieceState> states,
+        HashSet<DraggablePieceState> ignoredStates)
+    {
+        if (!IsLooseClusterBoundsPlacementAllowed(states))
+        {
+            return false;
+        }
+
+        for (var i = 0; i < states.Count; i++)
+        {
+            var state = states[i];
+            if (state?.PieceRenderer == null
+                || DoesColliderOverlapLoosePiece(state, state.PieceCollider, ignoredStates)
+                || CollidersOverlap(state.PieceCollider, state.GrooveProbeCollider)
+                || !IsLoosePiecePlacementAllowed(state))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private bool IsLooseClusterBoundsPlacementAllowed(
+        IReadOnlyList<DraggablePieceState> states)
+    {
+        if (states.Count <= 1 || _board.GameBoardImage == null || Camera.main == null)
+        {
+            return true;
+        }
+
+        var hasBounds = false;
+        var clusterBounds = default(Bounds);
+        for (var i = 0; i < states.Count; i++)
+        {
+            var renderer = states[i]?.PieceRenderer;
+            if (renderer == null)
+            {
+                continue;
+            }
+
+            if (!hasBounds)
+            {
+                clusterBounds = renderer.bounds;
+                hasBounds = true;
+            }
+            else
+            {
+                clusterBounds.Encapsulate(renderer.bounds);
+            }
+        }
+
+        if (!hasBounds)
+        {
+            return false;
+        }
+
+        var camera = Camera.main;
+        var boardBounds = GameCommonUtility.GetRectTransformCameraWorldBounds(
+            _board.GameBoardImage.rectTransform,
+            camera,
+            WorldGameplayDepth);
+        var fullyInsideBoard = clusterBounds.min.x >= boardBounds.min.x
+                               && clusterBounds.max.x <= boardBounds.max.x
+                               && clusterBounds.min.y >= boardBounds.min.y
+                               && clusterBounds.max.y <= boardBounds.max.y;
+        var fullyLeftOfBoard = clusterBounds.max.x <= boardBounds.min.x;
+        var fullyRightOfBoard = clusterBounds.min.x >= boardBounds.max.x;
+        return fullyInsideBoard
+               || fullyLeftOfBoard
+               || fullyRightOfBoard
+               || IsPieceFullyInTableSpaceBelowBoard(clusterBounds, boardBounds, camera);
+    }
+
+    private void ReturnDragMembersAfterInvalidDrop(
+        IReadOnlyList<DraggablePieceState> states,
+        IReadOnlyList<Vector3> startPositions,
+        bool anchorWasOnTray)
+    {
+        if (states.Count == 1 && anchorWasOnTray)
+        {
+            var state = states[0];
+            state.IsOnTray = true;
+            ResetPieceTrayPosition(instant: true);
+            LayoutTrayPieces(animate: true, excludedState: state);
+            StartCoroutine(PlayInvalidDropReturnAnimation(
+                state,
+                startPositions[0],
+                showInvalidTintImmediately: false));
+            return;
+        }
+
+        for (var i = 0; i < states.Count && i < startPositions.Count; i++)
+        {
+            var state = states[i];
+            if (state?.PieceRenderer == null)
+            {
+                continue;
+            }
+
+            state.IsOnTray = false;
+            StartCoroutine(PlayInvalidDropReturnAnimation(
+                state,
+                startPositions[i],
+                showInvalidTintImmediately: true));
+        }
+    }
+
+    private bool TryAttachLoosePieces(List<DraggablePieceState> movingStates)
+    {
+        if (movingStates == null || movingStates.Count == 0)
+        {
+            return false;
+        }
+
+        var movingSet = new HashSet<DraggablePieceState>(movingStates);
+        DraggablePieceState bestMoving = null;
+        DraggablePieceState bestStationary = null;
+        var bestDelta = Vector3.zero;
+        var bestDistance = float.PositiveInfinity;
+        for (var movingIndex = 0; movingIndex < movingStates.Count; movingIndex++)
+        {
+            var moving = movingStates[movingIndex];
+            if (moving?.PieceRenderer == null || moving.GrooveRect == null)
+            {
+                continue;
+            }
+
+            for (var i = 0; i < _drag.CurrentGroupDraggables.Count; i++)
+            {
+                var stationary = _drag.CurrentGroupDraggables[i];
+                if (stationary == null
+                    || movingSet.Contains(stationary)
+                    || stationary.IsPlaced
+                    || stationary.IsOnTray
+                    || stationary.PieceRenderer == null
+                    || stationary.GrooveRect == null
+                    || !AreGroovesAdjacent(moving, stationary))
+                {
+                    continue;
+                }
+
+                var movingGroove = GetGrooveSnapPosition(moving.GrooveRect, Camera.main);
+                var stationaryGroove = GetGrooveSnapPosition(stationary.GrooveRect, Camera.main);
+                var desiredMovingPosition = stationary.PieceRenderer.transform.position
+                                            + (movingGroove - stationaryGroove);
+                var delta = desiredMovingPosition - moving.PieceRenderer.transform.position;
+                var distance = delta.magnitude;
+                if (distance > CalculateLooseClusterAttachDistance(moving, stationary)
+                    || distance >= bestDistance)
+                {
+                    continue;
+                }
+
+                bestMoving = moving;
+                bestStationary = stationary;
+                bestDelta = delta;
+                bestDistance = distance;
+            }
+        }
+
+        if (bestMoving == null || bestStationary == null)
+        {
+            return false;
+        }
+
+        var startPositions = new List<Vector3>(movingStates.Count);
+        for (var i = 0; i < movingStates.Count; i++)
+        {
+            startPositions.Add(movingStates[i].PieceRenderer.transform.position);
+            movingStates[i].PieceRenderer.transform.position += bestDelta;
+        }
+
+        Physics2D.SyncTransforms();
+        var stationaryMembers = GetLooseClusterMembers(bestStationary);
+        var combinedSet = new HashSet<DraggablePieceState>(movingStates);
+        combinedSet.UnionWith(stationaryMembers);
+        if (!IsLooseClusterPlacementAllowed(movingStates, combinedSet))
+        {
+            for (var i = 0; i < movingStates.Count; i++)
+            {
+                movingStates[i].PieceRenderer.transform.position = startPositions[i];
+            }
+
+            Physics2D.SyncTransforms();
+            return false;
+        }
+
+        for (var i = 0; i < movingStates.Count; i++)
+        {
+            movingStates[i].PieceRenderer.transform.position = startPositions[i];
+            movingStates[i].IsOnTray = false;
+            RegisterLoosePiece(movingStates[i]);
+        }
+
+        var cluster = MergeLoosePieceClusters(movingStates, stationaryMembers);
+        if (_hintedPieces.Any(combinedSet.Contains))
+        {
+            ClearPieceHint();
+        }
+
+        StartCoroutine(PlayLooseClusterAttachAnimation(
+            movingStates,
+            startPositions,
+            bestDelta,
+            cluster));
+        return true;
+    }
+
+    private bool AreGroovesAdjacent(
+        DraggablePieceState first,
+        DraggablePieceState second)
+    {
+        if (first?.GrooveProbeCollider == null
+            || second?.GrooveProbeCollider == null
+            || first.GrooveRect == null
+            || second.GrooveRect == null)
+        {
+            return false;
+        }
+
+        UpdateGrooveOverlapProbe(
+            first,
+            GetGrooveSnapPosition(first.GrooveRect, Camera.main));
+        UpdateGrooveOverlapProbe(
+            second,
+            GetGrooveSnapPosition(second.GrooveRect, Camera.main));
+        Physics2D.SyncTransforms();
+        var distance = first.GrooveProbeCollider.Distance(second.GrooveProbeCollider);
+        if (!distance.isValid)
+        {
+            return false;
+        }
+
+        var firstSize = Mathf.Min(
+            first.GrooveProbeCollider.bounds.size.x,
+            first.GrooveProbeCollider.bounds.size.y);
+        var secondSize = Mathf.Min(
+            second.GrooveProbeCollider.bounds.size.x,
+            second.GrooveProbeCollider.bounds.size.y);
+        var threshold = Mathf.Clamp(
+            Mathf.Min(firstSize, secondSize) * LooseClusterAdjacencySizeRatio,
+            LooseClusterAdjacencyMin,
+            LooseClusterAdjacencyMax);
+        return distance.isOverlapped || distance.distance <= threshold;
+    }
+
+    private static float CalculateLooseClusterAttachDistance(
+        DraggablePieceState first,
+        DraggablePieceState second)
+    {
+        var firstSize = first?.PieceRenderer != null
+            ? Mathf.Max(first.PieceRenderer.bounds.size.x, first.PieceRenderer.bounds.size.y)
+            : 0f;
+        var secondSize = second?.PieceRenderer != null
+            ? Mathf.Max(second.PieceRenderer.bounds.size.x, second.PieceRenderer.bounds.size.y)
+            : 0f;
+        return Mathf.Clamp(
+            Mathf.Min(firstSize, secondSize) * LooseClusterAttachDistanceRatio,
+            LooseClusterAttachDistanceMin,
+            LooseClusterAttachDistanceMax);
+    }
+
+    private IEnumerator PlayLooseClusterAttachAnimation(
+        IReadOnlyList<DraggablePieceState> states,
+        IReadOnlyList<Vector3> startPositions,
+        Vector3 delta,
+        LoosePieceCluster cluster)
+    {
+        BeginPiecePlacementAnimation();
+        SetPieceSortingOrders(states, PieceSortingOrder + 100);
+        var elapsed = 0f;
+        while (elapsed < PieceSnapDuration)
+        {
+            elapsed += Mathf.Min(Time.unscaledDeltaTime, GameEntranceMaxFrameDelta);
+            var progress = Mathf.Clamp01(elapsed / PieceSnapDuration);
+            var eased = 1f - Mathf.Pow(1f - progress, 3f);
+            for (var i = 0; i < states.Count && i < startPositions.Count; i++)
+            {
+                if (states[i]?.PieceRenderer != null)
+                {
+                    states[i].PieceRenderer.transform.position =
+                        startPositions[i] + delta * eased;
+                }
+            }
+
+            yield return null;
+        }
+
+        for (var i = 0; i < states.Count && i < startPositions.Count; i++)
+        {
+            var state = states[i];
+            if (state?.PieceRenderer == null)
+            {
+                continue;
+            }
+
+            state.PieceRenderer.transform.position = startPositions[i] + delta;
+            state.PieceRenderer.sortingOrder = PieceSortingOrder;
+            ApplyPieceRendererShadow(state.PieceRenderer, PieceShadowStyle.Loose);
+        }
+
+        Physics2D.SyncTransforms();
+        EndPiecePlacementAnimation();
+        if (cluster != null && cluster.Members.Count > 0)
+        {
+            RestorePiecePlacementTutorialPresentation(cluster.Members[0]);
+        }
+    }
+
+    private IReadOnlyList<DraggablePieceState> GetLooseClusterMembers(
+        DraggablePieceState state)
+    {
+        return state != null
+               && _looseClusterByPiece.TryGetValue(state, out var cluster)
+            ? cluster.Members
+            : new[] { state };
+    }
+
+    private LoosePieceCluster MergeLoosePieceClusters(
+        IReadOnlyList<DraggablePieceState> firstMembers,
+        IReadOnlyList<DraggablePieceState> secondMembers)
+    {
+        LoosePieceCluster result = null;
+        for (var i = 0; i < firstMembers.Count && result == null; i++)
+        {
+            _looseClusterByPiece.TryGetValue(firstMembers[i], out result);
+        }
+        for (var i = 0; i < secondMembers.Count && result == null; i++)
+        {
+            _looseClusterByPiece.TryGetValue(secondMembers[i], out result);
+        }
+
+        if (result == null)
+        {
+            result = new LoosePieceCluster
+            {
+                CreatedOrder = ++_nextLoosePieceOrder
+            };
+            _loosePieceClusters.Add(result);
+        }
+
+        AddMembersToLooseCluster(result, firstMembers);
+        AddMembersToLooseCluster(result, secondMembers);
+
+        var mergedClusters = new HashSet<LoosePieceCluster>();
+        for (var i = 0; i < result.Members.Count; i++)
+        {
+            if (_looseClusterByPiece.TryGetValue(result.Members[i], out var cluster)
+                && cluster != result)
+            {
+                mergedClusters.Add(cluster);
+            }
+        }
+
+        foreach (var cluster in mergedClusters)
+        {
+            result.CreatedOrder = Math.Min(result.CreatedOrder, cluster.CreatedOrder);
+            AddMembersToLooseCluster(result, cluster.Members);
+            _loosePieceClusters.Remove(cluster);
+        }
+
+        for (var i = 0; i < result.Members.Count; i++)
+        {
+            _looseClusterByPiece[result.Members[i]] = result;
+        }
+
+        return result;
+    }
+
+    private void AddMembersToLooseCluster(
+        LoosePieceCluster cluster,
+        IReadOnlyList<DraggablePieceState> members)
+    {
+        for (var i = 0; i < members.Count; i++)
+        {
+            var member = members[i];
+            if (member != null && !cluster.Members.Contains(member))
+            {
+                cluster.Members.Add(member);
+            }
+        }
+    }
+
+    private void RegisterLoosePiece(DraggablePieceState state)
+    {
+        if (state != null)
+        {
+            GetOrCreateLoosePieceOrder(state);
+        }
+    }
+
+    private long GetOrCreateLoosePieceOrder(DraggablePieceState state)
+    {
+        if (state == null)
+        {
+            return long.MaxValue;
+        }
+
+        if (!_loosePieceOrders.TryGetValue(state, out var order))
+        {
+            order = ++_nextLoosePieceOrder;
+            _loosePieceOrders[state] = order;
+        }
+
+        return order;
+    }
+
+    private void DetachPiecesFromLooseClusters(IEnumerable<DraggablePieceState> states)
+    {
+        var affectedClusters = new HashSet<LoosePieceCluster>();
+        foreach (var state in states)
+        {
+            if (state == null)
+            {
+                continue;
+            }
+
+            _loosePieceOrders.Remove(state);
+            if (_looseClusterByPiece.TryGetValue(state, out var cluster))
+            {
+                affectedClusters.Add(cluster);
+                cluster.Members.Remove(state);
+                _looseClusterByPiece.Remove(state);
+            }
+        }
+
+        foreach (var cluster in affectedClusters)
+        {
+            if (cluster.Members.Count >= 2)
+            {
+                continue;
+            }
+
+            _loosePieceClusters.Remove(cluster);
+            for (var i = 0; i < cluster.Members.Count; i++)
+            {
+                _looseClusterByPiece.Remove(cluster.Members[i]);
+            }
+        }
+    }
+
+    private void ClearLoosePieceClusters()
+    {
+        _loosePieceClusters.Clear();
+        _looseClusterByPiece.Clear();
+        _loosePieceOrders.Clear();
+        _nextLoosePieceOrder = 0;
+        ClearActiveDragMembers();
     }
 
     private bool IsLoosePiecePlacementAllowed(DraggablePieceState state)
@@ -3490,7 +4350,8 @@ public class GameScene : MonoBehaviour
 
     private List<DraggablePieceState> CollectLoosePiecesOverlappingCollider(
         DraggablePieceState movingState,
-        Collider2D movingCollider)
+        Collider2D movingCollider,
+        HashSet<DraggablePieceState> ignoredStates = null)
     {
         var overlappingStates = new List<DraggablePieceState>();
         if (movingState == null || movingCollider == null)
@@ -3503,6 +4364,7 @@ public class GameScene : MonoBehaviour
             var state = _drag.CurrentGroupDraggables[i];
             if (state == null
                 || state == movingState
+                || (ignoredStates != null && ignoredStates.Contains(state))
                 || state.IsPlaced
                 || state.IsOnTray
                 || state.PieceRenderer == null
@@ -3527,7 +4389,8 @@ public class GameScene : MonoBehaviour
 
     private bool DoesColliderOverlapLoosePiece(
         DraggablePieceState movingState,
-        Collider2D movingCollider)
+        Collider2D movingCollider,
+        HashSet<DraggablePieceState> ignoredStates = null)
     {
         if (movingState == null || movingCollider == null)
         {
@@ -3539,6 +4402,7 @@ public class GameScene : MonoBehaviour
             var state = _drag.CurrentGroupDraggables[i];
             if (state == null
                 || state == movingState
+                || (ignoredStates != null && ignoredStates.Contains(state))
                 || state.IsPlaced
                 || state.IsOnTray
                 || state.PieceRenderer == null
@@ -3570,28 +4434,6 @@ public class GameScene : MonoBehaviour
 
         var distance = first.Distance(second);
         return distance.isValid && distance.isOverlapped;
-    }
-
-    private void ReturnPieceAfterInvalidDrop(
-        DraggablePieceState state,
-        bool wasOnTray)
-    {
-        if (state?.PieceRenderer == null)
-        {
-            return;
-        }
-
-        state.IsOnTray = wasOnTray;
-        if (wasOnTray)
-        {
-            ResetPieceTrayPosition(instant: true);
-            LayoutTrayPieces(animate: true, excludedState: state);
-        }
-
-        StartCoroutine(PlayInvalidDropReturnAnimation(
-            state,
-            _dragStartPosition,
-            showInvalidTintImmediately: !wasOnTray));
     }
 
     private void ReturnLoosePiecesToTray(List<DraggablePieceState> states)
@@ -6547,7 +7389,7 @@ public class GameScene : MonoBehaviour
             return;
         }
 
-        var target = FindFirstTrayHintTarget();
+        var target = FindHintTargetByInteractionOrder();
         if (target == null)
         {
             return;
@@ -6558,7 +7400,7 @@ public class GameScene : MonoBehaviour
         Debug.Log("GameScene: hint used; no-hint score bonus disabled for this game.");
     }
 
-    private DraggablePieceState FindFirstTrayHintTarget()
+    private DraggablePieceState FindHintTargetByInteractionOrder()
     {
         for (var i = 0; i < _drag.CurrentGroupDraggables.Count; i++)
         {
@@ -6573,7 +7415,48 @@ public class GameScene : MonoBehaviour
             }
         }
 
-        return null;
+        LoosePieceCluster earliestCluster = null;
+        for (var i = 0; i < _loosePieceClusters.Count; i++)
+        {
+            var cluster = _loosePieceClusters[i];
+            if (cluster == null
+                || cluster.Members.Count < 2
+                || cluster.Members.All(member => member == null || member.IsPlaced))
+            {
+                continue;
+            }
+
+            if (earliestCluster == null || cluster.CreatedOrder < earliestCluster.CreatedOrder)
+            {
+                earliestCluster = cluster;
+            }
+        }
+
+        if (earliestCluster != null)
+        {
+            return earliestCluster.Members.FirstOrDefault(
+                member => member?.PieceRenderer != null && !member.IsPlaced);
+        }
+
+        DraggablePieceState earliestLoosePiece = null;
+        var earliestOrder = long.MaxValue;
+        foreach (var pair in _loosePieceOrders)
+        {
+            var state = pair.Key;
+            if (state?.PieceRenderer == null
+                || state.IsPlaced
+                || state.IsOnTray
+                || _looseClusterByPiece.ContainsKey(state)
+                || pair.Value >= earliestOrder)
+            {
+                continue;
+            }
+
+            earliestLoosePiece = state;
+            earliestOrder = pair.Value;
+        }
+
+        return earliestLoosePiece;
     }
 
     private DraggablePieceState FindHintTarget()
@@ -6618,11 +7501,24 @@ public class GameScene : MonoBehaviour
         }
 
         _hintedPiece = state;
-        _hintedPieceBaseRotation = state.PieceRenderer.transform.rotation;
+        _hintedPieces.Clear();
+        _hintedPieceBaseRotations.Clear();
+        var hintMembers = GetLooseClusterMembers(state);
+        for (var i = 0; i < hintMembers.Count; i++)
+        {
+            var member = hintMembers[i];
+            if (member?.PieceRenderer == null || member.IsPlaced)
+            {
+                continue;
+            }
+
+            _hintedPieces.Add(member);
+            _hintedPieceBaseRotations.Add(member.PieceRenderer.transform.rotation);
+        }
         _hintShakeStartTime = Time.unscaledTime;
         _isHintPieceShaking = true;
         CreatePieceHintOutline(
-            state,
+            _hintedPieces,
             _isHighContrastEnabled
                 ? HighContrastPieceHintOutlineColor
                 : PieceHintOutlineColor);
@@ -6635,16 +7531,16 @@ public class GameScene : MonoBehaviour
             return;
         }
 
-        var renderer = _hintedPiece.PieceRenderer;
-        if (_hintedPiece.IsPlaced || renderer == null)
+        if (_hintedPieces.Count == 0
+            || _hintedPieces.Any(piece => piece == null || piece.IsPlaced || piece.PieceRenderer == null))
         {
             ClearPieceHint();
             return;
         }
 
-        if (_drag.DraggingPiece == _hintedPiece)
+        if (_activeDragMembers.Any(_hintedPieces.Contains))
         {
-            renderer.transform.rotation = _hintedPieceBaseRotation;
+            RestoreAllHintedPieceRotations();
             return;
         }
 
@@ -6656,17 +7552,112 @@ public class GameScene : MonoBehaviour
         var elapsed = Time.unscaledTime - _hintShakeStartTime;
         if (elapsed >= HintShakeDuration)
         {
-            renderer.transform.rotation = _hintedPieceBaseRotation;
+            RestoreAllHintedPieceRotations();
             _isHintPieceShaking = false;
             return;
         }
 
         var angle = Mathf.Sin(
             elapsed * HintShakeCyclesPerSecond * Mathf.PI * 2f) * HintShakeAngle;
-        renderer.transform.rotation = _hintedPieceBaseRotation * Quaternion.Euler(0f, 0f, angle);
+        for (var i = 0; i < _hintedPieces.Count && i < _hintedPieceBaseRotations.Count; i++)
+        {
+            _hintedPieces[i].PieceRenderer.transform.rotation =
+                _hintedPieceBaseRotations[i] * Quaternion.Euler(0f, 0f, angle);
+        }
     }
 
     private void CreatePieceHintOutline(DraggablePieceState state, Color outlineColor)
+    {
+        CreatePieceHintOutline(new[] { state }, outlineColor);
+    }
+
+    private void CreatePieceHintOutline(
+        IReadOnlyList<DraggablePieceState> states,
+        Color outlineColor)
+    {
+        var validStates = states
+            .Where(state => state?.GrooveRect != null && state.GrooveImage?.sprite != null)
+            .ToList();
+        if (validStates.Count == 0)
+        {
+            return;
+        }
+
+        if (validStates.Count == 1)
+        {
+            CreateSinglePieceHintOutline(validStates[0], outlineColor);
+            return;
+        }
+
+        var parent = _loadedCardBagRect != null
+            ? (RectTransform)_loadedCardBagRect
+            : validStates[0].GrooveRect.parent as RectTransform;
+        if (parent == null)
+        {
+            CreateSinglePieceHintOutline(validStates[0], outlineColor);
+            return;
+        }
+
+        var sourceRegions = new List<HintOutlineSpriteRegion>(validStates.Count);
+        var unionRect = default(Rect);
+        var hasUnion = false;
+        for (var i = 0; i < validStates.Count; i++)
+        {
+            if (!TryGetRectInParent(validStates[i].GrooveRect, parent, out var sourceRect))
+            {
+                continue;
+            }
+
+            sourceRegions.Add(new HintOutlineSpriteRegion(
+                validStates[i].GrooveImage.sprite,
+                sourceRect,
+                validStates[i].GrooveImage.preserveAspect));
+            unionRect = hasUnion ? UnionHintRects(unionRect, sourceRect) : sourceRect;
+            hasUnion = true;
+        }
+
+        if (!hasUnion || sourceRegions.Count < 2)
+        {
+            CreateSinglePieceHintOutline(validStates[0], outlineColor);
+            return;
+        }
+
+        var outlineObject = new GameObject(
+            PieceHintOutlineObjectName,
+            typeof(RectTransform),
+            typeof(CanvasRenderer),
+            typeof(HintDashedOutlineGraphic));
+        var outlineRect = outlineObject.GetComponent<RectTransform>();
+        outlineRect.SetParent(parent, false);
+        outlineRect.anchorMin = new Vector2(0.5f, 0.5f);
+        outlineRect.anchorMax = new Vector2(0.5f, 0.5f);
+        outlineRect.pivot = new Vector2(0.5f, 0.5f);
+        outlineRect.sizeDelta = unionRect.size;
+        outlineRect.localPosition = new Vector3(unionRect.center.x, unionRect.center.y, 0f);
+        outlineRect.localRotation = Quaternion.identity;
+        outlineRect.localScale = Vector3.one;
+        outlineRect.SetAsLastSibling();
+
+        for (var i = 0; i < sourceRegions.Count; i++)
+        {
+            sourceRegions[i] = sourceRegions[i].OffsetBy(-unionRect.center);
+        }
+
+        var outlineGraphic = outlineObject.GetComponent<HintDashedOutlineGraphic>();
+        outlineGraphic.maskable = false;
+        outlineGraphic.ConfigureCombined(
+            sourceRegions,
+            outlineColor,
+            HintOutlineWidth,
+            HintDashLength,
+            HintDashGap,
+            HintOutlineScrollSpeed);
+        _pieceHintOutlineRoot = outlineObject;
+    }
+
+    private void CreateSinglePieceHintOutline(
+        DraggablePieceState state,
+        Color outlineColor)
     {
         var grooveRect = state.GrooveRect;
         var outlineObject = new GameObject(
@@ -6698,15 +7689,61 @@ public class GameScene : MonoBehaviour
         _pieceHintOutlineRoot = outlineObject;
     }
 
-    private void ClearPieceHint()
+    private static bool TryGetRectInParent(
+        RectTransform source,
+        RectTransform parent,
+        out Rect rect)
     {
-        if (_hintedPiece?.PieceRenderer != null)
+        rect = default;
+        if (source == null || parent == null)
         {
-            _hintedPiece.PieceRenderer.transform.rotation = _hintedPieceBaseRotation;
+            return false;
         }
 
+        var corners = new Vector3[4];
+        source.GetWorldCorners(corners);
+        var first = parent.InverseTransformPoint(corners[0]);
+        var min = new Vector2(first.x, first.y);
+        var max = min;
+        for (var i = 1; i < corners.Length; i++)
+        {
+            var point = parent.InverseTransformPoint(corners[i]);
+            min = Vector2.Min(min, point);
+            max = Vector2.Max(max, point);
+        }
+
+        rect = Rect.MinMaxRect(min.x, min.y, max.x, max.y);
+        return rect.width > 0.001f && rect.height > 0.001f;
+    }
+
+    private static Rect UnionHintRects(Rect first, Rect second)
+    {
+        return Rect.MinMaxRect(
+            Mathf.Min(first.xMin, second.xMin),
+            Mathf.Min(first.yMin, second.yMin),
+            Mathf.Max(first.xMax, second.xMax),
+            Mathf.Max(first.yMax, second.yMax));
+    }
+
+    private void RestoreAllHintedPieceRotations()
+    {
+        for (var i = 0; i < _hintedPieces.Count && i < _hintedPieceBaseRotations.Count; i++)
+        {
+            if (_hintedPieces[i]?.PieceRenderer != null)
+            {
+                _hintedPieces[i].PieceRenderer.transform.rotation =
+                    _hintedPieceBaseRotations[i];
+            }
+        }
+    }
+
+    private void ClearPieceHint()
+    {
+        RestoreAllHintedPieceRotations();
+
         _hintedPiece = null;
-        _hintedPieceBaseRotation = Quaternion.identity;
+        _hintedPieces.Clear();
+        _hintedPieceBaseRotations.Clear();
         _hintShakeStartTime = 0f;
         _isHintPieceShaking = false;
         if (_pieceHintOutlineRoot != null)
@@ -8401,10 +9438,32 @@ internal sealed class TutorialArrowMotion : MonoBehaviour
     }
 }
 
+internal readonly struct HintOutlineSpriteRegion
+{
+    public HintOutlineSpriteRegion(Sprite sprite, Rect rect, bool preserveAspect)
+    {
+        Sprite = sprite;
+        Rect = rect;
+        PreserveAspect = preserveAspect;
+    }
+
+    public Sprite Sprite { get; }
+    public Rect Rect { get; }
+    public bool PreserveAspect { get; }
+
+    public HintOutlineSpriteRegion OffsetBy(Vector2 offset)
+    {
+        var rect = Rect;
+        rect.position += offset;
+        return new HintOutlineSpriteRegion(Sprite, rect, PreserveAspect);
+    }
+}
+
 internal sealed class HintDashedOutlineGraphic : MaskableGraphic
 {
     private const byte AlphaThreshold = 26;
     private const float OutlineSimplifyTolerancePixels = 0.75f;
+    private const int CombinedMaskMaxDimension = 2048;
     private static readonly Dictionary<Sprite, List<List<Vector2>>> sNormalizedPathCache =
         new Dictionary<Sprite, List<List<Vector2>>>();
     private readonly List<List<Vector2>> _spritePaths = new List<List<Vector2>>();
@@ -8415,6 +9474,7 @@ internal sealed class HintDashedOutlineGraphic : MaskableGraphic
     private float _dashGap = 4f;
     private float _scrollSpeed = 8f;
     private bool _preserveAspect;
+    private bool _usesCombinedMask;
 
     public static void ClearPathCache()
     {
@@ -8431,6 +9491,7 @@ internal sealed class HintDashedOutlineGraphic : MaskableGraphic
         bool preserveAspect)
     {
         _sourceSprite = sourceSprite;
+        _usesCombinedMask = false;
         color = lineColor;
         _lineWidth = Mathf.Max(0.5f, lineWidth);
         _dashLength = Mathf.Max(1f, dashLength);
@@ -8442,9 +9503,35 @@ internal sealed class HintDashedOutlineGraphic : MaskableGraphic
         SetAllDirty();
     }
 
+    public void ConfigureCombined(
+        IReadOnlyList<HintOutlineSpriteRegion> sourceRegions,
+        Color lineColor,
+        float lineWidth,
+        float dashLength,
+        float dashGap,
+        float scrollSpeed)
+    {
+        _sourceSprite = null;
+        _usesCombinedMask = true;
+        color = lineColor;
+        _lineWidth = Mathf.Max(0.5f, lineWidth);
+        _dashLength = Mathf.Max(1f, dashLength);
+        _dashGap = Mathf.Max(1f, dashGap);
+        _scrollSpeed = scrollSpeed;
+        _preserveAspect = false;
+        raycastTarget = false;
+        _spritePaths.Clear();
+        if (!TryBuildCombinedAlphaPaths(sourceRegions, rectTransform.rect, _spritePaths))
+        {
+            Debug.LogWarning("GameScene: combined hint outline could not build a shared alpha mask.");
+        }
+
+        SetAllDirty();
+    }
+
     private void Update()
     {
-        if (_sourceSprite != null && _spritePaths.Count > 0 && Mathf.Abs(_scrollSpeed) > 0.001f)
+        if (_spritePaths.Count > 0 && Mathf.Abs(_scrollSpeed) > 0.001f)
         {
             SetVerticesDirty();
         }
@@ -8453,18 +9540,32 @@ internal sealed class HintDashedOutlineGraphic : MaskableGraphic
     protected override void OnPopulateMesh(VertexHelper vertexHelper)
     {
         vertexHelper.Clear();
-        if (_sourceSprite == null || _spritePaths.Count == 0)
+        if (_spritePaths.Count == 0)
         {
             return;
         }
 
-        var spriteBounds = _sourceSprite.bounds;
-        if (spriteBounds.size.x <= 0.0001f || spriteBounds.size.y <= 0.0001f)
+        var targetRect = rectTransform.rect;
+        if (!_usesCombinedMask)
         {
-            return;
+            if (_sourceSprite == null)
+            {
+                return;
+            }
+
+            var spriteBounds = _sourceSprite.bounds;
+            if (spriteBounds.size.x <= 0.0001f || spriteBounds.size.y <= 0.0001f)
+            {
+                return;
+            }
+
+            targetRect = GetDrawingRect(
+                spriteBounds,
+                targetRect,
+                _preserveAspect,
+                rectTransform.pivot);
         }
 
-        var targetRect = GetDrawingRect(spriteBounds, rectTransform.rect);
         for (var pathIndex = 0; pathIndex < _spritePaths.Count; pathIndex++)
         {
             AddDashedPath(vertexHelper, _spritePaths[pathIndex], targetRect);
@@ -8598,9 +9699,13 @@ internal sealed class HintDashedOutlineGraphic : MaskableGraphic
             Mathf.Lerp(targetRect.yMin, targetRect.yMax, point.y));
     }
 
-    private Rect GetDrawingRect(Bounds spriteBounds, Rect targetRect)
+    private static Rect GetDrawingRect(
+        Bounds spriteBounds,
+        Rect targetRect,
+        bool preserveAspect,
+        Vector2 pivot)
     {
-        if (!_preserveAspect)
+        if (!preserveAspect)
         {
             return targetRect;
         }
@@ -8611,13 +9716,13 @@ internal sealed class HintDashedOutlineGraphic : MaskableGraphic
         {
             var originalHeight = targetRect.height;
             targetRect.height = targetRect.width / spriteAspect;
-            targetRect.y += (originalHeight - targetRect.height) * rectTransform.pivot.y;
+            targetRect.y += (originalHeight - targetRect.height) * pivot.y;
         }
         else
         {
             var originalWidth = targetRect.width;
             targetRect.width = targetRect.height * spriteAspect;
-            targetRect.x += (originalWidth - targetRect.width) * rectTransform.pivot.x;
+            targetRect.x += (originalWidth - targetRect.width) * pivot.x;
         }
 
         return targetRect;
@@ -8630,33 +9735,128 @@ internal sealed class HintDashedOutlineGraphic : MaskableGraphic
             return false;
         }
 
+        var mask = new bool[width * height];
+        for (var i = 0; i < pixels.Length; i++)
+        {
+            mask[i] = pixels[i].a >= AlphaThreshold;
+        }
+
+        return TryBuildMaskPaths(mask, width, height, outputPaths);
+    }
+
+    private static bool TryBuildCombinedAlphaPaths(
+        IReadOnlyList<HintOutlineSpriteRegion> sourceRegions,
+        Rect targetRect,
+        List<List<Vector2>> outputPaths)
+    {
+        if (sourceRegions == null
+            || sourceRegions.Count == 0
+            || targetRect.width <= 0.001f
+            || targetRect.height <= 0.001f)
+        {
+            return false;
+        }
+
+        var rasterScale = Mathf.Min(
+            1f,
+            CombinedMaskMaxDimension / Mathf.Max(targetRect.width, targetRect.height));
+        var width = Mathf.Max(1, Mathf.CeilToInt(targetRect.width * rasterScale));
+        var height = Mathf.Max(1, Mathf.CeilToInt(targetRect.height * rasterScale));
+        var mask = new bool[width * height];
+        var didRasterize = false;
+        for (var regionIndex = 0; regionIndex < sourceRegions.Count; regionIndex++)
+        {
+            var region = sourceRegions[regionIndex];
+            if (!TryReadSpritePixels(
+                    region.Sprite,
+                    out var pixels,
+                    out var spriteWidth,
+                    out var spriteHeight))
+            {
+                continue;
+            }
+
+            var drawingRect = GetDrawingRect(
+                region.Sprite.bounds,
+                region.Rect,
+                region.PreserveAspect,
+                new Vector2(0.5f, 0.5f));
+            var minX = Mathf.Clamp(
+                Mathf.FloorToInt((drawingRect.xMin - targetRect.xMin) * rasterScale),
+                0,
+                width - 1);
+            var maxX = Mathf.Clamp(
+                Mathf.CeilToInt((drawingRect.xMax - targetRect.xMin) * rasterScale),
+                1,
+                width);
+            var minY = Mathf.Clamp(
+                Mathf.FloorToInt((drawingRect.yMin - targetRect.yMin) * rasterScale),
+                0,
+                height - 1);
+            var maxY = Mathf.Clamp(
+                Mathf.CeilToInt((drawingRect.yMax - targetRect.yMin) * rasterScale),
+                1,
+                height);
+            for (var y = minY; y < maxY; y++)
+            {
+                var localY = targetRect.yMin + (y + 0.5f) / rasterScale;
+                var v = Mathf.InverseLerp(drawingRect.yMin, drawingRect.yMax, localY);
+                var sourceY = Mathf.Clamp(Mathf.FloorToInt(v * spriteHeight), 0, spriteHeight - 1);
+                for (var x = minX; x < maxX; x++)
+                {
+                    var localX = targetRect.xMin + (x + 0.5f) / rasterScale;
+                    var u = Mathf.InverseLerp(drawingRect.xMin, drawingRect.xMax, localX);
+                    var sourceX = Mathf.Clamp(Mathf.FloorToInt(u * spriteWidth), 0, spriteWidth - 1);
+                    if (pixels[sourceY * spriteWidth + sourceX].a >= AlphaThreshold)
+                    {
+                        mask[y * width + x] = true;
+                        didRasterize = true;
+                    }
+                }
+            }
+        }
+
+        return didRasterize && TryBuildMaskPaths(mask, width, height, outputPaths);
+    }
+
+    private static bool TryBuildMaskPaths(
+        bool[] mask,
+        int width,
+        int height,
+        List<List<Vector2>> outputPaths)
+    {
+        if (mask == null || mask.Length != width * height)
+        {
+            return false;
+        }
+
         var outgoingEdges = new Dictionary<Vector2Int, List<Vector2Int>>();
         var unusedEdges = new HashSet<PixelEdge>();
         for (var y = 0; y < height; y++)
         {
             for (var x = 0; x < width; x++)
             {
-                if (!IsOpaque(pixels, width, height, x, y))
+                if (!IsOpaque(mask, width, height, x, y))
                 {
                     continue;
                 }
 
-                if (!IsOpaque(pixels, width, height, x - 1, y))
+                if (!IsOpaque(mask, width, height, x - 1, y))
                 {
                     AddBoundaryEdge(outgoingEdges, unusedEdges, new Vector2Int(x, y), new Vector2Int(x, y + 1));
                 }
 
-                if (!IsOpaque(pixels, width, height, x, y + 1))
+                if (!IsOpaque(mask, width, height, x, y + 1))
                 {
                     AddBoundaryEdge(outgoingEdges, unusedEdges, new Vector2Int(x, y + 1), new Vector2Int(x + 1, y + 1));
                 }
 
-                if (!IsOpaque(pixels, width, height, x + 1, y))
+                if (!IsOpaque(mask, width, height, x + 1, y))
                 {
                     AddBoundaryEdge(outgoingEdges, unusedEdges, new Vector2Int(x + 1, y + 1), new Vector2Int(x + 1, y));
                 }
 
-                if (!IsOpaque(pixels, width, height, x, y - 1))
+                if (!IsOpaque(mask, width, height, x, y - 1))
                 {
                     AddBoundaryEdge(outgoingEdges, unusedEdges, new Vector2Int(x + 1, y), new Vector2Int(x, y));
                 }
@@ -8757,13 +9957,13 @@ internal sealed class HintDashedOutlineGraphic : MaskableGraphic
         }
     }
 
-    private static bool IsOpaque(Color32[] pixels, int width, int height, int x, int y)
+    private static bool IsOpaque(bool[] mask, int width, int height, int x, int y)
     {
         return x >= 0
             && x < width
             && y >= 0
             && y < height
-            && pixels[y * width + x].a >= AlphaThreshold;
+            && mask[y * width + x];
     }
 
     private static void AddBoundaryEdge(
