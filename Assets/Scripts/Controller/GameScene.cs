@@ -252,6 +252,10 @@ public class GameScene : MonoBehaviour
     private readonly List<DraggablePieceState> _trayScrollStates =
         new List<DraggablePieceState>();
     private readonly List<Vector3> _trayScrollStartPositions = new List<Vector3>();
+    private readonly List<DraggablePieceState> _trayPickupRestoreStates =
+        new List<DraggablePieceState>();
+    private readonly List<Vector3> _trayPickupRestorePositions = new List<Vector3>();
+    private DraggablePieceState _trayPickupRestorePiece;
     private bool _isTrayScrolling;
     private float _trayScrollStartWorldX;
     private float _trayScrollMinDeltaX;
@@ -2912,6 +2916,10 @@ public class GameScene : MonoBehaviour
         _drag.DraggingPiece = state;
         _drag.DragOffset = state.PieceRenderer.transform.position - world;
         PopulateActiveDragMembers(state);
+        if (state.IsOnTray)
+        {
+            CaptureTrayPickupLayout(state);
+        }
         RestoreHintedPieceRotationsIfDragging();
         for (var i = 0; i < _activeDragMembers.Count; i++)
         {
@@ -3098,6 +3106,114 @@ public class GameScene : MonoBehaviour
         _isTrayScrolling = false;
         _trayScrollStates.Clear();
         _trayScrollStartPositions.Clear();
+    }
+
+    private void CaptureTrayPickupLayout(DraggablePieceState pickedState)
+    {
+        ClearTrayPickupLayoutSnapshot();
+        if (pickedState == null || !pickedState.IsOnTray)
+        {
+            return;
+        }
+
+        _trayPickupRestorePiece = pickedState;
+        for (var i = 0; i < _drag.CurrentGroupDraggables.Count; i++)
+        {
+            var state = _drag.CurrentGroupDraggables[i];
+            if (state == null
+                || state.IsPlaced
+                || !state.IsOnTray
+                || state.PieceRenderer == null)
+            {
+                continue;
+            }
+
+            _trayPickupRestoreStates.Add(state);
+            _trayPickupRestorePositions.Add(state.PieceRenderer.transform.position);
+        }
+    }
+
+    private void ClearTrayPickupLayoutSnapshot()
+    {
+        _trayPickupRestorePiece = null;
+        _trayPickupRestoreStates.Clear();
+        _trayPickupRestorePositions.Clear();
+    }
+
+    private bool TryRestoreTrayPickupLayout(
+        DraggablePieceState pickedState,
+        bool animate,
+        bool animatePickedSeparately,
+        out Vector3 pickedTarget)
+    {
+        pickedTarget = Vector3.zero;
+        if (pickedState == null
+            || pickedState != _trayPickupRestorePiece
+            || _trayPickupRestoreStates.Count == 0
+            || _trayPickupRestoreStates.Count != _trayPickupRestorePositions.Count)
+        {
+            return false;
+        }
+
+        ResetPieceTrayPosition(instant: true);
+        if (_board.PieceBoardRect != null)
+        {
+            _board.PieceBoardRect.gameObject.SetActive(true);
+        }
+        else if (_board.PieceBgRenderer != null)
+        {
+            _board.PieceBgRenderer.gameObject.SetActive(true);
+            _board.PieceBgRenderer.enabled = true;
+        }
+
+        Canvas.ForceUpdateCanvases();
+        StopTrayPieceReflow();
+        var animatedStates = animate ? new List<DraggablePieceState>() : null;
+        var animatedTargets = animate ? new List<Vector3>() : null;
+        var foundPickedState = false;
+        var trayBounds = GetPieceTrayBounds();
+        for (var i = 0; i < _trayPickupRestoreStates.Count; i++)
+        {
+            var state = _trayPickupRestoreStates[i];
+            if (state?.PieceRenderer == null || state.IsPlaced)
+            {
+                continue;
+            }
+
+            var target = _trayPickupRestorePositions[i];
+            state.IsOnTray = true;
+            state.StartPosition = target;
+            state.TrayScale = CalculateTrayScaleForPiece(
+                state.PieceRenderer,
+                trayBounds,
+                state.DragScale);
+            var isPickedState = state == pickedState;
+            if (isPickedState)
+            {
+                foundPickedState = true;
+                pickedTarget = target;
+            }
+
+            if (isPickedState && animatePickedSeparately)
+            {
+                continue;
+            }
+
+            state.PieceRenderer.transform.localScale = state.TrayScale;
+            if (!animate)
+            {
+                state.PieceRenderer.transform.position = target;
+            }
+            else if (Vector3.SqrMagnitude(
+                         state.PieceRenderer.transform.position - target) > 0.000001f)
+            {
+                animatedStates.Add(state);
+                animatedTargets.Add(target);
+            }
+        }
+
+        StartTrayPieceReflow(animatedStates, animatedTargets);
+        return foundPickedState;
     }
 
     private bool IsPointerInVisiblePieceTray(Vector2 screenPosition)
@@ -3339,6 +3455,7 @@ public class GameScene : MonoBehaviour
     {
         _activeDragMembers.Clear();
         _activeDragStartPositions.Clear();
+        ClearTrayPickupLayoutSnapshot();
     }
 
     private void RestoreHintedPieceRotationsIfDragging()
@@ -3702,11 +3819,21 @@ public class GameScene : MonoBehaviour
         {
             var state = states[0];
             state.IsOnTray = true;
-            ResetPieceTrayPosition(instant: true);
-            LayoutTrayPieces(animate: true, excludedState: state);
+            var returnPosition = startPositions[0];
+            if (!TryRestoreTrayPickupLayout(
+                    state,
+                    animate: true,
+                    animatePickedSeparately: true,
+                    out returnPosition))
+            {
+                ResetPieceTrayPosition(instant: true);
+                LayoutTrayPieces(animate: true, excludedState: state);
+                returnPosition = state.StartPosition;
+            }
+
             StartCoroutine(PlayInvalidDropReturnAnimation(
                 state,
-                startPositions[0],
+                returnPosition,
                 showInvalidTintImmediately: false));
             return;
         }
@@ -4141,6 +4268,17 @@ public class GameScene : MonoBehaviour
     {
         if (state?.PieceRenderer == null)
         {
+            return;
+        }
+
+        if (wasOnTray
+            && TryRestoreTrayPickupLayout(
+                state,
+                animateLayout,
+                animatePickedSeparately: false,
+                out _))
+        {
+            RestorePiecePlacementTutorialPresentation(state);
             return;
         }
 
