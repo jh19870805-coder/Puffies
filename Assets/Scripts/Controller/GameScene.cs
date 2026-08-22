@@ -389,6 +389,7 @@ public class GameScene : MonoBehaviour
         {
             TryStartPiecePlacementTutorial();
             FadeInActiveGroupOutline();
+            StartCoroutine(RefreshCurrentGroupTrayScalesNextFrame());
         }
 
         Debug.Log(
@@ -646,6 +647,49 @@ public class GameScene : MonoBehaviour
         for (var frame = 0; frame < GameEntranceWarmupFrameCount; frame++)
         {
             yield return null;
+        }
+
+        if (boardRect != null)
+        {
+            boardRect.anchoredPosition = boardTarget;
+        }
+
+        if (trayRect != null)
+        {
+            trayRect.anchoredPosition = trayTarget;
+        }
+
+        RefreshCurrentGroupTrayScalesAndLayout();
+        for (var i = 0; i < pieceCount; i++)
+        {
+            var renderer = _drag.CurrentGroupDraggables[i]?.PieceRenderer;
+            if (renderer == null)
+            {
+                continue;
+            }
+
+            pieceTargets[i] = renderer.transform.position;
+            pieceTargetScales[i] = renderer.transform.localScale;
+            renderer.transform.position = pieceStarts[i];
+            renderer.transform.localScale = pieceTargetScales[i];
+            var angle = i * 137.5f * Mathf.Deg2Rad;
+            renderer.transform.rotation = Quaternion.Euler(
+                0f,
+                0f,
+                Mathf.Sin(angle) * 18f);
+            var hiddenColor = pieceTargetColors[i];
+            hiddenColor.a = 0f;
+            renderer.color = hiddenColor;
+        }
+
+        if (boardRect != null)
+        {
+            boardRect.anchoredPosition = boardStart;
+        }
+
+        if (trayRect != null)
+        {
+            trayRect.anchoredPosition = trayStart;
         }
 
         var totalDuration = Mathf.Max(
@@ -1385,25 +1429,56 @@ public class GameScene : MonoBehaviour
         var grooveScreenRect = GetRectTransformScreenRect(
             grooveImage.rectTransform,
             camera);
-        var rendererBounds = pieceRenderer.bounds;
-        var rendererScreenMin = camera.WorldToScreenPoint(rendererBounds.min);
-        var rendererScreenMax = camera.WorldToScreenPoint(rendererBounds.max);
-        var rendererScreenWidth = Mathf.Abs(rendererScreenMax.x - rendererScreenMin.x);
-        var rendererScreenHeight = Mathf.Abs(rendererScreenMax.y - rendererScreenMin.y);
-        if (grooveScreenRect.width <= 0.001f
-            || grooveScreenRect.height <= 0.001f
-            || rendererScreenWidth <= 0.001f
-            || rendererScreenHeight <= 0.001f)
+        if (!TryGetRendererUnitScreenSize(
+                pieceRenderer,
+                camera,
+                out var rendererUnitScreenSize))
         {
             return false;
         }
 
-        var currentScale = pieceRenderer.transform.localScale;
+        if (grooveScreenRect.width <= 0.001f
+            || grooveScreenRect.height <= 0.001f
+            || rendererUnitScreenSize.x <= 0.001f
+            || rendererUnitScreenSize.y <= 0.001f)
+        {
+            return false;
+        }
+
         scale = new Vector3(
-            currentScale.x * grooveScreenRect.width / rendererScreenWidth,
-            currentScale.y * grooveScreenRect.height / rendererScreenHeight,
+            grooveScreenRect.width / rendererUnitScreenSize.x,
+            grooveScreenRect.height / rendererUnitScreenSize.y,
             1f);
         return IsFinitePositiveScale(scale);
+    }
+
+    private static bool TryGetRendererUnitScreenSize(
+        SpriteRenderer pieceRenderer,
+        Camera camera,
+        out Vector2 screenSize)
+    {
+        screenSize = Vector2.zero;
+        if (pieceRenderer == null || pieceRenderer.sprite == null || camera == null)
+        {
+            return false;
+        }
+
+        var spriteLocalSize = pieceRenderer.sprite.bounds.size;
+        var parent = pieceRenderer.transform.parent;
+        var unitWidthWorld = parent != null
+            ? parent.TransformVector(Vector3.right * spriteLocalSize.x)
+            : Vector3.right * spriteLocalSize.x;
+        var unitHeightWorld = parent != null
+            ? parent.TransformVector(Vector3.up * spriteLocalSize.y)
+            : Vector3.up * spriteLocalSize.y;
+        var originWorld = pieceRenderer.transform.position;
+        var originScreen = camera.WorldToScreenPoint(originWorld);
+        var widthScreen = camera.WorldToScreenPoint(originWorld + unitWidthWorld);
+        var heightScreen = camera.WorldToScreenPoint(originWorld + unitHeightWorld);
+        screenSize = new Vector2(
+            Vector2.Distance(originScreen, widthScreen),
+            Vector2.Distance(originScreen, heightScreen));
+        return screenSize.x > 0.001f && screenSize.y > 0.001f;
     }
 
     private static bool IsFinitePositiveScale(Vector3 scale)
@@ -1422,48 +1497,44 @@ public class GameScene : MonoBehaviour
     private Vector3 CalculateTrayScaleForPiece(
         SpriteRenderer pieceRenderer,
         Bounds hostBounds,
-        float trayDesignHeight)
+        Vector3 dragScale)
     {
+        var trayScale = SanitizeTrayPieceScale(dragScale);
         if (pieceRenderer == null || pieceRenderer.sprite == null)
         {
-            return Vector3.one;
-        }
-
-        var currentScale = SanitizeTrayPieceScale(pieceRenderer.transform.localScale);
-        var originalDesignHeight = pieceRenderer.sprite.rect.height;
-        if (originalDesignHeight <= 0.0001f)
-        {
-            return currentScale;
+            return trayScale;
         }
 
         var camera = Camera.main;
-        if (trayDesignHeight > 0.0001f
-            && TryGetPieceTrayScreenRect(camera, out var trayScreenRect)
-            && TryGetRendererScreenRect(pieceRenderer, camera, out var pieceScreenRect)
+        if (TryGetPieceTrayScreenRect(camera, out var trayScreenRect)
+            && TryGetRendererUnitScreenSize(pieceRenderer, camera, out var unitScreenSize)
             && trayScreenRect.height > 0.0001f
-            && pieceScreenRect.height > 0.0001f)
+            && unitScreenSize.y > 0.0001f)
         {
-            var canvasPixelsPerDesignPixel = trayScreenRect.height / trayDesignHeight;
-            var targetDesignHeight = Mathf.Min(
-                originalDesignHeight,
-                trayDesignHeight * PieceTrayMaxHeightRatio);
-            var targetScreenHeight = targetDesignHeight * canvasPixelsPerDesignPixel;
-            return SanitizeTrayPieceScale(
-                currentScale * (targetScreenHeight / pieceScreenRect.height));
+            var dragScreenHeight = unitScreenSize.y * trayScale.y;
+            var maxTrayScreenHeight = trayScreenRect.height * PieceTrayMaxHeightRatio;
+            return dragScreenHeight <= maxTrayScreenHeight
+                ? trayScale
+                : SanitizeTrayPieceScale(
+                    trayScale * (maxTrayScreenHeight / dragScreenHeight));
         }
 
-        var originalWorldHeight = pieceRenderer.sprite.bounds.size.y;
-        if (originalWorldHeight <= 0.0001f)
+        var spriteLocalHeight = pieceRenderer.sprite.bounds.size.y;
+        var parent = pieceRenderer.transform.parent;
+        var unitWorldHeight = parent != null
+            ? parent.TransformVector(Vector3.up * spriteLocalHeight).magnitude
+            : spriteLocalHeight;
+        if (unitWorldHeight <= 0.0001f || hostBounds.size.y <= 0.0001f)
         {
-            return currentScale;
+            return trayScale;
         }
 
-        var maxWorldHeight = Mathf.Max(
-            0.0001f,
-            hostBounds.size.y * PieceTrayMaxHeightRatio);
-        return SanitizeTrayPieceScale(originalWorldHeight <= maxWorldHeight
-            ? Vector3.one
-            : Vector3.one * (maxWorldHeight / originalWorldHeight));
+        var dragWorldHeight = unitWorldHeight * trayScale.y;
+        var maxTrayWorldHeight = hostBounds.size.y * PieceTrayMaxHeightRatio;
+        return dragWorldHeight <= maxTrayWorldHeight
+            ? trayScale
+            : SanitizeTrayPieceScale(
+                trayScale * (maxTrayWorldHeight / dragWorldHeight));
     }
 
     private static Vector3 SanitizeTrayPieceScale(Vector3 scale)
@@ -1475,6 +1546,54 @@ public class GameScene : MonoBehaviour
 
         scale.z = 1f;
         return scale;
+    }
+
+    private void RefreshCurrentGroupTrayScalesAndLayout()
+    {
+        Canvas.ForceUpdateCanvases();
+        Physics2D.SyncTransforms();
+        var hostBounds = GetPieceTrayBounds();
+        for (var i = 0; i < _drag.CurrentGroupDraggables.Count; i++)
+        {
+            var state = _drag.CurrentGroupDraggables[i];
+            if (state?.PieceRenderer == null || state.IsPlaced)
+            {
+                continue;
+            }
+
+            state.DragScale = CalculatePieceScaleOnBoard(
+                state.GrooveImage,
+                state.PieceRenderer);
+            state.BoardScale = state.DragScale;
+            if (!state.IsOnTray)
+            {
+                continue;
+            }
+
+            state.TrayScale = CalculateTrayScaleForPiece(
+                state.PieceRenderer,
+                hostBounds,
+                state.DragScale);
+            state.PieceRenderer.transform.localScale = state.TrayScale;
+        }
+
+        LayoutTrayPieces();
+        Physics2D.SyncTransforms();
+    }
+
+    private IEnumerator RefreshCurrentGroupTrayScalesNextFrame()
+    {
+        var expectedGroupIndex = _drag.CurrentGroupIndex;
+        yield return null;
+        if (_isGameFinished
+            || _isEntranceAnimating
+            || _isGroupTransitionAnimating
+            || _drag.CurrentGroupIndex != expectedGroupIndex)
+        {
+            yield break;
+        }
+
+        RefreshCurrentGroupTrayScalesAndLayout();
     }
 
     private SpriteRenderer CreatePieceBackground()
@@ -1561,9 +1680,6 @@ public class GameScene : MonoBehaviour
 
         var root = new GameObject(DraggableGroupRootObjectName);
         var hostBounds = GetPieceTrayBounds();
-        var trayDesignHeight = _board.PieceBoardRect != null
-            ? Mathf.Abs(_board.PieceBoardRect.rect.height)
-            : 0f;
 
         for (var i = 0; i < grooveGroup.Count; i++)
         {
@@ -1601,7 +1717,7 @@ public class GameScene : MonoBehaviour
             var trayScale = CalculateTrayScaleForPiece(
                 pieceRenderer,
                 hostBounds,
-                trayDesignHeight);
+                dragScale);
             pieceRenderer.transform.localScale = trayScale;
             var grooveProbeCollider = CreateGrooveOverlapProbe(
                 grooveImage.sprite,
@@ -1623,6 +1739,7 @@ public class GameScene : MonoBehaviour
             });
         }
 
+        ShuffleCurrentGroupDraggables(groupIndex);
         AddAmbientLightsForCompletedGroups(groupIndex);
 
         LayoutTrayPieces();
@@ -1631,6 +1748,36 @@ public class GameScene : MonoBehaviour
             groupIndex,
             startHidden: true,
             ignoreTutorialBlock: allowOutlineDuringTutorialTransition);
+    }
+
+    private void ShuffleCurrentGroupDraggables(int groupIndex)
+    {
+        var pieces = _drag.CurrentGroupDraggables;
+        if (pieces.Count < 2)
+        {
+            return;
+        }
+
+        var originalOrder = pieces.ToArray();
+        var seed = unchecked(
+            Environment.TickCount
+            ^ (Time.frameCount * 397)
+            ^ (GameManager.GetBagId() * 486187739)
+            ^ (groupIndex * 16777619));
+        var random = new System.Random(seed);
+        for (var i = pieces.Count - 1; i > 0; i--)
+        {
+            var swapIndex = random.Next(i + 1);
+            (pieces[i], pieces[swapIndex]) = (pieces[swapIndex], pieces[i]);
+        }
+
+        if (pieces.Where((piece, index) => piece != originalOrder[index]).Any())
+        {
+            return;
+        }
+
+        var forcedSwapIndex = random.Next(1, pieces.Count);
+        (pieces[0], pieces[forcedSwapIndex]) = (pieces[forcedSwapIndex], pieces[0]);
     }
 
     private static SpriteRenderer CreateDraggablePieceFromGroove(Image grooveImage, string objectName, Transform parent)
@@ -2744,16 +2891,17 @@ public class GameScene : MonoBehaviour
         {
             state.PieceRenderer.transform.rotation = _hintedPieceBaseRotation;
         }
-        if (state.IsOnTray)
-        {
-            state.TrayScale = SanitizeTrayPieceScale(
-                state.PieceRenderer.transform.localScale);
-        }
-
         state.DragScale = CalculatePieceScaleOnBoard(
             state.GrooveImage,
             state.PieceRenderer);
         state.BoardScale = state.DragScale;
+        if (state.IsOnTray)
+        {
+            state.TrayScale = CalculateTrayScaleForPiece(
+                state.PieceRenderer,
+                GetPieceTrayBounds(),
+                state.DragScale);
+        }
         state.PieceRenderer.transform.localScale = state.DragScale;
         ApplyPieceRendererShadow(state.PieceRenderer, PieceShadowStyle.Initial);
         state.PieceRenderer.sortingOrder = PieceSortingOrder + 100;
@@ -3148,7 +3296,10 @@ public class GameScene : MonoBehaviour
         }
 
         Canvas.ForceUpdateCanvases();
-        state.TrayScale = SanitizeTrayPieceScale(state.TrayScale);
+        state.TrayScale = CalculateTrayScaleForPiece(
+            state.PieceRenderer,
+            GetPieceTrayBounds(),
+            state.DragScale);
         state.IsOnTray = true;
         if (wasOnTray)
         {
@@ -3488,7 +3639,10 @@ public class GameScene : MonoBehaviour
         var startScale = renderer.transform.localScale;
         if (state.IsOnTray)
         {
-            state.TrayScale = SanitizeTrayPieceScale(state.TrayScale);
+            state.TrayScale = CalculateTrayScaleForPiece(
+                renderer,
+                GetPieceTrayBounds(),
+                state.DragScale);
         }
         var returnScale = state.IsOnTray ? state.TrayScale : state.DragScale;
         var originalColor = renderer.color;
@@ -4557,7 +4711,6 @@ public class GameScene : MonoBehaviour
             unplaced.Add(state);
         }
 
-        unplaced.Sort((a, b) => GetPieceNumberFromState(a).CompareTo(GetPieceNumberFromState(b)));
         var trayCenterY = hostBounds.center.y;
         var animatedStates = animate ? new List<DraggablePieceState>() : null;
         var animatedTargets = animate ? new List<Vector3>() : null;
@@ -4565,9 +4718,14 @@ public class GameScene : MonoBehaviour
         {
             var state = unplaced[i];
             var currentScale = state.PieceRenderer.transform.localScale;
-            state.TrayScale = SanitizeTrayPieceScale(state.TrayScale);
+            state.TrayScale = CalculateTrayScaleForPiece(
+                state.PieceRenderer,
+                hostBounds,
+                state.DragScale);
             state.PieceRenderer.transform.localScale = state.TrayScale;
-            var pieceWidth = Mathf.Max(0.01f, state.PieceRenderer.bounds.size.x);
+            var pieceWidth = GameCommonUtility.GetPieceWidth(
+                state.PieceRenderer,
+                state.TrayScale);
             var pieceHalfWidth = pieceWidth * 0.5f;
             var pieceCenterX = nextCenterX + pieceHalfWidth;
             var position = CalculateTrayPiecePosition(
@@ -4604,27 +4762,31 @@ public class GameScene : MonoBehaviour
             return false;
         }
 
-        var removedPieceNumber = GetPieceNumberFromState(removedState);
-        if (removedPieceNumber == int.MaxValue)
+        var removedIndex = _drag.CurrentGroupDraggables.IndexOf(removedState);
+        if (removedIndex < 0)
         {
             return false;
         }
 
-        var horizontalSpacing = GetTrayHorizontalSpacingWorld(GetPieceTrayBounds());
+        var trayBounds = GetPieceTrayBounds();
+        removedState.TrayScale = CalculateTrayScaleForPiece(
+            removedState.PieceRenderer,
+            trayBounds,
+            removedState.DragScale);
+        var horizontalSpacing = GetTrayHorizontalSpacingWorld(trayBounds);
         var shiftX = GameCommonUtility.GetPieceWidth(
             removedState.PieceRenderer,
             removedState.TrayScale) + horizontalSpacing;
         var states = new List<DraggablePieceState>();
         var targets = new List<Vector3>();
-        for (var i = 0; i < _drag.CurrentGroupDraggables.Count; i++)
+        for (var i = removedIndex + 1; i < _drag.CurrentGroupDraggables.Count; i++)
         {
             var state = _drag.CurrentGroupDraggables[i];
             if (state == null
                 || state.IsPlaced
                 || !state.IsOnTray
                 || state.PieceRenderer == null
-                || state == _drag.DraggingPiece
-                || GetPieceNumberFromState(state) <= removedPieceNumber)
+                || state == _drag.DraggingPiece)
             {
                 continue;
             }
@@ -4645,7 +4807,16 @@ public class GameScene : MonoBehaviour
         float centerX,
         float trayCenterY)
     {
-        var renderedCenterOffset = renderer.bounds.center - renderer.transform.position;
+        var spriteCenter = renderer != null && renderer.sprite != null
+            ? renderer.sprite.bounds.center
+            : Vector3.zero;
+        var localCenterOffset = Vector3.Scale(
+            spriteCenter,
+            renderer != null ? renderer.transform.localScale : Vector3.one);
+        var parent = renderer != null ? renderer.transform.parent : null;
+        var renderedCenterOffset = parent != null
+            ? parent.TransformVector(localCenterOffset)
+            : localCenterOffset;
         return new Vector3(
             centerX - renderedCenterOffset.x,
             trayCenterY - renderedCenterOffset.y,
@@ -4956,6 +5127,28 @@ public class GameScene : MonoBehaviour
         else if (pieceBackground != null)
         {
             ApplyPieceBgSlidePosition(pieceBackgroundTarget, pieceBgFillTransform);
+        }
+
+        RefreshCurrentGroupTrayScalesAndLayout();
+        for (var i = 0; i < pieceCount; i++)
+        {
+            var renderer = _drag.CurrentGroupDraggables[i]?.PieceRenderer;
+            if (renderer == null)
+            {
+                continue;
+            }
+
+            pieceTargets[i] = renderer.transform.position;
+            pieceTargetScales[i] = renderer.transform.localScale;
+            renderer.transform.position = pieceStarts[i];
+            renderer.transform.localScale = pieceTargetScales[i];
+            renderer.transform.rotation = Quaternion.Euler(
+                0f,
+                0f,
+                Mathf.Sin(i * 137.5f * Mathf.Deg2Rad) * 12f);
+            var hiddenColor = pieceTargetColors[i];
+            hiddenColor.a = 0f;
+            renderer.color = hiddenColor;
         }
 
         FadeInActiveGroupOutline();
