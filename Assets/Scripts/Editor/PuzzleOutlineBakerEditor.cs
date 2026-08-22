@@ -8,6 +8,7 @@ using UnityEngine.UI;
 
 public static class PuzzleOutlineBakerEditor
 {
+    private const string OneShotBakeRequestPath = "Temp/CodexRebakePuzzleOutlines.request";
     private const string PrefabFolder = "Assets/Resources/CardBagPrefabs";
     private const string OutputRoot = "Assets/Resources/Generated/PuzzleOutlines";
     private const byte PieceAlphaThreshold = 32;
@@ -27,6 +28,8 @@ public static class PuzzleOutlineBakerEditor
     private const int StrokeRadius = 1;
     private const int StrokeOuterRadius = StrokeRadius + 1;
     private const byte StrokeOuterAlpha = 115;
+    private const int ContactStrokeRadius = StrokeRadius + StrokeOuterRadius;
+    private const int ContactStrokeOuterRadius = ContactStrokeRadius + 1;
     private static readonly Color32 OutlineColor = new Color32(0x3f, 0x42, 0x3e, 0xff);
     private static readonly Vector2Int[] Neighbors =
     {
@@ -216,6 +219,13 @@ public static class PuzzleOutlineBakerEditor
                 var topology = AnalyzeBoundaryTopology(activeBoundary, width, height);
                 var outputPixels = BuildGroupOutline(
                     activeBoundary,
+                    width,
+                    height);
+                AddCompletedContactOutline(
+                    outputPixels,
+                    completedContactBoundary,
+                    completedMask,
+                    pair.Value,
                     width,
                     height);
 
@@ -605,6 +615,34 @@ public static class PuzzleOutlineBakerEditor
         }
 
         return count;
+    }
+
+    [InitializeOnLoadMethod]
+    private static void QueueRequestedBake()
+    {
+        if (File.Exists(OneShotBakeRequestPath))
+        {
+            EditorApplication.delayCall += RunRequestedBakeWhenReady;
+        }
+    }
+
+    private static void RunRequestedBakeWhenReady()
+    {
+        if (!File.Exists(OneShotBakeRequestPath))
+        {
+            return;
+        }
+
+        if (EditorApplication.isCompiling
+            || EditorApplication.isUpdating
+            || EditorApplication.isPlayingOrWillChangePlaymode)
+        {
+            EditorApplication.delayCall += RunRequestedBakeWhenReady;
+            return;
+        }
+
+        File.Delete(OneShotBakeRequestPath);
+        BakeAll();
     }
 
     private static void DeleteObsoleteGroupOutputs(
@@ -1726,6 +1764,82 @@ public static class PuzzleOutlineBakerEditor
         }
 
         return output;
+    }
+
+    private static void AddCompletedContactOutline(
+        Color32[] output,
+        bool[] completedContactBoundary,
+        bool[] completedMask,
+        bool[] currentGroupMask,
+        int width,
+        int height)
+    {
+        var currentGroupReach = DilateMask(
+            currentGroupMask,
+            width,
+            height,
+            ContactStrokeOuterRadius);
+        for (var y = 0; y < height; y++)
+        {
+            for (var x = 0; x < width; x++)
+            {
+                var sourceIndex = y * width + x;
+                if (!completedContactBoundary[sourceIndex])
+                {
+                    continue;
+                }
+
+                for (var oy = -ContactStrokeOuterRadius; oy <= ContactStrokeOuterRadius; oy++)
+                {
+                    var ny = y + oy;
+                    if (ny < 0 || ny >= height)
+                    {
+                        continue;
+                    }
+
+                    for (var ox = -ContactStrokeOuterRadius; ox <= ContactStrokeOuterRadius; ox++)
+                    {
+                        var nx = x + ox;
+                        if (nx < 0 || nx >= width)
+                        {
+                            continue;
+                        }
+
+                        var outputIndex = ny * width + nx;
+                        if (completedMask[outputIndex])
+                        {
+                            output[outputIndex] = default;
+                            continue;
+                        }
+
+                        if (!currentGroupReach[outputIndex])
+                        {
+                            continue;
+                        }
+
+                        var alpha = Mathf.Max(Mathf.Abs(ox), Mathf.Abs(oy)) <= ContactStrokeRadius
+                            ? byte.MaxValue
+                            : StrokeOuterAlpha;
+                        if (output[outputIndex].a < alpha)
+                        {
+                            output[outputIndex] = new Color32(
+                                OutlineColor.r,
+                                OutlineColor.g,
+                                OutlineColor.b,
+                                alpha);
+                        }
+                    }
+                }
+            }
+        }
+
+        for (var i = 0; i < completedMask.Length; i++)
+        {
+            if (completedMask[i])
+            {
+                output[i] = default;
+            }
+        }
     }
 
     private static void WritePng(string assetPath, int width, int height, Color32[] pixels)
