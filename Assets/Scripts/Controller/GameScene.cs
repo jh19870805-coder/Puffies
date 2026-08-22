@@ -3594,6 +3594,11 @@ public class GameScene : MonoBehaviour
         Vector2 releaseScreenPosition,
         SpriteRenderer pieceRenderer)
     {
+        if (DoesPieceOverlapTray(pieceRenderer))
+        {
+            return true;
+        }
+
         if (!TryGetPieceTrayDropScreenRect(out var trayScreenRect))
         {
             return false;
@@ -7537,7 +7542,7 @@ public class GameScene : MonoBehaviour
     {
         if (Screen.width <= 0
             || Screen.height <= 0
-            || !TryGetPieceTrayScreenRect(Camera.main, out var screenRect))
+            || !TryGetStablePieceTrayDropScreenRect(out var screenRect))
         {
             return;
         }
@@ -7548,6 +7553,24 @@ public class GameScene : MonoBehaviour
             screenRect.xMax / Screen.width,
             screenRect.yMax / Screen.height);
         _hasPieceTrayDropNormalizedScreenRect = true;
+    }
+
+    private bool TryGetStablePieceTrayDropScreenRect(out Rect screenRect)
+    {
+        screenRect = default;
+        var camera = Camera.main;
+        if (_board.PieceBoardRect != null
+            && camera != null
+            && TryGetCanvasRectGameplayBounds(
+                _board.PieceBoardRect,
+                camera,
+                out var stableBounds)
+            && TryGetWorldBoundsScreenRect(stableBounds, camera, out screenRect))
+        {
+            return true;
+        }
+
+        return TryGetPieceTrayScreenRect(camera, out screenRect);
     }
 
     private void CachePieceBgOriginalPosition()
