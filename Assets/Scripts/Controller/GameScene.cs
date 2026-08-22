@@ -3437,7 +3437,10 @@ public class GameScene : MonoBehaviour
             LayoutTrayPieces(animate: true, excludedState: state);
         }
 
-        StartCoroutine(PlayInvalidDropReturnAnimation(state, _dragStartPosition));
+        StartCoroutine(PlayInvalidDropReturnAnimation(
+            state,
+            _dragStartPosition,
+            showInvalidTintImmediately: !wasOnTray));
     }
 
     private void ReturnLoosePiecesToTray(List<DraggablePieceState> states)
@@ -3471,7 +3474,8 @@ public class GameScene : MonoBehaviour
 
     private IEnumerator PlayInvalidDropReturnAnimation(
         DraggablePieceState state,
-        Vector3 returnPosition)
+        Vector3 returnPosition,
+        bool showInvalidTintImmediately = false)
     {
         var renderer = state?.PieceRenderer;
         if (renderer == null)
@@ -3496,7 +3500,12 @@ public class GameScene : MonoBehaviour
         renderer.sortingOrder = PieceSortingOrder + 100;
 
         var elapsed = 0f;
-        var didEnterTray = false;
+        var didShowInvalidTint = showInvalidTintImmediately;
+        if (didShowInvalidTint)
+        {
+            renderer.color = invalidColor;
+        }
+
         while (elapsed < InvalidDropReturnDuration && renderer != null)
         {
             elapsed += Mathf.Min(Time.unscaledDeltaTime, GameEntranceMaxFrameDelta);
@@ -3510,11 +3519,11 @@ public class GameScene : MonoBehaviour
                 startScale,
                 returnScale,
                 eased);
-            if (!didEnterTray
+            if (!didShowInvalidTint
                 && state.IsOnTray
                 && DoesPieceOverlapTray(renderer))
             {
-                didEnterTray = true;
+                didShowInvalidTint = true;
                 renderer.color = invalidColor;
             }
             yield return null;
@@ -3526,7 +3535,7 @@ public class GameScene : MonoBehaviour
             renderer.transform.localScale = returnScale;
 
             elapsed = 0f;
-            while (didEnterTray
+            while (didShowInvalidTint
                    && elapsed < InvalidDropColorRestoreDuration
                    && renderer != null)
             {
