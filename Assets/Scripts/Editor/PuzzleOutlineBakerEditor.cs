@@ -25,6 +25,8 @@ public static class PuzzleOutlineBakerEditor
     private const int MinimumBoundaryComponentPixels = 8;
     private const int MinimumImageEdgeBoundaryComponentPixels = 12;
     private const int StrokeRadius = 1;
+    private const int StrokeOuterRadius = StrokeRadius + 1;
+    private const byte StrokeOuterAlpha = 115;
     private static readonly Color32 OutlineColor = new Color32(0x3f, 0x42, 0x3e, 0xff);
     private static readonly Vector2Int[] Neighbors =
     {
@@ -1692,7 +1694,7 @@ public static class PuzzleOutlineBakerEditor
                     continue;
                 }
 
-                for (var oy = -StrokeRadius; oy <= StrokeRadius; oy++)
+                for (var oy = -StrokeOuterRadius; oy <= StrokeOuterRadius; oy++)
                 {
                     var ny = y + oy;
                     if (ny < 0 || ny >= height)
@@ -1700,12 +1702,23 @@ public static class PuzzleOutlineBakerEditor
                         continue;
                     }
 
-                    for (var ox = -StrokeRadius; ox <= StrokeRadius; ox++)
+                    for (var ox = -StrokeOuterRadius; ox <= StrokeOuterRadius; ox++)
                     {
                         var nx = x + ox;
                         if (nx >= 0 && nx < width)
                         {
-                            output[ny * width + nx] = OutlineColor;
+                            var alpha = Mathf.Max(Mathf.Abs(ox), Mathf.Abs(oy)) <= StrokeRadius
+                                ? byte.MaxValue
+                                : StrokeOuterAlpha;
+                            var outputIndex = ny * width + nx;
+                            if (output[outputIndex].a < alpha)
+                            {
+                                output[outputIndex] = new Color32(
+                                    OutlineColor.r,
+                                    OutlineColor.g,
+                                    OutlineColor.b,
+                                    alpha);
+                            }
                         }
                     }
                 }

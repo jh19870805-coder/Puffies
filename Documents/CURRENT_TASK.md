@@ -38,10 +38,15 @@
 - 托盘排布现在按 Sprite 原始宽度、最终 `TrayScale` 和未旋转的 Sprite 中心计算；入场旋转只影响动画画面，不再影响最终间距和上下居中。
 - 普通提示按钮不再按 Piece 编号选择固定的首个凹槽；点击后选择当前托盘运行时排列中第一个仍在托盘的 Piece，并继续提示它对应的凹槽。
 - 新手引导第一步仍沿用原有固定编号目标，不受普通提示按钮选择规则影响。
+- 提示虚线描边保持原来的 `3px`，不参与本次加粗。
+- 烘焙关卡描边保留原 `3px` 实心线，并增加 Alpha 为 `115/255` 的一像素外缘，使视觉宽度约增加 `30%` 至 `3.9px`。
+- 已按新规则批量刷新 `Assets/Resources/Generated/PuzzleOutlines` 下现有 `330` 张 PNG，共增加 `2,256,525` 个半透明外缘像素；所有 `.meta` 和 GUID 保持不变。
 
 ## 修改文件
 
 - `Assets/Scripts/Controller/GameScene.cs`
+- `Assets/Scripts/Editor/PuzzleOutlineBakerEditor.cs`
+- `Assets/Resources/Generated/PuzzleOutlines/**/*.png`
 - `Documents/CURRENT_TASK.md`
 - `Documents/PROJECT_CONTEXT.md`
 
@@ -58,11 +63,14 @@
 - 动画只能在最终棋盘、相机和托盘布局下刷新 Piece 比例之后缓存目标位置与目标缩放，不能继续使用 `CreateDraggableGroup` 创建瞬间的临时值。
 - 托盘横向间距和上下居中必须按 Piece 的最终未旋转姿态计算，不能读取入场动画起始旋转产生的轴对齐 Renderer 包围盒。
 - 普通 `BtnTips` 的目标按 `_drag.CurrentGroupDraggables` 当前托盘排列顺序选择首个 `IsOnTray` Piece；教程目标继续使用按编号选择的独立逻辑。
+- 普通提示和新手引导复用的虚线描边宽度保持 `3px`。
+- 烘焙描边不能把整数半径从 `1px` 直接改为 `2px`，否则会从约 `3px` 跳到约 `5px`；使用半透明外缘实现 30% 的视觉加粗。
 
 ## 验证
 
 - `dotnet build Assembly-CSharp.csproj --no-restore`：通过，`0` 警告，`0` 错误。
 - `dotnet build Assembly-CSharp-Editor.csproj --no-restore`：通过，`0` 警告，`0` 错误。
+- 烘焙描边资源批量处理：`330/330` 完成，无临时文件残留，未修改任何 `.meta`。
 - 尚未在 Unity Play Mode 中执行鼠标拖放验收。
 
 ## 下一步
