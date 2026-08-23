@@ -116,10 +116,6 @@ public class GameScene : MonoBehaviour
     private const string PiecePlacementShineMaterialName = "PuzzlePlacementShine (Runtime)";
     private const string PiecePlacementLightPathPrefix =
         GameDefine.UiRoot + "/GameScene/PieceLight";
-    private const string PickedPieceShadowPath =
-        GameDefine.UiRoot + "/GameScene/PieceShadow.png";
-    private const string PickedPieceShadowObjectName = "PickedPieceShadow";
-    private const float PickedPieceShadowGapPixels = 20f;
     private const string PiecePlacementLightMaterialResourcesPath = "PackHighlightAdditive";
     private const string PiecePlacementSpriteLightShaderResourcesPath =
         "PuzzlePieceLightAdditive";
@@ -329,11 +325,6 @@ public class GameScene : MonoBehaviour
         new List<AmbientPieceLightFx>();
     private readonly Dictionary<int, PieceLightState> _pieceLightStates =
         new Dictionary<int, PieceLightState>();
-    private Sprite _pickedPieceShadowSprite;
-    private GameObject _pickedPieceShadowRoot;
-    private SpriteRenderer _pickedPieceShadowRenderer;
-    private SpriteRenderer _pickedPieceShadowSource;
-    private CircleCollider2D _pickedPieceShadowCollider;
     private Material _piecePlacementLightMaterial;
     private Material _pieceSpriteLightMaterial;
     private Material _boardShadowMaterial;
@@ -473,8 +464,6 @@ public class GameScene : MonoBehaviour
         DestroyRuntimeCardBoardBackgroundSprite();
         DestroyRuntimePuzzleOutlineTintMaterial();
         DestroyRuntimePiecePlacementShineMaterial();
-        DestroyPickedPieceShadow();
-        DestroyPickedPieceShadowSprite();
         ClearPieceHint();
         ClearLoosePieceClusters();
         DestroyRuntimePieceShadowResources();
@@ -516,7 +505,6 @@ public class GameScene : MonoBehaviour
             TryBeginDrag,
             UpdateDragging,
             OnPointerEnd);
-        UpdatePickedPieceShadow();
         UpdateLooseClusterShadows();
         RefreshCursorForPointer(Input.mousePosition);
     }
@@ -3427,7 +3415,6 @@ public class GameScene : MonoBehaviour
         {
             SetLooseClusterPresentation(draggedCluster, PieceShadowStyle.Initial);
         }
-        ShowPickedPieceShadow(state);
         if (state.IsOnTray)
         {
             CompactFollowingTrayPieces(state);
@@ -3775,7 +3762,6 @@ public class GameScene : MonoBehaviour
         }
 
         _drag.DraggingPiece = null;
-        DestroyPickedPieceShadow();
         var wasOnTray = state.IsOnTray;
         SetPieceSortingOrders(dragMembers, PieceSortingOrder);
 
@@ -3867,7 +3853,6 @@ public class GameScene : MonoBehaviour
         var dragMembers = new List<DraggablePieceState>(_activeDragMembers);
         var dragStartPositions = new List<Vector3>(_activeDragStartPositions);
         _drag.DraggingPiece = null;
-        DestroyPickedPieceShadow();
         if (state?.PieceRenderer == null)
         {
             ClearActiveDragMembers();
@@ -3958,197 +3943,6 @@ public class GameScene : MonoBehaviour
             _hintedClusterCenter = Vector3.zero;
             _hintedClusterShadowBasePosition = Vector3.zero;
             _hintedClusterShadowBaseRotation = Quaternion.identity;
-        }
-    }
-
-    private void ShowPickedPieceShadow(DraggablePieceState state)
-    {
-        DestroyPickedPieceShadow();
-        var sourceRenderer = state?.PieceRenderer;
-        if (sourceRenderer == null || sourceRenderer.sprite == null)
-        {
-            return;
-        }
-
-        if (_pickedPieceShadowSprite == null)
-        {
-            _pickedPieceShadowSprite = GameCommonUtility.LoadSpriteByPath(
-                PickedPieceShadowPath,
-                PixelsPerUnit);
-        }
-        if (_pickedPieceShadowSprite == null)
-        {
-            return;
-        }
-
-        _pickedPieceShadowRenderer = GameCommonUtility.CreateSpriteRendererFromSprite(
-            PickedPieceShadowObjectName,
-            _pickedPieceShadowSprite,
-            sourceRenderer.sortingOrder - 1,
-            parent: null,
-            forceCreate: true);
-        if (_pickedPieceShadowRenderer == null)
-        {
-            return;
-        }
-
-        _pickedPieceShadowRoot = _pickedPieceShadowRenderer.gameObject;
-        _pickedPieceShadowSource = sourceRenderer;
-        _pickedPieceShadowRenderer.color = Color.white;
-        _pickedPieceShadowRenderer.enabled = false;
-        _pickedPieceShadowCollider =
-            _pickedPieceShadowRoot.AddComponent<CircleCollider2D>();
-        _pickedPieceShadowCollider.isTrigger = true;
-        _pickedPieceShadowCollider.offset = _pickedPieceShadowSprite.bounds.center;
-        _pickedPieceShadowCollider.radius = Mathf.Min(
-            _pickedPieceShadowSprite.bounds.extents.x,
-            _pickedPieceShadowSprite.bounds.extents.y) * 0.9f;
-        UpdatePickedPieceShadow();
-    }
-
-    private void UpdatePickedPieceShadow()
-    {
-        if (_pickedPieceShadowRoot == null
-            || _pickedPieceShadowRenderer == null
-            || _pickedPieceShadowSource == null)
-        {
-            return;
-        }
-
-        var sourceBounds = _pickedPieceShadowSource.bounds;
-        var camera = Camera.main;
-        var worldUnitsPerDesignPixel = camera != null
-            ? camera.orthographicSize * 2f / ReferenceHeight
-            : 1f / PixelsPerUnit;
-        var screenScale = worldUnitsPerDesignPixel * PixelsPerUnit;
-        var shadowHalfHeight = _pickedPieceShadowSprite.bounds.extents.y * screenScale;
-        _pickedPieceShadowRoot.transform.position = new Vector3(
-            sourceBounds.center.x,
-            sourceBounds.min.y
-            - PickedPieceShadowGapPixels * worldUnitsPerDesignPixel
-            - shadowHalfHeight,
-            WorldGameplayDepth + 0.01f);
-        _pickedPieceShadowRoot.transform.rotation = Quaternion.identity;
-        _pickedPieceShadowRoot.transform.localScale =
-            new Vector3(screenScale, screenScale, 1f);
-        _pickedPieceShadowRenderer.sortingLayerID =
-            _pickedPieceShadowSource.sortingLayerID;
-        _pickedPieceShadowRenderer.sortingOrder =
-            _pickedPieceShadowSource.sortingOrder - 1;
-        _pickedPieceShadowRenderer.enabled =
-            DoesPickedPieceShadowOverlapPlacedPiece();
-    }
-
-    private bool DoesPickedPieceShadowOverlapPlacedPiece()
-    {
-        if (_pickedPieceShadowCollider == null
-            || _board.GrooveImagesByGroup == null
-            || Camera.main == null)
-        {
-            return false;
-        }
-
-        Physics2D.SyncTransforms();
-        var candidateProbes = new List<Collider2D>();
-        var shadowBounds = _pickedPieceShadowCollider.bounds;
-        for (var groupIndex = 0;
-             groupIndex < _board.GrooveImagesByGroup.Count;
-             groupIndex++)
-        {
-            var group = _board.GrooveImagesByGroup[groupIndex];
-            if (group == null)
-            {
-                continue;
-            }
-
-            for (var i = 0; i < group.Count; i++)
-            {
-                var grooveImage = group[i];
-                if (grooveImage == null
-                    || grooveImage.sprite == null
-                    || !grooveImage.gameObject.activeInHierarchy
-                    || grooveImage.color.a <= 0.001f)
-                {
-                    continue;
-                }
-
-                var grooveBounds = GameCommonUtility.GetRectTransformCameraWorldBounds(
-                    grooveImage.rectTransform,
-                    Camera.main,
-                    WorldGameplayDepth);
-                if (!BoundsOverlapOnXY(shadowBounds, grooveBounds))
-                {
-                    continue;
-                }
-
-                var probe = GetOrCreateBoardOccupancyProbe(grooveImage);
-                if (probe == null)
-                {
-                    continue;
-                }
-
-                var probeTransform = probe.transform;
-                probeTransform.position = GetGrooveSnapPosition(
-                    grooveImage.rectTransform,
-                    Camera.main);
-                probeTransform.rotation = grooveImage.rectTransform.rotation;
-                probeTransform.localScale = CalculatePieceScaleOnBoard(grooveImage);
-                candidateProbes.Add(probe);
-            }
-        }
-
-        if (candidateProbes.Count == 0)
-        {
-            return false;
-        }
-
-        Physics2D.SyncTransforms();
-        for (var i = 0; i < candidateProbes.Count; i++)
-        {
-            if (CollidersOverlap(_pickedPieceShadowCollider, candidateProbes[i]))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private static bool BoundsOverlapOnXY(Bounds first, Bounds second)
-    {
-        return first.min.x <= second.max.x
-               && first.max.x >= second.min.x
-               && first.min.y <= second.max.y
-               && first.max.y >= second.min.y;
-    }
-
-    private void DestroyPickedPieceShadow()
-    {
-        if (_pickedPieceShadowRoot == null)
-        {
-            return;
-        }
-
-        Destroy(_pickedPieceShadowRoot);
-        _pickedPieceShadowRoot = null;
-        _pickedPieceShadowRenderer = null;
-        _pickedPieceShadowSource = null;
-        _pickedPieceShadowCollider = null;
-    }
-
-    private void DestroyPickedPieceShadowSprite()
-    {
-        if (_pickedPieceShadowSprite == null)
-        {
-            return;
-        }
-
-        var texture = _pickedPieceShadowSprite.texture;
-        Destroy(_pickedPieceShadowSprite);
-        _pickedPieceShadowSprite = null;
-        if (texture != null)
-        {
-            Destroy(texture);
         }
     }
 
@@ -4284,14 +4078,6 @@ public class GameScene : MonoBehaviour
         }
 
         DetachPiecesFromLooseClusters(states);
-        for (var i = 0; i < states.Count; i++)
-        {
-            if (states[i]?.PieceRenderer != null)
-            {
-                ApplyPieceRendererShadow(states[i].PieceRenderer, PieceShadowStyle.Loose);
-            }
-        }
-
         if (states.Count == 1 && anchorWasOnTray)
         {
             ReturnPieceToTray(states[0], wasOnTray: true);
@@ -4445,7 +4231,6 @@ public class GameScene : MonoBehaviour
             var state = states[i];
             if (state?.PieceRenderer == null
                 || DoesColliderOverlapLoosePiece(state, state.PieceCollider, ignoredStates)
-                || CollidersOverlap(state.PieceCollider, state.GrooveProbeCollider)
                 || !IsLoosePiecePlacementAllowed(state))
             {
                 return false;
@@ -4959,8 +4744,17 @@ public class GameScene : MonoBehaviour
                                && pieceBounds.max.y <= boardBounds.max.y;
         if (fullyInsideBoard)
         {
-            return !DoesPieceOverlapOccupiedBoardArea(state)
-                   && !DoesPieceCrossUnfilledBoardBoundary(state);
+            if (DoesPieceOverlapOccupiedBoardArea(state))
+            {
+                return false;
+            }
+
+            if (CollidersOverlap(state.PieceCollider, state.GrooveProbeCollider))
+            {
+                return true;
+            }
+
+            return !DoesPieceCrossUnfilledBoardBoundary(state);
         }
 
         var fullyLeftOfBoard = pieceBounds.max.x <= boardBounds.min.x;
@@ -5003,6 +4797,8 @@ public class GameScene : MonoBehaviour
         {
             return;
         }
+
+        ApplyPieceRendererShadow(state.PieceRenderer, PieceShadowStyle.Initial);
 
         if (wasOnTray
             && TryRestoreTrayPickupLayout(
@@ -5325,6 +5121,7 @@ public class GameScene : MonoBehaviour
             }
 
             state.IsOnTray = true;
+            ApplyPieceRendererShadow(state.PieceRenderer, PieceShadowStyle.Initial);
             excludedStates.Add(state);
         }
 
@@ -6308,19 +6105,33 @@ public class GameScene : MonoBehaviour
             return false;
         }
 
+        return TryGetSingleLoosePiece(out _);
+    }
+
+    private bool TryGetSingleLoosePiece(out DraggablePieceState loosePiece)
+    {
+        loosePiece = null;
         for (var i = 0; i < _drag.CurrentGroupDraggables.Count; i++)
         {
             var state = _drag.CurrentGroupDraggables[i];
-            if (state != null
-                && !state.IsPlaced
-                && !state.IsOnTray
-                && state.PieceRenderer != null)
+            if (state == null
+                || state.IsPlaced
+                || state.IsOnTray
+                || state.PieceRenderer == null)
             {
-                return true;
+                continue;
             }
+
+            if (loosePiece != null)
+            {
+                loosePiece = null;
+                return false;
+            }
+
+            loosePiece = state;
         }
 
-        return false;
+        return loosePiece != null;
     }
 
     private bool IsPieceTrayHidden()
@@ -6333,25 +6144,14 @@ public class GameScene : MonoBehaviour
     private void StartLoosePieceReminderShake()
     {
         StopLoosePieceReminderShake();
-        for (var i = 0; i < _drag.CurrentGroupDraggables.Count; i++)
+        if (!TryGetSingleLoosePiece(out var state))
         {
-            var state = _drag.CurrentGroupDraggables[i];
-            if (state == null
-                || state.IsPlaced
-                || state.IsOnTray
-                || state.PieceRenderer == null)
-            {
-                continue;
-            }
-
-            _loosePieceReminderStates.Add(state);
-            _loosePieceReminderBaseRotations.Add(state.PieceRenderer.transform.rotation);
+            return;
         }
 
-        if (_loosePieceReminderStates.Count > 0)
-        {
-            _loosePieceReminderShakeCoroutine = StartCoroutine(AnimateLoosePieceReminderShake());
-        }
+        _loosePieceReminderStates.Add(state);
+        _loosePieceReminderBaseRotations.Add(state.PieceRenderer.transform.rotation);
+        _loosePieceReminderShakeCoroutine = StartCoroutine(AnimateLoosePieceReminderShake());
     }
 
     private IEnumerator AnimateLoosePieceReminderShake()

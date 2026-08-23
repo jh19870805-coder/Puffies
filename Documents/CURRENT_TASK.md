@@ -1,5 +1,36 @@
 # 当前任务
 
+## 2026-08-23 自身凹槽相交允许临时放置
+
+- 状态：代码修改并通过编译，等待 Unity Play Mode 验收。
+- Piece 未达到正确吸附条件时，与自身凹槽相交不再触发错误回弹，允许作为未完成 Piece 留在当前位置。
+- 正确吸附仍优先执行；自身凹槽相交例外不放宽已拼区域、其他外部 Piece、棋盘边界或托盘区域的限制。未与自身凹槽相交时，其他未填凹槽边界继续沿用原判定。
+- 单块和临时组合共用该规则。
+- 验证：Runtime/Editor C# 编译均通过，`0` 警告、`0` 错误；`git diff --check` 通过。
+
+## 2026-08-23 组合回托盘投影恢复
+
+- 状态：代码修改并通过编译，等待 Unity Play Mode 验收。
+- 修复临时组合进入托盘并拆散后，成员仍保留桌面投影或组合成员无独立投影材质的问题。
+- 单块回托盘、整组主动回托盘及被正确 Piece 顶回托盘统一恢复 `IngameCoverShadow04`。
+- 验证：Runtime/Editor C# 编译均通过，`0` 警告、`0` 错误；`git diff --check` 通过。
+
+## 2026-08-23 取消拿起 Piece 圆点投影
+
+- 状态：代码和专用资源已移除，Runtime/Editor C# 编译通过。
+- 拿起单块或临时组合时不再创建、跟随或显示 `PieceShadow.png` 圆点投影。
+- Piece 自身材质投影、临时组合整体投影和落位光效保持不变。
+- 验证：Runtime/Editor C# 编译均通过，`0` 警告、`0` 错误；`git diff --check` 通过。仍需 Unity Play Mode 确认拖拽时不再显示圆点且其他投影表现不变。
+
+## 2026-08-23 托盘收起后的单块提醒
+
+- 状态：代码修改完成，等待 Unity Play Mode 验收。
+- 规则：托盘收起后，仅桌面或棋盘上严格剩余 `1` 块未正确放置的 Piece 时周期抖动；`0` 块或大于 `1` 块不抖动。
+- 临时组合按成员 Piece 数统计，两块及以上组合不触发提醒。
+- 数量或其他运行条件变化时立即停止当前抖动并重置提醒计时。
+- 修改文件：`Assets/Scripts/Controller/GameScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`。
+- 验证：Runtime/Editor C# 编译均通过，`0` 警告、`0` 错误；`git diff --check` 通过。Play Mode 仍需验证 1 块、2 块及数量动态变化场景。
+
 - 任务：实现桌面临时拼图组合
 - 状态：组合整体投影与整体提示抖动已完成并通过编译，等待 Unity Play Mode 验收
 - 更新时间：2026-08-23
@@ -31,17 +62,17 @@
 - Piece 成功拼入棋盘或合法放到桌面时直接清除本次快照，保留拿起后既有的前移补位结果。
 - 组合形成或继续合并后，将全部成员 Sprite 的 Alpha 按当前世界位置栅格化为一张并集蒙版；成员自身使用无投影材质，只由一个运行时 `SpriteRenderer` 使用现有 `IngameCoverShadow02/04` 参数绘制整体投影。
 - 拿起组合时整体投影切换为 `IngameCoverShadow04` 规则，松手留在桌面时切回 `IngameCoverShadow02`；拖动、错误回弹和提示动画期间投影跟随整体，正确入槽、回托盘、组合合并及切组时销毁或重建对应运行时资源。
+- 组合回托盘拆散时，每个成员在回弹动画开始前统一恢复托盘默认投影 `IngameCoverShadow04`；该规则同时覆盖被正确 Piece 顶回托盘的组合成员。
 - 组合提示记录全部成员的世界位置、旋转和共同中心，成员与整体投影使用同一个旋转增量绕共同中心抖动，结束、取消或开始拖拽时统一恢复。
 - 修复提示抖动期间立即拿起组合时整体投影留在提示起点的问题：开始拖拽会先恢复组合基准姿态、重新采集拖拽起点与鼠标偏移，再终止本轮抖动并解除提示起点的位置恢复绑定，但保留棋盘虚线；组合投影改在本帧鼠标拖拽位置更新完成后同步。
 - 桌面 Piece 或已有组合吸附成新临时组合后，在 `0.12s` 吸附缓动结束位置复用现有 `PuzzlePlacementShine` 参数播放一次整组滑光；全部成员共享同一道屏幕空间光带，播放结束后销毁临时覆盖层，不修改常驻 Piece 材质和整体投影。
-- 当前主拖拽 Piece 拿起后创建 `Assets/UI/GameScene/PieceShadow.png` 半透明圆点，但默认隐藏；圆点使用独立世界对象按当前相机换算为原始设计像素尺寸，不继承 Piece 的棋盘适配缩放，顶部与 Piece 实际渲染底边固定间隔 `20px`。投影对象使用与可见圆点匹配的明确 `CircleCollider2D`，只有该投影圆点与棋盘上 `Alpha > 0` 的已拼 Groove 真实轮廓重叠时才显示，投影离开已拼块立即隐藏；临时组合只创建一个，任何松手、取消、窗口失焦或场景退出都会立即移除。
 
 ## 修改文件
 
 - `Assets/Scripts/Controller/GameScene.cs`
 - `Assets/Resources/PackCoverShadow.shader`
-- `Assets/UI/GameScene/PieceShadow.png`
-- `Assets/UI/GameScene/PieceShadow.png.meta`
+- `Assets/UI/GameScene/PieceShadow.png`（已删除）
+- `Assets/UI/GameScene/PieceShadow.png.meta`（已删除）
 - `Documents/CURRENT_TASK.md`
 - `Documents/PROJECT_CONTEXT.md`
 
@@ -64,10 +95,6 @@
 - 组合整体投影与整体提示抖动修改后再次编译 Runtime 与 Editor C# 项目：均通过，`0` 警告，`0` 错误。
 - 提示后拿起组合的投影跟随修复后，Runtime 与 Editor C# 项目再次编译通过，`0` 警告，`0` 错误。
 - 临时组合吸附滑光修改后，Runtime 与 Editor C# 项目再次编译通过，`0` 警告，`0` 错误。
-- 拿起 Piece 的圆点投影修改后，Runtime 与 Editor C# 项目再次编译通过，`0` 警告，`0` 错误。
-- 圆点仅在已拼 Piece 轮廓上显示的修改后，Runtime 与 Editor C# 项目再次编译通过，`0` 警告，`0` 错误。
-- 投影触发恢复为圆点自身，并改用明确圆形 Collider 后，Runtime 与 Editor C# 项目再次编译通过，`0` 警告，`0` 错误。
-- 修复投影与 Groove 相差 `0.01` Z 深度时被三维 Bounds 粗筛错误排除的问题；候选筛选改为只比较 XY 后，Runtime 与 Editor C# 项目再次编译通过，`0` 警告，`0` 错误。
 - 尚未在 Unity Play Mode 中完成鼠标拖放和组合虚线视觉验收。
 
 ## 下一步
