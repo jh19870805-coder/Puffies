@@ -116,6 +116,10 @@ public class GameScene : MonoBehaviour
     private const string PiecePlacementShineMaterialName = "PuzzlePlacementShine (Runtime)";
     private const string PiecePlacementLightPathPrefix =
         GameDefine.UiRoot + "/GameScene/PieceLight";
+    private const string PickedPieceShadowPath =
+        GameDefine.UiRoot + "/GameScene/PieceShadow.png";
+    private const string PickedPieceShadowObjectName = "PickedPieceShadow";
+    private const float PickedPieceShadowGapPixels = 20f;
     private const string PiecePlacementLightMaterialResourcesPath = "PackHighlightAdditive";
     private const string PiecePlacementSpriteLightShaderResourcesPath =
         "PuzzlePieceLightAdditive";
@@ -325,6 +329,10 @@ public class GameScene : MonoBehaviour
         new List<AmbientPieceLightFx>();
     private readonly Dictionary<int, PieceLightState> _pieceLightStates =
         new Dictionary<int, PieceLightState>();
+    private Sprite _pickedPieceShadowSprite;
+    private GameObject _pickedPieceShadowRoot;
+    private SpriteRenderer _pickedPieceShadowRenderer;
+    private SpriteRenderer _pickedPieceShadowSource;
     private Material _piecePlacementLightMaterial;
     private Material _pieceSpriteLightMaterial;
     private Material _boardShadowMaterial;
@@ -464,6 +472,8 @@ public class GameScene : MonoBehaviour
         DestroyRuntimeCardBoardBackgroundSprite();
         DestroyRuntimePuzzleOutlineTintMaterial();
         DestroyRuntimePiecePlacementShineMaterial();
+        DestroyPickedPieceShadow();
+        DestroyPickedPieceShadowSprite();
         ClearPieceHint();
         ClearLoosePieceClusters();
         DestroyRuntimePieceShadowResources();
@@ -505,6 +515,7 @@ public class GameScene : MonoBehaviour
             TryBeginDrag,
             UpdateDragging,
             OnPointerEnd);
+        UpdatePickedPieceShadow();
         UpdateLooseClusterShadows();
         RefreshCursorForPointer(Input.mousePosition);
     }
@@ -3415,6 +3426,7 @@ public class GameScene : MonoBehaviour
         {
             SetLooseClusterPresentation(draggedCluster, PieceShadowStyle.Initial);
         }
+        ShowPickedPieceShadow(state.PieceRenderer);
         if (state.IsOnTray)
         {
             CompactFollowingTrayPieces(state);
@@ -3762,6 +3774,7 @@ public class GameScene : MonoBehaviour
         }
 
         _drag.DraggingPiece = null;
+        DestroyPickedPieceShadow();
         var wasOnTray = state.IsOnTray;
         SetPieceSortingOrders(dragMembers, PieceSortingOrder);
 
@@ -3853,6 +3866,7 @@ public class GameScene : MonoBehaviour
         var dragMembers = new List<DraggablePieceState>(_activeDragMembers);
         var dragStartPositions = new List<Vector3>(_activeDragStartPositions);
         _drag.DraggingPiece = null;
+        DestroyPickedPieceShadow();
         if (state?.PieceRenderer == null)
         {
             ClearActiveDragMembers();
@@ -3943,6 +3957,102 @@ public class GameScene : MonoBehaviour
             _hintedClusterCenter = Vector3.zero;
             _hintedClusterShadowBasePosition = Vector3.zero;
             _hintedClusterShadowBaseRotation = Quaternion.identity;
+        }
+    }
+
+    private void ShowPickedPieceShadow(SpriteRenderer sourceRenderer)
+    {
+        DestroyPickedPieceShadow();
+        if (sourceRenderer == null || sourceRenderer.sprite == null)
+        {
+            return;
+        }
+
+        if (_pickedPieceShadowSprite == null)
+        {
+            _pickedPieceShadowSprite = GameCommonUtility.LoadSpriteByPath(
+                PickedPieceShadowPath,
+                PixelsPerUnit);
+        }
+        if (_pickedPieceShadowSprite == null)
+        {
+            return;
+        }
+
+        _pickedPieceShadowRenderer = GameCommonUtility.CreateSpriteRendererFromSprite(
+            PickedPieceShadowObjectName,
+            _pickedPieceShadowSprite,
+            sourceRenderer.sortingOrder - 1,
+            parent: null,
+            forceCreate: true);
+        if (_pickedPieceShadowRenderer == null)
+        {
+            return;
+        }
+
+        _pickedPieceShadowRoot = _pickedPieceShadowRenderer.gameObject;
+        _pickedPieceShadowSource = sourceRenderer;
+        _pickedPieceShadowRenderer.color = Color.white;
+        UpdatePickedPieceShadow();
+    }
+
+    private void UpdatePickedPieceShadow()
+    {
+        if (_pickedPieceShadowRoot == null
+            || _pickedPieceShadowRenderer == null
+            || _pickedPieceShadowSource == null)
+        {
+            return;
+        }
+
+        var sourceBounds = _pickedPieceShadowSource.bounds;
+        var camera = Camera.main;
+        var worldUnitsPerDesignPixel = camera != null
+            ? camera.orthographicSize * 2f / ReferenceHeight
+            : 1f / PixelsPerUnit;
+        var screenScale = worldUnitsPerDesignPixel * PixelsPerUnit;
+        var shadowHalfHeight = _pickedPieceShadowSprite.bounds.extents.y * screenScale;
+        _pickedPieceShadowRoot.transform.position = new Vector3(
+            sourceBounds.center.x,
+            sourceBounds.min.y
+            - PickedPieceShadowGapPixels * worldUnitsPerDesignPixel
+            - shadowHalfHeight,
+            WorldGameplayDepth + 0.01f);
+        _pickedPieceShadowRoot.transform.rotation = Quaternion.identity;
+        _pickedPieceShadowRoot.transform.localScale =
+            new Vector3(screenScale, screenScale, 1f);
+        _pickedPieceShadowRenderer.sortingLayerID =
+            _pickedPieceShadowSource.sortingLayerID;
+        _pickedPieceShadowRenderer.sortingOrder =
+            _pickedPieceShadowSource.sortingOrder - 1;
+    }
+
+    private void DestroyPickedPieceShadow()
+    {
+        if (_pickedPieceShadowRoot == null)
+        {
+            return;
+        }
+
+        Destroy(_pickedPieceShadowRoot);
+        _pickedPieceShadowRoot = null;
+        _pickedPieceShadowRenderer = null;
+        _pickedPieceShadowSource = null;
+    }
+
+    private void DestroyPickedPieceShadowSprite()
+    {
+        if (_pickedPieceShadowSprite == null)
+        {
+            return;
+        }
+
+        var texture = _pickedPieceShadowSprite.texture;
+        Destroy(_pickedPieceShadowSprite);
+        _pickedPieceShadowSprite = null;
+        if (texture != null)
+        {
+            Destroy(texture);
         }
     }
 

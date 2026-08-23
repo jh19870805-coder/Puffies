@@ -34,11 +34,14 @@
 - 组合提示记录全部成员的世界位置、旋转和共同中心，成员与整体投影使用同一个旋转增量绕共同中心抖动，结束、取消或开始拖拽时统一恢复。
 - 修复提示抖动期间立即拿起组合时整体投影留在提示起点的问题：开始拖拽会先恢复组合基准姿态、重新采集拖拽起点与鼠标偏移，再终止本轮抖动并解除提示起点的位置恢复绑定，但保留棋盘虚线；组合投影改在本帧鼠标拖拽位置更新完成后同步。
 - 桌面 Piece 或已有组合吸附成新临时组合后，在 `0.12s` 吸附缓动结束位置复用现有 `PuzzlePlacementShine` 参数播放一次整组滑光；全部成员共享同一道屏幕空间光带，播放结束后销毁临时覆盖层，不修改常驻 Piece 材质和整体投影。
+- 当前主拖拽 Piece 拿起后，在其下方显示 `Assets/UI/GameScene/PieceShadow.png` 半透明圆点；圆点使用独立世界对象按当前相机换算为原始设计像素尺寸，不继承 Piece 的棋盘适配缩放，顶部与 Piece 实际渲染底边固定间隔 `20px`，保持资源原始比例并跟随主 Piece，临时组合只显示一个。任何松手、取消、窗口失焦或场景退出都会立即移除，运行时 Sprite 与 Texture 在场景销毁时释放。
 
 ## 修改文件
 
 - `Assets/Scripts/Controller/GameScene.cs`
 - `Assets/Resources/PackCoverShadow.shader`
+- `Assets/UI/GameScene/PieceShadow.png`
+- `Assets/UI/GameScene/PieceShadow.png.meta`
 - `Documents/CURRENT_TASK.md`
 - `Documents/PROJECT_CONTEXT.md`
 
@@ -61,6 +64,7 @@
 - 组合整体投影与整体提示抖动修改后再次编译 Runtime 与 Editor C# 项目：均通过，`0` 警告，`0` 错误。
 - 提示后拿起组合的投影跟随修复后，Runtime 与 Editor C# 项目再次编译通过，`0` 警告，`0` 错误。
 - 临时组合吸附滑光修改后，Runtime 与 Editor C# 项目再次编译通过，`0` 警告，`0` 错误。
+- 拿起 Piece 的圆点投影修改后，Runtime 与 Editor C# 项目再次编译通过，`0` 警告，`0` 错误。
 - 尚未在 Unity Play Mode 中完成鼠标拖放和组合虚线视觉验收。
 
 ## 下一步
