@@ -60,6 +60,7 @@ Shader "Puffies/UI/PackCoverShadow"
             #pragma multi_compile_local _ UNITY_UI_CLIP_RECT
             #pragma multi_compile_local _ UNITY_UI_ALPHACLIP
             #pragma multi_compile_local _ PACK_SHADOW_SPRITE_RENDERER
+            #pragma multi_compile_local _ PACK_SHADOW_ONLY
 
             #include "UnityCG.cginc"
             #include "UnityUI.cginc"
@@ -164,11 +165,15 @@ Shader "Puffies/UI/PackCoverShadow"
                     * input.color.a;
                 shadowAlpha *= 1.0 - cover.a;
 
+                #ifdef PACK_SHADOW_ONLY
+                fixed4 color = fixed4(_ShadowColor.rgb, shadowAlpha);
+                #else
                 fixed outputAlpha = cover.a + shadowAlpha;
                 fixed3 premultipliedColor =
                     cover.rgb * cover.a + _ShadowColor.rgb * shadowAlpha;
                 fixed3 outputColor = premultipliedColor / max(outputAlpha, 0.0001);
                 fixed4 color = fixed4(outputColor, outputAlpha);
+                #endif
 
                 #ifdef UNITY_UI_CLIP_RECT
                 color.a *= UnityGet2DClipping(input.localPosition.xy, _ClipRect);

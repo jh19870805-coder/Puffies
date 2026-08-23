@@ -124,6 +124,9 @@ public class GameScene : MonoBehaviour
     private const string PlacedPieceShadowMaterialResourcesPath = "IngameCoverShadow03";
     private const string DefaultPieceShadowMaterialResourcesPath = "IngameCoverShadow04";
     private const string SpriteRendererShadowKeyword = "PACK_SHADOW_SPRITE_RENDERER";
+    private const string ShadowOnlyKeyword = "PACK_SHADOW_ONLY";
+    private const string LooseClusterShadowObjectName = "LoosePieceClusterShadow";
+    private const int LooseClusterShadowMaxTextureSize = 2048;
     private const string DraggableGroupRootObjectName = "DraggableGroupPieces";
     private const string BoardOccupancyProbeRootObjectName = "BoardOccupancyProbes";
     private const string GameBoardOpaqueProbeObjectName = "GameBoardOpaqueProbe";
@@ -153,6 +156,7 @@ public class GameScene : MonoBehaviour
     private static readonly int ShineBandWidthId = Shader.PropertyToID("_BandWidth");
     private static readonly int ShineColorId = Shader.PropertyToID("_ShineColor");
     private static readonly int SpritePixelsPerUnitId = Shader.PropertyToID("_SpritePixelsPerUnit");
+    private static readonly int ShadowColorId = Shader.PropertyToID("_ShadowColor");
     private static readonly Vector2 TutorialStrongPromptAnchor = new Vector2(0.5f, 0.7f);
     private static readonly Vector2 TutorialStrongPromptOffset = new Vector2(-30f, -50f);
     private static readonly Vector2 TutorialHintPromptAnchor = new Vector2(0.73f, 0.76f);
@@ -210,6 +214,21 @@ public class GameScene : MonoBehaviour
         public long CreatedOrder;
         public readonly List<DraggablePieceState> Members =
             new List<DraggablePieceState>();
+        public GameObject ShadowRoot;
+        public SpriteRenderer ShadowRenderer;
+        public Texture2D ShadowTexture;
+        public Sprite ShadowSprite;
+        public PieceShadowStyle ShadowStyle = PieceShadowStyle.Loose;
+    }
+
+    private sealed class LooseClusterShadowSource
+    {
+        public SpriteRenderer Renderer;
+        public Color32[] Pixels;
+        public int Width;
+        public int Height;
+        public Bounds LocalBounds;
+        public Bounds WorldBounds;
     }
 
     private struct PiecePlacementLightTarget
@@ -315,6 +334,9 @@ public class GameScene : MonoBehaviour
     private Material _runtimeDefaultPieceShadowMaterial;
     private Material _runtimeLoosePieceShadowMaterial;
     private Material _runtimePlacedPieceShadowMaterial;
+    private Material _runtimeClusterPieceMaterial;
+    private Material _runtimeInitialClusterShadowMaterial;
+    private Material _runtimeLooseClusterShadowMaterial;
     private readonly Dictionary<Sprite, Sprite> _fullRectPieceShadowSprites =
         new Dictionary<Sprite, Sprite>();
     private readonly HashSet<Sprite> _runtimeFullRectPieceShadowSprites = new HashSet<Sprite>();
@@ -332,6 +354,11 @@ public class GameScene : MonoBehaviour
     private readonly List<DraggablePieceState> _hintedPieces =
         new List<DraggablePieceState>();
     private readonly List<Quaternion> _hintedPieceBaseRotations = new List<Quaternion>();
+    private readonly List<Vector3> _hintedPieceBasePositions = new List<Vector3>();
+    private LoosePieceCluster _hintedCluster;
+    private Vector3 _hintedClusterCenter;
+    private Vector3 _hintedClusterShadowBasePosition;
+    private Quaternion _hintedClusterShadowBaseRotation = Quaternion.identity;
     private float _hintShakeStartTime;
     private bool _isHintPieceShaking;
     private GameObject _pieceHintOutlineRoot;
@@ -437,11 +464,12 @@ public class GameScene : MonoBehaviour
         DestroyRuntimeCardBoardBackgroundSprite();
         DestroyRuntimePuzzleOutlineTintMaterial();
         DestroyRuntimePiecePlacementShineMaterial();
+        ClearPieceHint();
+        ClearLoosePieceClusters();
         DestroyRuntimePieceShadowResources();
         ClearAmbientPieceLights();
         DestroyPiecePlacementLightSprites();
         DestroyBoardOccupancyProbes();
-        ClearPieceHint();
         HintDashedOutlineGraphic.ClearPathCache();
     }
 
@@ -477,6 +505,7 @@ public class GameScene : MonoBehaviour
             TryBeginDrag,
             UpdateDragging,
             OnPointerEnd);
+        UpdateLooseClusterShadows();
         RefreshCursorForPointer(Input.mousePosition);
     }
 
@@ -1831,6 +1860,33 @@ public class GameScene : MonoBehaviour
             return;
         }
 
+        ApplyPieceRendererMaterial(renderer, material);
+    }
+
+    private void ApplyClusterMemberMaterial(SpriteRenderer renderer)
+    {
+        if (renderer == null || renderer.sprite == null || !EnsureCardBagShadowMaterials())
+        {
+            return;
+        }
+
+        if (_runtimeClusterPieceMaterial == null)
+        {
+            _runtimeClusterPieceMaterial = new Material(_loosePieceShadowMaterial)
+            {
+                name = "Loose Cluster Piece (No Shadow Runtime)"
+            };
+            _runtimeClusterPieceMaterial.EnableKeyword(SpriteRendererShadowKeyword);
+            var shadowColor = _runtimeClusterPieceMaterial.GetColor(ShadowColorId);
+            shadowColor.a = 0f;
+            _runtimeClusterPieceMaterial.SetColor(ShadowColorId, shadowColor);
+        }
+
+        ApplyPieceRendererMaterial(renderer, _runtimeClusterPieceMaterial);
+    }
+
+    private void ApplyPieceRendererMaterial(SpriteRenderer renderer, Material material)
+    {
         renderer.sprite = GetOrCreateFullRectShadowSprite(renderer.sprite);
         renderer.sharedMaterial = material;
         if (_pieceShadowPropertyBlock == null)
@@ -1844,6 +1900,42 @@ public class GameScene : MonoBehaviour
             Mathf.Max(1f, renderer.sprite.pixelsPerUnit));
         renderer.SetPropertyBlock(_pieceShadowPropertyBlock);
         _pieceShadowPropertyBlock.Clear();
+    }
+
+    private Material GetOrCreateClusterShadowMaterial(PieceShadowStyle style)
+    {
+        if (!EnsureCardBagShadowMaterials())
+        {
+            return null;
+        }
+
+        var source = style == PieceShadowStyle.Initial
+            ? _defaultPieceShadowMaterial
+            : _loosePieceShadowMaterial;
+        var runtimeMaterial = style == PieceShadowStyle.Initial
+            ? _runtimeInitialClusterShadowMaterial
+            : _runtimeLooseClusterShadowMaterial;
+        if (runtimeMaterial != null)
+        {
+            return runtimeMaterial;
+        }
+
+        runtimeMaterial = new Material(source)
+        {
+            name = $"{source.name} (Cluster Shadow Runtime)"
+        };
+        runtimeMaterial.EnableKeyword(SpriteRendererShadowKeyword);
+        runtimeMaterial.EnableKeyword(ShadowOnlyKeyword);
+        if (style == PieceShadowStyle.Initial)
+        {
+            _runtimeInitialClusterShadowMaterial = runtimeMaterial;
+        }
+        else
+        {
+            _runtimeLooseClusterShadowMaterial = runtimeMaterial;
+        }
+
+        return runtimeMaterial;
     }
 
     private Material GetOrCreatePieceRendererShadowMaterial(PieceShadowStyle style)
@@ -1921,6 +2013,9 @@ public class GameScene : MonoBehaviour
         DestroyRuntimeMaterial(ref _runtimeDefaultPieceShadowMaterial);
         DestroyRuntimeMaterial(ref _runtimeLoosePieceShadowMaterial);
         DestroyRuntimeMaterial(ref _runtimePlacedPieceShadowMaterial);
+        DestroyRuntimeMaterial(ref _runtimeClusterPieceMaterial);
+        DestroyRuntimeMaterial(ref _runtimeInitialClusterShadowMaterial);
+        DestroyRuntimeMaterial(ref _runtimeLooseClusterShadowMaterial);
 
         foreach (var sprite in _runtimeFullRectPieceShadowSprites)
         {
@@ -1944,6 +2039,367 @@ public class GameScene : MonoBehaviour
 
         Destroy(material);
         material = null;
+    }
+
+    private void SetLooseClusterPresentation(
+        LoosePieceCluster cluster,
+        PieceShadowStyle style,
+        bool rebuildShadow = false)
+    {
+        if (cluster == null || cluster.Members.Count < 2)
+        {
+            return;
+        }
+
+        for (var i = 0; i < cluster.Members.Count; i++)
+        {
+            var renderer = cluster.Members[i]?.PieceRenderer;
+            if (renderer != null)
+            {
+                ApplyClusterMemberMaterial(renderer);
+            }
+        }
+
+        if (rebuildShadow || cluster.ShadowRenderer == null)
+        {
+            RebuildLooseClusterShadow(cluster, style);
+            return;
+        }
+
+        cluster.ShadowStyle = style;
+        cluster.ShadowRenderer.sharedMaterial = GetOrCreateClusterShadowMaterial(style);
+        ApplyClusterShadowPropertyBlock(cluster.ShadowRenderer);
+        UpdateLooseClusterShadowTransform(cluster);
+    }
+
+    private void RebuildLooseClusterShadow(
+        LoosePieceCluster cluster,
+        PieceShadowStyle style)
+    {
+        DestroyLooseClusterShadow(cluster);
+        if (cluster == null || cluster.Members.Count < 2)
+        {
+            return;
+        }
+
+        if (!TryBuildLooseClusterShadowSprite(
+                cluster,
+                out var texture,
+                out var sprite,
+                out var worldCenter))
+        {
+            for (var i = 0; i < cluster.Members.Count; i++)
+            {
+                var renderer = cluster.Members[i]?.PieceRenderer;
+                if (renderer != null)
+                {
+                    ApplyPieceRendererShadow(renderer, style);
+                }
+            }
+            return;
+        }
+
+        var shadowObject = new GameObject(LooseClusterShadowObjectName);
+        shadowObject.transform.position = worldCenter;
+        shadowObject.transform.rotation = Quaternion.identity;
+        shadowObject.transform.localScale = Vector3.one;
+        var shadowRenderer = shadowObject.AddComponent<SpriteRenderer>();
+        shadowRenderer.sprite = sprite;
+        shadowRenderer.sharedMaterial = GetOrCreateClusterShadowMaterial(style);
+
+        cluster.ShadowRoot = shadowObject;
+        cluster.ShadowRenderer = shadowRenderer;
+        cluster.ShadowTexture = texture;
+        cluster.ShadowSprite = sprite;
+        cluster.ShadowStyle = style;
+        ApplyClusterShadowPropertyBlock(shadowRenderer);
+        UpdateLooseClusterShadowTransform(cluster);
+    }
+
+    private static bool TryBuildLooseClusterShadowSprite(
+        LoosePieceCluster cluster,
+        out Texture2D texture,
+        out Sprite sprite,
+        out Vector3 worldCenter)
+    {
+        texture = null;
+        sprite = null;
+        worldCenter = Vector3.zero;
+        if (cluster == null || cluster.Members.Count < 2)
+        {
+            return false;
+        }
+
+        var sources = new List<LooseClusterShadowSource>(cluster.Members.Count);
+        var hasWorldBounds = false;
+        var worldBounds = default(Bounds);
+        var pixelsPerWorldUnit = 1f;
+        for (var i = 0; i < cluster.Members.Count; i++)
+        {
+            var renderer = cluster.Members[i]?.PieceRenderer;
+            var sourceSprite = renderer != null ? renderer.sprite : null;
+            if (sourceSprite == null
+                || !HintDashedOutlineGraphic.TryReadSpritePixels(
+                    sourceSprite,
+                    out var pixels,
+                    out var width,
+                    out var height))
+            {
+                continue;
+            }
+
+            var source = new LooseClusterShadowSource
+            {
+                Renderer = renderer,
+                Pixels = pixels,
+                Width = width,
+                Height = height,
+                LocalBounds = sourceSprite.bounds,
+                WorldBounds = renderer.bounds
+            };
+            sources.Add(source);
+            if (!hasWorldBounds)
+            {
+                worldBounds = source.WorldBounds;
+                hasWorldBounds = true;
+            }
+            else
+            {
+                worldBounds.Encapsulate(source.WorldBounds);
+            }
+
+            var lossyScale = renderer.transform.lossyScale;
+            var worldScaleX = Mathf.Max(Mathf.Abs(lossyScale.x), 0.0001f);
+            var worldScaleY = Mathf.Max(Mathf.Abs(lossyScale.y), 0.0001f);
+            pixelsPerWorldUnit = Mathf.Max(
+                pixelsPerWorldUnit,
+                sourceSprite.pixelsPerUnit / Mathf.Min(worldScaleX, worldScaleY));
+        }
+
+        if (!hasWorldBounds
+            || sources.Count != cluster.Members.Count
+            || worldBounds.size.x <= 0.0001f
+            || worldBounds.size.y <= 0.0001f)
+        {
+            return false;
+        }
+
+        var largestPixelDimension = Mathf.Max(
+            worldBounds.size.x * pixelsPerWorldUnit,
+            worldBounds.size.y * pixelsPerWorldUnit);
+        if (largestPixelDimension > LooseClusterShadowMaxTextureSize)
+        {
+            pixelsPerWorldUnit *= LooseClusterShadowMaxTextureSize / largestPixelDimension;
+        }
+
+        var textureWidth = Mathf.Max(1, Mathf.CeilToInt(worldBounds.size.x * pixelsPerWorldUnit));
+        var textureHeight = Mathf.Max(1, Mathf.CeilToInt(worldBounds.size.y * pixelsPerWorldUnit));
+        var rasterMinX = worldBounds.center.x
+                         - textureWidth / (pixelsPerWorldUnit * 2f);
+        var rasterMinY = worldBounds.center.y
+                         - textureHeight / (pixelsPerWorldUnit * 2f);
+        var outputPixels = new Color32[textureWidth * textureHeight];
+        for (var sourceIndex = 0; sourceIndex < sources.Count; sourceIndex++)
+        {
+            var source = sources[sourceIndex];
+            var minX = Mathf.Clamp(
+                Mathf.FloorToInt(
+                    (source.WorldBounds.min.x - rasterMinX) * pixelsPerWorldUnit),
+                0,
+                textureWidth - 1);
+            var maxX = Mathf.Clamp(
+                Mathf.CeilToInt(
+                    (source.WorldBounds.max.x - rasterMinX) * pixelsPerWorldUnit),
+                1,
+                textureWidth);
+            var minY = Mathf.Clamp(
+                Mathf.FloorToInt(
+                    (source.WorldBounds.min.y - rasterMinY) * pixelsPerWorldUnit),
+                0,
+                textureHeight - 1);
+            var maxY = Mathf.Clamp(
+                Mathf.CeilToInt(
+                    (source.WorldBounds.max.y - rasterMinY) * pixelsPerWorldUnit),
+                1,
+                textureHeight);
+            for (var y = minY; y < maxY; y++)
+            {
+                var worldY = rasterMinY + (y + 0.5f) / pixelsPerWorldUnit;
+                for (var x = minX; x < maxX; x++)
+                {
+                    var worldX = rasterMinX + (x + 0.5f) / pixelsPerWorldUnit;
+                    var local = source.Renderer.transform.InverseTransformPoint(
+                        new Vector3(worldX, worldY, source.Renderer.transform.position.z));
+                    var normalizedX = Mathf.InverseLerp(
+                        source.LocalBounds.min.x,
+                        source.LocalBounds.max.x,
+                        local.x);
+                    var normalizedY = Mathf.InverseLerp(
+                        source.LocalBounds.min.y,
+                        source.LocalBounds.max.y,
+                        local.y);
+                    if (normalizedX < 0f
+                        || normalizedX > 1f
+                        || normalizedY < 0f
+                        || normalizedY > 1f)
+                    {
+                        continue;
+                    }
+
+                    var sourceX = Mathf.Clamp(
+                        Mathf.FloorToInt(normalizedX * source.Width),
+                        0,
+                        source.Width - 1);
+                    var sourceY = Mathf.Clamp(
+                        Mathf.FloorToInt(normalizedY * source.Height),
+                        0,
+                        source.Height - 1);
+                    var alpha = source.Pixels[sourceY * source.Width + sourceX].a;
+                    var outputIndex = y * textureWidth + x;
+                    if (alpha > outputPixels[outputIndex].a)
+                    {
+                        outputPixels[outputIndex] = new Color32(255, 255, 255, alpha);
+                    }
+                }
+            }
+        }
+
+        texture = new Texture2D(
+            textureWidth,
+            textureHeight,
+            TextureFormat.RGBA32,
+            false,
+            true)
+        {
+            name = "Loose Piece Cluster Shadow Mask (Runtime)",
+            filterMode = FilterMode.Bilinear,
+            wrapMode = TextureWrapMode.Clamp
+        };
+        texture.SetPixels32(outputPixels);
+        texture.Apply(false, true);
+        sprite = Sprite.Create(
+            texture,
+            new Rect(0f, 0f, textureWidth, textureHeight),
+            new Vector2(0.5f, 0.5f),
+            pixelsPerWorldUnit,
+            0,
+            SpriteMeshType.FullRect);
+        sprite.name = "Loose Piece Cluster Shadow Mask (Runtime)";
+        worldCenter = new Vector3(
+            worldBounds.center.x,
+            worldBounds.center.y,
+            cluster.Members[0].PieceRenderer.transform.position.z);
+        return true;
+    }
+
+    private void ApplyClusterShadowPropertyBlock(SpriteRenderer renderer)
+    {
+        if (renderer == null || renderer.sprite == null)
+        {
+            return;
+        }
+
+        if (_pieceShadowPropertyBlock == null)
+        {
+            _pieceShadowPropertyBlock = new MaterialPropertyBlock();
+        }
+
+        renderer.GetPropertyBlock(_pieceShadowPropertyBlock);
+        _pieceShadowPropertyBlock.SetFloat(
+            SpritePixelsPerUnitId,
+            Mathf.Max(1f, renderer.sprite.pixelsPerUnit));
+        renderer.SetPropertyBlock(_pieceShadowPropertyBlock);
+        _pieceShadowPropertyBlock.Clear();
+    }
+
+    private void UpdateLooseClusterShadows()
+    {
+        for (var i = 0; i < _loosePieceClusters.Count; i++)
+        {
+            var cluster = _loosePieceClusters[i];
+            if (cluster == null
+                || cluster.ShadowRenderer == null
+                || (_isHintPieceShaking
+                    && cluster == _hintedCluster
+                    && !_activeDragMembers.Any(cluster.Members.Contains)))
+            {
+                continue;
+            }
+
+            UpdateLooseClusterShadowTransform(cluster);
+        }
+    }
+
+    private static void UpdateLooseClusterShadowTransform(LoosePieceCluster cluster)
+    {
+        if (cluster?.ShadowRenderer == null || cluster.Members.Count < 2)
+        {
+            return;
+        }
+
+        var hasBounds = false;
+        var worldBounds = default(Bounds);
+        var sortingOrder = int.MaxValue;
+        var sortingLayerId = 0;
+        for (var i = 0; i < cluster.Members.Count; i++)
+        {
+            var renderer = cluster.Members[i]?.PieceRenderer;
+            if (renderer == null)
+            {
+                continue;
+            }
+
+            if (!hasBounds)
+            {
+                worldBounds = renderer.bounds;
+                sortingLayerId = renderer.sortingLayerID;
+                hasBounds = true;
+            }
+            else
+            {
+                worldBounds.Encapsulate(renderer.bounds);
+            }
+
+            sortingOrder = Mathf.Min(sortingOrder, renderer.sortingOrder);
+        }
+
+        if (!hasBounds)
+        {
+            return;
+        }
+
+        var position = cluster.ShadowRenderer.transform.position;
+        position.x = worldBounds.center.x;
+        position.y = worldBounds.center.y;
+        cluster.ShadowRenderer.transform.position = position;
+        cluster.ShadowRenderer.sortingLayerID = sortingLayerId;
+        cluster.ShadowRenderer.sortingOrder = sortingOrder - 1;
+    }
+
+    private static void DestroyLooseClusterShadow(LoosePieceCluster cluster)
+    {
+        if (cluster == null)
+        {
+            return;
+        }
+
+        if (cluster.ShadowRoot != null)
+        {
+            Destroy(cluster.ShadowRoot);
+        }
+        if (cluster.ShadowSprite != null)
+        {
+            Destroy(cluster.ShadowSprite);
+        }
+        if (cluster.ShadowTexture != null)
+        {
+            Destroy(cluster.ShadowTexture);
+        }
+
+        cluster.ShadowRoot = null;
+        cluster.ShadowRenderer = null;
+        cluster.ShadowSprite = null;
+        cluster.ShadowTexture = null;
     }
 
     private static Collider2D CreateGrooveOverlapProbe(
@@ -2914,13 +3370,21 @@ public class GameScene : MonoBehaviour
 
         var world = ToGameplayWorld(screenPosition);
         _drag.DraggingPiece = state;
-        _drag.DragOffset = state.PieceRenderer.transform.position - world;
         PopulateActiveDragMembers(state);
         if (state.IsOnTray)
         {
             CaptureTrayPickupLayout(state);
         }
         RestoreHintedPieceRotationsIfDragging();
+        _drag.DragOffset = state.PieceRenderer.transform.position - world;
+        for (var i = 0; i < _activeDragMembers.Count && i < _activeDragStartPositions.Count; i++)
+        {
+            var renderer = _activeDragMembers[i]?.PieceRenderer;
+            if (renderer != null)
+            {
+                _activeDragStartPositions[i] = renderer.transform.position;
+            }
+        }
         for (var i = 0; i < _activeDragMembers.Count; i++)
         {
             var member = _activeDragMembers[i];
@@ -2945,6 +3409,11 @@ public class GameScene : MonoBehaviour
             renderer.transform.localScale = member.DragScale;
             ApplyPieceRendererShadow(renderer, PieceShadowStyle.Initial);
             renderer.sortingOrder = PieceSortingOrder + 100 + i;
+        }
+        if (_looseClusterByPiece.TryGetValue(state, out var draggedCluster)
+            && draggedCluster.Members.Count > 1)
+        {
+            SetLooseClusterPresentation(draggedCluster, PieceShadowStyle.Initial);
         }
         if (state.IsOnTray)
         {
@@ -3413,6 +3882,11 @@ public class GameScene : MonoBehaviour
                 member.PieceRenderer.transform.localScale = member.DragScale;
                 ApplyPieceRendererShadow(member.PieceRenderer, PieceShadowStyle.Loose);
             }
+            if (_looseClusterByPiece.TryGetValue(state, out var cancelledCluster)
+                && cancelledCluster.Members.Count > 1)
+            {
+                SetLooseClusterPresentation(cancelledCluster, PieceShadowStyle.Loose);
+            }
             Physics2D.SyncTransforms();
             RestorePiecePlacementTutorialPresentation(state);
         }
@@ -3460,13 +3934,15 @@ public class GameScene : MonoBehaviour
 
     private void RestoreHintedPieceRotationsIfDragging()
     {
-        for (var i = 0; i < _hintedPieces.Count && i < _hintedPieceBaseRotations.Count; i++)
+        if (_activeDragMembers.Any(_hintedPieces.Contains))
         {
-            var hinted = _hintedPieces[i];
-            if (hinted?.PieceRenderer != null && _activeDragMembers.Contains(hinted))
-            {
-                hinted.PieceRenderer.transform.rotation = _hintedPieceBaseRotations[i];
-            }
+            RestoreAllHintedPieceRotations();
+            _isHintPieceShaking = false;
+            _hintedCluster = null;
+            _hintedPieceBasePositions.Clear();
+            _hintedClusterCenter = Vector3.zero;
+            _hintedClusterShadowBasePosition = Vector3.zero;
+            _hintedClusterShadowBaseRotation = Quaternion.identity;
         }
     }
 
@@ -3722,6 +4198,12 @@ public class GameScene : MonoBehaviour
 
     private void SetLoosePiecePresentation(IReadOnlyList<DraggablePieceState> states)
     {
+        LoosePieceCluster cluster = null;
+        if (states != null && states.Count > 1)
+        {
+            _looseClusterByPiece.TryGetValue(states[0], out cluster);
+        }
+
         for (var i = 0; i < states.Count; i++)
         {
             var state = states[i];
@@ -3730,8 +4212,16 @@ public class GameScene : MonoBehaviour
                 continue;
             }
 
-            ApplyPieceRendererShadow(state.PieceRenderer, PieceShadowStyle.Loose);
             state.PieceRenderer.transform.localScale = state.DragScale;
+            if (cluster == null)
+            {
+                ApplyPieceRendererShadow(state.PieceRenderer, PieceShadowStyle.Loose);
+            }
+        }
+
+        if (cluster != null)
+        {
+            SetLooseClusterPresentation(cluster, PieceShadowStyle.Loose);
         }
     }
 
@@ -4045,10 +4535,17 @@ public class GameScene : MonoBehaviour
 
             state.PieceRenderer.transform.position = startPositions[i] + delta;
             state.PieceRenderer.sortingOrder = PieceSortingOrder;
-            ApplyPieceRendererShadow(state.PieceRenderer, PieceShadowStyle.Loose);
         }
 
         Physics2D.SyncTransforms();
+        SetLooseClusterPresentation(
+            cluster,
+            PieceShadowStyle.Loose,
+            rebuildShadow: true);
+        if (cluster != null)
+        {
+            yield return PlayLooseClusterAttachShine(cluster.Members);
+        }
         EndPiecePlacementAnimation();
         if (cluster != null && cluster.Members.Count > 0)
         {
@@ -4079,6 +4576,11 @@ public class GameScene : MonoBehaviour
             _looseClusterByPiece.TryGetValue(secondMembers[i], out result);
         }
 
+        if (result != null)
+        {
+            DestroyLooseClusterShadow(result);
+        }
+
         if (result == null)
         {
             result = new LoosePieceCluster
@@ -4105,12 +4607,17 @@ public class GameScene : MonoBehaviour
         {
             result.CreatedOrder = Math.Min(result.CreatedOrder, cluster.CreatedOrder);
             AddMembersToLooseCluster(result, cluster.Members);
+            DestroyLooseClusterShadow(cluster);
             _loosePieceClusters.Remove(cluster);
         }
 
         for (var i = 0; i < result.Members.Count; i++)
         {
             _looseClusterByPiece[result.Members[i]] = result;
+            if (result.Members[i]?.PieceRenderer != null)
+            {
+                ApplyClusterMemberMaterial(result.Members[i].PieceRenderer);
+            }
         }
 
         return result;
@@ -4175,21 +4682,41 @@ public class GameScene : MonoBehaviour
 
         foreach (var cluster in affectedClusters)
         {
+            DestroyLooseClusterShadow(cluster);
             if (cluster.Members.Count >= 2)
             {
+                SetLooseClusterPresentation(
+                    cluster,
+                    PieceShadowStyle.Loose,
+                    rebuildShadow: true);
                 continue;
             }
 
             _loosePieceClusters.Remove(cluster);
             for (var i = 0; i < cluster.Members.Count; i++)
             {
-                _looseClusterByPiece.Remove(cluster.Members[i]);
+                var remainingMember = cluster.Members[i];
+                _looseClusterByPiece.Remove(remainingMember);
+                if (remainingMember?.PieceRenderer != null)
+                {
+                    ApplyPieceRendererShadow(
+                        remainingMember.PieceRenderer,
+                        remainingMember.IsPlaced
+                            ? PieceShadowStyle.Placed
+                            : remainingMember.IsOnTray
+                                ? PieceShadowStyle.Initial
+                                : PieceShadowStyle.Loose);
+                }
             }
         }
     }
 
     private void ClearLoosePieceClusters()
     {
+        for (var i = 0; i < _loosePieceClusters.Count; i++)
+        {
+            DestroyLooseClusterShadow(_loosePieceClusters[i]);
+        }
         _loosePieceClusters.Clear();
         _looseClusterByPiece.Clear();
         _loosePieceOrders.Clear();
@@ -5085,6 +5612,129 @@ public class GameScene : MonoBehaviour
         }
 
         DestroyPiecePlacementShineMaterial(shineMaterial);
+    }
+
+    private IEnumerator PlayLooseClusterAttachShine(
+        IReadOnlyList<DraggablePieceState> states)
+    {
+        if (states == null || states.Count == 0 || Camera.main == null)
+        {
+            yield break;
+        }
+
+        var shineMaterialTemplate = GetOrCreatePiecePlacementShineMaterial();
+        if (shineMaterialTemplate == null)
+        {
+            yield break;
+        }
+
+        var shineMaterial = new Material(shineMaterialTemplate)
+        {
+            name = $"{PiecePlacementShineMaterialName} Loose Cluster Instance"
+        };
+        _activePiecePlacementShineMaterials.Add(shineMaterial);
+        var shineObjects = new List<GameObject>(states.Count);
+        var hasScreenRect = false;
+        var clusterScreenRect = default(Rect);
+        for (var i = 0; i < states.Count; i++)
+        {
+            var renderer = states[i]?.PieceRenderer;
+            if (renderer == null || renderer.sprite == null)
+            {
+                continue;
+            }
+
+            var shineObject = CreateLoosePiecePlacementShineOverlay(
+                renderer,
+                shineMaterial);
+            if (shineObject != null)
+            {
+                shineObjects.Add(shineObject);
+            }
+
+            if (!TryGetRendererScreenRect(renderer, Camera.main, out var screenRect))
+            {
+                continue;
+            }
+
+            clusterScreenRect = hasScreenRect
+                ? UnionHintRects(clusterScreenRect, screenRect)
+                : screenRect;
+            hasScreenRect = true;
+        }
+
+        if (shineObjects.Count == 0 || !hasScreenRect)
+        {
+            DestroyLooseClusterShineObjects(shineObjects);
+            DestroyPiecePlacementShineMaterial(shineMaterial);
+            yield break;
+        }
+
+        var sweepAxis = new Vector2(-0.58f, 0.82f).normalized;
+        GetScreenRectAxisRange(
+            clusterScreenRect,
+            sweepAxis,
+            out var sweepStart,
+            out var sweepEnd);
+        sweepStart -= PiecePlacementShineBandWidth * 2f;
+        sweepEnd += PiecePlacementShineBandWidth * 2f;
+        shineMaterial.SetVector(ShineSweepAxisId, sweepAxis);
+        shineMaterial.SetFloat(ShineBandWidthId, PiecePlacementShineBandWidth);
+        shineMaterial.SetColor(ShineColorId, PiecePlacementShineColor);
+
+        var elapsed = 0f;
+        while (elapsed < PiecePlacementShineDuration && shineObjects.Count > 0)
+        {
+            elapsed += Mathf.Min(Time.unscaledDeltaTime, GameEntranceMaxFrameDelta);
+            var progress = Mathf.Clamp01(elapsed / PiecePlacementShineDuration);
+            var eased = progress * progress * (3f - 2f * progress);
+            shineMaterial.SetFloat(
+                ShineSweepCenterId,
+                Mathf.LerpUnclamped(sweepStart, sweepEnd, eased));
+            yield return null;
+        }
+
+        DestroyLooseClusterShineObjects(shineObjects);
+        DestroyPiecePlacementShineMaterial(shineMaterial);
+    }
+
+    private static GameObject CreateLoosePiecePlacementShineOverlay(
+        SpriteRenderer sourceRenderer,
+        Material shineMaterial)
+    {
+        if (sourceRenderer == null
+            || sourceRenderer.sprite == null
+            || shineMaterial == null)
+        {
+            return null;
+        }
+
+        var shineObject = new GameObject(
+            $"{sourceRenderer.gameObject.name}_ClusterAttachShine");
+        shineObject.transform.SetParent(sourceRenderer.transform, false);
+        shineObject.transform.localPosition = Vector3.zero;
+        shineObject.transform.localRotation = Quaternion.identity;
+        shineObject.transform.localScale = Vector3.one;
+        var shineRenderer = shineObject.AddComponent<SpriteRenderer>();
+        shineRenderer.sprite = sourceRenderer.sprite;
+        shineRenderer.sharedMaterial = shineMaterial;
+        shineRenderer.color = Color.white;
+        shineRenderer.sortingLayerID = sourceRenderer.sortingLayerID;
+        shineRenderer.sortingOrder = sourceRenderer.sortingOrder + 10;
+        return shineObject;
+    }
+
+    private static void DestroyLooseClusterShineObjects(List<GameObject> shineObjects)
+    {
+        for (var i = 0; i < shineObjects.Count; i++)
+        {
+            if (shineObjects[i] != null)
+            {
+                Destroy(shineObjects[i]);
+            }
+        }
+
+        shineObjects.Clear();
     }
 
     private static GameObject CreateCurrentPiecePlacementShineOverlay(
@@ -7641,6 +8291,8 @@ public class GameScene : MonoBehaviour
         _hintedPiece = state;
         _hintedPieces.Clear();
         _hintedPieceBaseRotations.Clear();
+        _hintedPieceBasePositions.Clear();
+        _hintedCluster = null;
         var hintMembers = GetLooseClusterMembers(state);
         for (var i = 0; i < hintMembers.Count; i++)
         {
@@ -7652,6 +8304,23 @@ public class GameScene : MonoBehaviour
 
             _hintedPieces.Add(member);
             _hintedPieceBaseRotations.Add(member.PieceRenderer.transform.rotation);
+            _hintedPieceBasePositions.Add(member.PieceRenderer.transform.position);
+        }
+        if (_hintedPieces.Count > 1
+            && _looseClusterByPiece.TryGetValue(state, out var hintedCluster))
+        {
+            _hintedCluster = hintedCluster;
+            if (TryGetPieceRendererBounds(_hintedPieces, out var hintedBounds))
+            {
+                _hintedClusterCenter = hintedBounds.center;
+            }
+            if (_hintedCluster.ShadowRenderer != null)
+            {
+                _hintedClusterShadowBasePosition =
+                    _hintedCluster.ShadowRenderer.transform.position;
+                _hintedClusterShadowBaseRotation =
+                    _hintedCluster.ShadowRenderer.transform.rotation;
+            }
         }
         _hintShakeStartTime = Time.unscaledTime;
         _isHintPieceShaking = true;
@@ -7697,6 +8366,33 @@ public class GameScene : MonoBehaviour
 
         var angle = Mathf.Sin(
             elapsed * HintShakeCyclesPerSecond * Mathf.PI * 2f) * HintShakeAngle;
+        if (_hintedCluster != null && _hintedPieces.Count > 1)
+        {
+            var deltaRotation = Quaternion.Euler(0f, 0f, angle);
+            for (var i = 0;
+                 i < _hintedPieces.Count
+                 && i < _hintedPieceBaseRotations.Count
+                 && i < _hintedPieceBasePositions.Count;
+                 i++)
+            {
+                var transform = _hintedPieces[i].PieceRenderer.transform;
+                transform.position = _hintedClusterCenter
+                    + deltaRotation * (_hintedPieceBasePositions[i] - _hintedClusterCenter);
+                transform.rotation = deltaRotation * _hintedPieceBaseRotations[i];
+            }
+
+            if (_hintedCluster.ShadowRenderer != null)
+            {
+                var shadowTransform = _hintedCluster.ShadowRenderer.transform;
+                shadowTransform.position = _hintedClusterCenter
+                    + deltaRotation
+                    * (_hintedClusterShadowBasePosition - _hintedClusterCenter);
+                shadowTransform.rotation =
+                    deltaRotation * _hintedClusterShadowBaseRotation;
+            }
+            return;
+        }
+
         for (var i = 0; i < _hintedPieces.Count && i < _hintedPieceBaseRotations.Count; i++)
         {
             _hintedPieces[i].PieceRenderer.transform.rotation =
@@ -7871,8 +8567,49 @@ public class GameScene : MonoBehaviour
             {
                 _hintedPieces[i].PieceRenderer.transform.rotation =
                     _hintedPieceBaseRotations[i];
+                if (_hintedCluster != null && i < _hintedPieceBasePositions.Count)
+                {
+                    _hintedPieces[i].PieceRenderer.transform.position =
+                        _hintedPieceBasePositions[i];
+                }
             }
         }
+
+        if (_hintedCluster?.ShadowRenderer != null)
+        {
+            _hintedCluster.ShadowRenderer.transform.position =
+                _hintedClusterShadowBasePosition;
+            _hintedCluster.ShadowRenderer.transform.rotation =
+                _hintedClusterShadowBaseRotation;
+        }
+    }
+
+    private static bool TryGetPieceRendererBounds(
+        IReadOnlyList<DraggablePieceState> states,
+        out Bounds bounds)
+    {
+        bounds = default;
+        var hasBounds = false;
+        for (var i = 0; i < states.Count; i++)
+        {
+            var renderer = states[i]?.PieceRenderer;
+            if (renderer == null)
+            {
+                continue;
+            }
+
+            if (!hasBounds)
+            {
+                bounds = renderer.bounds;
+                hasBounds = true;
+            }
+            else
+            {
+                bounds.Encapsulate(renderer.bounds);
+            }
+        }
+
+        return hasBounds;
     }
 
     private void ClearPieceHint()
@@ -7882,6 +8619,11 @@ public class GameScene : MonoBehaviour
         _hintedPiece = null;
         _hintedPieces.Clear();
         _hintedPieceBaseRotations.Clear();
+        _hintedPieceBasePositions.Clear();
+        _hintedCluster = null;
+        _hintedClusterCenter = Vector3.zero;
+        _hintedClusterShadowBasePosition = Vector3.zero;
+        _hintedClusterShadowBaseRotation = Quaternion.identity;
         _hintShakeStartTime = 0f;
         _isHintPieceShaking = false;
         if (_pieceHintOutlineRoot != null)
@@ -10035,7 +10777,7 @@ internal sealed class HintDashedOutlineGraphic : MaskableGraphic
         return outputPaths.Count > 0;
     }
 
-    private static bool TryReadSpritePixels(
+    internal static bool TryReadSpritePixels(
         Sprite sprite,
         out Color32[] pixels,
         out int width,
