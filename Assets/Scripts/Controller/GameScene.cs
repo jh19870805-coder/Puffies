@@ -66,6 +66,8 @@ public class GameScene : MonoBehaviour
     private const float PiecePlacementLightDurationMultiplier = 2f;
     private const float PiecePlacementLightMiddleStretch = 0.34f;
     private const float PieceLightMaximumWidthRatio = 0.7f;
+    private const int PieceLightInteriorGridResolution = 32;
+    private const float PieceLightPreferredClearanceRatio = 0.72f;
     private const int PiecePlacementLightSpriteCount = 4;
     private const int PiecePlacementLightMaxAffectedPieces = 7;
     private const float InvalidDropReturnDuration = 0.3f;
@@ -3077,13 +3079,8 @@ public class GameScene : MonoBehaviour
         var uniformScale = Mathf.Min(
             Mathf.Max(10f, targetWidth) / Mathf.Max(1f, lightSprite.rect.width),
             maximumHeight / Mathf.Max(1f, lightSprite.rect.height));
-        var normalizedPosition = CalculateUpperLeftPieceLightPosition(
+        var normalizedPosition = CalculateInteriorPieceLightPosition(
             sourceImage != null ? sourceImage.sprite : null);
-        normalizedPosition += new Vector2(
-            RandomRange(random, -0.018f, 0.018f),
-            RandomRange(random, -0.012f, 0.018f));
-        normalizedPosition.x = Mathf.Clamp(normalizedPosition.x, -0.34f, -0.1f);
-        normalizedPosition.y = Mathf.Clamp(normalizedPosition.y, 0.1f, 0.34f);
         state = new PieceLightState
         {
             SpriteIndex = spriteIndex,
@@ -3130,9 +3127,9 @@ public class GameScene : MonoBehaviour
         }
     }
 
-    private static Vector2 CalculateUpperLeftPieceLightPosition(Sprite sprite)
+    private static Vector2 CalculateInteriorPieceLightPosition(Sprite sprite)
     {
-        var fallback = new Vector2(-0.22f, 0.22f);
+        var fallback = Vector2.zero;
         if (sprite == null
             || sprite.bounds.size.x <= 0.001f
             || sprite.bounds.size.y <= 0.001f)
@@ -3140,42 +3137,161 @@ public class GameScene : MonoBehaviour
             return fallback;
         }
 
-        var bestPosition = fallback;
-        var bestScore = float.NegativeInfinity;
-        var foundPoint = false;
+        var normalizedPaths = new List<List<Vector2>>();
         var path = new List<Vector2>();
         var shapeCount = sprite.GetPhysicsShapeCount();
         for (var shapeIndex = 0; shapeIndex < shapeCount; shapeIndex++)
         {
             path.Clear();
             sprite.GetPhysicsShape(shapeIndex, path);
+            if (path.Count < 3)
+            {
+                continue;
+            }
+
+            var normalizedPath = new List<Vector2>(path.Count);
             for (var pointIndex = 0; pointIndex < path.Count; pointIndex++)
             {
                 var point = path[pointIndex];
-                var normalized = new Vector2(
+                normalizedPath.Add(new Vector2(
                     (point.x - sprite.bounds.center.x) / sprite.bounds.size.x,
-                    (point.y - sprite.bounds.center.y) / sprite.bounds.size.y);
-                var score = normalized.y - normalized.x;
-                if (score <= bestScore)
-                {
-                    continue;
-                }
-
-                bestScore = score;
-                bestPosition = normalized;
-                foundPoint = true;
+                    (point.y - sprite.bounds.center.y) / sprite.bounds.size.y));
             }
+
+            normalizedPaths.Add(normalizedPath);
         }
 
-        if (!foundPoint)
+        if (normalizedPaths.Count == 0)
         {
             return fallback;
         }
 
-        bestPosition = Vector2.Lerp(bestPosition, Vector2.zero, 0.34f);
-        return new Vector2(
-            Mathf.Clamp(bestPosition.x, -0.34f, -0.1f),
-            Mathf.Clamp(bestPosition.y, 0.1f, 0.34f));
+        var candidates = new List<Vector3>();
+        var maximumClearance = 0f;
+        var deepestPosition = fallback;
+        for (var y = 0; y < PieceLightInteriorGridResolution; y++)
+        {
+            for (var x = 0; x < PieceLightInteriorGridResolution; x++)
+            {
+                var candidate = new Vector2(
+                    (x + 0.5f) / PieceLightInteriorGridResolution - 0.5f,
+                    (y + 0.5f) / PieceLightInteriorGridResolution - 0.5f);
+                if (!TryGetPieceInteriorClearance(
+                        normalizedPaths,
+                        candidate,
+                        out var clearance))
+                {
+                    continue;
+                }
+
+                candidates.Add(new Vector3(candidate.x, candidate.y, clearance));
+                if (clearance > maximumClearance)
+                {
+                    maximumClearance = clearance;
+                    deepestPosition = candidate;
+                }
+            }
+        }
+
+        if (candidates.Count == 0)
+        {
+            return fallback;
+        }
+
+        var minimumPreferredClearance = maximumClearance * PieceLightPreferredClearanceRatio;
+        var preferredPosition = new Vector2(-0.18f, 0.18f);
+        var selectedPosition = deepestPosition;
+        var selectedDistance = float.PositiveInfinity;
+        for (var i = 0; i < candidates.Count; i++)
+        {
+            var candidate = candidates[i];
+            if (candidate.z < minimumPreferredClearance)
+            {
+                continue;
+            }
+
+            var position = new Vector2(candidate.x, candidate.y);
+            var distance = (position - preferredPosition).sqrMagnitude;
+            if (distance < selectedDistance)
+            {
+                selectedDistance = distance;
+                selectedPosition = position;
+            }
+        }
+
+        return selectedPosition;
+    }
+
+    private static bool TryGetPieceInteriorClearance(
+        IReadOnlyList<List<Vector2>> paths,
+        Vector2 point,
+        out float clearance)
+    {
+        clearance = 0f;
+        var isInside = false;
+        for (var pathIndex = 0; pathIndex < paths.Count; pathIndex++)
+        {
+            var path = paths[pathIndex];
+            if (!IsPointInsidePolygon(point, path))
+            {
+                continue;
+            }
+
+            isInside = true;
+            var pathClearance = float.PositiveInfinity;
+            for (var pointIndex = 0; pointIndex < path.Count; pointIndex++)
+            {
+                var start = path[pointIndex];
+                var end = path[(pointIndex + 1) % path.Count];
+                pathClearance = Mathf.Min(
+                    pathClearance,
+                    DistanceToSegment(point, start, end));
+            }
+
+            clearance = Mathf.Max(clearance, pathClearance);
+        }
+
+        return isInside;
+    }
+
+    private static bool IsPointInsidePolygon(Vector2 point, IReadOnlyList<Vector2> polygon)
+    {
+        var inside = false;
+        for (int current = 0, previous = polygon.Count - 1;
+             current < polygon.Count;
+             previous = current++)
+        {
+            var currentPoint = polygon[current];
+            var previousPoint = polygon[previous];
+            if ((currentPoint.y > point.y) == (previousPoint.y > point.y))
+            {
+                continue;
+            }
+
+            var edgeX = (previousPoint.x - currentPoint.x)
+                        * (point.y - currentPoint.y)
+                        / (previousPoint.y - currentPoint.y)
+                        + currentPoint.x;
+            if (point.x < edgeX)
+            {
+                inside = !inside;
+            }
+        }
+
+        return inside;
+    }
+
+    private static float DistanceToSegment(Vector2 point, Vector2 start, Vector2 end)
+    {
+        var segment = end - start;
+        var lengthSquared = segment.sqrMagnitude;
+        if (lengthSquared <= 0.000001f)
+        {
+            return Vector2.Distance(point, start);
+        }
+
+        var projection = Mathf.Clamp01(Vector2.Dot(point - start, segment) / lengthSquared);
+        return Vector2.Distance(point, start + segment * projection);
     }
 
     private void UpdatePieceLightSorting()
