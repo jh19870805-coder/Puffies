@@ -333,6 +333,7 @@ public class GameScene : MonoBehaviour
     private GameObject _pickedPieceShadowRoot;
     private SpriteRenderer _pickedPieceShadowRenderer;
     private SpriteRenderer _pickedPieceShadowSource;
+    private CircleCollider2D _pickedPieceShadowCollider;
     private Material _piecePlacementLightMaterial;
     private Material _pieceSpriteLightMaterial;
     private Material _boardShadowMaterial;
@@ -3426,7 +3427,7 @@ public class GameScene : MonoBehaviour
         {
             SetLooseClusterPresentation(draggedCluster, PieceShadowStyle.Initial);
         }
-        ShowPickedPieceShadow(state.PieceRenderer);
+        ShowPickedPieceShadow(state);
         if (state.IsOnTray)
         {
             CompactFollowingTrayPieces(state);
@@ -3960,9 +3961,10 @@ public class GameScene : MonoBehaviour
         }
     }
 
-    private void ShowPickedPieceShadow(SpriteRenderer sourceRenderer)
+    private void ShowPickedPieceShadow(DraggablePieceState state)
     {
         DestroyPickedPieceShadow();
+        var sourceRenderer = state?.PieceRenderer;
         if (sourceRenderer == null || sourceRenderer.sprite == null)
         {
             return;
@@ -3993,6 +3995,14 @@ public class GameScene : MonoBehaviour
         _pickedPieceShadowRoot = _pickedPieceShadowRenderer.gameObject;
         _pickedPieceShadowSource = sourceRenderer;
         _pickedPieceShadowRenderer.color = Color.white;
+        _pickedPieceShadowRenderer.enabled = false;
+        _pickedPieceShadowCollider =
+            _pickedPieceShadowRoot.AddComponent<CircleCollider2D>();
+        _pickedPieceShadowCollider.isTrigger = true;
+        _pickedPieceShadowCollider.offset = _pickedPieceShadowSprite.bounds.center;
+        _pickedPieceShadowCollider.radius = Mathf.Min(
+            _pickedPieceShadowSprite.bounds.extents.x,
+            _pickedPieceShadowSprite.bounds.extents.y) * 0.9f;
         UpdatePickedPieceShadow();
     }
 
@@ -4025,6 +4035,91 @@ public class GameScene : MonoBehaviour
             _pickedPieceShadowSource.sortingLayerID;
         _pickedPieceShadowRenderer.sortingOrder =
             _pickedPieceShadowSource.sortingOrder - 1;
+        _pickedPieceShadowRenderer.enabled =
+            DoesPickedPieceShadowOverlapPlacedPiece();
+    }
+
+    private bool DoesPickedPieceShadowOverlapPlacedPiece()
+    {
+        if (_pickedPieceShadowCollider == null
+            || _board.GrooveImagesByGroup == null
+            || Camera.main == null)
+        {
+            return false;
+        }
+
+        Physics2D.SyncTransforms();
+        var candidateProbes = new List<Collider2D>();
+        var shadowBounds = _pickedPieceShadowCollider.bounds;
+        for (var groupIndex = 0;
+             groupIndex < _board.GrooveImagesByGroup.Count;
+             groupIndex++)
+        {
+            var group = _board.GrooveImagesByGroup[groupIndex];
+            if (group == null)
+            {
+                continue;
+            }
+
+            for (var i = 0; i < group.Count; i++)
+            {
+                var grooveImage = group[i];
+                if (grooveImage == null
+                    || grooveImage.sprite == null
+                    || !grooveImage.gameObject.activeInHierarchy
+                    || grooveImage.color.a <= 0.001f)
+                {
+                    continue;
+                }
+
+                var grooveBounds = GameCommonUtility.GetRectTransformCameraWorldBounds(
+                    grooveImage.rectTransform,
+                    Camera.main,
+                    WorldGameplayDepth);
+                if (!BoundsOverlapOnXY(shadowBounds, grooveBounds))
+                {
+                    continue;
+                }
+
+                var probe = GetOrCreateBoardOccupancyProbe(grooveImage);
+                if (probe == null)
+                {
+                    continue;
+                }
+
+                var probeTransform = probe.transform;
+                probeTransform.position = GetGrooveSnapPosition(
+                    grooveImage.rectTransform,
+                    Camera.main);
+                probeTransform.rotation = grooveImage.rectTransform.rotation;
+                probeTransform.localScale = CalculatePieceScaleOnBoard(grooveImage);
+                candidateProbes.Add(probe);
+            }
+        }
+
+        if (candidateProbes.Count == 0)
+        {
+            return false;
+        }
+
+        Physics2D.SyncTransforms();
+        for (var i = 0; i < candidateProbes.Count; i++)
+        {
+            if (CollidersOverlap(_pickedPieceShadowCollider, candidateProbes[i]))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool BoundsOverlapOnXY(Bounds first, Bounds second)
+    {
+        return first.min.x <= second.max.x
+               && first.max.x >= second.min.x
+               && first.min.y <= second.max.y
+               && first.max.y >= second.min.y;
     }
 
     private void DestroyPickedPieceShadow()
@@ -4038,6 +4133,7 @@ public class GameScene : MonoBehaviour
         _pickedPieceShadowRoot = null;
         _pickedPieceShadowRenderer = null;
         _pickedPieceShadowSource = null;
+        _pickedPieceShadowCollider = null;
     }
 
     private void DestroyPickedPieceShadowSprite()
