@@ -28,6 +28,7 @@ public class MainScene : MonoBehaviour
     private const int PackagesPerPageRowCount = 3;
     private const int PackagesPerPageColumnCount = 6;
     private const int PackagesPerPage = PackagesPerPageRowCount * PackagesPerPageColumnCount;
+    private const int PackTornMaskCount = 6;
     private const int BagSelectPanelSortingOrder = 20000;
     private const int SelectedPackageSortingOrder = 30000;
     private const int PhotoPanelSortingOrder = 32000;
@@ -69,6 +70,7 @@ public class MainScene : MonoBehaviour
     private const string PackItemTemplateObjectName = "PackItemTemplate";
     private const string PackCoverObjectName = "PackCover";
     private const string PackSizeObjectName = "PackSize";
+    private const string PackTornMaskFilePrefix = "PackMask";
     private const string PackNameTextObjectName = "NameText";
     private const string MenuButtonObjectName = "BtnMenu";
     private const string MenuPanelObjectName = "PanelMenu";
@@ -116,10 +118,16 @@ public class MainScene : MonoBehaviour
     private const string BagSelectReplayActionText = "重玩";
     private const string TaskItemObjectName = "TaskItem";
     private static bool sHookedSceneLoaded;
+    private static readonly int TornMaskTextureId = Shader.PropertyToID("_TornMaskTex");
+    private static readonly int UseTornMaskId = Shader.PropertyToID("_UseTornMask");
 
     [SerializeField] private GameObject mPackageItemPrefab;
 
     private readonly Dictionary<int, PackageEntry> mPackageSlotsById = new Dictionary<int, PackageEntry>();
+    private readonly Sprite[] mPackTornMaskSprites = new Sprite[PackTornMaskCount];
+    private readonly Material[] mPackTornMaskMaterials = new Material[PackTornMaskCount];
+    private readonly bool[] mPackTornMaskLoadAttempted = new bool[PackTornMaskCount];
+    private readonly System.Random mPackTornMaskRandom = new System.Random();
     private GameObject mPackageItemTemplate;
     private RectTransform mPackageContentRoot;
     private RectTransform mPackagePageTemplate;
@@ -141,6 +149,7 @@ public class MainScene : MonoBehaviour
     private SpriteRenderer mOpeningStageBackgroundRenderer;
     private Material mOpeningStageBackgroundMaterial;
     private Sprite mOpeningStageBackgroundSprite;
+    private Material mPackCoverDefaultMaterial;
     private RenderTexture mBagSelectBackdropTexture;
     private FakeSettingsSliderInput mMusicSlider;
     private FakeSettingsSliderInput mEffectSlider;
@@ -192,6 +201,7 @@ public class MainScene : MonoBehaviour
     private bool mIsAwaitingTearSwipe;
     private bool mIsTrackingTearSwipe;
     private bool mIsTrackingTearTap;
+    private bool mDidWarnPackTornMaskUnavailable;
     private Vector2 mTearSwipeStartScreenPosition;
     private Rect mTearSwipeScreenRect;
 
@@ -234,6 +244,7 @@ public class MainScene : MonoBehaviour
         ReleaseBagSelectBackdropTexture();
         ReleaseGeneratedPhoto();
         ReleaseUsablePanelPreviewSprites();
+        ReleasePackTornMaskResources();
         if (mOpeningStageBackgroundSprite != null)
         {
             var texture = mOpeningStageBackgroundSprite.texture;
@@ -1384,6 +1395,7 @@ public class MainScene : MonoBehaviour
             entry.Image.sprite = packSprite;
         }
 
+        ApplyPackageTornMask(entry.Image, packId);
         ApplyPackageSizeVisual(entry.SizeImage, packId);
         if (CardPackRewardFlyTransition.IsPackPending(packId))
         {
@@ -1399,6 +1411,121 @@ public class MainScene : MonoBehaviour
         }
 
         EnsurePackageInteractionHandler(entry.Root, entry.Image, packId);
+    }
+
+    private void ApplyPackageTornMask(Image coverImage, int packId)
+    {
+        if (coverImage == null)
+        {
+            return;
+        }
+
+        if (mPackCoverDefaultMaterial == null)
+        {
+            mPackCoverDefaultMaterial = coverImage.material;
+        }
+
+        coverImage.material = mPackCoverDefaultMaterial;
+        if (!CardPackDataUtility.HasActivePuzzleSession(packId))
+        {
+            return;
+        }
+
+        var randomStart = mPackTornMaskRandom.Next(PackTornMaskCount);
+        for (var offset = 0; offset < PackTornMaskCount; offset++)
+        {
+            var maskIndex = (randomStart + offset) % PackTornMaskCount;
+            var material = GetOrCreatePackTornMaskMaterial(maskIndex);
+            if (material != null)
+            {
+                coverImage.material = material;
+                return;
+            }
+        }
+
+        if (!mDidWarnPackTornMaskUnavailable)
+        {
+            mDidWarnPackTornMaskUnavailable = true;
+            Debug.LogWarning("MainScene: no usable PackMask01-06.png torn mask was found.");
+        }
+    }
+
+    private Material GetOrCreatePackTornMaskMaterial(int maskIndex)
+    {
+        if (maskIndex < 0 || maskIndex >= PackTornMaskCount)
+        {
+            return null;
+        }
+
+        if (mPackTornMaskMaterials[maskIndex] != null)
+        {
+            return mPackTornMaskMaterials[maskIndex];
+        }
+
+        if (mPackCoverDefaultMaterial == null
+            || !mPackCoverDefaultMaterial.HasProperty(TornMaskTextureId)
+            || !mPackCoverDefaultMaterial.HasProperty(UseTornMaskId))
+        {
+            return null;
+        }
+
+        if (!mPackTornMaskLoadAttempted[maskIndex])
+        {
+            mPackTornMaskLoadAttempted[maskIndex] = true;
+            var maskNumber = maskIndex + 1;
+            var maskPath = $"{GameDefine.UiRoot}/PackImages/{PackTornMaskFilePrefix}{maskNumber:D2}.png";
+            mPackTornMaskSprites[maskIndex] = GameCommonUtility.LoadSpriteByPath(
+                maskPath,
+                PixelsPerUnit);
+            if (mPackTornMaskSprites[maskIndex] != null
+                && mPackTornMaskSprites[maskIndex].texture != null)
+            {
+                mPackTornMaskSprites[maskIndex].texture.wrapMode = TextureWrapMode.Clamp;
+            }
+        }
+
+        var maskSprite = mPackTornMaskSprites[maskIndex];
+        if (maskSprite == null || maskSprite.texture == null)
+        {
+            return null;
+        }
+
+        var material = new Material(mPackCoverDefaultMaterial)
+        {
+            name = $"PackCoverTornMask{maskIndex + 1:D2} (Runtime)",
+            hideFlags = HideFlags.DontSave
+        };
+        material.SetTexture(TornMaskTextureId, maskSprite.texture);
+        material.SetFloat(UseTornMaskId, 1f);
+        mPackTornMaskMaterials[maskIndex] = material;
+        return material;
+    }
+
+    private void ReleasePackTornMaskResources()
+    {
+        for (var i = 0; i < PackTornMaskCount; i++)
+        {
+            if (mPackTornMaskMaterials[i] != null)
+            {
+                Destroy(mPackTornMaskMaterials[i]);
+                mPackTornMaskMaterials[i] = null;
+            }
+
+            var sprite = mPackTornMaskSprites[i];
+            if (sprite == null)
+            {
+                continue;
+            }
+
+            var texture = sprite.texture;
+            Destroy(sprite);
+            if (texture != null)
+            {
+                Destroy(texture);
+            }
+
+            mPackTornMaskSprites[i] = null;
+        }
     }
 
     private void UpdatePackageDisplays()

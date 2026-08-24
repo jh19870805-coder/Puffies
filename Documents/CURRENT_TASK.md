@@ -1,5 +1,16 @@
 # 当前任务
 
+## 2026-08-24 首页进行中卡包撕口蒙版
+
+- 状态：首轮状态判断错误已修复，资源和 Shader 已由 Unity 导入，等待修复后 Play Mode 验收。
+- 用户将 `PackMask01~06.png` 从 `美术切图/卡包/撕开遮罩` 移入 `Assets/UI/PackImages`；这些蒙版尺寸为 `600x680`，透明区域表示撕掉，不透明区域表示保留，边界 Alpha 提供抗锯齿。
+- 首页只对存在 `CardPackPuzzleProgress` 未完成拼图会话的卡包启用撕口裁剪；无活动会话的卡包保持完整封面。每次进入或刷新首页时，每个进行中卡包随机选择一种蒙版，同一次首页停留期间不变化。
+- `PackCoverShadow.shader` 使用可选 Alpha 蒙版同时裁剪封面和其投影，避免投影仍保留完整卡包轮廓；默认关闭，因此不影响 GameScene 共用该 Shader 的投影材质。
+- 裁剪只作用于列表 `PackCover`；`PackSize`、点击后放大的完整封面、选择页及开包流程不使用该蒙版。
+- 验证：6 张蒙版均为 `600x680`，顶部 Alpha 为 `0`、主体 Alpha 为 `255`；使用 `PackIcon001.png` 离线合成确认撕口方向、尺寸和边界正确。Runtime/Editor C# 编译均通过，`0` 警告、`0` 错误；`git diff --check` 通过。
+- Unity 已生成 6 张新 PNG 的 `.meta`，BuildSync 也已同步到 `StreamingAssets/UI/PackImages`。需再次进入 MainScene 确认：有活动会话的卡包随机撕口、无活动会话的卡包完整、投影沿撕口裁剪、尺寸图标完整、点击后放大页仍显示完整封面，Console 无 Shader 错误。
+- 首轮失败原因：错误使用 `LifecycleState == InProgress` 判断。完成卡包重玩一半退出时生命周期仍为 `Completed`，但会保留活动拼图会话；本机数据验证 22 个卡包生命周期均为 `Completed`，其中 12 个仍有 `CardPackPuzzleProgress`。现已改为使用活动会话判断，覆盖首次游玩和重玩中途退出。
+
 ## 2026-08-24 移除首页卡包程序呼吸动画
 
 - 状态：代码与 Prefab 设置已清理并通过静态检查及编译，等待 Unity Play Mode 验收。

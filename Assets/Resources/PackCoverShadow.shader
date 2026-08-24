@@ -3,6 +3,8 @@ Shader "Puffies/UI/PackCoverShadow"
     Properties
     {
         [PerRendererData] _MainTex ("Sprite Texture", 2D) = "white" {}
+        _TornMaskTex ("Torn Mask", 2D) = "black" {}
+        [Toggle] _UseTornMask ("Use Torn Mask", Float) = 0
         _Color ("Cover Tint", Color) = (1,1,1,1)
         _ShadowColor ("Shadow Color / Opacity", Color) = (0.078,0.098,0.106,0.7)
         _ShadowOffsetX ("Shadow Offset X (Pixels)", Range(-200, 200)) = 0
@@ -83,6 +85,7 @@ Shader "Puffies/UI/PackCoverShadow"
             };
 
             sampler2D _MainTex;
+            sampler2D _TornMaskTex;
             float4 _MainTex_TexelSize;
             fixed4 _TextureSampleAdd;
             fixed4 _Color;
@@ -95,6 +98,7 @@ Shader "Puffies/UI/PackCoverShadow"
             float _PaddingX;
             float _PaddingY;
             float _SpritePixelsPerUnit;
+            float _UseTornMask;
             float4 _ClipRect;
 
             fixed IsInsideSprite(float2 uv)
@@ -108,7 +112,13 @@ Shader "Puffies/UI/PackCoverShadow"
             fixed SampleSpriteAlpha(float2 uv)
             {
                 fixed inside = IsInsideSprite(uv);
-                return (tex2D(_MainTex, saturate(uv)) + _TextureSampleAdd).a * inside;
+                fixed maskKeep = lerp(
+                    1.0,
+                    tex2D(_TornMaskTex, saturate(uv)).a,
+                    saturate(_UseTornMask));
+                return (tex2D(_MainTex, saturate(uv)) + _TextureSampleAdd).a
+                    * maskKeep
+                    * inside;
             }
 
             fixed SampleShadowAlpha(float2 uv)
@@ -156,6 +166,11 @@ Shader "Puffies/UI/PackCoverShadow"
                 fixed inside = IsInsideSprite(input.contentUv);
                 fixed4 coverTexture =
                     (tex2D(_MainTex, saturate(input.contentUv)) + _TextureSampleAdd) * inside;
+                fixed maskKeep = lerp(
+                    1.0,
+                    tex2D(_TornMaskTex, saturate(input.contentUv)).a,
+                    saturate(_UseTornMask));
+                coverTexture.a *= maskKeep;
                 fixed4 cover = coverTexture * input.color;
 
                 float2 shadowOffset =
