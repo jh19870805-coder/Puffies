@@ -29,7 +29,7 @@ Unity **2022.3** / Built-in Render Pipeline 项目，使用 Linear 色彩空间�
 | 场景 | 需求 |
 |------|------|
 | LoadingScene | 初始化 JSON、SQLite、任务数据和卡包数据；加载结束后进入 MainScene |
-| MainScene | 根据 `CardPacks.csv` 与 SQLite 解锁状态刷新卡包列表；正式列表固定使用 `PackageScrollView/Content/Page_1` 与 `PackItem` 分页结构，不再兼容旧 `Package001` 单图列表；每页按 6 列 x 3 行显示 18 个静态卡包封面。承载首页主 UI 的 Canvas 使用 `Screen Space - Camera` 并绑定场景 `Main Camera`，因此 `PackItem/PackCover`、`PackHighlight`、`PackSize` 与首页主 UI 统一经过该摄像机；运行时 `MainScene` 会重新校正绑定、`2560 x 1440` 设计分辨率、`Match=0.5` 和 `PPU=100`。`PackItem.prefab` 保留 `PackCover`、`PackHighlight` 和 `PackSize`；`PackCover` 使用编辑器可调的 `PackCoverShadow.mat` 在同一个 Graphic 中合成封面投影，运行时只替换为对应 `PackIconNNN.png`。首页卡包常驻播放 `0.98 ↔ 1.02 / 2.4s` 的整体呼吸，并显示 Prefab 内配置的 ADD 高光；列表不创建 3D 模型、粒子或 Animator。点击后通过同一 `Main Camera` 渲染的独立顶层 Canvas 使用同一静态封面，从列表实际位置等比放大到屏幕中心 `600 x 680`，并显示 `PanelBagSelect` 和既有背景虚化；Back 将静态封面返回原列表位置。点击玩/确认重玩后进入 `BgGame` 开包舞台，等待玩家再次轻点卡包或横划；有效操作随机加载一套 `CardPackOpeningModel_001-006`，使用当前 `PackIconNNN` 作为正面纹理，播放制作方骨骼撕裂动画及 `fx_chai_w_001` 横向光效，完成后进入 `GameScene`。3D 模型、撕口粒子、开包背景和 MainScene 最终画面统一由 `Main Camera` 直接渲染，不再经过独立特效相机、透明 RenderTexture 和 RawImage 合成。保留拍照、重玩确认、Rank、Achieve 和 Menu 入口。 |
+| MainScene | 根据 `CardPacks.csv` 与 SQLite 解锁状态刷新卡包列表；正式列表固定使用 `PackageScrollView/Content/Page_1` 与 `PackItem` 分页结构，不再兼容旧 `Package001` 单图列表；每页按 6 列 x 3 行显示 18 个静态卡包封面。承载首页主 UI 的 Canvas 使用 `Screen Space - Camera` 并绑定场景 `Main Camera`，因此 `PackItem/PackCover`、`PackSize`、`ImgLight` 与首页主 UI 统一经过该摄像机；运行时 `MainScene` 会重新校正绑定、`2560 x 1440` 设计分辨率、`Match=0.5` 和 `PPU=100`。`PackItem.prefab` 保留 `PackCover`、`PackSize`、`ImgLight`、呼吸容器和空 Animator 占位；旧 `PackHighlight` ADD 贴片已删除。`PackCover` 使用编辑器可调的 `PackCoverShadow.mat` 在同一个 Graphic 中合成封面投影，运行时只替换为对应 `PackIconNNN.png`。首页卡包常驻播放 `0.98 ↔ 1.02 / 2.4s` 的整体呼吸；列表不创建 3D 模型或粒子。点击后通过同一 `Main Camera` 渲染的独立顶层 Canvas 使用同一静态封面，从列表实际位置等比放大到屏幕中心 `600 x 680`，并显示 `PanelBagSelect` 和既有背景虚化；Back 将静态封面返回原列表位置。点击玩/确认重玩后进入 `BgGame` 开包舞台，等待玩家再次轻点卡包或横划；有效操作随机加载一套 `CardPackOpeningModel_001-006`，使用当前 `PackIconNNN` 作为正面纹理，播放制作方骨骼撕裂动画及 `fx_chai_w_001` 横向光效，完成后进入 `GameScene`。3D 模型、撕口粒子、开包背景和 MainScene 最终画面统一由 `Main Camera` 直接渲染，不再经过独立特效相机、透明 RenderTexture 和 RawImage 合成。保留拍照、重玩确认、Rank、Achieve 和 Menu 入口。 |
 | GameScene | 根据选中 PackId 加载 `CardBagNNN` Prefab，并读取 `CardPacks.csv/BoardScale` 缩放棋盘；按照 `PieceGGII` 四位数字命名组织拼图分组；从正常开包流程进入时播放棋盘、托盘和当前组 Piece 入场；每次正确放置 Piece 后立即持久化，重新进入时恢复已放置 Piece 并从首个未完成分组继续；全部完成后显示 RewardPanel；Editor 和 Development Build 在 `BtnTips` 左侧提供“一键完成”测试按钮 |
 | RankScene | 仅占位；首个 Demo 不包含排行榜后端功能。当前模拟列表前三名的 `RankBg` 分别使用原生 `1646 x 148` 的 `RankCellBg_1.png`、`RankCellBg_2.png`、`RankCellBg_3.png`，第四名以后使用 `1636 x 136` 的 `RankCellBg.png`；`RankItem` 根高度为 `148`，列表纵向间距为 `5`，条目中心步距为 `153` |
 | AchieveScene | 当前显示 20 条模拟成就，前 5 条已达成、后 15 条未达成；接入 Steam 后替换数据源。成就网格固定为 6 列，单元尺寸 `240 x 332`，横纵间距均为 `40` |
@@ -169,7 +169,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 | `TaskItem` | MainScene 任务进度和 GameScene RewardPanel 结算共用的 `Assets/Prefabs/TaskItem.prefab` 实例 |
 | `Package001` | MainScene 卡包列表项模板，隐藏并在运行时克隆 |
 | `PackItem/PackCover` | MainScene 卡包封面 Image；运行时设置 `PackIconNNN.png` |
-| `PackItem/PackHighlight` | 卡包封面上方的可调 ADD 高光父节点；四个子 Image 的位置、尺寸、颜色和透明度由 Prefab 配置，运行时只随封面整体缩放 |
+| `PackItem/ImgLight` | 卡包气泡/亮光 Image；是 `PackItem` 直属子节点，不随 `CardPackEffect` 呼吸目标缩放 |
 | `PackItem/PackSize` | 卡包尺寸图标；运行时根据 `CardPackSize` 配置选择 `PackSize_1.png` 到 `PackSize_7.png` |
 
 ---
@@ -256,7 +256,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 
 `MainScene.RefreshPackageList` 根据数据库动态创建已解锁卡包槽位。不要在场景中手工复制 `Package002`、`Package003` 等对象。
 
-共享尺寸图标为 `UI/PackImages/PackSize_1.png` 到 `PackSize_7.png`，对应 `CardPackSize` 数值（`XS=1` 到 `XXXL=7`）。`PackItem` 的可见结构为 `PackItem/CardPackEffect/PackCover|PackHighlight|PackSize`；MainScene 在运行时设置封面和尺寸 Sprite，并根据编辑器封面尺寸缩放尺寸图标。可调高光层级顺序为 `PackCover`、`PackHighlight`、`PackSize`。`PackHighlight` 父节点初始化启用，四张高光贴片使用 `Assets/Resources/PackHighlightAdditive.mat`；MainScene 只控制父节点显隐，不改其材质、颜色、Alpha 或子节点布局。`PackageInteractionHandler` 在 `PackItem` 根节点驱动 `CardPackEffect` 容器整体呼吸，默认范围为 `0.98..1.02`、周期 `2.4s`，并允许在 Prefab Mode 选中 `PackItem` 时预览和调整；`PackItem` 布局根节点本身不缩放。卡包移出 ScrollRect 可视范围、被其他面板遮挡或进入选中放大流程时，高光与呼吸随列表卡包一起隐藏/暂停；返回列表后恢复。选择页与选中卡包 Canvas 都使用 Main Camera，并明确覆盖 Sorting Order；Camera Canvas 之间的屏幕/本地坐标转换、撕包输入范围和卡包退出位置必须传入各自 `worldCamera`，不能沿用 Overlay 模式的 `null` 相机。Shader 和 Material 不得放进 `Assets/UI`，否则 BuildSync 会将其复制到 `StreamingAssets/UI` 并触发重复材质导入。
+共享尺寸图标为 `UI/PackImages/PackSize_1.png` 到 `PackSize_7.png`，对应 `CardPackSize` 数值（`XS=1` 到 `XXXL=7`）。`PackItem` 当前层级为 `PackItem/CardPackEffect/PackNode/PackCover|PackSize`，`ImgLight` 是 `PackItem` 直属子节点，位于呼吸目标外；旧 `PackHighlight` 与 `PackHighlight02~05.png` 已删除。`PackNode` 绑定 `Assets/Animation/PackNode.controller`，当前默认状态使用循环但无曲线的空动画 `PackAni.anim`，作为美术后续动画占位，不由程序写入动画参数。MainScene 在运行时设置封面和尺寸 Sprite，并根据编辑器封面尺寸缩放尺寸图标。`PackageInteractionHandler` 在 `PackItem` 根节点驱动 `CardPackEffect` 容器整体呼吸，默认范围为 `0.98..1.02`、周期 `2.4s`，并允许在 Prefab Mode 选中 `PackItem` 时预览和调整；`PackItem` 布局根节点和直属 `ImgLight` 本身不随该呼吸目标缩放。卡包移出 ScrollRect 可视范围、被其他面板遮挡或进入选中放大流程时，呼吸随列表卡包一起隐藏/暂停；返回列表后恢复。`Assets/Resources/PackHighlightAdditive.mat/.shader` 名称继续保留，但只供 GameScene 的 `PieceLight1~4` 拼图高光点使用，不属于 PackItem。选择页与选中卡包 Canvas 都使用 Main Camera，并明确覆盖 Sorting Order；Camera Canvas 之间的屏幕/本地坐标转换、撕包输入范围和卡包退出位置必须传入各自 `worldCamera`，不能沿用 Overlay 模式的 `null` 相机。Shader 和 Material 不得放进 `Assets/UI`，否则 BuildSync 会将其复制到 `StreamingAssets/UI` 并触发重复材质导入。
 
 `PackItem` 不再包含 `PackShadow` Image，也不再读取封面像素或在 CPU 生成阴影 Texture/Sprite。`PackCover` 直接引用 `Assets/Resources/PackCoverShadow.mat`；对应 UGUI Shader 根据当前封面 Alpha 在同一次绘制中合成投影和原封面，并按源贴图像素提供颜色/透明度、X/Y 偏移、X/Y 模糊、扩散及 X/Y 渲染留白参数。`PackCoverShadowEffect` 只在 UGUI 网格生成阶段围绕 `PackCover` 自身矩形中心提供 Shader 所需留白，并在 Material 留白参数变化时刷新网格；不能在 Shader 顶点阶段围绕 Canvas 原点直接缩放。MainScene 只替换封面 Sprite，不覆盖 Material。美术统一在该 Material 中调整投影；阴影被裁切时先增大 `Render Padding X/Y`。
 
@@ -338,8 +338,8 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 
 ### 卡包展示与开包表现
 
-- 首页列表的卡包主体使用 `Assets/UI/PackImages/PackIconNNN.png` 静态图；`PackItem.prefab` 不嵌套 3D 卡包特效 Prefab，但包含编辑器可调的 UGUI ADD 高光贴片。列表适配时保持 `PackHighlight02~05` 的内部美术布局不变，只把 `PackHighlight` 根节点按封面从原始尺寸到列表尺寸的比例整体缩放，确保子高光位置和尺寸同步变化，不得只改根 Rect 尺寸。
-- MainScene 主 Canvas 使用 `Screen Space - Camera`，`World Camera` 固定为场景 `Main Camera`，Plane Distance 为 `10`；`MainScene.ConfigureMainCanvas` 在运行时复用统一 Canvas 配置再次校正，确保 `PackItem` 封面、高光、尺寸图标和首页主 UI 经过同一摄像机渲染。
+- 首页列表的卡包主体使用 `Assets/UI/PackImages/PackIconNNN.png` 静态图；`PackItem.prefab` 不嵌套 3D 卡包特效 Prefab，也不再包含旧 UGUI `PackHighlight` ADD 高光贴片。列表保留封面投影、尺寸图标、直属 `ImgLight`、呼吸容器和空 Animator 占位。
+- MainScene 主 Canvas 使用 `Screen Space - Camera`，`World Camera` 固定为场景 `Main Camera`，Plane Distance 为 `10`；`MainScene.ConfigureMainCanvas` 在运行时复用统一 Canvas 配置再次校正，确保 `PackItem` 封面、尺寸图标、`ImgLight` 和首页主 UI 经过同一摄像机渲染。
 - Unity 编辑器单独打开 Loading、Main、Game、Rank 或 Achieve 场景后，`CanvasDesignResolutionEditor` 会延迟一帧按根 `Canvas` 的世界边界，将 SceneView 恢复为正交正视并自动取景；这避免 Camera Canvas 与 Overlay Canvas 之间切换时继承歪斜视角，不修改场景 Selection、Canvas 配置或运行时行为。`EffectScene001` 不参与自动取景，以保留制作方的三维编辑视角。
 - 选中态使用独立 `Screen Space - Camera` Canvas 的 `Image` 显示同一张静态图，目标尺寸为 `600 x 680`；该 Canvas 与选择面板同样绑定 `Main Camera`，背景虚化、返回、拍照和重玩确认继续沿用现有流程。
   - 点击玩后切换到 `BgGame` 开包舞台并等待玩家轻点或横划。有效操作随机选择 `CardPackOpeningModel_001-006`，共用制作方 `CardPackAnimation.controller`；短名称正面网格的 `_MainTex` 在运行时替换为当前 `PackIconNNN`。长名称背面网格会显示制作方 `Bg01.png` 灰块，替换成封面又会形成第二层完整卡包，因此当前运行时禁用该 Renderer；FBX、骨骼、UV 和动画资源本体不修改。

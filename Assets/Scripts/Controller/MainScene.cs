@@ -68,7 +68,6 @@ public class MainScene : MonoBehaviour
     private const string PackItemPrefabResourcesPath = "PackItem";
     private const string PackItemTemplateObjectName = "PackItemTemplate";
     private const string PackCoverObjectName = "PackCover";
-    private const string PackHighlightObjectName = "PackHighlight";
     private const string PackSizeObjectName = "PackSize";
     private const string PackNameTextObjectName = "NameText";
     private const string MenuButtonObjectName = "BtnMenu";
@@ -201,7 +200,6 @@ public class MainScene : MonoBehaviour
         public int BagId;
         public GameObject Root;
         public Image Image;
-        public GameObject HighlightRoot;
         public Image SizeImage;
         public PackageInteractionHandler InteractionHandler;
         public RectTransform RectTransform;
@@ -412,7 +410,6 @@ public class MainScene : MonoBehaviour
                 BagId = resolvedBagId,
                 Root = image.gameObject,
                 Image = image,
-                HighlightRoot = FindChild(image.transform, PackHighlightObjectName)?.gameObject,
                 InteractionHandler = image.GetComponentInParent<PackageInteractionHandler>(),
                 RectTransform = image.rectTransform
             };
@@ -1330,14 +1327,12 @@ public class MainScene : MonoBehaviour
         }
 
         var coverImage = FindChild(slotObject.transform, PackCoverObjectName)?.GetComponent<Image>() ?? rootImage;
-        var highlightRect = FindChild(slotObject.transform, PackHighlightObjectName) as RectTransform;
         var sizeImage = FindChild(slotObject.transform, PackSizeObjectName)?.GetComponent<Image>();
         PreparePagedPackageItem(
             slotObject,
             rootRect,
             rootImage,
             coverImage,
-            highlightRect,
             sizeImage);
         EnsurePackageInteractionHandler(slotObject, coverImage, packId);
 
@@ -1346,7 +1341,6 @@ public class MainScene : MonoBehaviour
             BagId = packId,
             Root = slotObject,
             Image = coverImage,
-            HighlightRoot = highlightRect != null ? highlightRect.gameObject : null,
             SizeImage = sizeImage,
             InteractionHandler = slotObject.GetComponent<PackageInteractionHandler>(),
             RectTransform = rootRect
@@ -1506,11 +1500,6 @@ public class MainScene : MonoBehaviour
         if (entry.Image != null)
         {
             entry.Image.enabled = visible;
-        }
-
-        if (entry.HighlightRoot != null && entry.HighlightRoot.activeSelf != visible)
-        {
-            entry.HighlightRoot.SetActive(visible);
         }
 
         entry.InteractionHandler?.SetBreathing(visible);
@@ -2330,7 +2319,6 @@ public class MainScene : MonoBehaviour
         RectTransform rootRect,
         Image rootImage,
         Image coverImage,
-        RectTransform highlightRect,
         Image sizeImage)
     {
         if (rootRect != null)
@@ -2363,7 +2351,6 @@ public class MainScene : MonoBehaviour
             coverImage.preserveAspect = true;
             var coverRect = coverImage.rectTransform;
             ScaleOverlayWithCover(sizeImage != null ? sizeImage.rectTransform : null, coverRect.sizeDelta);
-            ScaleHighlightWithCover(highlightRect, coverRect.sizeDelta);
             coverRect.anchorMin = new Vector2(0.5f, 0.5f);
             coverRect.anchorMax = new Vector2(0.5f, 0.5f);
             coverRect.pivot = new Vector2(0.5f, 0.5f);
@@ -2395,22 +2382,6 @@ public class MainScene : MonoBehaviour
         overlayRect.anchoredPosition = Vector2.Scale(overlayRect.anchoredPosition, scale);
         overlayRect.sizeDelta = Vector2.Scale(overlayRect.sizeDelta, scale);
         overlayRect.localScale = Vector3.one;
-    }
-
-    private static void ScaleHighlightWithCover(
-        RectTransform highlightRect,
-        Vector2 sourceCoverSize)
-    {
-        if (highlightRect == null || sourceCoverSize.x <= 0f || sourceCoverSize.y <= 0f)
-        {
-            return;
-        }
-
-        var scale = new Vector2(
-            PackageCoverWidth / sourceCoverSize.x,
-            PackageCoverHeight / sourceCoverSize.y);
-        highlightRect.anchoredPosition = Vector2.Scale(highlightRect.anchoredPosition, scale);
-        highlightRect.localScale = new Vector3(scale.x, scale.y, 1f);
     }
 
     private static RectTransform FindFirstGridPage(Transform root)
