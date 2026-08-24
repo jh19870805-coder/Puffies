@@ -1,20 +1,28 @@
 # 当前任务
 
+## 2026-08-24 移除首页卡包程序呼吸动画
+
+- 状态：代码与 Prefab 设置已清理并通过静态检查及编译，等待 Unity Play Mode 验收。
+- `PackageInteractionHandler` 保留点击、滑动和 ScrollRect 事件转发，删除 `[ExecuteAlways]`、呼吸缩放参数、编辑器预览、逐帧缩放及禁用时重置缩放逻辑。
+- `MainScene` 删除仅为呼吸显隐服务的 Handler 缓存与 `SetBreathing` 调用；卡包正常显隐逻辑不变。
+- `PackItem.prefab` 删除旧呼吸参数序列化数据，并把被编辑器呼吸预览停留在 `1.0166308` 的 `CardPackEffect.localScale` 恢复为 `1`；`CardPackEffect/PackNode`、空 Animator、封面、尺寸图标及 `ImgLight` 保留，供美术后续直接在 Prefab/Animator 中制作动效。
+- 验证：旧呼吸字段、方法和序列化参数无残留；`PackAni.anim` 与 `PackNode.controller` 无缩放曲线；Prefab 本地 `fileID` 完整；Runtime/Editor C# 编译均通过，`0` 警告、`0` 错误；`git diff --check` 通过。仍需 Unity Play Mode 确认列表不再缩放且点击、滑动、显隐和进入选中页正常。
+
 ## 2026-08-24 删除 PackHighlight 残留
 
 - 状态：Prefab、代码和专用贴片已清理并通过静态检查及编译，等待 Unity Play Mode 验收。
-- 从 `Assets/Prefabs/PackItem.prefab` 删除 `PackHighlight` 与 `PackHighlight02~05`，保留 `CardPackEffect/PackNode/PackCover|PackSize`、直属 `ImgLight`、呼吸逻辑和空 Animator。
+- 从 `Assets/Prefabs/PackItem.prefab` 删除 `PackHighlight` 与 `PackHighlight02~05`，保留 `CardPackEffect/PackNode/PackCover|PackSize`、直属 `ImgLight` 和空 Animator；程序呼吸逻辑已在后续任务中删除。
 - 从 `MainScene` 删除旧节点查找、`PackageEntry.HighlightRoot`、显隐控制和列表尺寸适配逻辑。
 - 删除仅被该节点引用的 `Assets/UI/MainScene/PackHighlight02~05.png` 及 `.meta`。
 - 保留 `Assets/Resources/PackHighlightAdditive.mat/.shader`，因为 GameScene 的 `PieceLight1~4` 拼图高光点仍在使用。
-- 验证：`PackItem.prefab` 本地 `fileID` 引用完整；Runtime/Editor C# 编译均通过，`0` 警告、`0` 错误；`git diff --check` 通过。仍需在 Unity 刷新后确认首页封面、尺寸图标、`ImgLight` 和呼吸动画正常，Console 无 Missing Reference。
+- 验证：`PackItem.prefab` 本地 `fileID` 引用完整；Runtime/Editor C# 编译均通过，`0` 警告、`0` 错误；`git diff --check` 通过。仍需在 Unity 刷新后确认首页封面、尺寸图标和 `ImgLight` 正常，Console 无 Missing Reference。
 
 ## 2026-08-24 仓库进度同步
 
 - 当前分支：`develop`；与 `origin/develop` 完全同步，领先/落后均为 `0`，工作区在同步前无未提交修改。
 - 当前 HEAD：`2bf3ade 呼吸动画层级+空动画对象`。
 - 已同步外部提交：`168b289 左右箭头+划开气泡`、`af84c24 添加气泡`、`5e2a90b 美术前置资源补全`、`2bf3ade 呼吸动画层级+空动画对象`。
-- `PackItem.prefab` 当前在 `CardPackEffect/PackNode` 下放置 `PackCover` 与 `PackSize`，`PackNode` 绑定循环空动画 `PackAni` 的 `PackNode.controller`；`ImgLight` 是 `PackItem` 直属子节点，位于呼吸目标 `CardPackEffect` 外；旧 `PackHighlight` 已在后续任务中删除。
+- `PackItem.prefab` 当前在 `CardPackEffect/PackNode` 下放置 `PackCover` 与 `PackSize`，`PackNode` 绑定循环空动画 `PackAni` 的 `PackNode.controller`；`ImgLight` 是 `PackItem` 直属子节点；旧 `PackHighlight` 与程序呼吸缩放均已在后续任务中删除。
 - 美术资源新增/调整包含 `ImgBagLight.png`、`Back.png`、`BlackBg.png`、左右翻页素材、气泡素材、抖动提示音和卡包状态参考图；MainScene、GameScene、字体资源及 PackItem Prefab 已有对应提交调整。
 - 程序侧已提交并保留：单块托盘提醒、取消拿起圆点投影、组合回托盘恢复 `04` 投影、自身凹槽相交允许临时放置、异形 Piece 高光点内部安全定位。
 - 本轮只同步记录，没有修改运行时代码或美术配置。Runtime/Editor C# 编译均通过，`0` 警告、`0` 错误；`git diff --check` 通过。仍需在 Unity Play Mode 集中验收以下各项。

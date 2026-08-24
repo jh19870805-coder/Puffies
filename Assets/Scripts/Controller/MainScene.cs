@@ -201,7 +201,6 @@ public class MainScene : MonoBehaviour
         public GameObject Root;
         public Image Image;
         public Image SizeImage;
-        public PackageInteractionHandler InteractionHandler;
         public RectTransform RectTransform;
         public bool SuppressDisplay;
     }
@@ -410,7 +409,6 @@ public class MainScene : MonoBehaviour
                 BagId = resolvedBagId,
                 Root = image.gameObject,
                 Image = image,
-                InteractionHandler = image.GetComponentInParent<PackageInteractionHandler>(),
                 RectTransform = image.rectTransform
             };
         }
@@ -1342,7 +1340,6 @@ public class MainScene : MonoBehaviour
             Root = slotObject,
             Image = coverImage,
             SizeImage = sizeImage,
-            InteractionHandler = slotObject.GetComponent<PackageInteractionHandler>(),
             RectTransform = rootRect
         };
         return entry;
@@ -1501,8 +1498,6 @@ public class MainScene : MonoBehaviour
         {
             entry.Image.enabled = visible;
         }
-
-        entry.InteractionHandler?.SetBreathing(visible);
     }
 
     private static void SetPackageSizeImageVisible(PackageEntry entry, bool visible)
