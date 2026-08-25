@@ -31,6 +31,8 @@ public class MainScene : MonoBehaviour
     private const int PackTornMaskCount = 6;
     private const int InProgressPackPieceCount = 3;
     private const float InProgressPackPieceMaxSize = 86f;
+    private const float NormalPackBreathingSpeed = 1f;
+    private const float CompletedPackBreathingSpeed = 0.2f;
     private const int BagSelectPanelSortingOrder = 20000;
     private const int SelectedPackageSortingOrder = 30000;
     private const int PhotoPanelSortingOrder = 32000;
@@ -76,6 +78,7 @@ public class MainScene : MonoBehaviour
     private const string PackLightObjectName = "ImgLight";
     private const string OpeningHintAnimationObjectName = "OpeningPackHintAnimation";
     private const string OpeningHintAnimationStateName = "PackAni";
+    private const string PackBreathingAnimationStateName = "PackAniBreath";
     private const string InProgressPackPiecesObjectName = "ProgressPieces";
     private const string PackTornMaskFilePrefix = "PackMask";
     private const string PackNameTextObjectName = "NameText";
@@ -220,6 +223,7 @@ public class MainScene : MonoBehaviour
         public Image Image;
         public Image SizeImage;
         public PackCoverVisualSettings VisualSettings;
+        public Animator PackAnimator;
         public GameObject ProgressPiecesRoot;
         public RectTransform RectTransform;
         public bool SuppressDisplay;
@@ -1351,6 +1355,7 @@ public class MainScene : MonoBehaviour
             ? visualSettings.PackCover
             : FindChild(slotObject.transform, PackCoverObjectName)?.GetComponent<Image>() ?? rootImage;
         var sizeImage = FindChild(slotObject.transform, PackSizeObjectName)?.GetComponent<Image>();
+        var packAnimator = FindChild(slotObject.transform, PackNodeObjectName)?.GetComponent<Animator>();
         PreparePagedPackageItem(
             slotObject,
             rootRect,
@@ -1366,6 +1371,7 @@ public class MainScene : MonoBehaviour
             Image = coverImage,
             SizeImage = sizeImage,
             VisualSettings = visualSettings,
+            PackAnimator = packAnimator,
             RectTransform = rootRect
         };
         return entry;
@@ -1420,6 +1426,7 @@ public class MainScene : MonoBehaviour
             hasActiveSession || wasCompleted,
             showCompletedState);
         ApplyPackageSizeVisual(entry.SizeImage, packId);
+        ApplyPackageBreathingAnimation(entry, showCompletedState);
         ApplyInProgressPackagePieces(entry, packId, hasActiveSession);
         if (CardPackRewardFlyTransition.IsPackPending(packId))
         {
@@ -1477,6 +1484,27 @@ public class MainScene : MonoBehaviour
             mDidWarnPackTornMaskUnavailable = true;
             Debug.LogWarning("MainScene: no usable PackMask01-06.png torn mask was found.");
         }
+    }
+
+    private static void ApplyPackageBreathingAnimation(
+        PackageEntry entry,
+        bool isCompleted)
+    {
+        if (entry?.PackAnimator == null)
+        {
+            return;
+        }
+
+        entry.PackAnimator.speed = isCompleted
+            ? CompletedPackBreathingSpeed
+            : NormalPackBreathingSpeed;
+        if (!entry.PackAnimator.isActiveAndEnabled)
+        {
+            return;
+        }
+
+        entry.PackAnimator.Play(PackBreathingAnimationStateName, 0, 0f);
+        entry.PackAnimator.Update(0f);
     }
 
     private Material GetOrCreatePackTornMaskMaterial(
@@ -3816,6 +3844,7 @@ public class MainScene : MonoBehaviour
         light.gameObject.SetActive(true);
         hintObject.SetActive(true);
         animator.enabled = true;
+        animator.speed = NormalPackBreathingSpeed;
         animator.Rebind();
         animator.Play(OpeningHintAnimationStateName, 0, 0f);
         animator.Update(0f);

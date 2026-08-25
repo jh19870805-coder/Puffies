@@ -1,5 +1,14 @@
 # 当前任务
 
+## 2026-08-25 首页卡包美术呼吸动画
+
+- 状态：Controller 与运行时速度分流已接入，Runtime/Editor 编译通过；等待美术保存实际曲线后进行 MainScene Play Mode 视觉验收。
+- `PackNode.controller` 新增 `PackAniBreath` 状态并设为默认状态，Motion 引用美术提供的 `Assets/Animation/PackAniBreath.anim`；原 `PackAni` 状态继续保留给等待撕包页的循环滑光提示。
+- MainScene 创建卡包列表项时缓存 `PackNode` Animator。彩色未完成卡包和存在活动重玩会话的彩色卡包使用正常速度 `1`；只有 `Completed` 且无活动会话、实际显示完成态灰色材质的卡包使用 `0.2`，即动画节奏放慢 5 倍。
+- 等待撕包页克隆 `PackNode` 后显式恢复 Animator 速度 `1` 并播放 `PackAni`，不会继承灰色列表卡包的慢速设置。
+- 程序不写呼吸曲线、缩放幅度或美术 Transform。当前仓库中的 `PackAniBreath.anim` 已开启循环，但 `m_FloatCurves`、`m_ScaleCurves` 等曲线均为空，因此接入逻辑已生效但暂时不会产生可见呼吸；美术需在 Unity 中把实际动画曲线保存进同一个 Clip，之后无需再改代码。
+- 验证：Controller 状态、Clip GUID 与 Prefab Controller GUID 引用一致；`Assembly-CSharp.csproj` 和 `Assembly-CSharp-Editor.csproj` 均编译通过，`0` 警告、`0` 错误；`git diff --check` 通过。尚未进行 Play Mode 视觉验收。
+
 ## 2026-08-25 等待撕包页循环滑光提示
 
 - 状态：代码接入完成并通过编译，等待 MainScene Play Mode 视觉验收。

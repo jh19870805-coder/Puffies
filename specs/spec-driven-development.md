@@ -801,3 +801,19 @@
 - [x] 1. 进入等待撕包状态后，从 `PackItem` 模板克隆 `PackNode` 动画层到 `SelectedCardPackImage`，隐藏 `PackCover/PackSize`，只启用 `ImgLight` 和现有 Animator。
 - [x] 2. 在有效轻点/横划统一入口、清除选择和场景销毁时停止并释放提示动画层。
 - [x] 3. Runtime/Editor 程序集编译通过，均为 `0` 警告、`0` 错误；`PackAni.anim`、`PackNode.controller`、输入阈值和正式撕包资源无修改，`git diff --check` 通过。仍需 MainScene Play Mode 目视验收提示位置、循环和交接时机。
+
+## 2026-08-25 - 首页卡包美术呼吸动画
+
+### 需求
+
+1. WHEN 首页创建可见卡包列表项 THEN 系统 SHALL 默认循环播放美术提供的 `PackAniBreath` 呼吸动画。
+2. IF 卡包使用完成态灰色材质 THEN 系统 SHALL 以正常卡包 `1/5` 的速度播放同一呼吸动画，不得修改美术曲线或缩放幅度。
+3. IF 已完成卡包存在活动重玩会话并恢复为彩色进行中状态 THEN 系统 SHALL 恢复正常呼吸速度。
+4. `BgGame` 等待撕包页的 ImgLight 提示 SHALL 继续显式播放 `PackAni` 且保持正常速度，不得继承灰色列表项速度。
+
+### 设计与任务
+
+- [x] 1. 将 `PackAniBreath.anim` 添加到 `PackNode.controller` 并设为首页默认状态，保留 `PackAni` 供等待撕包页显式调用。
+- [x] 2. 在卡包状态刷新时设置列表项 Animator 速度：彩色 `1`、灰色 `0.2`；等待撕包提示克隆固定恢复为 `1`。
+- [x] 3. Runtime/Editor 程序集编译通过，均为 `0` 警告、`0` 错误；Controller 状态、Clip GUID、Prefab Controller GUID 和 Git 差异检查通过，`PackAni.anim`、`PackAniBreath.anim` 本体均未修改。
+- [ ] 4. 当前 `PackAniBreath.anim` 虽已启用循环，但文件中没有任何曲线；需要美术在 Unity 中把实际呼吸曲线保存进该 Clip 后再做 Play Mode 视觉验收。
