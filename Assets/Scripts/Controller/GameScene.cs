@@ -10174,24 +10174,12 @@ public class GameScene : MonoBehaviour
     private void OnReturnButtonClicked()
     {
         var packId = GameManager.GetBagId();
-        if (!_isGameFinished && packId > 0)
+        if (!_isGameFinished
+            && packId > 0
+            && !CardPackDataUtility.TryEnsurePuzzleSession(packId))
         {
-            if (_wasSelectedPackCompletedOnEntry)
-            {
-                var hasCompletedFirstGroup =
-                    CardPackDataUtility.HasCompletedFirstPuzzleGroup(packId);
-                if (!hasCompletedFirstGroup
-                    && !CardPackDataUtility.TryClearPuzzleSession(packId))
-                {
-                    Debug.LogWarning(
-                        $"GameScene: failed to discard replay puzzle session before returning. packId={packId}");
-                }
-            }
-            else if (!CardPackDataUtility.TryEnsurePuzzleSession(packId))
-            {
-                Debug.LogWarning(
-                    $"GameScene: failed to preserve puzzle session before returning. packId={packId}");
-            }
+            Debug.LogWarning(
+                $"GameScene: failed to preserve puzzle session before returning. packId={packId}");
         }
 
         GameManager.EnterMainScene();
