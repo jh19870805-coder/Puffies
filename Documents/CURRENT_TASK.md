@@ -1,5 +1,14 @@
 # 当前任务
 
+## 2026-08-25 卡包尺寸标签完成态材质
+
+- 状态：实现完成并通过 Runtime/Editor 编译，等待 Unity 资源导入与 MainScene 视觉验收。
+- 新增 `Assets/Resources/PackSizeCompleted.mat` 和专用 `PackSizeState.shader`。材质只处理尺寸标签本身，不包含卡包封面的撕口、投影或蒙版逻辑；美术可调整 `Tint`、`Grayscale Amount`、`Grayscale Color`、`Brightness` 和 `Contrast`。
+- `PackCoverVisualSettings` 新增 `PackSize`、普通尺寸材质和完成态尺寸材质配置，并让 `Preview Completed In Editor` 同时预览封面与尺寸标签完成态。`PackItem.prefab` 已绑定新材质，普通材质留空表示使用 Unity 默认 UI 材质。
+- MainScene 仅在卡包历史状态为 `Completed` 且没有活动拼图会话时切换 `PackSizeCompleted`；未完成、进行中和重玩中的卡包继续显示彩色尺寸标签。
+- 修改文件：`Assets/Resources/PackSizeState.shader`、`Assets/Resources/PackSizeCompleted.mat`、`Assets/Scripts/View/PackCoverVisualSettings.cs`、`Assets/Scripts/Controller/MainScene.cs`、`Assets/Prefabs/PackItem.prefab`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
+- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 编译通过，均为 `0` 警告、`0` 错误；材质、Shader 和 Prefab GUID 引用唯一且完整；`git diff --check` 通过。仍需回到 Unity 触发资源刷新，确认 Console 无 Shader error，并在 `PackItem.prefab` 和 MainScene 检查彩色/完成态切换效果。
+
 ## 2026-08-25 卡包进度与撕开状态
 
 - 状态：实现完成并通过 Runtime/Editor 编译，等待 Play Mode 验收。

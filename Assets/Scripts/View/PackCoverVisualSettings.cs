@@ -10,10 +10,17 @@ public sealed class PackCoverVisualSettings : MonoBehaviour
     [SerializeField] private Material mNormalCoverMaterial;
     [InspectorName("Completed Cover Material")]
     [SerializeField] private Material mCompletedCoverMaterial;
+    [InspectorName("Pack Size")]
+    [SerializeField] private Image mPackSize;
+    [InspectorName("Normal Size Material")]
+    [SerializeField] private Material mNormalSizeMaterial;
+    [InspectorName("Completed Size Material")]
+    [SerializeField] private Material mCompletedSizeMaterial;
     [InspectorName("Preview Completed In Editor")]
     [SerializeField] private bool mPreviewCompleted;
 
     public Image PackCover => mPackCover;
+    public Image PackSize => mPackSize;
 
     public Material GetCoverMaterial(bool isCompleted)
     {
@@ -30,6 +37,13 @@ public sealed class PackCoverVisualSettings : MonoBehaviour
         return mPackCover != null ? mPackCover.material : null;
     }
 
+    public Material GetSizeMaterial(bool isCompleted)
+    {
+        return isCompleted && mCompletedSizeMaterial != null
+            ? mCompletedSizeMaterial
+            : mNormalSizeMaterial;
+    }
+
 #if UNITY_EDITOR
     private void OnValidate()
     {
@@ -38,28 +52,38 @@ public sealed class PackCoverVisualSettings : MonoBehaviour
             return;
         }
 
-        if (mPackCover == null)
+        if (mPackCover == null || mPackSize == null)
         {
             var images = GetComponentsInChildren<Image>(true);
             for (var i = 0; i < images.Length; i++)
             {
-                if (images[i].gameObject.name == "PackCover")
+                if (mPackCover == null && images[i].gameObject.name == "PackCover")
                 {
                     mPackCover = images[i];
-                    break;
+                }
+                else if (mPackSize == null && images[i].gameObject.name == "PackSize")
+                {
+                    mPackSize = images[i];
                 }
             }
         }
 
-        if (mPackCover == null)
+        if (mPackCover != null)
         {
-            return;
+            var previewMaterial = GetCoverMaterial(mPreviewCompleted);
+            if (previewMaterial != null && mPackCover.material != previewMaterial)
+            {
+                mPackCover.material = previewMaterial;
+            }
         }
 
-        var previewMaterial = GetCoverMaterial(mPreviewCompleted);
-        if (previewMaterial != null && mPackCover.material != previewMaterial)
+        if (mPackSize != null)
         {
-            mPackCover.material = previewMaterial;
+            var previewSizeMaterial = GetSizeMaterial(mPreviewCompleted);
+            if (mPackSize.material != previewSizeMaterial)
+            {
+                mPackSize.material = previewSizeMaterial;
+            }
         }
     }
 #endif

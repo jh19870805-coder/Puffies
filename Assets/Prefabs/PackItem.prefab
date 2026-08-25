@@ -162,6 +162,9 @@ MonoBehaviour:
   mPackCover: {fileID: 7866172318959208622}
   mNormalCoverMaterial: {fileID: 2100000, guid: 3a4da46db45b440eba7fb98e06dc7464, type: 2}
   mCompletedCoverMaterial: {fileID: 2100000, guid: 048d3989ae87474c9fc79b7f3593a70b, type: 2}
+  mPackSize: {fileID: 4017709832613726455}
+  mNormalSizeMaterial: {fileID: 0}
+  mCompletedSizeMaterial: {fileID: 2100000, guid: ebc248773a4f4a539b7459fe91ca70dd, type: 2}
   mPreviewCompleted: 1
 --- !u!1 &4862296459549254539
 GameObject:
@@ -220,7 +223,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_Material: {fileID: 0}
+  m_Material: {fileID: 2100000, guid: ebc248773a4f4a539b7459fe91ca70dd, type: 2}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}

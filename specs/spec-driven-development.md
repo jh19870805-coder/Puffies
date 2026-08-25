@@ -777,7 +777,7 @@
 2. WHEN 首页卡包处于未开始或进行中状态 THEN 系统 SHALL 使用美术在 `PackItem` 配置的正常封面材质。
 3. WHEN 卡包需要显示撕口 THEN 程序 SHALL 只向所选材质的运行时副本写入随机撕口蒙版和启用状态，不得写入灰度强度、灰色颜色或灰色遮罩参数。
 4. WHEN 美术调整完成态效果 THEN 美术 SHALL 能在材质中直接调整灰度强度、灰色颜色并选择是否使用灰色蒙版贴图，无需修改 C#。
-5. `PackSize` 不再由程序创建或切换置灰材质；其颜色和材质完全保留 Prefab 美术配置。
+5. `PackSize` SHALL 在卡包 `Completed` 且没有活动会话时使用 Prefab 配置的完成态材质，其余状态使用普通彩色材质；程序 SHALL 只切换材质引用，不得覆盖材质参数。
 6. WHEN 首页卡包显示任意撕开状态 THEN 系统 SHALL 显示 Prefab 配置的 `PackBg`；未撕开的卡包 SHALL 隐藏 `PackBg`。
 7. WHEN 撕开卡包存在进行中贴纸 THEN 显示层级 SHALL 为 `PackBg < ProgressPieces < PackCover`。
 8. WHEN 卡包存在活动拼图会话 BUT 对应 `CardBagNNN.prefab` 的第一组 `Piece01II` 尚未全部完成 THEN 系统 SHALL 显示完整彩色卡包，并隐藏撕口、`PackBg` 和进行中装饰贴纸。
@@ -788,7 +788,7 @@
 
 - [x] 1. 在 `PackItem` 添加 `PackCoverVisualSettings`，引用 `PackCover`、正常封面材质与完成态封面材质，并提供非运行时完成态预览开关。
 - [x] 2. 新增完成态材质模板，并为 `PackCoverShadow.shader` 增加美术可调灰色颜色与可选灰色蒙版，不改变默认正常材质效果。
-- [x] 3. 删除 `MainScene` 中写死的完成态灰度值、Shader 灰度属性写入及 `PackSize` 运行时置灰材质，只保留撕口蒙版注入与资源释放。
+- [x] 3. 删除 `MainScene` 中写死的完成态灰度参数写入；封面保留撕口蒙版注入，`PackSize` 改为在 Prefab 配置独立完成态材质并由程序按状态切换。
 - [x] 4. Runtime/Editor 程序集编译通过，均为 `0` 警告、`0` 错误；Prefab 脚本与材质 GUID 引用完整，`git diff --check` 通过。Unity 当前占用工程且尚未自动刷新，仍需回到编辑器触发资源刷新，并在 MainScene 目视验收三种卡包状态及灰色蒙版效果。
 - [x] 5. 接入 `PackBg` 撕开状态显隐、列表尺寸适配和可见性同步，并保证进行中贴纸位于背景上方、封面下方。
 - [x] 6. 将活动会话撕开判定改为 Prefab 第一组 Piece 全量完成判定，并让进行中装饰贴纸使用同一门槛。
