@@ -31,7 +31,6 @@ public class MainScene : MonoBehaviour
     private const int PackTornMaskCount = 6;
     private const int InProgressPackPieceCount = 3;
     private const float InProgressPackPieceMaxSize = 86f;
-    private const float CompletedPackGrayscaleAmount = 0.5f;
     private const int BagSelectPanelSortingOrder = 20000;
     private const int SelectedPackageSortingOrder = 30000;
     private const int PhotoPanelSortingOrder = 32000;
@@ -124,10 +123,6 @@ public class MainScene : MonoBehaviour
     private static bool sHookedSceneLoaded;
     private static readonly int TornMaskTextureId = Shader.PropertyToID("_TornMaskTex");
     private static readonly int UseTornMaskId = Shader.PropertyToID("_UseTornMask");
-    private static readonly int GrayscaleAmountId = Shader.PropertyToID("_GrayscaleAmount");
-    private static readonly int ShadowColorId = Shader.PropertyToID("_ShadowColor");
-    private static readonly int PaddingXId = Shader.PropertyToID("_PaddingX");
-    private static readonly int PaddingYId = Shader.PropertyToID("_PaddingY");
 
     [SerializeField] private GameObject mPackageItemPrefab;
 
@@ -158,8 +153,6 @@ public class MainScene : MonoBehaviour
     private SpriteRenderer mOpeningStageBackgroundRenderer;
     private Material mOpeningStageBackgroundMaterial;
     private Sprite mOpeningStageBackgroundSprite;
-    private Material mPackCoverDefaultMaterial;
-    private Material mPackSizeGrayscaleMaterial;
     private RenderTexture mBagSelectBackdropTexture;
     private FakeSettingsSliderInput mMusicSlider;
     private FakeSettingsSliderInput mEffectSlider;
@@ -221,6 +214,7 @@ public class MainScene : MonoBehaviour
         public GameObject Root;
         public Image Image;
         public Image SizeImage;
+        public PackCoverVisualSettings VisualSettings;
         public GameObject ProgressPiecesRoot;
         public RectTransform RectTransform;
         public bool SuppressDisplay;
@@ -1346,7 +1340,10 @@ public class MainScene : MonoBehaviour
             rootImage = slotObject.AddComponent<Image>();
         }
 
-        var coverImage = FindChild(slotObject.transform, PackCoverObjectName)?.GetComponent<Image>() ?? rootImage;
+        var visualSettings = slotObject.GetComponent<PackCoverVisualSettings>();
+        var coverImage = visualSettings != null && visualSettings.PackCover != null
+            ? visualSettings.PackCover
+            : FindChild(slotObject.transform, PackCoverObjectName)?.GetComponent<Image>() ?? rootImage;
         var sizeImage = FindChild(slotObject.transform, PackSizeObjectName)?.GetComponent<Image>();
         PreparePagedPackageItem(
             slotObject,
@@ -1362,6 +1359,7 @@ public class MainScene : MonoBehaviour
             Root = slotObject,
             Image = coverImage,
             SizeImage = sizeImage,
+            VisualSettings = visualSettings,
             RectTransform = rootRect
         };
         return entry;
@@ -1410,8 +1408,12 @@ public class MainScene : MonoBehaviour
             && record.LifecycleState == CardPackLifecycleState.Completed;
         var hasActiveSession = CardPackDataUtility.HasActivePuzzleSession(packId);
         var showCompletedState = wasCompleted && !hasActiveSession;
-        ApplyPackageTornMask(entry.Image, hasActiveSession || wasCompleted, showCompletedState);
-        ApplyPackageSizeVisual(entry.SizeImage, packId, showCompletedState);
+        ApplyPackageTornMask(
+            entry.Image,
+            entry.VisualSettings,
+            hasActiveSession || wasCompleted,
+            showCompletedState);
+        ApplyPackageSizeVisual(entry.SizeImage, packId);
         ApplyInProgressPackagePieces(entry, packId, hasActiveSession);
         if (CardPackRewardFlyTransition.IsPackPending(packId))
         {
@@ -1431,6 +1433,7 @@ public class MainScene : MonoBehaviour
 
     private void ApplyPackageTornMask(
         Image coverImage,
+        PackCoverVisualSettings visualSettings,
         bool shouldShowTornState,
         bool isCompleted)
     {
@@ -1439,12 +1442,10 @@ public class MainScene : MonoBehaviour
             return;
         }
 
-        if (mPackCoverDefaultMaterial == null)
-        {
-            mPackCoverDefaultMaterial = coverImage.material;
-        }
-
-        coverImage.material = mPackCoverDefaultMaterial;
+        var coverMaterial = visualSettings != null
+            ? visualSettings.GetCoverMaterial(isCompleted)
+            : coverImage.material;
+        coverImage.material = coverMaterial;
         if (!shouldShowTornState)
         {
             return;
@@ -1454,7 +1455,10 @@ public class MainScene : MonoBehaviour
         for (var offset = 0; offset < PackTornMaskCount; offset++)
         {
             var maskIndex = (randomStart + offset) % PackTornMaskCount;
-            var material = GetOrCreatePackTornMaskMaterial(maskIndex, isCompleted);
+            var material = GetOrCreatePackTornMaskMaterial(
+                maskIndex,
+                coverMaterial,
+                isCompleted);
             if (material != null)
             {
                 coverImage.material = material;
@@ -1469,7 +1473,10 @@ public class MainScene : MonoBehaviour
         }
     }
 
-    private Material GetOrCreatePackTornMaskMaterial(int maskIndex, bool isCompleted)
+    private Material GetOrCreatePackTornMaskMaterial(
+        int maskIndex,
+        Material coverMaterial,
+        bool isCompleted)
     {
         if (maskIndex < 0 || maskIndex >= PackTornMaskCount)
         {
@@ -1484,10 +1491,9 @@ public class MainScene : MonoBehaviour
             return materialCache[maskIndex];
         }
 
-        if (mPackCoverDefaultMaterial == null
-            || !mPackCoverDefaultMaterial.HasProperty(TornMaskTextureId)
-            || !mPackCoverDefaultMaterial.HasProperty(UseTornMaskId)
-            || !mPackCoverDefaultMaterial.HasProperty(GrayscaleAmountId))
+        if (coverMaterial == null
+            || !coverMaterial.HasProperty(TornMaskTextureId)
+            || !coverMaterial.HasProperty(UseTornMaskId))
         {
             return null;
         }
@@ -1513,7 +1519,7 @@ public class MainScene : MonoBehaviour
             return null;
         }
 
-        var material = new Material(mPackCoverDefaultMaterial)
+        var material = new Material(coverMaterial)
         {
             name = isCompleted
                 ? $"PackCoverCompletedTornMask{maskIndex + 1:D2} (Runtime)"
@@ -1522,39 +1528,8 @@ public class MainScene : MonoBehaviour
         };
         material.SetTexture(TornMaskTextureId, maskSprite.texture);
         material.SetFloat(UseTornMaskId, 1f);
-        material.SetFloat(
-            GrayscaleAmountId,
-            isCompleted ? CompletedPackGrayscaleAmount : 0f);
         materialCache[maskIndex] = material;
         return material;
-    }
-
-    private Material GetOrCreatePackSizeGrayscaleMaterial()
-    {
-        if (mPackSizeGrayscaleMaterial != null)
-        {
-            return mPackSizeGrayscaleMaterial;
-        }
-
-        if (mPackCoverDefaultMaterial == null
-            || !mPackCoverDefaultMaterial.HasProperty(GrayscaleAmountId))
-        {
-            return null;
-        }
-
-        mPackSizeGrayscaleMaterial = new Material(mPackCoverDefaultMaterial)
-        {
-            name = "PackSizeGrayscale (Runtime)",
-            hideFlags = HideFlags.DontSave
-        };
-        mPackSizeGrayscaleMaterial.SetFloat(UseTornMaskId, 0f);
-        mPackSizeGrayscaleMaterial.SetFloat(
-            GrayscaleAmountId,
-            CompletedPackGrayscaleAmount);
-        mPackSizeGrayscaleMaterial.SetColor(ShadowColorId, Color.clear);
-        mPackSizeGrayscaleMaterial.SetFloat(PaddingXId, 0f);
-        mPackSizeGrayscaleMaterial.SetFloat(PaddingYId, 0f);
-        return mPackSizeGrayscaleMaterial;
     }
 
     private void ApplyInProgressPackagePieces(
@@ -1761,11 +1736,6 @@ public class MainScene : MonoBehaviour
             mPackTornMaskSprites[i] = null;
         }
 
-        if (mPackSizeGrayscaleMaterial != null)
-        {
-            Destroy(mPackSizeGrayscaleMaterial);
-            mPackSizeGrayscaleMaterial = null;
-        }
     }
 
     private void UpdatePackageDisplays()
@@ -1884,7 +1854,7 @@ public class MainScene : MonoBehaviour
         }
     }
 
-    private void ApplyPackageSizeVisual(Image sizeImage, int packId, bool isCompleted)
+    private void ApplyPackageSizeVisual(Image sizeImage, int packId)
     {
         if (sizeImage == null)
         {
@@ -1912,9 +1882,6 @@ public class MainScene : MonoBehaviour
         }
 
         sizeImage.sprite = sizeSprite;
-        sizeImage.material = isCompleted
-            ? GetOrCreatePackSizeGrayscaleMaterial()
-            : null;
         sizeImage.enabled = true;
         sizeImage.gameObject.SetActive(true);
     }

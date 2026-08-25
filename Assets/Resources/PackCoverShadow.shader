@@ -6,6 +6,9 @@ Shader "Puffies/UI/PackCoverShadow"
         _TornMaskTex ("Torn Mask", 2D) = "black" {}
         [Toggle] _UseTornMask ("Use Torn Mask", Float) = 0
         _GrayscaleAmount ("Grayscale Amount", Range(0, 1)) = 0
+        _GrayColor ("Grayscale Color", Color) = (1,1,1,1)
+        _GrayMaskTex ("Gray Mask (White = Affected)", 2D) = "white" {}
+        [Toggle(PACK_GRAY_MASK)] _UseGrayMask ("Use Gray Mask", Float) = 0
         _Color ("Cover Tint", Color) = (1,1,1,1)
         _ShadowColor ("Shadow Color / Opacity", Color) = (0.078,0.098,0.106,0.7)
         _ShadowOffsetX ("Shadow Offset X (Pixels)", Range(-200, 200)) = 0
@@ -64,6 +67,7 @@ Shader "Puffies/UI/PackCoverShadow"
             #pragma multi_compile_local _ UNITY_UI_ALPHACLIP
             #pragma multi_compile_local _ PACK_SHADOW_SPRITE_RENDERER
             #pragma multi_compile_local _ PACK_SHADOW_ONLY
+            #pragma shader_feature_local _ PACK_GRAY_MASK
 
             #include "UnityCG.cginc"
             #include "UnityUI.cginc"
@@ -87,9 +91,11 @@ Shader "Puffies/UI/PackCoverShadow"
 
             sampler2D _MainTex;
             sampler2D _TornMaskTex;
+            sampler2D _GrayMaskTex;
             float4 _MainTex_TexelSize;
             fixed4 _TextureSampleAdd;
             fixed4 _Color;
+            fixed4 _GrayColor;
             fixed4 _ShadowColor;
             float _ShadowOffsetX;
             float _ShadowOffsetY;
@@ -174,10 +180,14 @@ Shader "Puffies/UI/PackCoverShadow"
                     saturate(_UseTornMask));
                 coverTexture.a *= maskKeep;
                 fixed luminance = dot(coverTexture.rgb, fixed3(0.299, 0.587, 0.114));
+                fixed grayMask = 1.0;
+                #ifdef PACK_GRAY_MASK
+                grayMask = tex2D(_GrayMaskTex, saturate(input.contentUv)).r;
+                #endif
                 coverTexture.rgb = lerp(
                     coverTexture.rgb,
-                    luminance.xxx,
-                    saturate(_GrayscaleAmount));
+                    luminance.xxx * _GrayColor.rgb,
+                    saturate(_GrayscaleAmount) * grayMask);
                 fixed4 cover = coverTexture * input.color;
 
                 float2 shadowOffset =
