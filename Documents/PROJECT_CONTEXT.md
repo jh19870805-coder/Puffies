@@ -121,7 +121,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
                     -> BtnSet        -> PanelSet -> BtnClose / BtnReturn -> 关闭设置
                     -> BtnUsable     -> PanelUsable -> BtnClose / BtnReturn -> 关闭辅助选项
                     -> BtnData       -> PanelSave -> BtnClose / BtnReturn -> 关闭存档面板
-      -> 已解锁卡包运行时列表项 -> 居中放大 + 半透明压暗背景 + PanelBagSelect
+      -> 已解锁卡包运行时列表项 -> 居中放大 + 无染色半透明虚化背景 + PanelBagSelect
                                       -> BtnPlay/重玩 -> BgGame 开包舞台
                                                          -> ImgLight 循环滑光 -> 轻点卡包 / 横划 -> 真实卡包撕裂 + 横向光效 -> GameScene 入场
                                       -> BtnBack -> 卡包返回列表并关闭面板
@@ -227,7 +227,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 - `LoadingScene.Start` 初始化 `JsonLocalStore`、`SqliteLocalStore`、`GameTaskUtility` 和 `CardPackDataUtility`。
 - `Assets/Scripts/Model` 有意保持单层扁平目录。相关纯 C# 类型按以下方式合并：`GameManager` 位于 `GameDefine.cs`，CSV 解析类型位于 `GameConfigRepository.cs`，`JsonLocalStore`、`SqliteLocalStore`、`GameSettingsData` 和 `GameSettingsUtility` 位于 `LocalDataStore.cs`，积分类型和 `GameScoreUtility` 位于 `GameTaskUtility.cs`，`GameFontUtility` 位于 `GameCommonUtility.cs`。公开类型名和调用点保持不变。
 - Model 当前保留 7 个脚本。`CardPackDataUtility`、`GameTaskUtility`、`GameConfigRepository`、`CardPackRewardFlyTransition` 和 `GameDefine` 属于大型或独立模块，不为减少文件数量继续互相合并。旧 `GameAnimationUtility` 与 `CardFxRuntimeUtility` 已随开包特效一起删除。
-- MainScene 的卡包选择、居中放大、`PanelBagSelect`、开包输入和 2D 缺失资源回退逻辑保持不变。选中态在隐藏选中槽位后临时隐藏软件鼠标，生成不包含鼠标的四分之一分辨率背景截图并放大虚化，再立即恢复鼠标并叠加半透明 Panel 压暗；选中卡包使用更高排序层保持清晰。运行时保持动态封面、`600 x 680` 设计尺寸、选中复原和进入 GameScene 的现有交互节奏。
+- MainScene 的卡包选择、居中放大、`PanelBagSelect`、开包输入和 2D 缺失资源回退逻辑保持不变。选中态在隐藏选中槽位后临时隐藏软件鼠标，生成不包含鼠标的四分之一分辨率背景截图并放大虚化，再立即恢复鼠标。虚化截图使用纯白不染色和 `0.45` Alpha 与原首页混合，让下方原画面透出 `55%`；`PanelBagSelect` 根 Image 的黑色视觉层完全透明，只继续负责 Raycast，不再引入灰调。选中卡包使用更高排序层保持清晰。运行时保持动态封面、`600 x 680` 设计尺寸、选中复原和进入 GameScene 的现有交互节奏。
 - 只有通过正常拆包进入 GameScene 时才播放一次入场：CardBag/棋盘从上方进入，PieceBoard 从下方进入，当前组 Piece 从棋盘附近错峰落入托盘，返回和提示按钮淡入；入场完成前屏蔽拖拽。托盘 Piece 在首次入场和切组入场全过程保持最终 `TrayScale`，不做临时放大，位移、旋转与淡入动画继续保留。对象在起始姿态保留两个渲染帧后才推进动画，单帧动画时间最多推进 `1/30s`，场景加载或首帧资源初始化卡顿不得吞掉入场过程。直接在编辑器启动 GameScene 保持即时初始化。
 - 每组完成后等待最后一片的绿色 ADD 滑光和本轮光点回弹全部结束，再将 CardBag/棋盘位置、相机正交尺寸和托盘平滑切换到下一组布局；棋盘主体动画约 `0.72s`，新组 Piece 从棋盘区域用约 `0.38s` 错峰进入托盘。切组动画期间锁定拖拽、提示和“一键完成”，普通卡包同样使用该流程。
 - 首次建组和后续切组自动适配棋盘时，继续先按活动槽位适配相机并居中，再限制 `GameBoard` 屏幕底边到可见托盘屏幕顶边的间距不超过游戏背景可视高度的 `10%`。只有超限时才向下平移整个 CardBag 根节点；不修改 `BoardScale`、相机缩放、托盘位置或 Piece 相对布局，托盘隐藏时不执行该限制。
@@ -341,7 +341,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 - 首页列表的卡包主体使用 `Assets/UI/PackImages/PackIconNNN.png` 静态图；`PackItem.prefab` 不嵌套 3D 卡包特效 Prefab，也不再包含旧 UGUI `PackHighlight` ADD 高光贴片。列表保留封面投影、尺寸图标、`ImgLight` 和美术 Animator。`PackNode.controller` 默认循环播放 `PackAniBreath`；程序不生成或覆盖呼吸曲线，只将完成且无活动会话的灰色卡包速度设为正常速度的 `1/3`，彩色及活动重玩卡包保持正常速度。
 - MainScene 主 Canvas 使用 `Screen Space - Camera`，`World Camera` 固定为场景 `Main Camera`，Plane Distance 为 `10`；`MainScene.ConfigureMainCanvas` 在运行时复用统一 Canvas 配置再次校正，确保 `PackItem` 封面、尺寸图标、`ImgLight` 和首页主 UI 经过同一摄像机渲染。
 - Unity 编辑器单独打开 Loading、Main、Game、Rank 或 Achieve 场景后，`CanvasDesignResolutionEditor` 会延迟一帧按根 `Canvas` 的世界边界，将 SceneView 恢复为正交正视并自动取景；这避免 Camera Canvas 与 Overlay Canvas 之间切换时继承歪斜视角，不修改场景 Selection、Canvas 配置或运行时行为。`EffectScene001` 不参与自动取景，以保留制作方的三维编辑视角。
-- 选中态使用独立 `Screen Space - Camera` Canvas 的 `Image` 显示同一张静态图，目标尺寸为 `600 x 680`；该 Canvas 与选择面板同样绑定 `Main Camera`，背景虚化、返回、拍照和重玩确认继续沿用现有流程。
+- 选中态使用独立 `Screen Space - Camera` Canvas 的 `Image` 显示同一张静态图，目标尺寸为 `600 x 680`；该 Canvas 与选择面板同样绑定 `Main Camera`。背景使用 `0.45` Alpha 的无染色虚化截图与原画面混合，不再叠加黑色蒙版；返回、拍照和重玩确认继续沿用现有流程。
   - 点击玩后切换到 `BgGame` 开包舞台；转场和卡包回弹结束后，从 `PackItem.prefab` 克隆 `PackNode` 到静态封面下，关闭克隆中的 `PackCover/PackSize`，只启用 `ImgLight`，恢复 Animator 正常速度并循环播放现有 `PackAni`。提示层按当前静态卡包 Rect 等比缩放；只有有效轻点或达到原横划门槛时才立即停止并释放，无效操作继续循环。列表中的 `ImgLight` 由 `PackAniBreath` 的美术配置决定，程序不修改 `PackAni.anim` 或 `PackAniBreath.anim` 的曲线。
   - 有效操作随机选择 `CardPackOpeningModel_001-006`，共用制作方 `CardPackAnimation.controller`；短名称正面网格的 `_MainTex` 在运行时替换为当前 `PackIconNNN`。长名称背面网格会显示制作方 `Bg01.png` 灰块，替换成封面又会形成第二层完整卡包，因此当前运行时禁用该 Renderer；FBX、骨骼、UV 和动画资源本体不修改。
 - 开包特效的混合模式和内部渲染层级归资源配置所有：`fx_chai_w_001.prefab` 保留各 ParticleSystemRenderer 自己的 `sortingOrder`，其 Material/Shader 决定 Additive 或 Alpha 混合；运行时代码不得把所有粒子 Renderer 强制改成同一排序值。卡包正反面 `test.mat`、`test01.mat` 的 Custom Render Queue 固定为 `2001` 并直接保存在 Material 中，运行时材质实例只替换动态贴图。

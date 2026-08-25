@@ -45,7 +45,7 @@ public class MainScene : MonoBehaviour
     private const float PhotoFlashFadeInDuration = 0.06f;
     private const float PhotoFlashHoldDuration = 0.04f;
     private const float PhotoFlashFadeOutDuration = 0.16f;
-    private const float BagSelectBackdropAlpha = 0.34f;
+    private const float BagSelectBlurredBackdropAlpha = 0.45f;
     private const float BagSelectPanelWorldDepth = -0.1f;
     private const float OverlayWorldDepth = -0.2f;
     private const float MainCanvasWorldDepth = 0f;
@@ -456,7 +456,7 @@ public class MainScene : MonoBehaviour
         if (panelImage != null)
         {
             var panelColor = panelImage.color;
-            panelColor.a = BagSelectBackdropAlpha;
+            panelColor.a = 0f;
             panelImage.color = panelColor;
         }
 
@@ -2987,7 +2987,11 @@ public class MainScene : MonoBehaviour
         }
 
         mBagSelectBackdropImage.texture = mBagSelectBackdropTexture;
-        mBagSelectBackdropImage.color = Color.white;
+        mBagSelectBackdropImage.color = new Color(
+            1f,
+            1f,
+            1f,
+            BagSelectBlurredBackdropAlpha);
     }
 
     private bool TryCreatePhotoTexture(int bagId, out Texture2D photoTexture)
@@ -3364,7 +3368,7 @@ public class MainScene : MonoBehaviour
             if (mBagSelectBackdropImage != null)
             {
                 var color = mBagSelectBackdropImage.color;
-                color.a = 1f - eased;
+                color.a = BagSelectBlurredBackdropAlpha * (1f - eased);
                 mBagSelectBackdropImage.color = color;
             }
 
