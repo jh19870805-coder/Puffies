@@ -1,5 +1,15 @@
 # 当前任务
 
+## 2026-08-25 等待撕包页循环滑光提示
+
+- 状态：代码接入完成并通过编译，等待 MainScene Play Mode 视觉验收。
+- 点击“玩”或确认重玩并完成 `BgGame` 开包舞台转场后，从 `PackItem.prefab` 克隆 `PackNode` 到当前 `SelectedCardPackImage` 下；克隆层关闭 `PackCover` 与 `PackSize`，只启用 `ImgLight` 并播放现有循环状态 `PackAni`。
+- 提示层以 Prefab 中 `PackCover` 的 `600 x 680` 为基准，按当前居中静态卡包的实际 Rect 等比缩放，因此继续使用美术在 `PackItem` 中配置的 ImgLight Sprite、位置、尺寸和动画曲线。
+- 只有现有输入逻辑确认有效轻点或横划达到开包门槛时，才立即隐藏并销毁循环滑光，再进入现有 `PlaySelectedPackage` 撕包流程；无效点击和未达门槛的滑动不会停止提示。
+- 清除卡包选择、重新进入开包舞台或销毁 MainScene 时统一释放提示层，避免返回首页后残留。
+- `PackAni.anim`、`PackNode.controller`、轻点/横划阈值、3D 撕包模型、`fx_chai_w_001` 和切场景时序均未修改；`PackItem/ImgLight` 保持 Prefab 默认隐藏，只在等待撕包页的运行时克隆中启用。
+- 验证：Runtime/Editor C# 编译通过，`0` 警告、`0` 错误；`git diff --check` 通过。仍需在 Play Mode 确认滑光位置、循环衔接、有效输入瞬间停止以及撕包动画正常开始。
+
 ## 2026-08-25 首页卡包撕口与完成态美术配置
 
 - 状态：三种卡包状态逻辑、进行中贴纸展示及完成态美术材质入口已完成并通过编译，等待 Unity 刷新与 Play Mode 视觉验收。

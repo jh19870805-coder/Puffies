@@ -70,8 +70,12 @@ public class MainScene : MonoBehaviour
     private const string PackItemPrefabEditorPath = "Assets/Prefabs/PackItem.prefab";
     private const string PackItemPrefabResourcesPath = "PackItem";
     private const string PackItemTemplateObjectName = "PackItemTemplate";
+    private const string PackNodeObjectName = "PackNode";
     private const string PackCoverObjectName = "PackCover";
     private const string PackSizeObjectName = "PackSize";
+    private const string PackLightObjectName = "ImgLight";
+    private const string OpeningHintAnimationObjectName = "OpeningPackHintAnimation";
+    private const string OpeningHintAnimationStateName = "PackAni";
     private const string InProgressPackPiecesObjectName = "ProgressPieces";
     private const string PackTornMaskFilePrefix = "PackMask";
     private const string PackNameTextObjectName = "NameText";
@@ -145,6 +149,7 @@ public class MainScene : MonoBehaviour
     private Canvas mSelectedPackageOverlayCanvas;
     private Image mSelectedPackageOverlayImage;
     private RectTransform mSelectedPackageOverlayRect;
+    private GameObject mOpeningHintAnimationRoot;
     private CardPackOpeningEffect mCardPackOpeningEffect;
     private CanvasGroup mMainCanvasGroup;
     private CanvasGroup mBagSelectPanelCanvasGroup;
@@ -231,6 +236,7 @@ public class MainScene : MonoBehaviour
 
     private void OnDestroy()
     {
+        StopOpeningHintAnimation();
         if (mSelectedPackageOverlayCanvas != null)
         {
             Destroy(mSelectedPackageOverlayCanvas.gameObject);
@@ -3291,6 +3297,7 @@ public class MainScene : MonoBehaviour
 
     private IEnumerator EnterCardPackOpeningStage()
     {
+        StopOpeningHintAnimation();
         mIsPlayingAnimation = true;
         SetBagSelectButtonsInteractable(false);
         SetUnselectedPackageVisualsVisible(false);
@@ -3370,6 +3377,7 @@ public class MainScene : MonoBehaviour
             halfSettleDuration);
 
         StartCoroutine(GameManager.PreloadGameScene(mSelectedBagId));
+        StartOpeningHintAnimation();
         mIsPlayingAnimation = false;
         mIsAwaitingTearSwipe = true;
         mIsTrackingTearSwipe = false;
@@ -3708,6 +3716,7 @@ public class MainScene : MonoBehaviour
             return;
         }
 
+        StopOpeningHintAnimation();
         mIsAwaitingTearSwipe = false;
         mIsTrackingTearSwipe = false;
         mIsTrackingTearTap = false;
@@ -3716,6 +3725,7 @@ public class MainScene : MonoBehaviour
 
     private void ClearPackageSelection()
     {
+        StopOpeningHintAnimation();
         if (mReplayPanelRoot != null)
         {
             SetPanelVisible(mReplayPanelRoot, false);
@@ -3736,6 +3746,92 @@ public class MainScene : MonoBehaviour
         mSelectedPackageDisplayPosition = default;
         mSelectedPackageDisplaySize = default;
         mSelectedPackageStageSize = default;
+    }
+
+    private void StartOpeningHintAnimation()
+    {
+        StopOpeningHintAnimation();
+        if (mPackageItemTemplate == null || mSelectedPackageOverlayRect == null)
+        {
+            Debug.LogWarning("MainScene: opening hint animation skipped; PackItem template or selected cover is missing.");
+            return;
+        }
+
+        var packNodeTemplate = FindChild(mPackageItemTemplate.transform, PackNodeObjectName);
+        if (packNodeTemplate == null)
+        {
+            Debug.LogWarning("MainScene: opening hint animation skipped; PackItem/PackNode is missing.");
+            return;
+        }
+
+        var hintObject = Instantiate(
+            packNodeTemplate.gameObject,
+            mSelectedPackageOverlayRect,
+            false);
+        hintObject.name = OpeningHintAnimationObjectName;
+
+        var hintRect = hintObject.GetComponent<RectTransform>();
+        var sourceCoverRect = FindChild(packNodeTemplate, PackCoverObjectName) as RectTransform;
+        if (hintRect == null || sourceCoverRect == null)
+        {
+            Destroy(hintObject);
+            Debug.LogWarning("MainScene: opening hint animation skipped; PackNode RectTransform is incomplete.");
+            return;
+        }
+
+        hintRect.anchorMin = new Vector2(0.5f, 0.5f);
+        hintRect.anchorMax = new Vector2(0.5f, 0.5f);
+        hintRect.pivot = new Vector2(0.5f, 0.5f);
+        hintRect.anchoredPosition = Vector2.zero;
+        var sourceSize = sourceCoverRect.rect.size;
+        var displaySize = mSelectedPackageOverlayRect.rect.size;
+        var hintScale = Mathf.Min(
+            displaySize.x / Mathf.Max(1f, sourceSize.x),
+            displaySize.y / Mathf.Max(1f, sourceSize.y));
+        hintRect.localScale = Vector3.one * hintScale;
+        hintRect.SetAsLastSibling();
+
+        var cover = FindChild(hintObject.transform, PackCoverObjectName);
+        if (cover != null)
+        {
+            cover.gameObject.SetActive(false);
+        }
+
+        var size = FindChild(hintObject.transform, PackSizeObjectName);
+        if (size != null)
+        {
+            size.gameObject.SetActive(false);
+        }
+
+        var light = FindChild(hintObject.transform, PackLightObjectName);
+        var animator = hintObject.GetComponent<Animator>();
+        if (light == null || animator == null || animator.runtimeAnimatorController == null)
+        {
+            hintObject.SetActive(false);
+            Destroy(hintObject);
+            Debug.LogWarning("MainScene: opening hint animation skipped; PackItem ImgLight or Animator is missing.");
+            return;
+        }
+
+        light.gameObject.SetActive(true);
+        hintObject.SetActive(true);
+        animator.enabled = true;
+        animator.Rebind();
+        animator.Play(OpeningHintAnimationStateName, 0, 0f);
+        animator.Update(0f);
+        mOpeningHintAnimationRoot = hintObject;
+    }
+
+    private void StopOpeningHintAnimation()
+    {
+        if (mOpeningHintAnimationRoot == null)
+        {
+            return;
+        }
+
+        mOpeningHintAnimationRoot.SetActive(false);
+        Destroy(mOpeningHintAnimationRoot);
+        mOpeningHintAnimationRoot = null;
     }
 
 }
