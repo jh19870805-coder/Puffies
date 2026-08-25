@@ -1,5 +1,24 @@
 # 当前任务
 
+## 2026-08-25 已完成卡包重玩返回状态
+
+- 状态：实现完成并通过 Runtime/Editor 编译，等待 Play Mode 验收。
+- 已完成卡包确认重玩时，MainScene 清除旧会话并创建新的空会话，确保进入 GameScene 时棋盘为空。
+- GameScene 记录进入时该卡包是否已经历史完成。历史已完成卡包重玩返回时，统一按 Prefab 的实际 `Piece01II` 清单检查第一组：第一组未完成则删除本次临时会话，首页恢复灰色撕开卡包和“重玩”，下次确认重玩仍从空棋盘开始；第一组已完成则保留进度，首页显示彩色撕开卡包和本关碎片，后续可继续玩。
+- 第一组完成判定已提取到 `CardPackDataUtility.HasCompletedFirstPuzzleGroup`，MainScene 展示和 GameScene 返回共用同一规则。
+- 首次尚未完成的卡包不是临时重玩，未通关返回时继续保留活动会话和已正确拼入的 Piece，后续仍可续玩。
+- 修改文件：`Assets/Scripts/Model/CardPackDataUtility.cs`、`Assets/Scripts/Controller/MainScene.cs`、`Assets/Scripts/Controller/GameScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
+- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 编译通过，均为 `0` 警告、`0` 错误；`git diff --check` 通过。仍需 Play Mode 分别验证已完成卡包重玩在第一组完成前返回、第一组完成后返回，以及首次未完成卡包正常续玩。
+
+## 2026-08-25 第一组完成后显示撕开状态
+
+- 状态：实现完成并通过 Runtime/Editor 编译与全 CardBag 资源检查，等待 MainScene Play Mode 验收。
+- 活动拼图会话不再直接代表卡包已撕开。MainScene 会读取当前会话已正确拼入的 Piece，并扫描对应 `CardBagNNN.prefab` 的全部 `Piece01II`；只有第一组全部完成，才显示彩色撕口、`PackBg` 和最多 3 片本关装饰碎片。
+- 新进入游戏但尚未完成第一组、第一组只完成部分，以及已完成卡包开始重玩但当前第一组尚未完成时，首页均显示完整彩色卡包；完成且没有活动会话的卡包继续显示完成态撕开卡包。
+- 判定使用 Prefab 实际第一组清单，不写死第一组片数；缺少 Prefab 或 `Piece01II` 时保持完整状态并输出警告。
+- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
+- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 编译通过，均为 `0` 警告、`0` 错误；23 个 CardBag Prefab 均存在合法 `Piece01II`，第一组片数范围为 `1~14`；`git diff --check` 通过。仍需 MainScene Play Mode 验证第一组完成前、完成后、继续游戏、重玩和整包完成状态。
+
 ## 2026-08-25 撕包页面卡包范围内滑动
 
 - 状态：实现完成并通过 Runtime/Editor 编译，等待 MainScene Play Mode 验收。

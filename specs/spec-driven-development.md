@@ -780,6 +780,9 @@
 5. `PackSize` 不再由程序创建或切换置灰材质；其颜色和材质完全保留 Prefab 美术配置。
 6. WHEN 首页卡包显示任意撕开状态 THEN 系统 SHALL 显示 Prefab 配置的 `PackBg`；未撕开的卡包 SHALL 隐藏 `PackBg`。
 7. WHEN 撕开卡包存在进行中贴纸 THEN 显示层级 SHALL 为 `PackBg < ProgressPieces < PackCover`。
+8. WHEN 卡包存在活动拼图会话 BUT 对应 `CardBagNNN.prefab` 的第一组 `Piece01II` 尚未全部完成 THEN 系统 SHALL 显示完整彩色卡包，并隐藏撕口、`PackBg` 和进行中装饰贴纸。
+9. WHEN 活动会话的全部第一组 `Piece01II` 均已正确拼入 THEN 系统 SHALL 显示彩色撕开卡包、`PackBg` 和进行中装饰贴纸；第一组片数 SHALL 从 Prefab 实际内容读取，不得写死。
+10. WHEN 已完成卡包确认重玩 THEN 系统 SHALL 清除旧进度并立即创建新的空活动会话，进入关卡时棋盘 SHALL 为空；WHEN 重玩在第一组完成前返回首页 THEN 系统 SHALL 删除临时会话，首页 SHALL 恢复灰色撕开状态和“重玩”，再次重玩仍从空棋盘开始；WHEN 重玩在第一组完成后返回首页 THEN 系统 SHALL 保留进度，首页 SHALL 显示彩色撕开状态和本关碎片并支持续玩。首次尚未完成卡包的正常进度 SHALL 始终保存。
 
 ### 设计与任务
 
@@ -788,6 +791,8 @@
 - [x] 3. 删除 `MainScene` 中写死的完成态灰度值、Shader 灰度属性写入及 `PackSize` 运行时置灰材质，只保留撕口蒙版注入与资源释放。
 - [x] 4. Runtime/Editor 程序集编译通过，均为 `0` 警告、`0` 错误；Prefab 脚本与材质 GUID 引用完整，`git diff --check` 通过。Unity 当前占用工程且尚未自动刷新，仍需回到编辑器触发资源刷新，并在 MainScene 目视验收三种卡包状态及灰色蒙版效果。
 - [x] 5. 接入 `PackBg` 撕开状态显隐、列表尺寸适配和可见性同步，并保证进行中贴纸位于背景上方、封面下方。
+- [x] 6. 将活动会话撕开判定改为 Prefab 第一组 Piece 全量完成判定，并让进行中装饰贴纸使用同一门槛。
+- [x] 7. 确认重玩时建立空临时会话；已完成卡包返回时按第一组完成状态决定丢弃或保留会话，首次游玩会话始终保留。
 
 ## 2026-08-25 - 等待撕包页循环滑光提示
 

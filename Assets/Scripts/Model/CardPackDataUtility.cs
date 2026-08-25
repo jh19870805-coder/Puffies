@@ -441,6 +441,55 @@ public static class CardPackDataUtility
         }
     }
 
+    public static bool HasCompletedFirstPuzzleGroup(int packId)
+    {
+        if (!TryGetPlacedPieceNumbers(packId, out var placedPieceNumbers)
+            || placedPieceNumbers.Count == 0)
+        {
+            return false;
+        }
+
+        var cardBagPrefab = Resources.Load<GameObject>(
+            GameDefine.FormatCardBagPrefabResourcesPath(packId));
+        if (cardBagPrefab == null)
+        {
+            Debug.LogWarning(
+                $"CardPackDataUtility: first group check failed; CardBag prefab not found. packId={packId}");
+            return false;
+        }
+
+        var foundFirstGroupPiece = false;
+        var transforms = cardBagPrefab.GetComponentsInChildren<Transform>(true);
+        for (var i = 0; i < transforms.Length; i++)
+        {
+            var pieceTransform = transforms[i];
+            if (pieceTransform == null
+                || !GameDefine.TryParsePieceObjectName(
+                    pieceTransform.gameObject.name,
+                    out var groupNumber,
+                    out _,
+                    out var pieceNumber)
+                || groupNumber != 1)
+            {
+                continue;
+            }
+
+            foundFirstGroupPiece = true;
+            if (!placedPieceNumbers.Contains(pieceNumber))
+            {
+                return false;
+            }
+        }
+
+        if (!foundFirstGroupPiece)
+        {
+            Debug.LogWarning(
+                $"CardPackDataUtility: first group check failed; CardBag has no Piece01II group. packId={packId}");
+        }
+
+        return foundFirstGroupPiece;
+    }
+
     public static bool TryRecordPlacedPiece(int packId, int pieceNumber)
     {
         return TryRecordPlacedPieces(packId, new[] { pieceNumber });

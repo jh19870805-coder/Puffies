@@ -1072,6 +1072,12 @@ public class MainScene : MonoBehaviour
                 $"MainScene: failed to reset puzzle session before replay. packId={mSelectedBagId}");
         }
 
+        if (!CardPackDataUtility.TryEnsurePuzzleSession(mSelectedBagId))
+        {
+            Debug.LogWarning(
+                $"MainScene: failed to create puzzle session for replay. packId={mSelectedBagId}");
+        }
+
         SetSelectedPackageImageVisible(true);
         mPlayAnimationCoroutine = StartCoroutine(EnterCardPackOpeningStage());
     }
@@ -1444,7 +1450,9 @@ public class MainScene : MonoBehaviour
             && record.LifecycleState == CardPackLifecycleState.Completed;
         var hasActiveSession = CardPackDataUtility.HasActivePuzzleSession(packId);
         var showCompletedState = wasCompleted && !hasActiveSession;
-        var showTornState = hasActiveSession || wasCompleted;
+        var hasCompletedFirstGroup = hasActiveSession
+            && CardPackDataUtility.HasCompletedFirstPuzzleGroup(packId);
+        var showTornState = showCompletedState || hasCompletedFirstGroup;
         ApplyPackageTornMask(
             entry.Image,
             entry.VisualSettings,
@@ -1454,7 +1462,7 @@ public class MainScene : MonoBehaviour
         SetPackageBackgroundVisible(entry, true);
         ApplyPackageSizeVisual(entry.SizeImage, packId);
         ApplyPackageBreathingAnimation(entry, showCompletedState);
-        ApplyInProgressPackagePieces(entry, packId, hasActiveSession);
+        ApplyInProgressPackagePieces(entry, packId, hasCompletedFirstGroup);
         if (CardPackRewardFlyTransition.IsPackPending(packId))
         {
             SetPackageVisualsVisible(entry, false);
@@ -1602,9 +1610,9 @@ public class MainScene : MonoBehaviour
     private void ApplyInProgressPackagePieces(
         PackageEntry entry,
         int packId,
-        bool hasActiveSession)
+        bool shouldShowPieces)
     {
-        if (entry == null || entry.Image == null || !hasActiveSession)
+        if (entry == null || entry.Image == null || !shouldShowPieces)
         {
             return;
         }
