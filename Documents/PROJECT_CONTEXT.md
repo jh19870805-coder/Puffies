@@ -106,7 +106,7 @@ Assets/
 - 不要重命名 `Resources`；代码中存在硬编码资源路径。
 - GameScene 根据选中 PackId 动态加载 `Resources/CardBagPrefabs/CardBagNNN.prefab`。源贴图位于 `UI/CardBags/CardBagNNN/`，通过 Prefab 的 Sprite 引用进入构建，不放入 StreamingAssets。
 - `Assets/Resources/Effects/` 保存制作方的新撕包模型、Animator、材质、Shader 和粒子 Prefab；`Assets/Scenes/EffectScene001.unity` 是制作方效果与时间轴参考场景，不作为游戏入口。
-- 当前卡包列表、选中放大与 `BgGame` 等待输入阶段只使用静态封面；收到开包输入后才创建 3D 撕裂模型和粒子资源。
+- 当前卡包列表和选中放大阶段使用静态封面；`BgGame` 等待输入阶段在静态封面上叠加从 `PackItem/PackNode` 克隆的 `ImgLight` 循环滑光提示，但不创建 3D 撕裂模型或正式撕包粒子。收到有效开包输入后立即移除提示层，再创建 3D 撕裂模型和粒子资源。
 
 ---
 
@@ -123,7 +123,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
                     -> BtnData       -> PanelSave -> BtnClose / BtnReturn -> 关闭存档面板
       -> 已解锁卡包运行时列表项 -> 居中放大 + 半透明压暗背景 + PanelBagSelect
                                       -> BtnPlay/重玩 -> BgGame 开包舞台
-                                                         -> 轻点卡包 / 横划 -> 真实卡包撕裂 + 横向光效 -> GameScene 入场
+                                                         -> ImgLight 循环滑光 -> 轻点卡包 / 横划 -> 真实卡包撕裂 + 横向光效 -> GameScene 入场
                                       -> BtnBack -> 卡包返回列表并关闭面板
           -> BtnReturn -> Main
           -> RewardPanel / BtnFinish -> Main
@@ -342,7 +342,8 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 - MainScene 主 Canvas 使用 `Screen Space - Camera`，`World Camera` 固定为场景 `Main Camera`，Plane Distance 为 `10`；`MainScene.ConfigureMainCanvas` 在运行时复用统一 Canvas 配置再次校正，确保 `PackItem` 封面、尺寸图标、`ImgLight` 和首页主 UI 经过同一摄像机渲染。
 - Unity 编辑器单独打开 Loading、Main、Game、Rank 或 Achieve 场景后，`CanvasDesignResolutionEditor` 会延迟一帧按根 `Canvas` 的世界边界，将 SceneView 恢复为正交正视并自动取景；这避免 Camera Canvas 与 Overlay Canvas 之间切换时继承歪斜视角，不修改场景 Selection、Canvas 配置或运行时行为。`EffectScene001` 不参与自动取景，以保留制作方的三维编辑视角。
 - 选中态使用独立 `Screen Space - Camera` Canvas 的 `Image` 显示同一张静态图，目标尺寸为 `600 x 680`；该 Canvas 与选择面板同样绑定 `Main Camera`，背景虚化、返回、拍照和重玩确认继续沿用现有流程。
-  - 点击玩后切换到 `BgGame` 开包舞台并等待玩家轻点或横划。有效操作随机选择 `CardPackOpeningModel_001-006`，共用制作方 `CardPackAnimation.controller`；短名称正面网格的 `_MainTex` 在运行时替换为当前 `PackIconNNN`。长名称背面网格会显示制作方 `Bg01.png` 灰块，替换成封面又会形成第二层完整卡包，因此当前运行时禁用该 Renderer；FBX、骨骼、UV 和动画资源本体不修改。
+  - 点击玩后切换到 `BgGame` 开包舞台；转场和卡包回弹结束后，从 `PackItem.prefab` 克隆 `PackNode` 到静态封面下，关闭克隆中的 `PackCover/PackSize`，只启用 `ImgLight` 并循环播放现有 `PackAni`。提示层按当前静态卡包 Rect 等比缩放；只有有效轻点或达到原横划门槛时才立即停止并释放，无效操作继续循环。列表中的 `ImgLight` 保持默认隐藏，程序不修改 `PackAni.anim` 与 `PackNode.controller` 的美术曲线。
+  - 有效操作随机选择 `CardPackOpeningModel_001-006`，共用制作方 `CardPackAnimation.controller`；短名称正面网格的 `_MainTex` 在运行时替换为当前 `PackIconNNN`。长名称背面网格会显示制作方 `Bg01.png` 灰块，替换成封面又会形成第二层完整卡包，因此当前运行时禁用该 Renderer；FBX、骨骼、UV 和动画资源本体不修改。
 - 开包特效的混合模式和内部渲染层级归资源配置所有：`fx_chai_w_001.prefab` 保留各 ParticleSystemRenderer 自己的 `sortingOrder`，其 Material/Shader 决定 Additive 或 Alpha 混合；运行时代码不得把所有粒子 Renderer 强制改成同一排序值。卡包正反面 `test.mat`、`test01.mat` 的 Custom Render Queue 固定为 `2001` 并直接保存在 Material 中，运行时材质实例只替换动态贴图。
 - 制作方 Timeline 中骨骼动画先启动，`fx_chai_w_001` 在 `0.5s` 后启动并占用约 `3.033s` 的正式控制轨道；运行时沿用这一相对启动时序，但进入 `GameScene` 的等待只覆盖模型和滑光的主要可见动作，不再等待控制轨道或模型 Clip 的静止尾段。当前模型 Clip 约 `1.833s`，主要可见动作上限为 `1.6s`；滑光主要窗口按启动后的 `1.1s` 计算，因此正常切换下限为模型启动后约 `1.6s`。正式参考是 `EffectScene001` Timeline 绑定的主 Canvas 下实例，不是场景中另一份世界空间演示实例。开包流程直接复用 MainScene 场景 `Canvas/PackObject` 下已调好的 `fx_chai_w_001` Prefab 实例，不再通过 `Resources.Load/Instantiate` 创建光效，也不覆盖根或子节点 Scale、Start Size、材质、粒子模块和相对排序。主 Canvas 使用 `Screen Space - Camera` 并绑定 Main Camera，与开包模型由同一摄像机渲染；不得以“同一摄像机”为由移动用户配置的父节点。`PackObject` 容器保持激活，内部编辑器参照 `PackItem` 与光效实例默认关闭，播放时只激活光效实例。
 - `test.playable` 为正式滑光轨道保存了 `particleRandomSeed=1`。运行时手写播放必须复现该确定性：播放前只把启用 `Auto Random Seed` 的场景 ParticleSystem 实例设为种子 `1`，保证跨场景返回后重复开包仍与首次一致；这是 Timeline 播放状态，不得写回或修改粒子 Prefab 的美术参数。

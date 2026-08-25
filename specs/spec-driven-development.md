@@ -785,3 +785,19 @@
 - [x] 2. 新增完成态材质模板，并为 `PackCoverShadow.shader` 增加美术可调灰色颜色与可选灰色蒙版，不改变默认正常材质效果。
 - [x] 3. 删除 `MainScene` 中写死的完成态灰度值、Shader 灰度属性写入及 `PackSize` 运行时置灰材质，只保留撕口蒙版注入与资源释放。
 - [x] 4. Runtime/Editor 程序集编译通过，均为 `0` 警告、`0` 错误；Prefab 脚本与材质 GUID 引用完整，`git diff --check` 通过。Unity 当前占用工程且尚未自动刷新，仍需回到编辑器触发资源刷新，并在 MainScene 目视验收三种卡包状态及灰色蒙版效果。
+
+## 2026-08-25 - 等待撕包页循环滑光提示
+
+### 需求
+
+1. WHEN 玩家点击“玩”或确认重玩并完成开包舞台转场 THEN 系统 SHALL 在居中卡包上循环播放 `PackItem.prefab/PackNode/ImgLight` 的现有 `PackAni` 滑动动画。
+2. WHILE 系统等待玩家操作卡包 THEN 滑光 SHALL 持续循环，不得在一次动画结束后停止。
+3. WHEN 玩家在卡包上完成有效轻点或达到现有横划判定 THEN 系统 SHALL 立即停止并隐藏循环滑光，然后播放现有卡包撕开模型和粒子动画。
+4. IF 点击或滑动没有通过现有开包输入判定 THEN 系统 SHALL 继续播放循环滑光，不得提前停止。
+5. 列表中的 `ImgLight` 默认隐藏规则、`PackAni` 美术曲线、现有撕包输入门槛、3D 模型、`fx_chai_w_001` 和切场景时序不得改变。
+
+### 设计与任务
+
+- [x] 1. 进入等待撕包状态后，从 `PackItem` 模板克隆 `PackNode` 动画层到 `SelectedCardPackImage`，隐藏 `PackCover/PackSize`，只启用 `ImgLight` 和现有 Animator。
+- [x] 2. 在有效轻点/横划统一入口、清除选择和场景销毁时停止并释放提示动画层。
+- [x] 3. Runtime/Editor 程序集编译通过，均为 `0` 警告、`0` 错误；`PackAni.anim`、`PackNode.controller`、输入阈值和正式撕包资源无修改，`git diff --check` 通过。仍需 MainScene Play Mode 目视验收提示位置、循环和交接时机。
