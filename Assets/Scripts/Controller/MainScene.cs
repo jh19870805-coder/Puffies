@@ -77,6 +77,7 @@ public class MainScene : MonoBehaviour
     private const string PackItemTemplateObjectName = "PackItemTemplate";
     private const string PackNodeObjectName = "PackNode";
     private const string PackCoverObjectName = "PackCover";
+    private const string PackBackgroundObjectName = "PackBg";
     private const string PackSizeObjectName = "PackSize";
     private const string PackLightObjectName = "ImgLight";
     private const string OpeningHintAnimationObjectName = "OpeningPackHintAnimation";
@@ -226,6 +227,7 @@ public class MainScene : MonoBehaviour
         public int BagId;
         public GameObject Root;
         public Image Image;
+        public Image BackgroundImage;
         public Image SizeImage;
         public PackCoverVisualSettings VisualSettings;
         public Animator PackAnimator;
@@ -233,6 +235,7 @@ public class MainScene : MonoBehaviour
         public List<InProgressPackagePieceAnimation> ProgressPieceAnimations;
         public RectTransform RectTransform;
         public bool SuppressDisplay;
+        public bool ShowTornBackground;
     }
 
     private sealed class InProgressPackagePieceAnimation
@@ -1375,13 +1378,16 @@ public class MainScene : MonoBehaviour
         var coverImage = visualSettings != null && visualSettings.PackCover != null
             ? visualSettings.PackCover
             : FindChild(slotObject.transform, PackCoverObjectName)?.GetComponent<Image>() ?? rootImage;
+        var backgroundImage = FindChild(slotObject.transform, PackBackgroundObjectName)?.GetComponent<Image>();
         var sizeImage = FindChild(slotObject.transform, PackSizeObjectName)?.GetComponent<Image>();
         var packAnimator = FindChild(slotObject.transform, PackNodeObjectName)?.GetComponent<Animator>();
+        EnsurePackageBackgroundBehindCover(backgroundImage, coverImage);
         PreparePagedPackageItem(
             slotObject,
             rootRect,
             rootImage,
             coverImage,
+            backgroundImage,
             sizeImage);
         EnsurePackageInteractionHandler(slotObject, coverImage, packId);
 
@@ -1390,6 +1396,7 @@ public class MainScene : MonoBehaviour
             BagId = packId,
             Root = slotObject,
             Image = coverImage,
+            BackgroundImage = backgroundImage,
             SizeImage = sizeImage,
             VisualSettings = visualSettings,
             PackAnimator = packAnimator,
@@ -1441,11 +1448,14 @@ public class MainScene : MonoBehaviour
             && record.LifecycleState == CardPackLifecycleState.Completed;
         var hasActiveSession = CardPackDataUtility.HasActivePuzzleSession(packId);
         var showCompletedState = wasCompleted && !hasActiveSession;
+        var showTornState = hasActiveSession || wasCompleted;
         ApplyPackageTornMask(
             entry.Image,
             entry.VisualSettings,
-            hasActiveSession || wasCompleted,
+            showTornState,
             showCompletedState);
+        entry.ShowTornBackground = showTornState;
+        SetPackageBackgroundVisible(entry, true);
         ApplyPackageSizeVisual(entry.SizeImage, packId);
         ApplyPackageBreathingAnimation(entry, showCompletedState);
         ApplyInProgressPackagePieces(entry, packId, hasActiveSession);
@@ -1656,6 +1666,8 @@ public class MainScene : MonoBehaviour
         {
             return;
         }
+
+        EnsurePackageBackgroundBehindCover(entry.BackgroundImage, entry.Image);
 
         var piecesRootObject = new GameObject(
             InProgressPackPiecesObjectName,
@@ -1893,6 +1905,7 @@ public class MainScene : MonoBehaviour
                 && entry.Root.activeInHierarchy
                 && IsRectVisibleInViewport(anchor, viewport);
             SetPackageCoverVisible(entry, shouldRender);
+            SetPackageBackgroundVisible(entry, shouldRender);
             SetPackageSizeImageVisible(entry, shouldRender);
             SetPackageProgressPiecesVisible(entry, shouldRender);
         }
@@ -1967,6 +1980,22 @@ public class MainScene : MonoBehaviour
         {
             entry.Image.enabled = visible;
         }
+    }
+
+    private static void SetPackageBackgroundVisible(PackageEntry entry, bool visible)
+    {
+        if (entry?.BackgroundImage == null)
+        {
+            return;
+        }
+
+        var backgroundObject = entry.BackgroundImage.gameObject;
+        if (backgroundObject.activeSelf != entry.ShowTornBackground)
+        {
+            backgroundObject.SetActive(entry.ShowTornBackground);
+        }
+
+        entry.BackgroundImage.enabled = visible && entry.ShowTornBackground;
     }
 
     private static void SetPackageSizeImageVisible(PackageEntry entry, bool visible)
@@ -2791,6 +2820,7 @@ public class MainScene : MonoBehaviour
         RectTransform rootRect,
         Image rootImage,
         Image coverImage,
+        Image backgroundImage,
         Image sizeImage)
     {
         if (rootRect != null)
@@ -2822,13 +2852,24 @@ public class MainScene : MonoBehaviour
             coverImage.raycastTarget = false;
             coverImage.preserveAspect = true;
             var coverRect = coverImage.rectTransform;
-            ScaleOverlayWithCover(sizeImage != null ? sizeImage.rectTransform : null, coverRect.sizeDelta);
+            var sourceCoverSize = coverRect.sizeDelta;
+            ScaleOverlayWithCover(
+                backgroundImage != null ? backgroundImage.rectTransform : null,
+                sourceCoverSize);
+            ScaleOverlayWithCover(
+                sizeImage != null ? sizeImage.rectTransform : null,
+                sourceCoverSize);
             coverRect.anchorMin = new Vector2(0.5f, 0.5f);
             coverRect.anchorMax = new Vector2(0.5f, 0.5f);
             coverRect.pivot = new Vector2(0.5f, 0.5f);
             coverRect.anchoredPosition = Vector2.zero;
             coverRect.sizeDelta = new Vector2(PackageCoverWidth, PackageCoverHeight);
             coverRect.localScale = Vector3.one;
+        }
+
+        if (backgroundImage != null)
+        {
+            backgroundImage.raycastTarget = false;
         }
 
         var nameText = FindChild(itemObject.transform, PackNameTextObjectName)?.GetComponent<TMP_Text>();
@@ -2918,6 +2959,26 @@ public class MainScene : MonoBehaviour
         return null;
     }
 
+    private static void EnsurePackageBackgroundBehindCover(
+        Image backgroundImage,
+        Image coverImage)
+    {
+        if (backgroundImage == null || coverImage == null)
+        {
+            return;
+        }
+
+        var backgroundTransform = backgroundImage.rectTransform;
+        var coverTransform = coverImage.rectTransform;
+        if (backgroundTransform.parent != coverTransform.parent
+            || backgroundTransform.GetSiblingIndex() < coverTransform.GetSiblingIndex())
+        {
+            return;
+        }
+
+        backgroundTransform.SetSiblingIndex(coverTransform.GetSiblingIndex());
+    }
+
     private static void SetPackageVisualsVisible(PackageEntry entry, bool visible)
     {
         if (entry == null)
@@ -2927,6 +2988,7 @@ public class MainScene : MonoBehaviour
 
         entry.SuppressDisplay = !visible;
         SetPackageCoverVisible(entry, visible);
+        SetPackageBackgroundVisible(entry, visible);
         SetPackageSizeImageVisible(entry, visible);
         SetPackageProgressPiecesVisible(entry, visible);
     }

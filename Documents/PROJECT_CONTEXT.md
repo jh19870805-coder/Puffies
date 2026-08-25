@@ -57,7 +57,8 @@ Unity **2022.3** / Built-in Render Pipeline 项目，使用 Linear 色彩空间�
 - 卡包生命周期保存在 SQLite `CardPacks` 表中，状态为 `Locked`、`Unlocked`、`InProgress` 或 `Completed`。
 - 当前拼图会话保存在 SQLite `CardPackPuzzleProgress` 表中；记录存在表示该卡包有一局可继续，已正确放置的 Piece 编号即时保存，整包完成后删除记录。
 - MainScene 卡包排序：上次列表展示后新发放的卡包优先展示一次，且最新发放的在前；随后依次为 `InProgress`、按解锁时间升序的 `Unlocked`、按首次完成时间升序的 `Completed`。PackId 是确定性并列排序依据；每日挑战优先级暂缓实现。
-- MainScene 所有生命周期状态均使用 `UI/PackImages/PackIconNNN.png` 静态封面。显示优先级为：存在活动会话时固定显示撕开彩色状态和最多 3 片本关贴纸；否则 `Completed` 显示撕开，并将封面、投影与尺寸标识按 `0.5` 强度置灰；其余显示完整彩色状态。选中放大页不继承列表的撕口、置灰材质或进行中贴纸。
+- MainScene 所有生命周期状态均使用 `UI/PackImages/PackIconNNN.png` 静态封面。显示优先级为：存在活动会话时固定显示撕开彩色状态和最多 3 片本关贴纸；否则 `Completed` 显示撕开，并切换为美术配置的完成态封面材质；其余显示完整彩色状态。所有撕开状态都显示 `PackBg`，进行中贴纸位于 `PackBg` 上方、`PackCover` 下方。程序不置灰 `PackSize`，也不覆盖完成态材质中的灰度参数。选中放大页不继承列表的撕口、`PackBg`、完成态材质或进行中贴纸。
+- `PackItem/CardPackEffect/PackNode` 的列表视觉顺序为 `PackBg`、运行时可选的 `ProgressPieces`、`PackCover`、`PackSize`、`ImgLight`。`PackBg` 默认关闭，仅在撕开状态启用；运行时按封面从 Prefab 原始尺寸到列表尺寸的比例同步缩放，并与封面、尺寸图标和进行中贴纸统一执行可见区域及面板显隐。
 - 任务实例、当前进度、下一个实例号、积分目标循环游标、贴纸目标循环游标和待结转积分保存在 JSON 根对象 `TaskProgressData`。
 - 业务进度不得使用 `PlayerPrefs`。
 

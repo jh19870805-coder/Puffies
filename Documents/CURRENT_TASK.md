@@ -1,5 +1,14 @@
 # 当前任务
 
+## 2026-08-25 撕开卡包背景与碎片层级
+
+- 状态：实现完成并通过 Runtime/Editor 编译，等待 MainScene Play Mode 视觉验收。
+- 所有撕开状态，包括存在活动拼图会话的彩色撕开卡包和已完成无活动会话的完成态撕开卡包，都会显示 `PackItem/PackNode/PackBg`；未撕开的普通卡包保持隐藏。
+- `PackBg` 沿用 Prefab 中的 `Bg01.png`、尺寸、颜色和材质，运行时只按封面从 `600x680` 到列表 `240x272` 的比例同步缩放，并关闭 Raycast，不覆盖美术参数。
+- 层级固定为 `PackBg < ProgressPieces < PackCover`。没有进行中碎片时仍保持 `PackBg < PackCover`；列表滚出可见区域、打开遮挡面板或选中卡包时，背景与该卡包其他列表视觉同步隐藏。
+- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Assets/Prefabs/PackItem.prefab`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
+- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 编译通过，均为 `0` 警告、`0` 错误；`git diff --check` 通过。仍需在 MainScene Play Mode 检查普通、进行中和完成三种状态以及 `PackBg < ProgressPieces < PackCover` 的实际视觉层级。
+
 ## 2026-08-25 进行中卡包碎片放大与浮动
 
 - 状态：实现完成并通过 Runtime/Editor 编译，等待 MainScene Play Mode 视觉验收。
