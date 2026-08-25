@@ -33,6 +33,7 @@ public class MainScene : MonoBehaviour
     private const float InProgressPackPieceMaxSize = 86f;
     private const float NormalPackBreathingSpeed = 1f;
     private const float CompletedPackBreathingSpeed = 1f / 3f;
+    private const float PackBreathingPhaseStep = 0.61803398875f;
     private const int BagSelectPanelSortingOrder = 20000;
     private const int SelectedPackageSortingOrder = 30000;
     private const int PhotoPanelSortingOrder = 32000;
@@ -45,13 +46,11 @@ public class MainScene : MonoBehaviour
     private const float PhotoFlashFadeInDuration = 0.06f;
     private const float PhotoFlashHoldDuration = 0.04f;
     private const float PhotoFlashFadeOutDuration = 0.16f;
-    private const float BagSelectBlurredBackdropAlpha = 0.45f;
     private const float BagSelectPanelWorldDepth = -0.1f;
     private const float OverlayWorldDepth = -0.2f;
     private const float MainCanvasWorldDepth = 0f;
     private const float OpeningStageBackgroundWorldDepth = 0f;
-    private const int BagSelectBlurDownsample = 2;
-    private const int BagSelectBlurPyramidLevels = 3;
+    private const float BagSelectGaussianBlurRadius = 8f;
     private const float OpeningStageTransitionDuration = 0.28f;
     private const float OpeningStageSettleDuration = 0.22f;
     private const float OpeningStageScaleRatio = 0.92f;
@@ -107,6 +106,7 @@ public class MainScene : MonoBehaviour
     private const string BagSelectPanelObjectName = "PanelBagSelect";
     private const string BagSelectCanvasObjectName = "PanelBagSelectCanvas";
     private const string BagSelectBackdropObjectName = "PanelBagSelectBlurredBackdrop";
+    private const string BagSelectBlurShaderResourcePath = "BagSelectGaussianBlur";
     private const string SelectedPackageCanvasObjectName = "SelectedCardPackCanvas";
     private const string SelectedPackageImageObjectName = "SelectedCardPackImage";
     private const string OpeningStageBackgroundObjectName = "CardPackOpeningStageBackground";
@@ -162,6 +162,7 @@ public class MainScene : MonoBehaviour
     private Material mOpeningStageBackgroundMaterial;
     private Sprite mOpeningStageBackgroundSprite;
     private RenderTexture mBagSelectBackdropTexture;
+    private Material mBagSelectBlurMaterial;
     private FakeSettingsSliderInput mMusicSlider;
     private FakeSettingsSliderInput mEffectSlider;
     private Toggle mWindowedToggle;
@@ -257,6 +258,12 @@ public class MainScene : MonoBehaviour
         }
 
         ReleaseBagSelectBackdropTexture();
+        if (mBagSelectBlurMaterial != null)
+        {
+            Destroy(mBagSelectBlurMaterial);
+            mBagSelectBlurMaterial = null;
+        }
+
         ReleaseGeneratedPhoto();
         ReleaseUsablePanelPreviewSprites();
         ReleasePackTornMaskResources();
@@ -1503,7 +1510,13 @@ public class MainScene : MonoBehaviour
             return;
         }
 
-        entry.PackAnimator.Play(PackBreathingAnimationStateName, 0, 0f);
+        var normalizedStartTime = Mathf.Repeat(
+            entry.BagId * PackBreathingPhaseStep,
+            1f);
+        entry.PackAnimator.Play(
+            PackBreathingAnimationStateName,
+            0,
+            normalizedStartTime);
         entry.PackAnimator.Update(0f);
     }
 
@@ -2935,63 +2948,112 @@ public class MainScene : MonoBehaviour
             yield break;
         }
 
-        var blurLevels = new List<RenderTexture>(BagSelectBlurPyramidLevels);
+        var blurWidth = screenshot.width;
+        var blurHeight = screenshot.height;
+        RenderTexture blurSource = null;
+        RenderTexture horizontalBlur = null;
         try
         {
-            Texture blurSource = screenshot;
-            for (var level = 0; level < BagSelectBlurPyramidLevels; level++)
-            {
-                var downsample = BagSelectBlurDownsample << level;
-                var levelWidth = Mathf.Max(1, screenshot.width / downsample);
-                var levelHeight = Mathf.Max(1, screenshot.height / downsample);
-                var blurLevel = RenderTexture.GetTemporary(
-                    levelWidth,
-                    levelHeight,
-                    0,
-                    RenderTextureFormat.ARGB32,
-                    RenderTextureReadWrite.Default);
-                blurLevel.filterMode = FilterMode.Bilinear;
-                blurLevel.wrapMode = TextureWrapMode.Clamp;
-                Graphics.Blit(blurSource, blurLevel);
-                blurLevels.Add(blurLevel);
-                blurSource = blurLevel;
-            }
-
-            for (var level = blurLevels.Count - 2; level >= 0; level--)
-            {
-                Graphics.Blit(blurSource, blurLevels[level]);
-                blurSource = blurLevels[level];
-            }
+            blurSource = RenderTexture.GetTemporary(
+                blurWidth,
+                blurHeight,
+                0,
+                RenderTextureFormat.ARGB32,
+                RenderTextureReadWrite.Default);
+            horizontalBlur = RenderTexture.GetTemporary(
+                blurWidth,
+                blurHeight,
+                0,
+                RenderTextureFormat.ARGB32,
+                RenderTextureReadWrite.Default);
+            blurSource.filterMode = FilterMode.Bilinear;
+            blurSource.wrapMode = TextureWrapMode.Clamp;
+            horizontalBlur.filterMode = FilterMode.Bilinear;
+            horizontalBlur.wrapMode = TextureWrapMode.Clamp;
+            Graphics.Blit(screenshot, blurSource);
 
             mBagSelectBackdropTexture = new RenderTexture(
-                blurLevels[0].width,
-                blurLevels[0].height,
+                blurWidth,
+                blurHeight,
                 0,
                 RenderTextureFormat.ARGB32)
             {
-                name = "BagSelectBlurredBackdropTexture",
+                name = "BagSelectGaussianBlurredBackdropTexture",
                 filterMode = FilterMode.Bilinear,
                 wrapMode = TextureWrapMode.Clamp
             };
             mBagSelectBackdropTexture.Create();
-            Graphics.Blit(blurSource, mBagSelectBackdropTexture);
+
+            if (TryGetBagSelectBlurMaterial(out var blurMaterial))
+            {
+                var sampleScale = BagSelectGaussianBlurRadius / 8f;
+                blurMaterial.SetFloat("_SampleScale", sampleScale);
+                blurMaterial.SetVector(
+                    "_BlurDirection",
+                    new Vector4(1f, 0f, 0f, 0f));
+                blurMaterial.SetFloat("_ConvertOutputToLinear", 0f);
+                Graphics.Blit(blurSource, horizontalBlur, blurMaterial);
+                blurMaterial.SetVector(
+                    "_BlurDirection",
+                    new Vector4(0f, 1f, 0f, 0f));
+                blurMaterial.SetFloat(
+                    "_ConvertOutputToLinear",
+                    QualitySettings.activeColorSpace == ColorSpace.Linear
+                        ? 1f
+                        : 0f);
+                Graphics.Blit(
+                    horizontalBlur,
+                    mBagSelectBackdropTexture,
+                    blurMaterial);
+            }
+            else
+            {
+                Graphics.Blit(blurSource, mBagSelectBackdropTexture);
+            }
         }
         finally
         {
-            for (var i = 0; i < blurLevels.Count; i++)
+            if (horizontalBlur != null)
             {
-                RenderTexture.ReleaseTemporary(blurLevels[i]);
+                RenderTexture.ReleaseTemporary(horizontalBlur);
+            }
+
+            if (blurSource != null)
+            {
+                RenderTexture.ReleaseTemporary(blurSource);
             }
 
             Destroy(screenshot);
         }
 
         mBagSelectBackdropImage.texture = mBagSelectBackdropTexture;
-        mBagSelectBackdropImage.color = new Color(
-            1f,
-            1f,
-            1f,
-            BagSelectBlurredBackdropAlpha);
+        mBagSelectBackdropImage.color = Color.white;
+    }
+
+    private bool TryGetBagSelectBlurMaterial(out Material blurMaterial)
+    {
+        if (mBagSelectBlurMaterial != null)
+        {
+            blurMaterial = mBagSelectBlurMaterial;
+            return true;
+        }
+
+        var blurShader = Resources.Load<Shader>(BagSelectBlurShaderResourcePath);
+        if (blurShader == null || !blurShader.isSupported)
+        {
+            Debug.LogWarning(
+                "MainScene: BagSelectGaussianBlur shader is missing or unsupported; using the downsampled backdrop without Gaussian blur.");
+            blurMaterial = null;
+            return false;
+        }
+
+        mBagSelectBlurMaterial = new Material(blurShader)
+        {
+            name = "BagSelectGaussianBlurRuntimeMaterial",
+            hideFlags = HideFlags.HideAndDontSave
+        };
+        blurMaterial = mBagSelectBlurMaterial;
+        return true;
     }
 
     private bool TryCreatePhotoTexture(int bagId, out Texture2D photoTexture)
@@ -3368,7 +3430,7 @@ public class MainScene : MonoBehaviour
             if (mBagSelectBackdropImage != null)
             {
                 var color = mBagSelectBackdropImage.color;
-                color.a = BagSelectBlurredBackdropAlpha * (1f - eased);
+                color.a = 1f - eased;
                 mBagSelectBackdropImage.color = color;
             }
 
