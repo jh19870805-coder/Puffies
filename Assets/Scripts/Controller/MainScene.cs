@@ -32,7 +32,7 @@ public class MainScene : MonoBehaviour
     private const int InProgressPackPieceCount = 3;
     private const float InProgressPackPieceMaxSize = 86f;
     private const float NormalPackBreathingSpeed = 1f;
-    private const float CompletedPackBreathingSpeed = 0.2f;
+    private const float CompletedPackBreathingSpeed = 1f / 3f;
     private const int BagSelectPanelSortingOrder = 20000;
     private const int SelectedPackageSortingOrder = 30000;
     private const int PhotoPanelSortingOrder = 32000;

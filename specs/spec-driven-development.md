@@ -807,13 +807,13 @@
 ### 需求
 
 1. WHEN 首页创建可见卡包列表项 THEN 系统 SHALL 默认循环播放美术提供的 `PackAniBreath` 呼吸动画。
-2. IF 卡包使用完成态灰色材质 THEN 系统 SHALL 以正常卡包 `1/5` 的速度播放同一呼吸动画，不得修改美术曲线或缩放幅度。
+2. IF 卡包使用完成态灰色材质 THEN 系统 SHALL 以正常卡包 `1/3` 的速度播放同一呼吸动画，不得修改美术曲线或缩放幅度。
 3. IF 已完成卡包存在活动重玩会话并恢复为彩色进行中状态 THEN 系统 SHALL 恢复正常呼吸速度。
 4. `BgGame` 等待撕包页的 ImgLight 提示 SHALL 继续显式播放 `PackAni` 且保持正常速度，不得继承灰色列表项速度。
 
 ### 设计与任务
 
 - [x] 1. 将 `PackAniBreath.anim` 添加到 `PackNode.controller` 并设为首页默认状态，保留 `PackAni` 供等待撕包页显式调用。
-- [x] 2. 在卡包状态刷新时设置列表项 Animator 速度：彩色 `1`、灰色 `0.2`；等待撕包提示克隆固定恢复为 `1`。
+- [x] 2. 在卡包状态刷新时设置列表项 Animator 速度：彩色 `1`、灰色 `1/3`；等待撕包提示克隆固定恢复为 `1`。
 - [x] 3. Runtime/Editor 程序集编译通过，均为 `0` 警告、`0` 错误；Controller 状态、Clip GUID、Prefab Controller GUID 和 Git 差异检查通过，`PackAni.anim`、`PackAniBreath.anim` 本体均未修改。
-- [x] 4. 美术已在 `develop` 的 `7c90569` 中把 6 秒根节点位置与旋转循环曲线保存进 `PackAniBreath.anim`；合并时保留美术生成的唯一 Animator 状态并设为默认状态，仍需 MainScene Play Mode 视觉验收正常卡包节奏和灰色卡包 `0.2` 倍速。
+- [x] 4. 美术已在 `develop` 的 `7c90569` 中把 6 秒根节点位置与旋转循环曲线保存进 `PackAniBreath.anim`；合并时保留美术生成的唯一 Animator 状态并设为默认状态，仍需 MainScene Play Mode 视觉验收正常卡包节奏和灰色卡包 `1/3` 倍速。

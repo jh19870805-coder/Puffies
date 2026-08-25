@@ -4,7 +4,7 @@
 
 - 状态：美术新版呼吸曲线、Controller 与运行时速度分流已合并，Runtime/Editor 编译通过；等待 MainScene Play Mode 视觉验收。
 - `PackNode.controller` 新增 `PackAniBreath` 状态并设为默认状态，Motion 引用美术提供的 `Assets/Animation/PackAniBreath.anim`；原 `PackAni` 状态继续保留给等待撕包页的循环滑光提示。
-- MainScene 创建卡包列表项时缓存 `PackNode` Animator。彩色未完成卡包和存在活动重玩会话的彩色卡包使用正常速度 `1`；只有 `Completed` 且无活动会话、实际显示完成态灰色材质的卡包使用 `0.2`，即动画节奏放慢 5 倍。
+- MainScene 创建卡包列表项时缓存 `PackNode` Animator。彩色未完成卡包和存在活动重玩会话的彩色卡包使用正常速度 `1`；只有 `Completed` 且无活动会话、实际显示完成态灰色材质的卡包使用 `1/3`，即动画节奏放慢 3 倍。
 - 等待撕包页克隆 `PackNode` 后显式恢复 Animator 速度 `1` 并播放 `PackAni`，不会继承灰色列表卡包的慢速设置。
 - 美术在 `develop` 的 `7c90569` 提交中重新保存了 `PackAniBreath.anim`，现在包含完整的 6 秒根节点位置与旋转循环曲线。合并冲突来自双方创建的同名 Animator 状态使用了不同内部 fileID；最终保留美术生成的状态 `5785946119623635755`，删除重复状态，并将其设为 Controller 默认状态。程序不写呼吸曲线、幅度或美术 Transform。
 - 验证：美术 Clip 曲线、Controller 唯一状态、Clip GUID 与 Prefab Controller GUID 引用一致；合并冲突标记已清除；`Assembly-CSharp.csproj` 和 `Assembly-CSharp-Editor.csproj` 均编译通过，`0` 警告、`0` 错误；`git diff --check` 通过。尚未进行 Play Mode 视觉验收。
