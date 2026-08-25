@@ -5,6 +5,7 @@ Shader "Puffies/UI/PackCoverShadow"
         [PerRendererData] _MainTex ("Sprite Texture", 2D) = "white" {}
         _TornMaskTex ("Torn Mask", 2D) = "black" {}
         [Toggle] _UseTornMask ("Use Torn Mask", Float) = 0
+        _GrayscaleAmount ("Grayscale Amount", Range(0, 1)) = 0
         _Color ("Cover Tint", Color) = (1,1,1,1)
         _ShadowColor ("Shadow Color / Opacity", Color) = (0.078,0.098,0.106,0.7)
         _ShadowOffsetX ("Shadow Offset X (Pixels)", Range(-200, 200)) = 0
@@ -99,6 +100,7 @@ Shader "Puffies/UI/PackCoverShadow"
             float _PaddingY;
             float _SpritePixelsPerUnit;
             float _UseTornMask;
+            float _GrayscaleAmount;
             float4 _ClipRect;
 
             fixed IsInsideSprite(float2 uv)
@@ -171,6 +173,11 @@ Shader "Puffies/UI/PackCoverShadow"
                     tex2D(_TornMaskTex, saturate(input.contentUv)).a,
                     saturate(_UseTornMask));
                 coverTexture.a *= maskKeep;
+                fixed luminance = dot(coverTexture.rgb, fixed3(0.299, 0.587, 0.114));
+                coverTexture.rgb = lerp(
+                    coverTexture.rgb,
+                    luminance.xxx,
+                    saturate(_GrayscaleAmount));
                 fixed4 cover = coverTexture * input.color;
 
                 float2 shadowOffset =

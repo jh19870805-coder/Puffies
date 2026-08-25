@@ -29,6 +29,9 @@ public class MainScene : MonoBehaviour
     private const int PackagesPerPageColumnCount = 6;
     private const int PackagesPerPage = PackagesPerPageRowCount * PackagesPerPageColumnCount;
     private const int PackTornMaskCount = 6;
+    private const int InProgressPackPieceCount = 3;
+    private const float InProgressPackPieceMaxSize = 86f;
+    private const float CompletedPackGrayscaleAmount = 0.5f;
     private const int BagSelectPanelSortingOrder = 20000;
     private const int SelectedPackageSortingOrder = 30000;
     private const int PhotoPanelSortingOrder = 32000;
@@ -70,6 +73,7 @@ public class MainScene : MonoBehaviour
     private const string PackItemTemplateObjectName = "PackItemTemplate";
     private const string PackCoverObjectName = "PackCover";
     private const string PackSizeObjectName = "PackSize";
+    private const string InProgressPackPiecesObjectName = "ProgressPieces";
     private const string PackTornMaskFilePrefix = "PackMask";
     private const string PackNameTextObjectName = "NameText";
     private const string MenuButtonObjectName = "BtnMenu";
@@ -120,12 +124,17 @@ public class MainScene : MonoBehaviour
     private static bool sHookedSceneLoaded;
     private static readonly int TornMaskTextureId = Shader.PropertyToID("_TornMaskTex");
     private static readonly int UseTornMaskId = Shader.PropertyToID("_UseTornMask");
+    private static readonly int GrayscaleAmountId = Shader.PropertyToID("_GrayscaleAmount");
+    private static readonly int ShadowColorId = Shader.PropertyToID("_ShadowColor");
+    private static readonly int PaddingXId = Shader.PropertyToID("_PaddingX");
+    private static readonly int PaddingYId = Shader.PropertyToID("_PaddingY");
 
     [SerializeField] private GameObject mPackageItemPrefab;
 
     private readonly Dictionary<int, PackageEntry> mPackageSlotsById = new Dictionary<int, PackageEntry>();
     private readonly Sprite[] mPackTornMaskSprites = new Sprite[PackTornMaskCount];
     private readonly Material[] mPackTornMaskMaterials = new Material[PackTornMaskCount];
+    private readonly Material[] mPackCompletedTornMaskMaterials = new Material[PackTornMaskCount];
     private readonly bool[] mPackTornMaskLoadAttempted = new bool[PackTornMaskCount];
     private readonly System.Random mPackTornMaskRandom = new System.Random();
     private GameObject mPackageItemTemplate;
@@ -150,6 +159,7 @@ public class MainScene : MonoBehaviour
     private Material mOpeningStageBackgroundMaterial;
     private Sprite mOpeningStageBackgroundSprite;
     private Material mPackCoverDefaultMaterial;
+    private Material mPackSizeGrayscaleMaterial;
     private RenderTexture mBagSelectBackdropTexture;
     private FakeSettingsSliderInput mMusicSlider;
     private FakeSettingsSliderInput mEffectSlider;
@@ -211,6 +221,7 @@ public class MainScene : MonoBehaviour
         public GameObject Root;
         public Image Image;
         public Image SizeImage;
+        public GameObject ProgressPiecesRoot;
         public RectTransform RectTransform;
         public bool SuppressDisplay;
     }
@@ -1395,8 +1406,13 @@ public class MainScene : MonoBehaviour
             entry.Image.sprite = packSprite;
         }
 
-        ApplyPackageTornMask(entry.Image, packId);
-        ApplyPackageSizeVisual(entry.SizeImage, packId);
+        var wasCompleted = CardPackDataUtility.TryGetPack(packId, out var record)
+            && record.LifecycleState == CardPackLifecycleState.Completed;
+        var hasActiveSession = CardPackDataUtility.HasActivePuzzleSession(packId);
+        var showCompletedState = wasCompleted && !hasActiveSession;
+        ApplyPackageTornMask(entry.Image, hasActiveSession || wasCompleted, showCompletedState);
+        ApplyPackageSizeVisual(entry.SizeImage, packId, showCompletedState);
+        ApplyInProgressPackagePieces(entry, packId, hasActiveSession);
         if (CardPackRewardFlyTransition.IsPackPending(packId))
         {
             SetPackageVisualsVisible(entry, false);
@@ -1413,7 +1429,10 @@ public class MainScene : MonoBehaviour
         EnsurePackageInteractionHandler(entry.Root, entry.Image, packId);
     }
 
-    private void ApplyPackageTornMask(Image coverImage, int packId)
+    private void ApplyPackageTornMask(
+        Image coverImage,
+        bool shouldShowTornState,
+        bool isCompleted)
     {
         if (coverImage == null)
         {
@@ -1426,7 +1445,7 @@ public class MainScene : MonoBehaviour
         }
 
         coverImage.material = mPackCoverDefaultMaterial;
-        if (!CardPackDataUtility.HasActivePuzzleSession(packId))
+        if (!shouldShowTornState)
         {
             return;
         }
@@ -1435,7 +1454,7 @@ public class MainScene : MonoBehaviour
         for (var offset = 0; offset < PackTornMaskCount; offset++)
         {
             var maskIndex = (randomStart + offset) % PackTornMaskCount;
-            var material = GetOrCreatePackTornMaskMaterial(maskIndex);
+            var material = GetOrCreatePackTornMaskMaterial(maskIndex, isCompleted);
             if (material != null)
             {
                 coverImage.material = material;
@@ -1450,21 +1469,25 @@ public class MainScene : MonoBehaviour
         }
     }
 
-    private Material GetOrCreatePackTornMaskMaterial(int maskIndex)
+    private Material GetOrCreatePackTornMaskMaterial(int maskIndex, bool isCompleted)
     {
         if (maskIndex < 0 || maskIndex >= PackTornMaskCount)
         {
             return null;
         }
 
-        if (mPackTornMaskMaterials[maskIndex] != null)
+        var materialCache = isCompleted
+            ? mPackCompletedTornMaskMaterials
+            : mPackTornMaskMaterials;
+        if (materialCache[maskIndex] != null)
         {
-            return mPackTornMaskMaterials[maskIndex];
+            return materialCache[maskIndex];
         }
 
         if (mPackCoverDefaultMaterial == null
             || !mPackCoverDefaultMaterial.HasProperty(TornMaskTextureId)
-            || !mPackCoverDefaultMaterial.HasProperty(UseTornMaskId))
+            || !mPackCoverDefaultMaterial.HasProperty(UseTornMaskId)
+            || !mPackCoverDefaultMaterial.HasProperty(GrayscaleAmountId))
         {
             return null;
         }
@@ -1492,13 +1515,218 @@ public class MainScene : MonoBehaviour
 
         var material = new Material(mPackCoverDefaultMaterial)
         {
-            name = $"PackCoverTornMask{maskIndex + 1:D2} (Runtime)",
+            name = isCompleted
+                ? $"PackCoverCompletedTornMask{maskIndex + 1:D2} (Runtime)"
+                : $"PackCoverTornMask{maskIndex + 1:D2} (Runtime)",
             hideFlags = HideFlags.DontSave
         };
         material.SetTexture(TornMaskTextureId, maskSprite.texture);
         material.SetFloat(UseTornMaskId, 1f);
-        mPackTornMaskMaterials[maskIndex] = material;
+        material.SetFloat(
+            GrayscaleAmountId,
+            isCompleted ? CompletedPackGrayscaleAmount : 0f);
+        materialCache[maskIndex] = material;
         return material;
+    }
+
+    private Material GetOrCreatePackSizeGrayscaleMaterial()
+    {
+        if (mPackSizeGrayscaleMaterial != null)
+        {
+            return mPackSizeGrayscaleMaterial;
+        }
+
+        if (mPackCoverDefaultMaterial == null
+            || !mPackCoverDefaultMaterial.HasProperty(GrayscaleAmountId))
+        {
+            return null;
+        }
+
+        mPackSizeGrayscaleMaterial = new Material(mPackCoverDefaultMaterial)
+        {
+            name = "PackSizeGrayscale (Runtime)",
+            hideFlags = HideFlags.DontSave
+        };
+        mPackSizeGrayscaleMaterial.SetFloat(UseTornMaskId, 0f);
+        mPackSizeGrayscaleMaterial.SetFloat(
+            GrayscaleAmountId,
+            CompletedPackGrayscaleAmount);
+        mPackSizeGrayscaleMaterial.SetColor(ShadowColorId, Color.clear);
+        mPackSizeGrayscaleMaterial.SetFloat(PaddingXId, 0f);
+        mPackSizeGrayscaleMaterial.SetFloat(PaddingYId, 0f);
+        return mPackSizeGrayscaleMaterial;
+    }
+
+    private void ApplyInProgressPackagePieces(
+        PackageEntry entry,
+        int packId,
+        bool hasActiveSession)
+    {
+        if (entry == null || entry.Image == null || !hasActiveSession)
+        {
+            return;
+        }
+
+        var cardBagPrefab = Resources.Load<GameObject>(
+            GameDefine.FormatCardBagPrefabResourcesPath(packId));
+        if (cardBagPrefab == null)
+        {
+            Debug.LogWarning(
+                $"MainScene: in-progress pack pieces skipped; CardBag prefab not found. packId={packId}");
+            return;
+        }
+
+        CardPackDataUtility.TryGetPlacedPieceNumbers(packId, out var placedPieceNumbers);
+        var unplacedCandidates = new List<Image>();
+        var placedCandidates = new List<Image>();
+        var pieceImages = cardBagPrefab.GetComponentsInChildren<Image>(true);
+        for (var i = 0; i < pieceImages.Length; i++)
+        {
+            var pieceImage = pieceImages[i];
+            if (pieceImage == null
+                || pieceImage.sprite == null
+                || !GameDefine.TryParsePieceObjectName(
+                    pieceImage.gameObject.name,
+                    out var pieceNumber))
+            {
+                continue;
+            }
+
+            if (placedPieceNumbers.Contains(pieceNumber))
+            {
+                placedCandidates.Add(pieceImage);
+            }
+            else
+            {
+                unplacedCandidates.Add(pieceImage);
+            }
+        }
+
+        ShufflePackagePieceCandidates(unplacedCandidates);
+        ShufflePackagePieceCandidates(placedCandidates);
+        var selectedPieces = new List<Image>(InProgressPackPieceCount);
+        AddPackagePieceCandidates(selectedPieces, unplacedCandidates);
+        AddPackagePieceCandidates(selectedPieces, placedCandidates);
+        if (selectedPieces.Count == 0)
+        {
+            Debug.LogWarning(
+                $"MainScene: in-progress pack pieces skipped; no PieceGGII sprites found. packId={packId}");
+            return;
+        }
+
+        var coverRect = entry.Image.rectTransform;
+        var parent = coverRect.parent;
+        if (parent == null)
+        {
+            return;
+        }
+
+        var piecesRootObject = new GameObject(
+            InProgressPackPiecesObjectName,
+            typeof(RectTransform));
+        piecesRootObject.layer = entry.Image.gameObject.layer;
+        var piecesRoot = piecesRootObject.GetComponent<RectTransform>();
+        piecesRoot.SetParent(parent, false);
+        piecesRoot.anchorMin = new Vector2(0.5f, 0.5f);
+        piecesRoot.anchorMax = new Vector2(0.5f, 0.5f);
+        piecesRoot.pivot = new Vector2(0.5f, 0.5f);
+        piecesRoot.anchoredPosition = coverRect.anchoredPosition;
+        piecesRoot.sizeDelta = coverRect.sizeDelta;
+        piecesRoot.localScale = Vector3.one;
+        piecesRoot.SetSiblingIndex(coverRect.GetSiblingIndex());
+        entry.ProgressPiecesRoot = piecesRootObject;
+
+        for (var i = 0; i < selectedPieces.Count; i++)
+        {
+            CreateInProgressPackagePiece(piecesRoot, selectedPieces[i].sprite, i);
+        }
+    }
+
+    private void ShufflePackagePieceCandidates(List<Image> candidates)
+    {
+        for (var i = candidates.Count - 1; i > 0; i--)
+        {
+            var swapIndex = mPackTornMaskRandom.Next(i + 1);
+            var candidate = candidates[i];
+            candidates[i] = candidates[swapIndex];
+            candidates[swapIndex] = candidate;
+        }
+    }
+
+    private static void AddPackagePieceCandidates(
+        List<Image> selectedPieces,
+        List<Image> candidates)
+    {
+        for (var i = 0;
+             i < candidates.Count && selectedPieces.Count < InProgressPackPieceCount;
+             i++)
+        {
+            selectedPieces.Add(candidates[i]);
+        }
+    }
+
+    private static void CreateInProgressPackagePiece(
+        RectTransform parent,
+        Sprite sprite,
+        int index)
+    {
+        var pieceObject = new GameObject(
+            $"ProgressPiece{index + 1:D2}",
+            typeof(RectTransform),
+            typeof(CanvasRenderer),
+            typeof(Image),
+            typeof(Shadow));
+        pieceObject.layer = parent.gameObject.layer;
+        var pieceRect = pieceObject.GetComponent<RectTransform>();
+        pieceRect.SetParent(parent, false);
+        pieceRect.anchorMin = new Vector2(0.5f, 0.5f);
+        pieceRect.anchorMax = new Vector2(0.5f, 0.5f);
+        pieceRect.pivot = new Vector2(0.5f, 0.5f);
+        pieceRect.anchoredPosition = GetInProgressPackagePiecePosition(index);
+        pieceRect.localRotation = Quaternion.Euler(0f, 0f, GetInProgressPackagePieceRotation(index));
+        pieceRect.localScale = Vector3.one;
+
+        var spriteSize = sprite.rect.size;
+        var scale = InProgressPackPieceMaxSize / Mathf.Max(spriteSize.x, spriteSize.y, 1f);
+        pieceRect.sizeDelta = spriteSize * scale;
+
+        var pieceImage = pieceObject.GetComponent<Image>();
+        pieceImage.sprite = sprite;
+        pieceImage.color = Color.white;
+        pieceImage.preserveAspect = true;
+        pieceImage.useSpriteMesh = false;
+        pieceImage.raycastTarget = false;
+
+        var shadow = pieceObject.GetComponent<Shadow>();
+        shadow.effectColor = new Color(0f, 0f, 0f, 0.34f);
+        shadow.effectDistance = new Vector2(2f, -3f);
+        shadow.useGraphicAlpha = true;
+    }
+
+    private static Vector2 GetInProgressPackagePiecePosition(int index)
+    {
+        switch (index)
+        {
+            case 0:
+                return new Vector2(-66f, 68f);
+            case 1:
+                return new Vector2(0f, 82f);
+            default:
+                return new Vector2(66f, 70f);
+        }
+    }
+
+    private static float GetInProgressPackagePieceRotation(int index)
+    {
+        switch (index)
+        {
+            case 0:
+                return 344f;
+            case 1:
+                return 5f;
+            default:
+                return 18f;
+        }
     }
 
     private void ReleasePackTornMaskResources()
@@ -1509,6 +1737,12 @@ public class MainScene : MonoBehaviour
             {
                 Destroy(mPackTornMaskMaterials[i]);
                 mPackTornMaskMaterials[i] = null;
+            }
+
+            if (mPackCompletedTornMaskMaterials[i] != null)
+            {
+                Destroy(mPackCompletedTornMaskMaterials[i]);
+                mPackCompletedTornMaskMaterials[i] = null;
             }
 
             var sprite = mPackTornMaskSprites[i];
@@ -1525,6 +1759,12 @@ public class MainScene : MonoBehaviour
             }
 
             mPackTornMaskSprites[i] = null;
+        }
+
+        if (mPackSizeGrayscaleMaterial != null)
+        {
+            Destroy(mPackSizeGrayscaleMaterial);
+            mPackSizeGrayscaleMaterial = null;
         }
     }
 
@@ -1553,6 +1793,7 @@ public class MainScene : MonoBehaviour
                 && IsRectVisibleInViewport(anchor, viewport);
             SetPackageCoverVisible(entry, shouldRender);
             SetPackageSizeImageVisible(entry, shouldRender);
+            SetPackageProgressPiecesVisible(entry, shouldRender);
         }
     }
 
@@ -1635,7 +1876,15 @@ public class MainScene : MonoBehaviour
         }
     }
 
-    private static void ApplyPackageSizeVisual(Image sizeImage, int packId)
+    private static void SetPackageProgressPiecesVisible(PackageEntry entry, bool visible)
+    {
+        if (entry?.ProgressPiecesRoot != null)
+        {
+            entry.ProgressPiecesRoot.SetActive(visible);
+        }
+    }
+
+    private void ApplyPackageSizeVisual(Image sizeImage, int packId, bool isCompleted)
     {
         if (sizeImage == null)
         {
@@ -1663,6 +1912,9 @@ public class MainScene : MonoBehaviour
         }
 
         sizeImage.sprite = sizeSprite;
+        sizeImage.material = isCompleted
+            ? GetOrCreatePackSizeGrayscaleMaterial()
+            : null;
         sizeImage.enabled = true;
         sizeImage.gameObject.SetActive(true);
     }
@@ -2578,6 +2830,7 @@ public class MainScene : MonoBehaviour
         entry.SuppressDisplay = !visible;
         SetPackageCoverVisible(entry, visible);
         SetPackageSizeImageVisible(entry, visible);
+        SetPackageProgressPiecesVisible(entry, visible);
     }
 
     private void SetUnselectedPackageVisualsVisible(bool visible)
