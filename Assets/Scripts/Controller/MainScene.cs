@@ -31,6 +31,10 @@ public class MainScene : MonoBehaviour
     private const int PackTornMaskCount = 6;
     private const int InProgressPackPieceCount = 3;
     private const float InProgressPackPieceMaxSize = 86f;
+    private const float InProgressPackPieceScaleMultiplier = 1.4f;
+    private const float InProgressPackPieceFloatDistance = 6f;
+    private const float InProgressPackPieceFloatDuration = 6f;
+    private const float InProgressPackPieceHorizontalMargin = 2f;
     private const float NormalPackBreathingSpeed = 1f;
     private const float CompletedPackBreathingSpeed = 1f / 3f;
     private const float PackBreathingPhaseStep = 0.61803398875f;
@@ -226,8 +230,16 @@ public class MainScene : MonoBehaviour
         public PackCoverVisualSettings VisualSettings;
         public Animator PackAnimator;
         public GameObject ProgressPiecesRoot;
+        public List<InProgressPackagePieceAnimation> ProgressPieceAnimations;
         public RectTransform RectTransform;
         public bool SuppressDisplay;
+    }
+
+    private sealed class InProgressPackagePieceAnimation
+    {
+        public RectTransform RectTransform;
+        public Vector2 BasePosition;
+        public float PhaseRadians;
     }
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -286,6 +298,8 @@ public class MainScene : MonoBehaviour
 
     private void Update()
     {
+        UpdateInProgressPackagePieceAnimations();
+
         if (!mIsAwaitingTearSwipe)
         {
             return;
@@ -1657,10 +1671,17 @@ public class MainScene : MonoBehaviour
         piecesRoot.localScale = Vector3.one;
         piecesRoot.SetSiblingIndex(coverRect.GetSiblingIndex());
         entry.ProgressPiecesRoot = piecesRootObject;
+        entry.ProgressPieceAnimations = new List<InProgressPackagePieceAnimation>(
+            selectedPieces.Count);
 
         for (var i = 0; i < selectedPieces.Count; i++)
         {
-            CreateInProgressPackagePiece(piecesRoot, selectedPieces[i].sprite, i);
+            entry.ProgressPieceAnimations.Add(
+                CreateInProgressPackagePiece(
+                    piecesRoot,
+                    selectedPieces[i].sprite,
+                    packId,
+                    i));
         }
     }
 
@@ -1687,9 +1708,10 @@ public class MainScene : MonoBehaviour
         }
     }
 
-    private static void CreateInProgressPackagePiece(
+    private static InProgressPackagePieceAnimation CreateInProgressPackagePiece(
         RectTransform parent,
         Sprite sprite,
+        int packId,
         int index)
     {
         var pieceObject = new GameObject(
@@ -1704,13 +1726,31 @@ public class MainScene : MonoBehaviour
         pieceRect.anchorMin = new Vector2(0.5f, 0.5f);
         pieceRect.anchorMax = new Vector2(0.5f, 0.5f);
         pieceRect.pivot = new Vector2(0.5f, 0.5f);
-        pieceRect.anchoredPosition = GetInProgressPackagePiecePosition(index);
-        pieceRect.localRotation = Quaternion.Euler(0f, 0f, GetInProgressPackagePieceRotation(index));
+        var rotationDegrees = GetInProgressPackagePieceRotation(index);
+        pieceRect.localRotation = Quaternion.Euler(0f, 0f, rotationDegrees);
         pieceRect.localScale = Vector3.one;
 
         var spriteSize = sprite.rect.size;
         var scale = InProgressPackPieceMaxSize / Mathf.Max(spriteSize.x, spriteSize.y, 1f);
-        pieceRect.sizeDelta = spriteSize * scale;
+        var previousSize = spriteSize * scale;
+        var displayedSize = previousSize * InProgressPackPieceScaleMultiplier;
+        var basePosition = GetInProgressPackagePiecePosition(index);
+        basePosition.y -= (displayedSize.y - previousSize.y) * 0.5f;
+        var rotationRadians = rotationDegrees * Mathf.Deg2Rad;
+        var rotatedHalfWidth = (
+            Mathf.Abs(Mathf.Cos(rotationRadians)) * displayedSize.x
+            + Mathf.Abs(Mathf.Sin(rotationRadians)) * displayedSize.y) * 0.5f;
+        var minimumCenterX = parent.rect.xMin
+            + rotatedHalfWidth
+            + InProgressPackPieceHorizontalMargin;
+        var maximumCenterX = parent.rect.xMax
+            - rotatedHalfWidth
+            - InProgressPackPieceHorizontalMargin;
+        basePosition.x = minimumCenterX <= maximumCenterX
+            ? Mathf.Clamp(basePosition.x, minimumCenterX, maximumCenterX)
+            : parent.rect.center.x;
+        pieceRect.anchoredPosition = basePosition;
+        pieceRect.sizeDelta = displayedSize;
 
         var pieceImage = pieceObject.GetComponent<Image>();
         pieceImage.sprite = sprite;
@@ -1723,6 +1763,50 @@ public class MainScene : MonoBehaviour
         shadow.effectColor = new Color(0f, 0f, 0f, 0.34f);
         shadow.effectDistance = new Vector2(2f, -3f);
         shadow.useGraphicAlpha = true;
+
+        var normalizedPhase = Mathf.Repeat(
+            packId * PackBreathingPhaseStep
+                + index / (float)InProgressPackPieceCount,
+            1f);
+        return new InProgressPackagePieceAnimation
+        {
+            RectTransform = pieceRect,
+            BasePosition = basePosition,
+            PhaseRadians = normalizedPhase * Mathf.PI * 2f
+        };
+    }
+
+    private void UpdateInProgressPackagePieceAnimations()
+    {
+        if (mPackageSlotsById.Count == 0)
+        {
+            return;
+        }
+
+        var cycleRadians = Time.unscaledTime
+            * (Mathf.PI * 2f / InProgressPackPieceFloatDuration);
+        foreach (var pair in mPackageSlotsById)
+        {
+            var animations = pair.Value?.ProgressPieceAnimations;
+            if (animations == null)
+            {
+                continue;
+            }
+
+            for (var i = 0; i < animations.Count; i++)
+            {
+                var animation = animations[i];
+                if (animation?.RectTransform == null)
+                {
+                    continue;
+                }
+
+                var position = animation.BasePosition;
+                position.y += Mathf.Sin(cycleRadians + animation.PhaseRadians)
+                    * InProgressPackPieceFloatDistance;
+                animation.RectTransform.anchoredPosition = position;
+            }
+        }
     }
 
     private static Vector2 GetInProgressPackagePiecePosition(int index)
