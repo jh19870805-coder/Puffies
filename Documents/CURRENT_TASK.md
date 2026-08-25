@@ -1,5 +1,14 @@
 # 当前任务
 
+## 2026-08-25 首页卡包尺寸标签等比缩放
+
+- 状态：实现完成并通过 Runtime/Editor 编译，等待 MainScene 视觉验收。
+- `PackItem.prefab/PackSize` 继续按卡包展开态 `600 x 680` 制作，不修改美术原始 RectTransform。
+- MainScene 创建列表项时，先使用封面从展开态到列表态的统一比例计算布局位置，再对 `PackSize` 额外应用 `0.75` 的列表视觉缩放；全程保持宽高同倍率，不分别拉伸 X/Y。缩放后根据标签实际宽度与 Pivot 显式计算横向位置，使标签左边缘始终对齐列表卡包左边缘，不依赖 Prefab 的横坐标碰巧对齐。
+- 当前卡包比例为 `0.4`，标签最终比例为 `0.4 x 0.75 = 0.3`；`PackSize` 从 `274 x 158` 显示为约 `82.2 x 47.4`，左边缘固定为列表卡包的 `x=-120`。纵向位置仍按卡包 `0.4` 比例定位，避免标签二次缩小时向卡包中心漂移。
+- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
+- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 编译通过，均为 `0` 警告、`0` 错误；待在 MainScene Play Mode 检查不同尺寸标签的等比显示和左边缘对齐。
+
 ## 2026-08-25 卡包尺寸标签完成态材质
 
 - 状态：实现完成并通过 Runtime/Editor 编译，等待 Unity 资源导入与 MainScene 视觉验收。

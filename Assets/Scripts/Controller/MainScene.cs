@@ -21,6 +21,7 @@ public class MainScene : MonoBehaviour
     private const float PackageSlotHeight = 272f;
     private const float PackageCoverWidth = 240f;
     private const float PackageCoverHeight = 272f;
+    private const float PackageSizeListVisualScale = 0.75f;
     private const float PackageHorizontalSpacing = 20f;
     private const float PackageVerticalSpacing = 20f;
     private const float DefaultPackagePageWidth = 1625f;
@@ -2871,7 +2872,7 @@ public class MainScene : MonoBehaviour
             ScaleOverlayWithCover(
                 backgroundImage != null ? backgroundImage.rectTransform : null,
                 sourceCoverSize);
-            ScaleOverlayWithCover(
+            ScalePackageSizeWithCover(
                 sizeImage != null ? sizeImage.rectTransform : null,
                 sourceCoverSize);
             coverRect.anchorMin = new Vector2(0.5f, 0.5f);
@@ -2910,6 +2911,28 @@ public class MainScene : MonoBehaviour
         overlayRect.anchoredPosition = Vector2.Scale(overlayRect.anchoredPosition, scale);
         overlayRect.sizeDelta = Vector2.Scale(overlayRect.sizeDelta, scale);
         overlayRect.localScale = Vector3.one;
+    }
+
+    private static void ScalePackageSizeWithCover(
+        RectTransform sizeRect,
+        Vector2 sourceCoverSize)
+    {
+        if (sizeRect == null || sourceCoverSize.x <= 0f || sourceCoverSize.y <= 0f)
+        {
+            return;
+        }
+
+        var coverScale = Mathf.Min(
+            PackageCoverWidth / sourceCoverSize.x,
+            PackageCoverHeight / sourceCoverSize.y);
+        var sourcePosition = sizeRect.anchoredPosition;
+        sizeRect.anchorMin = new Vector2(0.5f, 0.5f);
+        sizeRect.anchorMax = new Vector2(0.5f, 0.5f);
+        sizeRect.sizeDelta *= coverScale * PackageSizeListVisualScale;
+        sizeRect.anchoredPosition = new Vector2(
+            -PackageCoverWidth * 0.5f + sizeRect.sizeDelta.x * sizeRect.pivot.x,
+            sourcePosition.y * coverScale);
+        sizeRect.localScale = Vector3.one;
     }
 
     private static RectTransform FindFirstGridPage(Transform root)
