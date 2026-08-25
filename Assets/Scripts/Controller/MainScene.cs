@@ -61,12 +61,8 @@ public class MainScene : MonoBehaviour
     private const float OpeningStagePunchScaleRatio = 1.04f;
     private const float OpeningModelHandoffHoldDuration = 0.06f;
     private const float OpeningModelHandoffFadeDuration = 0.12f;
-    private const float TearSwipeBandHeightRatio = 0.24f;
-    private const float TearSwipeStartMaxRatio = 0.38f;
-    private const float TearSwipeRequiredDistanceRatio = 0.5f;
-    private const float TearSwipeMaxVerticalDriftRatio = 0.2f;
-    private const float TearTapMaxTravelRatio = 0.06f;
-    private const float TearTapMinTravelPixels = 18f;
+    private const float TearGestureTravelRatio = 0.06f;
+    private const float TearGestureMinTravelPixels = 18f;
     private const int MainPackageBagId = GameDefine.DefaultBagId;
     private const string BootstrapObjectName = "MainSceneBootstrap";
     private const string PackageScrollViewObjectName = "PackageScrollView";
@@ -3848,82 +3844,48 @@ public class MainScene : MonoBehaviour
         return true;
     }
 
-    private bool TryRefreshTearSwipeGeometry(out float tearSeamScreenY)
-    {
-        tearSeamScreenY = 0f;
-        if (!TryRefreshTearSwipeScreenRect())
-        {
-            return false;
-        }
-
-        tearSeamScreenY = Mathf.Lerp(
-            mTearSwipeScreenRect.yMax,
-            mTearSwipeScreenRect.yMin,
-            0.05f);
-        return true;
-    }
-
     private void OnTearSwipeBegin(Vector2 screenPosition)
     {
         if (!mIsAwaitingTearSwipe
-            || !TryRefreshTearSwipeGeometry(out var tearSeamScreenY))
+            || !TryRefreshTearSwipeScreenRect())
         {
             return;
         }
 
         mIsTrackingTearTap = mTearSwipeScreenRect.Contains(screenPosition);
+        mIsTrackingTearSwipe = mIsTrackingTearTap;
         if (!mIsTrackingTearTap)
         {
             return;
         }
 
         mTearSwipeStartScreenPosition = screenPosition;
-
-        var bandHalfHeight = mTearSwipeScreenRect.height * TearSwipeBandHeightRatio * 0.5f;
-        var bandCenterY = tearSeamScreenY;
-        var maximumStartX = Mathf.Lerp(
-            mTearSwipeScreenRect.xMin,
-            mTearSwipeScreenRect.xMax,
-            TearSwipeStartMaxRatio);
-        if (screenPosition.x < mTearSwipeScreenRect.xMin
-            || screenPosition.x > maximumStartX
-            || screenPosition.y < bandCenterY - bandHalfHeight
-            || screenPosition.y > bandCenterY + bandHalfHeight)
-        {
-            return;
-        }
-
-        mIsTrackingTearSwipe = true;
     }
 
     private void OnTearSwipeMove(Vector2 screenPosition)
     {
-        if (mIsTrackingTearTap)
-        {
-            var maximumTapTravel = Mathf.Max(
-                TearTapMinTravelPixels,
-                Mathf.Min(mTearSwipeScreenRect.width, mTearSwipeScreenRect.height)
-                    * TearTapMaxTravelRatio);
-            if (Vector2.Distance(screenPosition, mTearSwipeStartScreenPosition) > maximumTapTravel)
-            {
-                mIsTrackingTearTap = false;
-            }
-        }
-
         if (!mIsTrackingTearSwipe)
         {
             return;
         }
 
-        var horizontalDistance = screenPosition.x - mTearSwipeStartScreenPosition.x;
-        var verticalDistance = Mathf.Abs(screenPosition.y - mTearSwipeStartScreenPosition.y);
-        if (horizontalDistance < mTearSwipeScreenRect.width * TearSwipeRequiredDistanceRatio
-            || verticalDistance > mTearSwipeScreenRect.height * TearSwipeMaxVerticalDriftRatio)
+        if (!mTearSwipeScreenRect.Contains(screenPosition))
+        {
+            mIsTrackingTearSwipe = false;
+            mIsTrackingTearTap = false;
+            return;
+        }
+
+        var minimumSwipeTravel = Mathf.Max(
+            TearGestureMinTravelPixels,
+            Mathf.Min(mTearSwipeScreenRect.width, mTearSwipeScreenRect.height)
+                * TearGestureTravelRatio);
+        if (Vector2.Distance(screenPosition, mTearSwipeStartScreenPosition) < minimumSwipeTravel)
         {
             return;
         }
 
-        CompleteTearSwipe();
+        mIsTrackingTearTap = false;
     }
 
     private void OnTearSwipeEnd(Vector2 screenPosition)
@@ -3941,9 +3903,12 @@ public class MainScene : MonoBehaviour
 
         var shouldOpenFromTap = mIsTrackingTearTap
             && mTearSwipeScreenRect.Contains(screenPosition);
+        var shouldOpenFromSwipe = mIsTrackingTearSwipe
+            && !mIsTrackingTearTap
+            && mTearSwipeScreenRect.Contains(screenPosition);
         mIsTrackingTearSwipe = false;
         mIsTrackingTearTap = false;
-        if (shouldOpenFromTap)
+        if (shouldOpenFromTap || shouldOpenFromSwipe)
         {
             CompleteTearSwipe();
         }

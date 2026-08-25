@@ -68,6 +68,7 @@ Unity **2022.3** / Built-in Render Pipeline 项目，使用 Linear 色彩空间�
 - 新拼图通过在 `Resources/CardBagPrefabs/` 下新增 `CardBagNNN` Prefab 实现；每个已分组 Prefab 包含 `GameBoard` 和 `PieceGGII` 节点，不创建 Package JSON。
 - 编辑器批量生成器可扫描 `CardBagNNN` 资源目录，使用完整的 `Previews/CardBagNNN.png` 与透明 Piece PNG 进行像素匹配，并以 `GameBoard.png` 作为运行时棋盘底图批量创建 Prefab，不依赖 Package JSON 或 `unity_layout.json`。生成器优先使用精确 RGB 锚点；切图与预览几何一致但存在导出色差时，回退到分阶段感知颜色匹配，并且只有最低相似度和远距离第二候选分差同时达标才接受，避免相似贴纸误定位。每个源目录除 `BoardTitle.png`、`GameBoard.png` 外的碎片统一命名为小写三位编号 `piece_001.png`、`piece_002.png`……；定位完成后自动按空间生成正式 `PieceGGII` 分组。已有 `.meta` 必须随 PNG 一起移动以保持 Prefab Sprite GUID 引用。
 - 新卡包撕包特效位于 `Resources/Effects`：六套 `CardPackOpeningModel_001-006` 共用 `CardPackAnimation.controller`，`fx_chai_w_001` 提供撕口横向光效。列表和选中放大仍使用静态图，只有 `BgGame` 内收到轻点或有效横划后才加载并播放这些资源。
+- `BgGame` 等待撕包输入必须从居中卡包的屏幕矩形内开始。短距离松手按点击处理；指针保持在卡包矩形内并向任意方向移动至少 `18` 屏幕像素或卡包短边 `6%` 时记录为有效滑动，但只有鼠标左键或触摸抬起且结束点仍在卡包内时才触发撕包。卡包外起手或滑动过程中离开卡包范围均不触发；点击与滑动在抬起时共用同一个撕包完成入口。
 - 构建前执行 `Puffies -> Sync Build Resources`，将运行时磁盘加载的 UI 目录同步到 `StreamingAssets/UI`。
 
 ### 待完成需求

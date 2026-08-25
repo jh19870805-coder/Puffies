@@ -1,5 +1,14 @@
 # 当前任务
 
+## 2026-08-25 撕包页面卡包范围内滑动
+
+- 状态：实现完成并通过 Runtime/Editor 编译，等待 MainScene Play Mode 验收。
+- 等待撕包页面继续支持卡包范围内点击；同时允许从卡包矩形内起手并在矩形内向任意方向滑动。移动达到至少 `18` 屏幕像素或卡包短边 `6%` 时只记录为有效滑动，必须等鼠标左键或触摸抬起后，才触发现有撕包动画与后续进入游戏流程。
+- 滑动过程中离开卡包矩形会取消本次手势，卡包外起手不会触发；未抬起前不会停止循环滑光或播放撕包动画。点击与滑动在抬起时共用现有单次完成入口，不会重复启动动画。
+- 移除了旧的撕口窄带、左侧起手、仅向右移动半个卡包宽度及纵向偏移限制；撕包资源、动画和转场时序保持不变。
+- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
+- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 编译通过，均为 `0` 警告、`0` 错误；旧窄带和定向横划常量、方法已无残留，`git diff --check` 通过。仍需在 MainScene Play Mode 分别验证点击、横向滑动、纵向滑动、卡包外起手和滑出卡包五种输入。
+
 ## 2026-08-25 撕开卡包背景与碎片层级
 
 - 状态：实现完成并通过 Runtime/Editor 编译，等待 MainScene Play Mode 视觉验收。

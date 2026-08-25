@@ -795,15 +795,17 @@
 
 1. WHEN 玩家点击“玩”或确认重玩并完成开包舞台转场 THEN 系统 SHALL 在居中卡包上循环播放 `PackItem.prefab/PackNode/ImgLight` 的现有 `PackAni` 滑动动画。
 2. WHILE 系统等待玩家操作卡包 THEN 滑光 SHALL 持续循环，不得在一次动画结束后停止。
-3. WHEN 玩家在卡包上完成有效轻点或达到现有横划判定 THEN 系统 SHALL 立即停止并隐藏循环滑光，然后播放现有卡包撕开模型和粒子动画。
+3. WHEN 玩家在卡包上完成有效轻点，或从卡包矩形内起手并保持在范围内滑动达到最小距离 THEN 系统 SHALL 等到鼠标左键或触摸抬起后，再停止并隐藏循环滑光，然后播放现有卡包撕开模型和粒子动画。
 4. IF 点击或滑动没有通过现有开包输入判定 THEN 系统 SHALL 继续播放循环滑光，不得提前停止。
-5. 列表中的 `ImgLight` 默认隐藏规则、`PackAni` 美术曲线、现有撕包输入门槛、3D 模型、`fx_chai_w_001` 和切场景时序不得改变。
+5. 滑动方向不限，最小距离为 `18` 屏幕像素或卡包短边 `6%` 中的较大值；达到距离只记录手势有效，不得在指针仍按住时提前触发。卡包外起手或移动过程中离开卡包矩形 SHALL NOT 触发撕包。
+6. 列表中的 `ImgLight` 默认隐藏规则、`PackAni` 美术曲线、3D 模型、`fx_chai_w_001` 和切场景时序不得改变。
 
 ### 设计与任务
 
 - [x] 1. 进入等待撕包状态后，从 `PackItem` 模板克隆 `PackNode` 动画层到 `SelectedCardPackImage`，隐藏 `PackCover/PackSize`，只启用 `ImgLight` 和现有 Animator。
 - [x] 2. 在有效轻点/横划统一入口、清除选择和场景销毁时停止并释放提示动画层。
-- [x] 3. Runtime/Editor 程序集编译通过，均为 `0` 警告、`0` 错误；`PackAni.anim`、`PackNode.controller`、输入阈值和正式撕包资源无修改，`git diff --check` 通过。仍需 MainScene Play Mode 目视验收提示位置、循环和交接时机。
+- [x] 3. Runtime/Editor 程序集编译通过，均为 `0` 警告、`0` 错误；`PackAni.anim`、`PackNode.controller` 和正式撕包资源无修改，`git diff --check` 通过。仍需 MainScene Play Mode 目视验收提示位置、循环和交接时机。
+- [x] 4. 将旧撕口窄带定向横划改为卡包矩形内任意方向滑动，并继续复用轻点的单次撕包入口。
 
 ## 2026-08-25 - 首页卡包美术呼吸动画
 
