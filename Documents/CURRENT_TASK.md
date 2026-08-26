@@ -1,5 +1,14 @@
 # 当前任务
 
+## 2026-08-26 进行中卡包重复进入空白修复
+
+- 状态：代码修复完成并通过 Runtime/Editor 编译，等待 Unity Play Mode 流程验收。
+- 复现流程中 `GameScene.Start()` 已正常完成，空白来自跨场景卡包转场协程在 MainScene 卸载后未继续推进；GameScene 一直等待该静态转场实例结束，同时保持棋盘、托盘、按钮和碎片隐藏。
+- `CardPackGameEntranceTransition` 不再于 MainScene 初始化移交对象时启动动画；GameScene 完成初始化、绑定自己的 Camera 并调用 `NotifyGameSceneReady` 后才显式开始播放，且用状态位保证只启动一次。
+- GameScene 等待转场增加 `2s` 上限；超时后立即把卡包和碎片设置到转场终点、记录实际发牌起点、释放跨场景 Canvas 并继续现有棋盘/托盘入场。MainScene 每次启动时也会清理残留实例，避免返回首页后的旧状态影响下一次进入。
+- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Assets/Scripts/Model/CardPackRewardFlyTransition.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
+- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译通过，均为 `0` 警告、`0` 错误；Unity 已重新导入脚本且 `Editor.log` 未发现 C# 编译错误。仍需从 MainScene 进入一个卡包、完成第一组、返回首页，再次点击同一卡包并点击“玩”，验收卡包下收、碎片分开和 GameScene 入场是否完整显示。
+
 ## 2026-08-26 Loading 与入场动画卡顿优化
 
 - 状态：实现完成并通过 Runtime/Editor 编译，等待 Unity Play Mode 性能与视觉验收。

@@ -372,6 +372,7 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
 public sealed class CardPackGameEntranceTransition : MonoBehaviour
 {
     private const int GameSceneSettleFrameCount = 2;
+    private const float CompletionTimeoutSeconds = 2f;
 
     private static CardPackGameEntranceTransition sInstance;
 
@@ -384,6 +385,7 @@ public sealed class CardPackGameEntranceTransition : MonoBehaviour
     private Vector2[] mPieceTargets;
     private float mDuration;
     private bool mGameSceneReady;
+    private bool mPlaybackStarted;
     private Material mOwnedCoverMaterial;
     private Texture mOwnedMaskTexture;
 
@@ -447,13 +449,33 @@ public sealed class CardPackGameEntranceTransition : MonoBehaviour
         }
 
         sInstance.mGameSceneReady = true;
+        sInstance.StartPlaybackIfReady();
     }
 
     public static IEnumerator WaitForCompletion()
     {
-        while (sInstance != null)
+        var waitStartedAt = Time.realtimeSinceStartup;
+        while (sInstance != null
+               && Time.realtimeSinceStartup - waitStartedAt < CompletionTimeoutSeconds)
         {
             yield return null;
+        }
+
+        if (sInstance != null)
+        {
+            Debug.LogWarning(
+                "CardPackGameEntranceTransition: completion timed out; "
+                + "finishing immediately so GameScene can continue.");
+            sInstance.CompleteImmediately(storeExitPosition: true);
+            yield return null;
+        }
+    }
+
+    public static void CancelPending()
+    {
+        if (sInstance != null)
+        {
+            sInstance.CompleteImmediately(storeExitPosition: false);
         }
     }
 
@@ -496,8 +518,18 @@ public sealed class CardPackGameEntranceTransition : MonoBehaviour
         }
 
         CloneTransientCoverMaterial(coverImage);
-        StartCoroutine(PlayAfterGameSceneIsReady());
         return true;
+    }
+
+    private void StartPlaybackIfReady()
+    {
+        if (!mGameSceneReady || mPlaybackStarted || !isActiveAndEnabled)
+        {
+            return;
+        }
+
+        mPlaybackStarted = true;
+        StartCoroutine(PlayAfterGameSceneIsReady());
     }
 
     private void CloneTransientCoverMaterial(Image coverImage)
@@ -533,11 +565,6 @@ public sealed class CardPackGameEntranceTransition : MonoBehaviour
 
     private IEnumerator PlayAfterGameSceneIsReady()
     {
-        while (!mGameSceneReady)
-        {
-            yield return null;
-        }
-
         for (var frame = 0; frame < GameSceneSettleFrameCount; frame++)
         {
             yield return null;
@@ -577,10 +604,38 @@ public sealed class CardPackGameEntranceTransition : MonoBehaviour
             mPackRect.anchoredPosition = mPackTarget;
         }
 
-        StorePieceExitPosition();
+        CompleteImmediately(storeExitPosition: true);
+    }
+
+    private void CompleteImmediately(bool storeExitPosition)
+    {
+        StopAllCoroutines();
+        if (mPackRect != null)
+        {
+            mPackRect.anchoredPosition = mPackTarget;
+        }
+
+        for (var i = 0; i < mPieceRects.Count; i++)
+        {
+            if (mPieceRects[i] != null && i < mPieceTargets.Length)
+            {
+                mPieceRects[i].anchoredPosition = mPieceTargets[i];
+            }
+        }
+
+        if (storeExitPosition)
+        {
+            StorePieceExitPosition();
+        }
+
         if (mCanvas != null)
         {
             mCanvas.gameObject.SetActive(false);
+        }
+
+        if (sInstance == this)
+        {
+            sInstance = null;
         }
 
         Destroy(gameObject);

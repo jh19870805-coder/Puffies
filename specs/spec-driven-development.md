@@ -896,3 +896,19 @@
 - [x] 2. 为每片运行时碎片记录基准位置与稳定错峰相位，在 MainScene 更新中按不受 TimeScale 影响的正弦曲线循环修改 Y 位置；振幅为 `6` 设计像素，周期与 `PackAniBreath` 一致为 `6s`。
 - [x] 3. 根据每片放大后的尺寸与倾角计算旋转包围宽度，将横向中心限制在卡包 Rect 内并保留 `2` 设计像素边距，避免左右漏出。
 - [ ] 4. Runtime/Editor 编译和 Git 差异检查已通过；仍需在 MainScene Play Mode 验收尺寸、露出范围、浮动节奏、边界及显隐状态。
+
+## 2026-08-26 - 进行中卡包重复进入空白修复
+
+### 需求
+
+1. WHEN 玩家完成至少一组后返回首页并再次进入同一卡包 THEN 撕开卡包 SHALL 正常播放下收与碎片分开动画，随后显示 GameScene 入场。
+2. GameScene SHALL NOT 因跨场景卡包转场协程中断而无限隐藏棋盘、托盘、按钮和碎片。
+3. WHEN GameScene 完成初始化 THEN 跨场景卡包动画 SHALL 在绑定 GameScene Camera 后明确启动，不得依赖 MainScene 卸载前启动的等待协程继续存活。
+4. IF 跨场景转场在合理时间内未完成 THEN 系统 SHALL 强制结束转场并继续 GameScene 入场；返回 MainScene 时 SHALL 清理任何残留转场实例。
+
+### 设计与任务
+
+- [x] 1. 将 `CardPackGameEntranceTransition` 的播放启动从 MainScene 初始化阶段移动到 `NotifyGameSceneReady`，并保证只启动一次。
+- [x] 2. 为 GameScene 等待增加超时完成路径，超时时恢复最终卡包/碎片位置、释放跨场景 Canvas 并解除入场等待。
+- [x] 3. MainScene 启动时清理残留的跨场景入场转场，避免静态实例影响下一次进入。
+- [ ] 4. Runtime/Editor 编译与静态差异检查已通过；仍需在 Play Mode 验证“完成一组 -> 返回首页 -> 再次进入”流程。

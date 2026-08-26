@@ -509,6 +509,8 @@ public class MainScene : MonoBehaviour
             return;
         }
 
+        CardPackGameEntranceTransition.CancelPending();
+
         mHasSwitchedToGameScene = false;
         mIsPlayingAnimation = false;
         mPlayAnimationCoroutine = null;
