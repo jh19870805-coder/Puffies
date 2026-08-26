@@ -164,7 +164,7 @@ MonoBehaviour:
   mCompletedCoverMaterial: {fileID: 2100000, guid: 048d3989ae87474c9fc79b7f3593a70b, type: 2}
   mPackSize: {fileID: 4017709832613726455}
   mNormalSizeMaterial: {fileID: 0}
-  mCompletedSizeMaterial: {fileID: 2100000, guid: ebc248773a4f4a539b7459fe91ca70dd, type: 2}
+  mCompletedSizeMaterial: {fileID: 0}
   mPreviewCompleted: 1
 --- !u!1 &4862296459549254539
 GameObject:
@@ -200,8 +200,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -300, y: -119}
-  m_SizeDelta: {x: 274, y: 158}
+  m_AnchoredPosition: {x: -293, y: -119}
+  m_SizeDelta: {x: 222, y: 128}
   m_Pivot: {x: 0, y: 1}
 --- !u!222 &6780448732322398337
 CanvasRenderer:
@@ -223,7 +223,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_Material: {fileID: 2100000, guid: ebc248773a4f4a539b7459fe91ca70dd, type: 2}
+  m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
