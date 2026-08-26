@@ -7,9 +7,11 @@
 - 彩色撕开进行中卡包点击“玩”后不播放完整拆包特效。灰色撕开已完成卡包仍先显示重玩确认，确认后清除旧进度并创建空会话，再从对应 CardBag 临时选择本关碎片补入灰色卡包；两种撕开状态随后共用同一个转场协程，灰色卡包不会被切回彩色样式。
 - MainScene 在 `0.22s` 内退掉选择 UI 并恢复 `BgGame`，居中停留 `0.68s`，再用 `0.46s` 将卡包向下收走；`ProgressPieces` 在此期间反向补偿位移并横向散开，形成从撕口脱出的连续动作。转场同时低优先级预加载当前 CardBag 与 GameScene。
 - MainScene 在卡包退场结束时读取选中碎片实际屏幕位置的平均值并传给 GameScene，不再用固定坐标猜测发射点。GameScene 让当前组碎片从该位置先向上扇形发出，再落到已计算好的托盘位置；托盘先从下方快速进入，棋盘延迟后从右侧滑入，返回和提示按钮与棋盘阶段同步显示。
+- 修复 MainScene 分开碎片后与 GameScene 发牌之间的明显停顿：撕开卡包入口现在向 GameScene 传递“碎片已扇出”状态，GameScene 首帧直接在扇出位置显示当前组碎片，不再重复执行 `0.3s` 扇出和后续 `0.3s` 等待；保留两帧起始姿态预热，但碎片在预热期间可见，并在约 `0.04s` 后直接错峰落入托盘。
+- MainScene 在最短 `0.68s` 卡包停顿期间等待 GameScene 预加载达到 `90%` 可激活状态，最长等待 `5s`；加载等待不再出现在卡包下收和碎片分开之后。请求场景激活前不主动隐藏上一层碎片，由场景卸载自然清理，避免交接帧出现空画面。
 - 入场期间 Piece 始终保持最终 `TrayScale`，不临时放大；目标位置、托盘顺序、光点创建、两帧起始姿态预热、单帧最大 `1/30s` 时间推进和交互锁定规则保持不变。完整彩色卡包的拆包流程不变；灰色完成态保留重玩确认和进度重置，但确认后的视觉转场与彩色撕开带碎片状态一致。
 - 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Assets/Scripts/Controller/GameScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
-- 验证：FFmpeg 逐帧联系表确认参考视频的卡包下收、碎片发出和棋盘右侧进入顺序；`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 编译通过，均为 `0` 警告、`0` 错误。仍需在 Unity Play Mode 分别使用彩色撕开进行中卡包和灰色撕开已完成卡包验收背景交接、卡包颜色、退场距离、碎片发射位置、扇形范围和整体节奏。
+- 验证：FFmpeg 逐帧联系表确认参考视频的卡包下收、碎片发出和棋盘右侧进入顺序；`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 编译通过，均为 `0` 警告、`0` 错误。仍需在 Unity Play Mode 分别使用彩色撕开进行中卡包和灰色撕开已完成卡包验收背景交接、卡包颜色、退场距离、碎片分开到发牌的连续性、落牌范围和整体节奏。
 
 ## 2026-08-26 进行中卡包碎片显示恢复
 

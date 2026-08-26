@@ -217,6 +217,7 @@ public static class GameManager
     private static int sBagId = GameDefine.DefaultBagId;
     private static bool sIsInitialized;
     private static bool sPlayGameEntranceAnimation;
+    private static bool sGameEntrancePiecesAlreadyFanned;
     private static bool sIsReplaySession;
     private static bool sHasOpeningPackExitPosition;
     private static Vector2 sOpeningPackExitPositionNormalized;
@@ -241,6 +242,7 @@ public static class GameManager
 
         sBagId = GameDefine.DefaultBagId;
         sPlayGameEntranceAnimation = false;
+        sGameEntrancePiecesAlreadyFanned = false;
         sIsReplaySession = false;
         sHasOpeningPackExitPosition = false;
         sOpeningPackExitPositionNormalized = default;
@@ -262,10 +264,12 @@ public static class GameManager
     public static void EnterGameScene(
         int bagId,
         bool playEntranceAnimation = false,
-        bool isReplaySession = false)
+        bool isReplaySession = false,
+        bool entrancePiecesAlreadyFanned = false)
     {
         SetBagId(bagId);
         sPlayGameEntranceAnimation = playEntranceAnimation;
+        sGameEntrancePiecesAlreadyFanned = entrancePiecesAlreadyFanned;
         sIsReplaySession = isReplaySession;
         if (sPreloadedGameBagId == bagId
             && (sCardBagPreloadRequest != null || sGameScenePreloadOperation != null))
@@ -350,6 +354,14 @@ public static class GameManager
         return prefab != null;
     }
 
+    public static bool IsGameSceneReadyForActivation(int bagId)
+    {
+        return sPreloadedGameBagId == bagId
+            && sGameScenePreloadOperation != null
+            && (sGameScenePreloadOperation.isDone
+                || sGameScenePreloadOperation.progress >= 0.9f);
+    }
+
     public static void NotifyGameSceneLoaded()
     {
         ResetGameScenePreloadState(clearPrefab: true);
@@ -372,6 +384,13 @@ public static class GameManager
         var shouldPlay = sPlayGameEntranceAnimation;
         sPlayGameEntranceAnimation = false;
         return shouldPlay;
+    }
+
+    public static bool ConsumeGameEntrancePiecesAlreadyFanned()
+    {
+        var piecesAlreadyFanned = sGameEntrancePiecesAlreadyFanned;
+        sGameEntrancePiecesAlreadyFanned = false;
+        return piecesAlreadyFanned;
     }
 
     public static bool ConsumeGameReplaySession()

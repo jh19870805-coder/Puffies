@@ -45,6 +45,7 @@ public class GameScene : MonoBehaviour
     private const float GameEntranceTrayDuration = 0.22f;
     private const float GameEntrancePieceLaunchDuration = 0.3f;
     private const float GameEntrancePieceSettleDelay = 0.3f;
+    private const float GameEntranceFannedPieceSettleDelay = 0.04f;
     private const float GameEntrancePieceSettleDuration = 0.46f;
     private const float GameEntrancePieceStagger = 0.018f;
     private const float GameEntranceControlDelay = 0.28f;
@@ -416,6 +417,8 @@ public class GameScene : MonoBehaviour
         InitializeScoringSession();
         var selectedBagId = GameManager.GetBagId();
         var playEntranceAnimation = GameManager.ConsumeGameEntranceAnimation();
+        var entrancePiecesAlreadyFanned =
+            GameManager.ConsumeGameEntrancePiecesAlreadyFanned();
         var isReplaySession = GameManager.ConsumeGameReplaySession();
         CardPackDataUtility.Initialize();
         _wasSelectedPackCompletedOnEntry = CardPackDataUtility.IsPackCompleted(selectedBagId);
@@ -442,7 +445,7 @@ public class GameScene : MonoBehaviour
 
         if (playEntranceAnimation && !_isGameFinished)
         {
-            StartCoroutine(PlayGameEntranceAnimation());
+            StartCoroutine(PlayGameEntranceAnimation(entrancePiecesAlreadyFanned));
         }
         else
         {
@@ -618,7 +621,7 @@ public class GameScene : MonoBehaviour
         _configuredBoardScale = config.BoardScale;
     }
 
-    private IEnumerator PlayGameEntranceAnimation()
+    private IEnumerator PlayGameEntranceAnimation(bool piecesAlreadyFanned)
     {
         _isEntranceAnimating = true;
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
@@ -677,6 +680,7 @@ public class GameScene : MonoBehaviour
         var pieceTargetScales = new Vector3[pieceCount];
         var pieceTargetRotations = new Quaternion[pieceCount];
         var pieceStartRotations = new Quaternion[pieceCount];
+        var pieceFanRotations = new Quaternion[pieceCount];
         var pieceTargetColors = new Color[pieceCount];
         var visibleWorldHeight = camera != null
             ? camera.orthographicSize * 2f
@@ -717,11 +721,22 @@ public class GameScene : MonoBehaviour
                 0f,
                 0f,
                 Mathf.Sin(angle) * 18f);
-            renderer.transform.position = pieceStarts[i];
+            pieceFanRotations[i] = Quaternion.SlerpUnclamped(
+                pieceStartRotations[i],
+                Quaternion.identity,
+                0.45f);
+            renderer.transform.position = piecesAlreadyFanned
+                ? pieceFanPositions[i]
+                : pieceStarts[i];
             renderer.transform.localScale = pieceTargetScales[i];
-            renderer.transform.rotation = pieceStartRotations[i];
+            renderer.transform.rotation = piecesAlreadyFanned
+                ? pieceFanRotations[i]
+                : pieceStartRotations[i];
             var color = pieceTargetColors[i];
-            color.a = 0f;
+            if (!piecesAlreadyFanned)
+            {
+                color.a = 0f;
+            }
             renderer.color = color;
         }
 
@@ -752,11 +767,18 @@ public class GameScene : MonoBehaviour
 
             pieceTargets[i] = renderer.transform.position;
             pieceTargetScales[i] = renderer.transform.localScale;
-            renderer.transform.position = pieceStarts[i];
+            renderer.transform.position = piecesAlreadyFanned
+                ? pieceFanPositions[i]
+                : pieceStarts[i];
             renderer.transform.localScale = pieceTargetScales[i];
-            renderer.transform.rotation = pieceStartRotations[i];
+            renderer.transform.rotation = piecesAlreadyFanned
+                ? pieceFanRotations[i]
+                : pieceStartRotations[i];
             var hiddenColor = pieceTargetColors[i];
-            hiddenColor.a = 0f;
+            if (!piecesAlreadyFanned)
+            {
+                hiddenColor.a = 0f;
+            }
             renderer.color = hiddenColor;
         }
 
@@ -770,11 +792,14 @@ public class GameScene : MonoBehaviour
             trayRect.anchoredPosition = trayStart;
         }
 
+        var pieceSettleDelay = piecesAlreadyFanned
+            ? GameEntranceFannedPieceSettleDelay
+            : GameEntrancePieceSettleDelay;
         var totalDuration = Mathf.Max(
             GameEntranceBoardDelay + GameEntranceBoardDuration,
             GameEntranceTrayDelay + GameEntranceTrayDuration,
             GameEntranceControlDelay + GameEntranceControlDuration,
-            GameEntrancePieceSettleDelay
+            pieceSettleDelay
                 + Mathf.Max(0, pieceCount - 1) * GameEntrancePieceStagger
                 + GameEntrancePieceSettleDuration);
         var elapsed = 0f;
@@ -827,11 +852,13 @@ public class GameScene : MonoBehaviour
                 }
 
                 var pieceDelay = i * GameEntrancePieceStagger;
-                var launchT = Mathf.Clamp01(
-                    (elapsed - pieceDelay) / GameEntrancePieceLaunchDuration);
+                var launchT = piecesAlreadyFanned
+                    ? 1f
+                    : Mathf.Clamp01(
+                        (elapsed - pieceDelay) / GameEntrancePieceLaunchDuration);
                 var launchEased = 1f - Mathf.Pow(1f - launchT, 3f);
                 var settleT = Mathf.Clamp01(
-                    (elapsed - GameEntrancePieceSettleDelay - pieceDelay)
+                    (elapsed - pieceSettleDelay - pieceDelay)
                     / GameEntrancePieceSettleDuration);
                 var settleEased = Mathf.SmoothStep(
                     0f,
@@ -848,10 +875,12 @@ public class GameScene : MonoBehaviour
                         settleEased)
                     : launchPosition;
                 renderer.transform.localScale = pieceTargetScales[i];
-                var fanRotation = Quaternion.SlerpUnclamped(
-                    pieceStartRotations[i],
-                    Quaternion.identity,
-                    launchEased * 0.45f);
+                var fanRotation = piecesAlreadyFanned
+                    ? pieceFanRotations[i]
+                    : Quaternion.SlerpUnclamped(
+                        pieceStartRotations[i],
+                        pieceFanRotations[i],
+                        launchEased);
                 renderer.transform.rotation = settleT > 0f
                     ? Quaternion.SlerpUnclamped(
                         fanRotation,
@@ -859,7 +888,10 @@ public class GameScene : MonoBehaviour
                         settleEased)
                     : fanRotation;
                 var color = pieceTargetColors[i];
-                color.a *= Mathf.Clamp01(launchT * 2.5f);
+                if (!piecesAlreadyFanned)
+                {
+                    color.a *= Mathf.Clamp01(launchT * 2.5f);
+                }
                 renderer.color = color;
                 if (settleT >= 1f)
                 {

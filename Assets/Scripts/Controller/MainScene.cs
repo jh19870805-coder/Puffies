@@ -65,6 +65,7 @@ public class MainScene : MonoBehaviour
     private const float TearGestureMinTravelPixels = 18f;
     private const float InProgressGameTransitionFadeDuration = 0.22f;
     private const float InProgressGameTransitionHoldDuration = 0.68f;
+    private const float InProgressGameTransitionPreloadTimeout = 5f;
     private const float InProgressPackExitDuration = 0.46f;
     private const float InProgressPackExitScreenHeightRatio = 0.62f;
     private const float InProgressPieceExitCompensation = 0.62f;
@@ -3904,7 +3905,9 @@ public class MainScene : MonoBehaviour
         }
 
         var holdElapsed = 0f;
-        while (holdElapsed < InProgressGameTransitionHoldDuration)
+        while (holdElapsed < InProgressGameTransitionHoldDuration
+               || (!GameManager.IsGameSceneReadyForActivation(mSelectedBagId)
+                   && holdElapsed < InProgressGameTransitionPreloadTimeout))
         {
             holdElapsed += Time.unscaledDeltaTime;
             yield return null;
@@ -3973,13 +3976,13 @@ public class MainScene : MonoBehaviour
         }
 
         StoreInProgressPieceExitPosition();
-        SetSelectedPackageImageVisible(false);
         mPlayAnimationCoroutine = null;
         mHasSwitchedToGameScene = true;
         GameManager.EnterGameScene(
             mSelectedBagId,
             playEntranceAnimation: true,
-            isReplaySession: isReplaySession);
+            isReplaySession: isReplaySession,
+            entrancePiecesAlreadyFanned: true);
     }
 
     private IEnumerator PlaySelectedPackage()
