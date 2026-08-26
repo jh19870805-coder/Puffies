@@ -420,6 +420,11 @@ public class GameScene : MonoBehaviour
         var entrancePiecesAlreadyFanned =
             GameManager.ConsumeGameEntrancePiecesAlreadyFanned();
         var isReplaySession = GameManager.ConsumeGameReplaySession();
+        Debug.Log(
+            $"GameScene: entrance requested. play={playEntranceAnimation}, "
+            + $"piecesAlreadyFanned={entrancePiecesAlreadyFanned}, "
+            + $"transitionPending={CardPackGameEntranceTransition.IsPending}, "
+            + $"replay={isReplaySession}");
         CardPackDataUtility.Initialize();
         _wasSelectedPackCompletedOnEntry = CardPackDataUtility.IsPackCompleted(selectedBagId);
         _isTutorialPending = ShouldOfferPiecePlacementTutorial(selectedBagId, isReplaySession);
@@ -463,9 +468,14 @@ public class GameScene : MonoBehaviour
 
     private IEnumerator PlayGameEntranceAfterPackTransition(bool piecesAlreadyFanned)
     {
+        Debug.Log(
+            $"GameScene: entrance coroutine started. "
+            + $"piecesAlreadyFanned={piecesAlreadyFanned}, "
+            + $"transitionPending={CardPackGameEntranceTransition.IsPending}");
         yield return PlayGameEntranceAnimation(
             piecesAlreadyFanned,
             waitForPackTransition: CardPackGameEntranceTransition.IsPending);
+        Debug.Log("GameScene: entrance coroutine completed.");
     }
 
     private void OnDestroy()
@@ -695,7 +705,9 @@ public class GameScene : MonoBehaviour
                 }
             }
 
+            Debug.Log("GameScene: board/tray hidden; waiting for card pack transition.");
             yield return CardPackGameEntranceTransition.WaitForCompletion();
+            Debug.Log("GameScene: card pack transition finished; starting board/tray entrance.");
         }
 
         var pieceEntranceOrigin = GetPreviousPackBottomWorldPosition(camera, boardCenter);
@@ -1038,8 +1050,15 @@ public class GameScene : MonoBehaviour
             return;
         }
 
-        var canvas = UnityEngine.Object.FindObjectOfType<Canvas>();
+        var canvas = FindGameplayCanvas();
         var parent = canvas != null ? canvas.transform : null;
+        if (parent == null)
+        {
+            Debug.LogError(
+                "GameScene: scene Canvas not found; CardBag prefab cannot be attached safely.");
+            return;
+        }
+
         _loadedCardBagRoot = Instantiate(prefab, parent, false);
         _loadedCardBagRoot.name = prefab.name;
         ApplyCardBoardBackground();
@@ -1059,7 +1078,9 @@ public class GameScene : MonoBehaviour
         _board.IsBoardAndGroovesInitialized = false;
         Debug.Log(
             $"GameScene: loaded card bag prefab Resources/{resourcePath}. "
-            + $"source={(usedPreloadedPrefab ? "preloaded" : "synchronous")}");
+            + $"source={(usedPreloadedPrefab ? "preloaded" : "synchronous")}, "
+            + $"canvasScene={canvas.gameObject.scene.name}, "
+            + $"canvasScale={canvas.transform.localScale}");
     }
 
     private void ApplyCardBoardBackground()
@@ -1149,9 +1170,10 @@ public class GameScene : MonoBehaviour
 
     private void ConfigureGameplayCanvas(Camera camera)
     {
-        var canvas = UnityEngine.Object.FindObjectOfType<Canvas>();
+        var canvas = FindGameplayCanvas();
         if (canvas == null)
         {
+            Debug.LogError("GameScene: scene Canvas not found; gameplay UI cannot be configured.");
             return;
         }
 
@@ -1193,6 +1215,12 @@ public class GameScene : MonoBehaviour
         }
 
         Canvas.ForceUpdateCanvases();
+    }
+
+    private static Canvas FindGameplayCanvas()
+    {
+        var canvasObject = GameCommonUtility.FindSceneObject("Canvas");
+        return canvasObject != null ? canvasObject.GetComponent<Canvas>() : null;
     }
 
     private void EnsureBoardAndGroovesInitialized()

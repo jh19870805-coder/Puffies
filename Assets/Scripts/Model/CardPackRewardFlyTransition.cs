@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -372,7 +373,7 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
 public sealed class CardPackGameEntranceTransition : MonoBehaviour
 {
     private const int GameSceneSettleFrameCount = 2;
-    private const float CompletionTimeoutSeconds = 2f;
+    private const float PlaybackGraceSeconds = 1f;
 
     private static CardPackGameEntranceTransition sInstance;
 
@@ -384,8 +385,6 @@ public sealed class CardPackGameEntranceTransition : MonoBehaviour
     private Vector2[] mPieceStarts;
     private Vector2[] mPieceTargets;
     private float mDuration;
-    private bool mGameSceneReady;
-    private bool mPlaybackStarted;
     private Material mOwnedCoverMaterial;
     private Texture mOwnedMaskTexture;
 
@@ -432,6 +431,10 @@ public sealed class CardPackGameEntranceTransition : MonoBehaviour
 
         sInstance = transition;
         DontDestroyOnLoad(canvas.gameObject);
+        Debug.Log(
+            $"CardPackGameEntranceTransition: prepared. "
+            + $"pieces={transition.mPieceRects.Count}, duration={duration:F2}s, "
+            + $"canvasActive={canvas.gameObject.activeInHierarchy}");
         return true;
     }
 
@@ -448,27 +451,63 @@ public sealed class CardPackGameEntranceTransition : MonoBehaviour
             sInstance.mCanvas.worldCamera = gameCamera;
         }
 
-        sInstance.mGameSceneReady = true;
-        sInstance.StartPlaybackIfReady();
+        Debug.Log(
+            $"CardPackGameEntranceTransition: GameScene camera bound. "
+            + $"canvasActive={sInstance.gameObject.activeInHierarchy}");
     }
 
     public static IEnumerator WaitForCompletion()
     {
-        var waitStartedAt = Time.realtimeSinceStartup;
-        while (sInstance != null
-               && Time.realtimeSinceStartup - waitStartedAt < CompletionTimeoutSeconds)
+        var transition = sInstance;
+        if (transition == null)
         {
+            yield break;
+        }
+
+        if (!transition.gameObject.activeSelf)
+        {
+            transition.gameObject.SetActive(true);
+        }
+
+        Debug.Log("CardPackGameEntranceTransition: GameScene playback started.");
+        var playback = transition.PlayAfterGameSceneIsReady();
+        var deadline = Time.realtimeSinceStartup
+                       + Mathf.Max(0f, transition.mDuration)
+                       + PlaybackGraceSeconds;
+        while (sInstance == transition && Time.realtimeSinceStartup < deadline)
+        {
+            var hasNext = false;
+            try
+            {
+                hasNext = playback.MoveNext();
+            }
+            catch (Exception exception)
+            {
+                Debug.LogException(exception);
+                Debug.LogWarning(
+                    "CardPackGameEntranceTransition: playback failed; "
+                    + "forcing final state so GameScene can continue.");
+                break;
+            }
+
+            if (!hasNext)
+            {
+                break;
+            }
+
+            yield return playback.Current;
+        }
+
+        if (sInstance == transition)
+        {
+            Debug.LogWarning(
+                "CardPackGameEntranceTransition: playback did not complete in time; "
+                + "forcing final state so GameScene can continue.");
+            transition.CompleteImmediately(storeExitPosition: true);
             yield return null;
         }
 
-        if (sInstance != null)
-        {
-            Debug.LogWarning(
-                "CardPackGameEntranceTransition: completion timed out; "
-                + "finishing immediately so GameScene can continue.");
-            sInstance.CompleteImmediately(storeExitPosition: true);
-            yield return null;
-        }
+        Debug.Log("CardPackGameEntranceTransition: GameScene playback completed.");
     }
 
     public static void CancelPending()
@@ -519,17 +558,6 @@ public sealed class CardPackGameEntranceTransition : MonoBehaviour
 
         CloneTransientCoverMaterial(coverImage);
         return true;
-    }
-
-    private void StartPlaybackIfReady()
-    {
-        if (!mGameSceneReady || mPlaybackStarted || !isActiveAndEnabled)
-        {
-            return;
-        }
-
-        mPlaybackStarted = true;
-        StartCoroutine(PlayAfterGameSceneIsReady());
     }
 
     private void CloneTransientCoverMaterial(Image coverImage)
@@ -609,7 +637,6 @@ public sealed class CardPackGameEntranceTransition : MonoBehaviour
 
     private void CompleteImmediately(bool storeExitPosition)
     {
-        StopAllCoroutines();
         if (mPackRect != null)
         {
             mPackRect.anchoredPosition = mPackTarget;
@@ -638,6 +665,9 @@ public sealed class CardPackGameEntranceTransition : MonoBehaviour
             sInstance = null;
         }
 
+        Debug.Log(
+            $"CardPackGameEntranceTransition: released. "
+            + $"storedExitPosition={storeExitPosition}");
         Destroy(gameObject);
     }
 

@@ -903,12 +903,15 @@
 
 1. WHEN 玩家完成至少一组后返回首页并再次进入同一卡包 THEN 撕开卡包 SHALL 正常播放下收与碎片分开动画，随后显示 GameScene 入场。
 2. GameScene SHALL NOT 因跨场景卡包转场协程中断而无限隐藏棋盘、托盘、按钮和碎片。
-3. WHEN GameScene 完成初始化 THEN 跨场景卡包动画 SHALL 在绑定 GameScene Camera 后明确启动，不得依赖 MainScene 卸载前启动的等待协程继续存活。
-4. IF 跨场景转场在合理时间内未完成 THEN 系统 SHALL 强制结束转场并继续 GameScene 入场；返回 MainScene 时 SHALL 清理任何残留转场实例。
+3. WHEN GameScene 完成初始化 THEN 跨场景卡包动画 SHALL 由 GameScene 自己的入场协程驱动，不得依赖跨场景 Canvas 上的 MonoBehaviour 协程继续存活。
+4. IF 跨场景 Canvas 在场景切换期间被禁用 THEN GameScene SHALL 在播放前恢复其激活状态；返回 MainScene 时 SHALL 清理任何残留转场实例。
+5. WHILE 跨场景卡包 Canvas 与 GameScene Canvas 同时存在 THEN GameScene SHALL 只配置当前场景 Canvas，并将 CardBag Prefab 挂到当前场景 Canvas 下；不得使用无场景约束的全局 Canvas 查找。
 
 ### 设计与任务
 
-- [x] 1. 将 `CardPackGameEntranceTransition` 的播放启动从 MainScene 初始化阶段移动到 `NotifyGameSceneReady`，并保证只启动一次。
-- [x] 2. 为 GameScene 等待增加超时完成路径，超时时恢复最终卡包/碎片位置、释放跨场景 Canvas 并解除入场等待。
+- [x] 1. 将 `CardPackGameEntranceTransition` 改为只保存转场数据，由 GameScene 的 `PlayGameEntranceAnimation` 嵌套执行其动画枚举器。
+- [x] 2. 播放前恢复被禁用的跨场景 Canvas；动画完成后设置最终位置、记录发牌起点、释放 Canvas 并同步解除入场等待，不再依赖独立超时协程。
 - [x] 3. MainScene 启动时清理残留的跨场景入场转场，避免静态实例影响下一次进入。
-- [ ] 4. Runtime/Editor 编译与静态差异检查已通过；仍需在 Play Mode 验证“完成一组 -> 返回首页 -> 再次进入”流程。
+- [x] 4. GameScene 逐帧推进转场枚举器；动画时长加 `1s` 后强制完成，并捕获视觉引用异常后走同一释放路径。关键阶段写入日志。
+- [x] 5. GameScene Canvas 配置与 CardBag Prefab 挂载改为按当前激活场景根对象解析，排除 `DontDestroyOnLoad` 的临时转场 Canvas。
+- [ ] 6. Runtime/Editor 编译与静态差异检查已通过；仍需在 Play Mode 验证“完成一组 -> 返回首页 -> 再次进入”流程。

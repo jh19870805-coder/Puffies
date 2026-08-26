@@ -3,11 +3,14 @@
 ## 2026-08-26 进行中卡包重复进入空白修复
 
 - 状态：代码修复完成并通过 Runtime/Editor 编译，等待 Unity Play Mode 流程验收。
-- 复现流程中 `GameScene.Start()` 已正常完成，空白来自跨场景卡包转场协程在 MainScene 卸载后未继续推进；GameScene 一直等待该静态转场实例结束，同时保持棋盘、托盘、按钮和碎片隐藏。
-- `CardPackGameEntranceTransition` 不再于 MainScene 初始化移交对象时启动动画；GameScene 完成初始化、绑定自己的 Camera 并调用 `NotifyGameSceneReady` 后才显式开始播放，且用状态位保证只启动一次。
-- GameScene 等待转场增加 `2s` 上限；超时后立即把卡包和碎片设置到转场终点、记录实际发牌起点、释放跨场景 Canvas 并继续现有棋盘/托盘入场。MainScene 每次启动时也会清理残留实例，避免返回首页后的旧状态影响下一次进入。
-- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Assets/Scripts/Model/CardPackRewardFlyTransition.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
-- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译通过，均为 `0` 警告、`0` 错误；Unity 已重新导入脚本且 `Editor.log` 未发现 C# 编译错误。仍需从 MainScene 进入一个卡包、完成第一组、返回首页，再次点击同一卡包并点击“玩”，验收卡包下收、碎片分开和 GameScene 入场是否完整显示。
+- 最新失败日志确认 `GameScene.Start()`、CardBag Prefab 加载、5 片历史进度恢复、跨场景卡包释放和棋盘/托盘入场均已完整结束；因此本次“卡住”不是流程等待，而是最终画面对象挂载错误。
+- 已确认根因：转场期间同时存在 GameScene Canvas 和 `DontDestroyOnLoad` 的卡包 Canvas，但 `GameScene` 原来使用全局 `FindObjectOfType<Canvas>()`。运行时可能把临时卡包 Canvas 当作游戏 Canvas 配置，并将 `CardBag002` 实例挂在临时 Canvas 下；转场释放该 Canvas 时棋盘随之销毁，真正的 GameScene Canvas 又保持场景序列化的零缩放，最终表现为空白。
+- `ConfigureGameplayCanvas` 和 `EnsureCardBagLoaded` 现在都只通过当前激活场景的根对象 `Canvas` 获取 GameScene Canvas。找不到时直接报错并停止错误挂载，不再回退到任意全局 Canvas。
+- `CardPackGameEntranceTransition` 现在只保存跨场景卡包、碎片、材质和位置信息，不再通过自身 `StartCoroutine` 决定流程推进。GameScene 完成初始化并绑定自己的 Camera 后，直接在 GameScene 的入场协程中执行该转场枚举器；即使 Canvas 曾被禁用，也会先恢复激活，再稳定两帧、完成原 `0.46s` 卡包下收和碎片分开，然后立即继续棋盘、托盘和发牌入场。
+- 已移除上一版依赖 Canvas 自身协程和 `2s` 超时解锁的方案；MainScene 启动时仍清理残留实例，避免返回首页后的旧状态影响下一次进入。
+- 转场枚举器由 GameScene 逐帧显式 `MoveNext`，完成边界为动画时长加 `1s` 宽限；超时或任一已卸载 UI 引用抛异常时，立即设置最终位置、记录发牌点并释放 Canvas，不能继续阻断玩法。`prepared -> camera bound -> playback started -> released -> board/tray entrance -> entrance completed` 均有阶段日志，后续可按实际最后一条日志精确定位。
+- 修改文件：`Assets/Scripts/Controller/GameScene.cs`、`Assets/Scripts/Model/CardPackRewardFlyTransition.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
+- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译通过，均为 `0` 警告、`0` 错误；`git diff --check` 通过。仍需退出当前 Play Mode 等 Unity 完成脚本重编译，再次从带碎片的撕开卡包点击“玩”，确认 GameScene 棋盘、托盘、已恢复拼图和当前组碎片正常显示。
 
 ## 2026-08-26 Loading 与入场动画卡顿优化
 
