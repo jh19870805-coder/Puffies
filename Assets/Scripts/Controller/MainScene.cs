@@ -21,7 +21,7 @@ public class MainScene : MonoBehaviour
     private const float PackageSlotWidth = 240f;
     private const float PackageSlotHeight = 272f;
     private const float PackageCoverWidth = 240f;
-    private const float PackageCoverHeight = 272f;
+    internal const float PackageCoverHeight = 272f;
     private const float PackageHorizontalSpacing = 20f;
     private const float PackageVerticalSpacing = 20f;
     private const float DefaultPackagePageWidth = 1625f;
@@ -32,8 +32,8 @@ public class MainScene : MonoBehaviour
     private const int PackageListBuildBatchSize = 4;
     private const int PackTornMaskCount = 6;
     private const int InProgressPackPieceCount = 3;
-    private const float InProgressPackPieceMaxSize = 86f;
-    private const float InProgressPackPieceScaleMultiplier = 1.4f;
+    internal const float InProgressPackPieceMaxSize = 86f;
+    internal const float InProgressPackPieceScaleMultiplier = 1.4f;
     private const float InProgressPackPieceFloatDistance = 6f;
     private const float InProgressPackPieceFloatDuration = 6f;
     private const float InProgressPackPieceHorizontalMargin = 2f;
@@ -4004,7 +4004,8 @@ public class MainScene : MonoBehaviour
 
     private IEnumerator PlayTornPackageGameTransition(
         bool isReplaySession,
-        bool backgroundHandoffCompleted = false)
+        bool backgroundHandoffCompleted = false,
+        bool piecesReadyToDealImmediately = false)
     {
         StopOpeningHintAnimation();
         mIsPlayingAnimation = true;
@@ -4016,12 +4017,27 @@ public class MainScene : MonoBehaviour
         }
 
         var holdElapsed = 0f;
-        while (holdElapsed < InProgressGameTransitionHoldDuration
+        var requiredHoldDuration = piecesReadyToDealImmediately
+            ? 0f
+            : InProgressGameTransitionHoldDuration;
+        while (holdElapsed < requiredHoldDuration
                || (!GameManager.IsGameSceneReadyForActivation(mSelectedBagId)
                    && holdElapsed < InProgressGameTransitionPreloadTimeout))
         {
             holdElapsed += Time.unscaledDeltaTime;
             yield return null;
+        }
+
+        if (piecesReadyToDealImmediately)
+        {
+            mPlayAnimationCoroutine = null;
+            mHasSwitchedToGameScene = true;
+            GameManager.EnterGameScene(
+                mSelectedBagId,
+                playEntranceAnimation: true,
+                isReplaySession: isReplaySession,
+                entrancePiecesAlreadyFanned: true);
+            yield break;
         }
 
         StoreOpeningPackExitPosition();
@@ -4061,7 +4077,7 @@ public class MainScene : MonoBehaviour
                 mSelectedBagId,
                 playEntranceAnimation: true,
                 isReplaySession: isReplaySession,
-                entrancePiecesAlreadyFanned: false);
+                entrancePiecesAlreadyFanned: piecesReadyToDealImmediately);
             yield break;
         }
 
@@ -4133,7 +4149,7 @@ public class MainScene : MonoBehaviour
             mSelectedBagId,
             playEntranceAnimation: true,
             isReplaySession: isReplaySession,
-            entrancePiecesAlreadyFanned: false);
+            entrancePiecesAlreadyFanned: piecesReadyToDealImmediately);
     }
 
     private IEnumerator PlayMainToGameBackgroundHandoff()
@@ -4249,6 +4265,7 @@ public class MainScene : MonoBehaviour
         StoreOpeningPackExitPosition();
 
         var openingEffectStarted = false;
+        var firstGroupPieceSprites = LoadFirstGroupPieceSprites(selectedBagId);
         var packTexture = mSelectedPackageOverlayImage != null
             && mSelectedPackageOverlayImage.sprite != null
             ? mSelectedPackageOverlayImage.sprite.texture
@@ -4264,7 +4281,10 @@ public class MainScene : MonoBehaviour
             }
 
             openingEffectStarted = mCardPackOpeningEffect != null
-                && mCardPackOpeningEffect.Begin(packTexture, mSelectedPackageOverlayRect);
+                && mCardPackOpeningEffect.Begin(
+                    packTexture,
+                    mSelectedPackageOverlayRect,
+                    firstGroupPieceSprites);
         }
 
         SetBagSelectPanelVisible(false);
@@ -4305,28 +4325,73 @@ public class MainScene : MonoBehaviour
             yield return null;
         }
 
-        PrepareOpenedPackageTransitionVisual();
-        yield return PlayTornPackageGameTransition(
-            isReplaySession,
-            backgroundHandoffCompleted: true);
-    }
-
-    private void PrepareOpenedPackageTransitionVisual()
-    {
-        if (mSelectedPackageOverlayImage == null || mSelectedPackageOverlayRect == null)
+        var emergedPieceOrigin = default(Vector2);
+        var piecesReadyToDealImmediately = openingEffectStarted
+            && mCardPackOpeningEffect.TryGetEmergedPieceScreenOrigin(
+                out emergedPieceOrigin);
+        if (piecesReadyToDealImmediately)
         {
-            return;
+            GameManager.SetOpeningPackExitPosition(emergedPieceOrigin);
         }
 
-        ApplyPackageTornMask(
-            mSelectedPackageOverlayImage,
-            mSelectedPackageEntry?.VisualSettings,
-            shouldShowTornState: true,
-            isCompleted: false);
-        mSelectedPackageOverlayRect.anchoredPosition = mSelectedPackageDisplayPosition;
-        SetSelectedPackageVisualSize(mSelectedPackageDisplaySize);
-        SetSelectedPackageImageAlpha(1f);
-        SetSelectedPackageImageVisible(true);
+        if (mSelectedPackageVisualContent != null)
+        {
+            mSelectedPackageVisualContent.gameObject.SetActive(false);
+        }
+
+        ClearSelectedPackageVisual();
+        yield return PlayTornPackageGameTransition(
+            isReplaySession,
+            backgroundHandoffCompleted: true,
+            piecesReadyToDealImmediately: piecesReadyToDealImmediately);
+    }
+
+    private static List<Sprite> LoadFirstGroupPieceSprites(int packId)
+    {
+        var sprites = new List<Sprite>();
+        var cardBagPrefab = Resources.Load<GameObject>(
+            GameDefine.FormatCardBagPrefabResourcesPath(packId));
+        if (cardBagPrefab == null)
+        {
+            Debug.LogWarning(
+                $"MainScene: opening pieces skipped; CardBag prefab not found. packId={packId}");
+            return sprites;
+        }
+
+        var indexedSprites = new List<KeyValuePair<int, Sprite>>();
+        var pieceImages = cardBagPrefab.GetComponentsInChildren<Image>(true);
+        for (var i = 0; i < pieceImages.Length; i++)
+        {
+            var pieceImage = pieceImages[i];
+            if (pieceImage == null
+                || pieceImage.sprite == null
+                || !GameDefine.TryParsePieceObjectName(
+                    pieceImage.gameObject.name,
+                    out var groupNumber,
+                    out var indexInGroup,
+                    out _)
+                || groupNumber != 1)
+            {
+                continue;
+            }
+
+            indexedSprites.Add(
+                new KeyValuePair<int, Sprite>(indexInGroup, pieceImage.sprite));
+        }
+
+        indexedSprites.Sort((left, right) => left.Key.CompareTo(right.Key));
+        for (var i = 0; i < indexedSprites.Count; i++)
+        {
+            sprites.Add(indexedSprites[i].Value);
+        }
+
+        if (sprites.Count == 0)
+        {
+            Debug.LogWarning(
+                $"MainScene: opening pieces skipped; first group is empty. packId={packId}");
+        }
+
+        return sprites;
     }
 
     private void StoreOpeningPackExitPosition()
@@ -4679,6 +4744,16 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
     private const float ModelVisibleDuration = 1.6f;
     private const float LightEffectDelay = 0.5f;
     private const float LightEffectVisibleDuration = 1.1f;
+    private const float PieceEmergeDelay = 0.08f;
+    private const float PieceEmergeStagger = 0.025f;
+    private const float PieceMaximumPackHeightRatio =
+        MainScene.InProgressPackPieceMaxSize
+        * MainScene.InProgressPackPieceScaleMultiplier
+        / MainScene.PackageCoverHeight;
+    private const float PieceRisePackHeightRatio = 0.24f;
+    private const float PieceSpreadPackWidthRatio = 0.28f;
+    private const float PieceDepthBehindPack = 0.2f;
+    private const int PieceSortingOrderBehindPack = -100;
     private const uint LightEffectRandomSeed = 1u;
     private const float FallbackAnimationDuration = 1.8333334f;
     private const string ModelPathFormat = "Effects/CardPack/Models/CardPackOpeningModel_{0:D3}";
@@ -4697,6 +4772,10 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
     private Camera mMainCamera;
     private Animator mAnimator;
     private Material mFrontMaterial;
+    private readonly List<SpriteRenderer> mEmergedPieceRenderers =
+        new List<SpriteRenderer>();
+    private Vector3[] mEmergedPieceStartPositions = Array.Empty<Vector3>();
+    private Vector3[] mEmergedPieceFinalPositions = Array.Empty<Vector3>();
     private int mOriginalCameraCullingMask;
     private bool mDidOverrideCameraCullingMask;
     private float mAnimationDuration;
@@ -4737,7 +4816,10 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         return effect;
     }
 
-    public bool Begin(Texture packTexture, RectTransform displayedPackRect)
+    public bool Begin(
+        Texture packTexture,
+        RectTransform displayedPackRect,
+        IReadOnlyList<Sprite> firstGroupPieceSprites)
     {
         CleanupPlaybackResources();
         if (packTexture == null || displayedPackRect == null)
@@ -4829,6 +4911,7 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
 
         StopAndClearParticleSystems(mLightEffectObject);
         mLightEffectObject.SetActive(false);
+        PrepareEmergedPieces(firstGroupPieceSprites);
 
         gameObject.SetActive(true);
         mIsPrepared = true;
@@ -4885,11 +4968,169 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
                 StartLightEffect();
             }
 
+            UpdateEmergedPieces(elapsed, playbackDuration);
+
             yield return null;
         }
 
+        CompleteEmergedPieces();
         ReleaseSceneLightEffect();
         mIsPlaying = false;
+    }
+
+    public bool TryGetEmergedPieceScreenOrigin(out Vector2 normalizedScreenPosition)
+    {
+        normalizedScreenPosition = default;
+        if (mMainCamera == null
+            || mEmergedPieceFinalPositions.Length == 0
+            || Screen.width <= 0
+            || Screen.height <= 0)
+        {
+            return false;
+        }
+
+        var worldCenter = Vector3.zero;
+        for (var i = 0; i < mEmergedPieceFinalPositions.Length; i++)
+        {
+            worldCenter += mEmergedPieceFinalPositions[i];
+        }
+
+        worldCenter /= mEmergedPieceFinalPositions.Length;
+        var screenCenter = mMainCamera.WorldToScreenPoint(worldCenter);
+        if (screenCenter.z <= 0f)
+        {
+            return false;
+        }
+
+        normalizedScreenPosition = new Vector2(
+            Mathf.Clamp01(screenCenter.x / Screen.width),
+            Mathf.Clamp01(screenCenter.y / Screen.height));
+        return true;
+    }
+
+    private void PrepareEmergedPieces(IReadOnlyList<Sprite> pieceSprites)
+    {
+        mEmergedPieceRenderers.Clear();
+        mEmergedPieceStartPositions = Array.Empty<Vector3>();
+        mEmergedPieceFinalPositions = Array.Empty<Vector3>();
+        if (pieceSprites == null || pieceSprites.Count == 0 || mWorldRoot == null)
+        {
+            return;
+        }
+
+        var frontRenderers = GetFrontCardRenderers(mModelObject);
+        if (!TryGetRendererBounds(frontRenderers, out var packBounds))
+        {
+            return;
+        }
+
+        var largestPieceSide = 0f;
+        for (var i = 0; i < pieceSprites.Count; i++)
+        {
+            var sprite = pieceSprites[i];
+            if (sprite != null)
+            {
+                largestPieceSide = Mathf.Max(
+                    largestPieceSide,
+                    sprite.bounds.size.x,
+                    sprite.bounds.size.y);
+            }
+        }
+
+        if (largestPieceSide <= 0.0001f)
+        {
+            return;
+        }
+
+        var pieceRoot = new GameObject("OpeningFirstGroupPieces");
+        pieceRoot.layer = EffectLayer;
+        pieceRoot.transform.SetParent(mWorldRoot.transform, false);
+        var pieceScale = packBounds.size.y
+                         * PieceMaximumPackHeightRatio
+                         / largestPieceSide;
+        var tearPosition = mLightEffectObject.transform.position;
+        tearPosition.z = ModelWorldDepth + PieceDepthBehindPack;
+        var pieceCount = pieceSprites.Count;
+        mEmergedPieceStartPositions = new Vector3[pieceCount];
+        mEmergedPieceFinalPositions = new Vector3[pieceCount];
+        for (var i = 0; i < pieceCount; i++)
+        {
+            var normalizedIndex = pieceCount > 1
+                ? i / (float)(pieceCount - 1) - 0.5f
+                : 0f;
+            var horizontalOffset = normalizedIndex
+                                   * packBounds.size.x
+                                   * PieceSpreadPackWidthRatio;
+            var verticalOffset = packBounds.size.y
+                                 * (PieceRisePackHeightRatio
+                                    + (i % 3) * 0.018f);
+            var startPosition = tearPosition + new Vector3(
+                horizontalOffset * 0.12f,
+                -packBounds.size.y * 0.015f,
+                0f);
+            var finalPosition = tearPosition + new Vector3(
+                horizontalOffset,
+                verticalOffset,
+                0f);
+            mEmergedPieceStartPositions[i] = startPosition;
+            mEmergedPieceFinalPositions[i] = finalPosition;
+
+            var pieceObject = new GameObject($"OpeningPiece{i + 1:D2}");
+            pieceObject.layer = EffectLayer;
+            pieceObject.transform.SetParent(pieceRoot.transform, false);
+            pieceObject.transform.position = startPosition;
+            pieceObject.transform.localScale = Vector3.one * pieceScale;
+            pieceObject.transform.rotation = Quaternion.Euler(
+                0f,
+                0f,
+                normalizedIndex * 12f);
+            var renderer = pieceObject.AddComponent<SpriteRenderer>();
+            renderer.sprite = pieceSprites[i];
+            renderer.sortingOrder = PieceSortingOrderBehindPack;
+            renderer.color = new Color(1f, 1f, 1f, 0f);
+            mEmergedPieceRenderers.Add(renderer);
+        }
+    }
+
+    private void UpdateEmergedPieces(float elapsed, float playbackDuration)
+    {
+        for (var i = 0; i < mEmergedPieceRenderers.Count; i++)
+        {
+            var renderer = mEmergedPieceRenderers[i];
+            if (renderer == null)
+            {
+                continue;
+            }
+
+            var pieceStartTime = PieceEmergeDelay + i * PieceEmergeStagger;
+            var pieceDuration = Mathf.Max(0.1f, playbackDuration - pieceStartTime);
+            var normalized = Mathf.Clamp01((elapsed - pieceStartTime) / pieceDuration);
+            var eased = Mathf.SmoothStep(0f, 1f, normalized);
+            renderer.transform.position = Vector3.LerpUnclamped(
+                mEmergedPieceStartPositions[i],
+                mEmergedPieceFinalPositions[i],
+                eased);
+            var color = renderer.color;
+            color.a = eased;
+            renderer.color = color;
+        }
+    }
+
+    private void CompleteEmergedPieces()
+    {
+        for (var i = 0; i < mEmergedPieceRenderers.Count; i++)
+        {
+            var renderer = mEmergedPieceRenderers[i];
+            if (renderer == null)
+            {
+                continue;
+            }
+
+            renderer.transform.position = mEmergedPieceFinalPositions[i];
+            var color = renderer.color;
+            color.a = 1f;
+            renderer.color = color;
+        }
     }
 
     private bool CreateRenderStage()
@@ -5191,6 +5432,9 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         mAnimator = null;
         mAnimationDuration = 0f;
         mPlaybackStartTime = 0f;
+        mEmergedPieceRenderers.Clear();
+        mEmergedPieceStartPositions = Array.Empty<Vector3>();
+        mEmergedPieceFinalPositions = Array.Empty<Vector3>();
     }
 
     private void OnDestroy()

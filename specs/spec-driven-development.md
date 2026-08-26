@@ -818,6 +818,7 @@
 17. WHEN 选中状态为彩色撕开进行中或灰色撕开已完成重玩 THEN SHALL 跳过拆包特效；灰色重玩仍须先显示 `PanelReplay`。WHEN 玩家确认重玩 THEN `PanelReplay` SHALL 立即隐藏，系统 SHALL 恢复确认前同一份灰色撕开选中视觉，再重置会话并执行统一转场；不得从隐藏的列表槽位重新克隆卡包，卡包颜色、撕开样式、尺寸和位置不得改变。
 18. WHEN GameScene 激活 THEN 棋盘、PieceBoard 与游戏按钮入场 SHALL 和卡包慢速下落并行开始；卡包越过初始碎片区域后 SHALL 加速掉出屏幕。
 19. WHEN 卡包完整下落到初始碎片区域下方 THEN 首页装饰 `ProgressPieces` SHALL 隐藏，GameScene 当前组真实 Piece SHALL 保持叠放直到各自错峰时间到达，再与卡包加速下坠并行直飞托盘终点。
+20. WHEN 完整彩色卡包通过点击或滑动开始拆包 THEN 系统 SHALL 在拆包动画播放期间读取对应 `CardBagNNN.prefab` 第一组全部真实 Piece Sprite，并以场景 `PackObject/fx_chai_w_001` 的实际世界位置作为撕口锚点，让碎片在卡包后方从撕口向上冒出。碎片 SHALL 沿用首页 `86px * 1.4` 的最大边基准，并与卡包从 `240x272` 放大到 `600x680` 使用相同比例，展开状态最大边约为 `301px`；位移与 Alpha SHALL 使用覆盖主要拆包窗口的慢进慢出曲线。WHEN 滑光主可见窗口结束 THEN 系统 SHALL 保存临时碎片最终中心，隐藏并销毁选中静态卡包内容，不得再次显示撕开静态包或执行卡包下落，然后直接激活 GameScene；当前组真实可交互 Piece SHALL 在同一屏幕位置接管，且与棋盘、托盘和游戏按钮入场同步开始，按托盘顺序依次直飞各自终点，不得创建 `CardPackGameEntranceTransition`，也不得增加完整包专属静止等待、淡入、预散开、起点覆盖或重复视觉。彩色进行中包和灰色重玩包 SHALL 保持第 16、18、19 条的可见卡包越过后发牌规则。
 
 ### 设计与任务
 

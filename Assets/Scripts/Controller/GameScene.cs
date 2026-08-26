@@ -676,11 +676,20 @@ public class GameScene : MonoBehaviour
         SetCanvasGroupAlpha(hintCanvasGroup, 0f);
 
         Coroutine pieceDealCoroutine = null;
-        if (waitForPackTransition)
+        if (piecesAlreadyFanned)
+        {
+            pieceDealCoroutine = StartCoroutine(
+                PlayCurrentGroupPieceDealAnimation(
+                    waitForPackTransition: false,
+                    startVisibleAtOpeningOrigin: true));
+        }
+        else if (waitForPackTransition)
         {
             // Cache tray targets and show the pieces before moving the tray off-screen.
             pieceDealCoroutine = StartCoroutine(
-                PlayCurrentGroupPieceDealAnimation(waitForPackTransition: true));
+                PlayCurrentGroupPieceDealAnimation(
+                    waitForPackTransition: true,
+                    startVisibleAtOpeningOrigin: false));
         }
         else
         {
@@ -783,7 +792,8 @@ public class GameScene : MonoBehaviour
         else
         {
             yield return PlayCurrentGroupPieceDealAnimation(
-                waitForPackTransition: false);
+                waitForPackTransition: false,
+                startVisibleAtOpeningOrigin: false);
         }
 
         _isEntranceAnimating = false;
@@ -797,7 +807,8 @@ public class GameScene : MonoBehaviour
     }
 
     private IEnumerator PlayCurrentGroupPieceDealAnimation(
-        bool waitForPackTransition)
+        bool waitForPackTransition,
+        bool startVisibleAtOpeningOrigin)
     {
         var camera = Camera.main;
         var boardCenter = _board.GameBoardImage != null && camera != null
@@ -830,14 +841,14 @@ public class GameScene : MonoBehaviour
             pieceTargetColors[i] = renderer.color;
             var angle = i * 137.5f * Mathf.Deg2Rad;
             var radius = 0.025f + (i % 3) * 0.012f;
-            pieceStarts[i] = waitForPackTransition
+            pieceStarts[i] = waitForPackTransition || startVisibleAtOpeningOrigin
                 ? pieceEntranceOrigin
                 : pieceEntranceOrigin + new Vector3(
                     Mathf.Cos(angle) * radius,
                     Mathf.Sin(angle) * radius,
                     0f);
             pieceStarts[i].z = pieceTargets[i].z;
-            pieceStartRotations[i] = waitForPackTransition
+            pieceStartRotations[i] = waitForPackTransition || startVisibleAtOpeningOrigin
                 ? Quaternion.identity
                 : Quaternion.Euler(
                     0f,
@@ -848,7 +859,7 @@ public class GameScene : MonoBehaviour
             renderer.transform.localScale = pieceTargetScales[i];
             renderer.transform.rotation = pieceStartRotations[i];
             var color = pieceTargetColors[i];
-            if (!waitForPackTransition)
+            if (!waitForPackTransition && !startVisibleAtOpeningOrigin)
             {
                 color.a = 0f;
             }
@@ -905,7 +916,7 @@ public class GameScene : MonoBehaviour
                     pieceTargetRotations[i],
                     flightEased);
                 var color = pieceTargetColors[i];
-                if (!waitForPackTransition)
+                if (!waitForPackTransition && !startVisibleAtOpeningOrigin)
                 {
                     color.a *= Mathf.Clamp01(flightT * 2.5f);
                 }
