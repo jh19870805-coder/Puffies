@@ -1,5 +1,24 @@
 # 当前任务
 
+## 2026-08-26 首页卡包整体父节点缩放
+
+- 状态：实现完成并通过 Runtime/Editor 编译，等待 MainScene 视觉验收。
+- 美术资源更新时清空了 `PackItem.prefab` 的 `Completed Size Material` 和 `PackSize/Image` 编辑器预览材质引用，导致代码虽然执行状态切换，但完成态得到空材质。现已重新绑定 `PackSizeCompleted.mat`；普通态继续使用默认 UI 材质，标签 RectTransform 保持美术配置不变。
+- 首页列表不再分别修改 `PackCover`、`PackBg` 或 `PackSize` 子节点的 RectTransform。MainScene 根据美术 `PackCover` 原始尺寸与列表目标 `240 x 272` 计算统一比例，并只缩放共同父节点 `PackNode`。
+- 当前美术封面为 `600 x 680`，因此列表 `PackNode.localScale` 为 `0.4`。`PackSize` 的美术尺寸、位置、锚点和 Pivot 均保持 Prefab 原值，并随父节点同步缩小和移动；其他卡包子视觉也使用同一比例。
+- `PackAniBreath` 没有 Scale 曲线，不会覆盖程序设置的父节点列表缩放。
+- 修改文件：`Assets/Prefabs/PackItem.prefab`、`Assets/Scripts/Controller/MainScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
+- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 编译通过，均为 `0` 警告、`0` 错误；`PackItem.prefab` 的完成态配置和 `PackSize/Image` 编辑器预览均已引用 `PackSizeCompleted.mat` 的有效 GUID；代码中已无对 `PackSize` RectTransform 的缩放或定位写入。仍需在 MainScene Play Mode 检查普通、进行中和已完成三种尺寸标签状态。
+
+## 2026-08-26 卡包尺寸标签使用美术 Prefab 布局
+
+- 状态：实现完成并通过 Runtime/Editor 编译，等待 MainScene 视觉验收。
+- 美术已更新卡包尺寸图片及 `PackItem.prefab/PackSize` 的尺寸、位置、锚点和 Pivot。MainScene 不再直接修改 `PackSize` 的 RectTransform；列表实例沿用 Prefab 配置并随共同父节点 `PackNode` 整体缩放。
+- 保留按 `CardPacks.csv/PackSize` 动态替换对应 `PackSize_1~7.png` 的逻辑，以及普通/完成态材质选择；这些逻辑不修改尺寸和位置。
+- 已删除 `PackageSizeListVisualScale`、`ScalePackageSizeWithCover` 及创建列表项时的调用。
+- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
+- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 编译通过，均为 `0` 警告、`0` 错误；代码中已无 `PackSize` RectTransform 缩放或定位写入；`git diff --check` 通过。仍需在 MainScene Play Mode 确认各尺寸图片完全按最新 Prefab 布局显示。
+
 ## 2026-08-25 首页卡包尺寸标签等比缩放
 
 - 状态：实现完成并通过 Runtime/Editor 编译，等待 MainScene 视觉验收。
