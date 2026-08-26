@@ -1465,6 +1465,7 @@ public class MainScene : MonoBehaviour
         SetPanelVisible(mReplayPanelRoot, false);
         mIsReplayConfirmationVisible = false;
         mIsSelectedPackageReplay = true;
+        RestoreCompletedReplayTransitionVisual();
         if (!CardPackDataUtility.TryClearPuzzleSession(mSelectedBagId))
         {
             Debug.LogWarning(
@@ -1477,29 +1478,27 @@ public class MainScene : MonoBehaviour
                 $"MainScene: failed to create puzzle session for replay. packId={mSelectedBagId}");
         }
 
-        PrepareCompletedReplayTransitionVisual();
         mPlayAnimationCoroutine = StartCoroutine(
             PlayTornPackageGameTransition(isReplaySession: true));
     }
 
-    private void PrepareCompletedReplayTransitionVisual()
+    private void RestoreCompletedReplayTransitionVisual()
     {
-        if (mSelectedPackageEntry == null)
-        {
-            return;
-        }
-
-        if (!CreateSelectedPackageVisual(mSelectedPackageEntry))
+        if (mSelectedPackageVisualContent == null
+            || mSelectedPackageOverlayImage == null
+            || mSelectedPackageOverlayRect == null)
         {
             Debug.LogWarning(
-                $"MainScene: completed replay transition visual is unavailable. "
+                $"MainScene: completed replay visual could not be restored. "
                 + $"packId={mSelectedBagId}");
             return;
         }
 
+        mSelectedPackageOverlayRect.anchoredPosition = mSelectedPackageDisplayPosition;
         SetSelectedPackageVisualSize(mSelectedPackageDisplaySize);
+        SetSelectedPackageImageAlpha(1f);
         SetSelectedPackageImageVisible(true);
-        SyncSelectedPackageAnimator(mSelectedPackageEntry);
+        mIsSelectedPackageProgressPieceTransitioning = false;
     }
 
     private void OnReplayCancelled()

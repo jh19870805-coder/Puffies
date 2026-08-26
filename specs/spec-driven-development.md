@@ -815,7 +815,7 @@
 14. WHEN 玩家点击“玩”或确认“重玩” THEN 选中卡包 SHALL 保持当前位置和尺寸不动，`PanelBagSelect` SHALL 向下滑出，首页背景与 `PackageScrollView` 所在的运行时内容容器及虚化背景 SHALL 向左滑出，`BgGame` SHALL 从右侧同步滑入；不得移动 `Screen Space - Camera` 根 Canvas，也不得用透明度渐变替代横向背景交接。本流程的视觉动画、停顿和错峰间隔 SHALL 使用基础参数的 `1.5` 倍时长，场景加载保护超时、预热帧数和单帧最大推进量除外。
 15. WHEN 选中状态为完整彩色 THEN 背景交接完成后 SHALL 播放滑光提示并等待点击或横划；拆包特效完成后 SHALL 恢复同位置的撕开静态卡包，再执行统一游戏入场流程。
 16. WHEN GameScene 开始播放入场 THEN 系统 SHALL 先缓存托盘终点并把当前组真实 Piece 以最终托盘缩放直接叠放在卡包初始中心；统一稳定两帧后，卡包下落与棋盘、托盘和游戏按钮入场 SHALL 立即在同一帧开始，不得再有独立起步延迟。卡包按自身实际显示高度下落到碎片区域下方后，Piece 才按托盘顺序从同一个初始位置依次直飞各自终点。Piece 不得先散开，也不得从卡包下坠后的低位向上滑入。
-17. WHEN 选中状态为彩色撕开进行中或灰色撕开已完成重玩 THEN SHALL 跳过拆包特效；灰色重玩仍须先显示 `PanelReplay` 并在确认后重置会话，卡包颜色和撕开样式不得改变。
+17. WHEN 选中状态为彩色撕开进行中或灰色撕开已完成重玩 THEN SHALL 跳过拆包特效；灰色重玩仍须先显示 `PanelReplay`。WHEN 玩家确认重玩 THEN `PanelReplay` SHALL 立即隐藏，系统 SHALL 恢复确认前同一份灰色撕开选中视觉，再重置会话并执行统一转场；不得从隐藏的列表槽位重新克隆卡包，卡包颜色、撕开样式、尺寸和位置不得改变。
 18. WHEN GameScene 激活 THEN 棋盘、PieceBoard 与游戏按钮入场 SHALL 和卡包慢速下落并行开始；卡包越过初始碎片区域后 SHALL 加速掉出屏幕。
 19. WHEN 卡包完整下落到初始碎片区域下方 THEN 首页装饰 `ProgressPieces` SHALL 隐藏，GameScene 当前组真实 Piece SHALL 保持叠放直到各自错峰时间到达，再与卡包加速下坠并行直飞托盘终点。
 
