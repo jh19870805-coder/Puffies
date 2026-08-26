@@ -1,5 +1,17 @@
 # 当前任务
 
+## 2026-08-26 卡包进入游戏动画流程重排
+
+- 状态：代码实现完成并通过 Runtime/Editor 编译，等待 Unity Play Mode 视觉验收。
+- 点击“玩”或确认“重玩”后，选中卡包保持当前位置和尺寸不动；运行时将首页背景与 `PackageScrollView` 归入 `MainPageTransitionRoot`，该首页内容容器与虚化背景一起向左滑出，`PanelBagSelect` 向下滑出，`BgGame` 从右侧同步滑入。转场不再移动由 Unity 驱动的根 Canvas，因此底部卡包列表会和首页一起完整退场。
+- 完整彩色卡包在背景交接后继续播放滑光提示并等待点击或横划；拆包特效完成后恢复同位置的撕开静态卡包，再进入统一的撕开包流程。彩色进行中和灰色重玩直接进入统一流程，重玩二次确认及进度重置不变。
+- GameScene 激活后，当前组真实 Piece 先以最终托盘缩放叠放在卡包初始中心；只保留统一的两帧起始姿态稳定，随后卡包下落与棋盘、托盘、返回和提示按钮入场立即在同一帧并行播放。棋盘与按钮原有的 `0.42s` 起步延迟已移除，卡包也不再重复等待额外两帧。碎片仍等待卡包完整越过后再直飞终点。
+- 卡包慢速下落分界不再使用固定 `24%`，而是读取卡包 RectTransform 的实际显示高度。卡包完整落到初始碎片区域下方后，首页装饰碎片隐藏，卡包开始加速掉出屏幕；真实 Piece 不再预先散开，而是按托盘顺序从同一个初始位置依次直飞各自终点。
+- GameScene Canvas 与 CardBag Prefab 仍只按当前激活场景查找和挂载，避免跨场景卡包 Canvas 销毁时带走棋盘。
+- 本次流程的视觉动画继续按基础参数的 `1.5` 倍执行：首页交接 `0.42s`、卡包两段下坠合计 `0.69s`；卡包切入游戏背景后的最短静止等待再次减半，由 `0.51s` 改为 `0.255s`。GameScene 棋盘、托盘、按钮及 Piece 直飞的时长和错峰间隔不变；场景预加载 `5s` 超时、统一两帧稳定和单帧最大推进量不变。
+- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Assets/Scripts/Controller/GameScene.cs`、`Assets/Scripts/Model/CardPackRewardFlyTransition.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
+- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译通过，均为 `0` 警告、`0` 错误；`git diff --check` 通过。Unity Play Mode 需重点确认切入停顿明显缩短，统一两帧后卡包、棋盘和托盘立即同帧起动。
+
 ## 2026-08-26 进行中卡包重复进入空白修复
 
 - 状态：代码修复完成并通过 Runtime/Editor 编译，等待 Unity Play Mode 流程验收。

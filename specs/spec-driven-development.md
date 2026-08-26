@@ -812,8 +812,12 @@
 11. `PackSize` SHALL 直接使用 `PackItem.prefab` 中美术配置的尺寸、位置、锚点和 Pivot；程序 SHALL 只替换对应尺寸图片及状态材质，不得直接调整其 RectTransform。首页列表 SHALL 通过统一缩放共同父节点 `PackNode`，让尺寸标签与卡包其他视觉保持相对布局并同步缩小。
 12. WHEN 玩家选中卡包 THEN 选中层 SHALL 复制列表当前完整 `PackNode` 并统一放大，撕口、`PackBg`、`ProgressPieces`、封面、尺寸标签和状态材质 SHALL 与列表一致。
 13. WHEN 选中状态为完整彩色 THEN 点击“玩” SHALL 进入拆包舞台并执行等待操作、拆包模型、粒子和后续 GameScene 入场完整流程。
-14. WHEN 选中状态为彩色撕开进行中 THEN 点击“玩” SHALL 跳过拆包特效；选择 UI SHALL 先退场并只保留展开卡包，卡包短暂停顿后 SHALL 向下收走，`ProgressPieces` SHALL 相对撕口向上脱出；MainScene SHALL 在卡包下收前等待 GameScene 预加载可激活，并向 GameScene 传递碎片已扇出状态。GameScene SHALL 首帧直接显示扇出 Piece，不得重复扇出或再次停顿；PieceBoard SHALL 先进入，棋盘 SHALL 延迟从右侧滑入，Piece SHALL 连续落入托盘。
-15. WHEN 选中状态为灰色撕开已完成 THEN 点击“重玩” SHALL 先显示 `PanelReplay`；确认后 SHALL 清除旧会话、创建空会话，并在保持灰色撕开卡包样式的前提下临时显示本关转场碎片，再执行与彩色撕开进行中卡包相同的卡包下收、碎片发出、棋盘右侧滑入和碎片落入托盘流程；不得播放完整拆包动画。
+14. WHEN 玩家点击“玩”或确认“重玩” THEN 选中卡包 SHALL 保持当前位置和尺寸不动，`PanelBagSelect` SHALL 向下滑出，首页背景与 `PackageScrollView` 所在的运行时内容容器及虚化背景 SHALL 向左滑出，`BgGame` SHALL 从右侧同步滑入；不得移动 `Screen Space - Camera` 根 Canvas，也不得用透明度渐变替代横向背景交接。本流程的视觉动画、停顿和错峰间隔 SHALL 使用基础参数的 `1.5` 倍时长，场景加载保护超时、预热帧数和单帧最大推进量除外。
+15. WHEN 选中状态为完整彩色 THEN 背景交接完成后 SHALL 播放滑光提示并等待点击或横划；拆包特效完成后 SHALL 恢复同位置的撕开静态卡包，再执行统一游戏入场流程。
+16. WHEN GameScene 开始播放入场 THEN 系统 SHALL 先缓存托盘终点并把当前组真实 Piece 以最终托盘缩放直接叠放在卡包初始中心；统一稳定两帧后，卡包下落与棋盘、托盘和游戏按钮入场 SHALL 立即在同一帧开始，不得再有独立起步延迟。卡包按自身实际显示高度下落到碎片区域下方后，Piece 才按托盘顺序从同一个初始位置依次直飞各自终点。Piece 不得先散开，也不得从卡包下坠后的低位向上滑入。
+17. WHEN 选中状态为彩色撕开进行中或灰色撕开已完成重玩 THEN SHALL 跳过拆包特效；灰色重玩仍须先显示 `PanelReplay` 并在确认后重置会话，卡包颜色和撕开样式不得改变。
+18. WHEN GameScene 激活 THEN 棋盘、PieceBoard 与游戏按钮入场 SHALL 和卡包慢速下落并行开始；卡包越过初始碎片区域后 SHALL 加速掉出屏幕。
+19. WHEN 卡包完整下落到初始碎片区域下方 THEN 首页装饰 `ProgressPieces` SHALL 隐藏，GameScene 当前组真实 Piece SHALL 保持叠放直到各自错峰时间到达，再与卡包加速下坠并行直飞托盘终点。
 
 ### 设计与任务
 
@@ -906,6 +910,7 @@
 3. WHEN GameScene 完成初始化 THEN 跨场景卡包动画 SHALL 由 GameScene 自己的入场协程驱动，不得依赖跨场景 Canvas 上的 MonoBehaviour 协程继续存活。
 4. IF 跨场景 Canvas 在场景切换期间被禁用 THEN GameScene SHALL 在播放前恢复其激活状态；返回 MainScene 时 SHALL 清理任何残留转场实例。
 5. WHILE 跨场景卡包 Canvas 与 GameScene Canvas 同时存在 THEN GameScene SHALL 只配置当前场景 Canvas，并将 CardBag Prefab 挂到当前场景 Canvas 下；不得使用无场景约束的全局 Canvas 查找。
+6. WHEN GameScene 播放跨场景卡包入场 THEN 系统 SHALL 先缓存托盘终点并将真实 Piece 叠放在卡包初始中心；棋盘和托盘入场 SHALL 与卡包慢速下落同时开始，卡包越过碎片后 SHALL 在加速掉出时触发 Piece 依次直飞托盘。
 
 ### 设计与任务
 
@@ -914,4 +919,6 @@
 - [x] 3. MainScene 启动时清理残留的跨场景入场转场，避免静态实例影响下一次进入。
 - [x] 4. GameScene 逐帧推进转场枚举器；动画时长加 `1s` 后强制完成，并捕获视觉引用异常后走同一释放路径。关键阶段写入日志。
 - [x] 5. GameScene Canvas 配置与 CardBag Prefab 挂载改为按当前激活场景根对象解析，排除 `DontDestroyOnLoad` 的临时转场 Canvas。
-- [ ] 6. Runtime/Editor 编译与静态差异检查已通过；仍需在 Play Mode 验证“完成一组 -> 返回首页 -> 再次进入”流程。
+- [x] 6. MainScene 背景改为左右滑动交接，选择按钮向下退场；完整包拆完后恢复撕开静态包并进入统一转场。
+- [x] 7. GameScene 入场改为棋盘/托盘先完成，卡包再按慢落和加速两段下坠；加速点切换到真实当前组 Piece 发牌。
+- [ ] 8. Runtime/Editor 编译与静态差异检查已通过；仍需在 Play Mode 分别验证完整彩包、彩色进行中包和灰色重玩包。

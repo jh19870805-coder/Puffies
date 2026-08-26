@@ -374,6 +374,7 @@ public sealed class CardPackGameEntranceTransition : MonoBehaviour
 {
     private const int GameSceneSettleFrameCount = 2;
     private const float PlaybackGraceSeconds = 1f;
+    private const float SlowDropDurationRatio = 0.42f;
 
     private static CardPackGameEntranceTransition sInstance;
 
@@ -381,10 +382,12 @@ public sealed class CardPackGameEntranceTransition : MonoBehaviour
     private Canvas mCanvas;
     private RectTransform mPackRect;
     private Vector2 mPackStart;
+    private Vector2 mPackLaunchPoint;
     private Vector2 mPackTarget;
-    private Vector2[] mPieceStarts;
-    private Vector2[] mPieceTargets;
     private float mDuration;
+    private float mSlowDropDuration;
+    private float mFastDropDuration;
+    private bool mReachedPieceLaunch;
     private Material mOwnedCoverMaterial;
     private Texture mOwnedMaskTexture;
 
@@ -458,6 +461,12 @@ public sealed class CardPackGameEntranceTransition : MonoBehaviour
 
     public static IEnumerator WaitForCompletion()
     {
+        yield return WaitForPieceLaunch();
+        yield return FinishAfterPieceLaunch();
+    }
+
+    public static IEnumerator WaitForPieceLaunch()
+    {
         var transition = sInstance;
         if (transition == null)
         {
@@ -469,10 +478,10 @@ public sealed class CardPackGameEntranceTransition : MonoBehaviour
             transition.gameObject.SetActive(true);
         }
 
-        Debug.Log("CardPackGameEntranceTransition: GameScene playback started.");
-        var playback = transition.PlayAfterGameSceneIsReady();
+        Debug.Log("CardPackGameEntranceTransition: slow drop started.");
+        var playback = transition.PlayToPieceLaunch();
         var deadline = Time.realtimeSinceStartup
-                       + Mathf.Max(0f, transition.mDuration)
+                       + Mathf.Max(0f, transition.mSlowDropDuration)
                        + PlaybackGraceSeconds;
         while (sInstance == transition && Time.realtimeSinceStartup < deadline)
         {
@@ -485,7 +494,53 @@ public sealed class CardPackGameEntranceTransition : MonoBehaviour
             {
                 Debug.LogException(exception);
                 Debug.LogWarning(
-                    "CardPackGameEntranceTransition: playback failed; "
+                    "CardPackGameEntranceTransition: slow drop failed; "
+                    + "forcing the piece launch point.");
+                break;
+            }
+
+            if (!hasNext)
+            {
+                break;
+            }
+
+            yield return playback.Current;
+        }
+
+        if (sInstance == transition)
+        {
+            transition.ReachPieceLaunchImmediately();
+        }
+
+        Debug.Log("CardPackGameEntranceTransition: piece launch point reached.");
+    }
+
+    public static IEnumerator FinishAfterPieceLaunch()
+    {
+        var transition = sInstance;
+        if (transition == null)
+        {
+            yield break;
+        }
+
+        transition.ReachPieceLaunchImmediately();
+        Debug.Log("CardPackGameEntranceTransition: accelerated exit started.");
+        var playback = transition.PlayAcceleratedExit();
+        var deadline = Time.realtimeSinceStartup
+                       + Mathf.Max(0f, transition.mFastDropDuration)
+                       + PlaybackGraceSeconds;
+        while (sInstance == transition && Time.realtimeSinceStartup < deadline)
+        {
+            var hasNext = false;
+            try
+            {
+                hasNext = playback.MoveNext();
+            }
+            catch (Exception exception)
+            {
+                Debug.LogException(exception);
+                Debug.LogWarning(
+                    "CardPackGameEntranceTransition: accelerated exit failed; "
                     + "forcing final state so GameScene can continue.");
                 break;
             }
@@ -500,11 +555,7 @@ public sealed class CardPackGameEntranceTransition : MonoBehaviour
 
         if (sInstance == transition)
         {
-            Debug.LogWarning(
-                "CardPackGameEntranceTransition: playback did not complete in time; "
-                + "forcing final state so GameScene can continue.");
-            transition.CompleteImmediately(storeExitPosition: true);
-            yield return null;
+            transition.CompleteImmediately(storeExitPosition: false);
         }
 
         Debug.Log("CardPackGameEntranceTransition: GameScene playback completed.");
@@ -532,7 +583,18 @@ public sealed class CardPackGameEntranceTransition : MonoBehaviour
         mPackRect = packRect;
         mDuration = duration;
         mPackStart = packRect.anchoredPosition;
+        var displayedPackHeight = GetDisplayedHeightInParent(packRect);
+        var launchDropDistance = displayedPackHeight > 0.01f
+            ? Mathf.Min(dropDistance, displayedPackHeight)
+            : dropDistance * SlowDropDurationRatio;
+        mPackLaunchPoint = mPackStart
+                           + Vector2.down * launchDropDistance;
         mPackTarget = mPackStart + Vector2.down * dropDistance;
+        var slowDurationRatio = dropDistance > 0.01f
+            ? Mathf.Clamp(launchDropDistance / dropDistance, 0.2f, 0.8f)
+            : SlowDropDurationRatio;
+        mSlowDropDuration = duration * slowDurationRatio;
+        mFastDropDuration = Mathf.Max(0.01f, duration - mSlowDropDuration);
 
         if (pieceRects != null)
         {
@@ -545,19 +607,23 @@ public sealed class CardPackGameEntranceTransition : MonoBehaviour
             }
         }
 
-        mPieceStarts = new Vector2[mPieceRects.Count];
-        mPieceTargets = new Vector2[mPieceRects.Count];
-        for (var i = 0; i < mPieceRects.Count; i++)
+        CloneTransientCoverMaterial(coverImage);
+        StorePieceOriginPosition();
+        return true;
+    }
+
+    private static float GetDisplayedHeightInParent(RectTransform rectTransform)
+    {
+        if (rectTransform == null || rectTransform.parent == null)
         {
-            mPieceStarts[i] = mPieceRects[i].anchoredPosition;
-            var centeredIndex = i - (mPieceRects.Count - 1) * 0.5f;
-            mPieceTargets[i] = mPieceStarts[i] + new Vector2(
-                centeredIndex * horizontalSpread,
-                dropDistance * pieceVerticalCompensation);
+            return 0f;
         }
 
-        CloneTransientCoverMaterial(coverImage);
-        return true;
+        var corners = new Vector3[4];
+        rectTransform.GetWorldCorners(corners);
+        var bottom = rectTransform.parent.InverseTransformPoint(corners[0]);
+        var top = rectTransform.parent.InverseTransformPoint(corners[1]);
+        return Mathf.Abs(top.y - bottom.y);
     }
 
     private void CloneTransientCoverMaterial(Image coverImage)
@@ -591,37 +657,52 @@ public sealed class CardPackGameEntranceTransition : MonoBehaviour
         coverImage.material = mOwnedCoverMaterial;
     }
 
-    private IEnumerator PlayAfterGameSceneIsReady()
+    private IEnumerator PlayToPieceLaunch()
     {
+        if (mReachedPieceLaunch)
+        {
+            yield break;
+        }
+
         for (var frame = 0; frame < GameSceneSettleFrameCount; frame++)
         {
             yield return null;
         }
 
         var elapsed = 0f;
-        while (elapsed < mDuration)
+        while (elapsed < mSlowDropDuration)
         {
             elapsed += Time.unscaledDeltaTime;
-            var normalized = Mathf.Clamp01(elapsed / mDuration);
+            var normalized = Mathf.Clamp01(elapsed / mSlowDropDuration);
             var packT = Mathf.SmoothStep(0f, 1f, normalized);
-            var pieceT = 1f - Mathf.Pow(1f - normalized, 3f);
             if (mPackRect != null)
             {
                 mPackRect.anchoredPosition = Vector2.LerpUnclamped(
                     mPackStart,
-                    mPackTarget,
+                    mPackLaunchPoint,
                     packT);
             }
 
-            for (var i = 0; i < mPieceRects.Count; i++)
+            yield return null;
+        }
+
+        ReachPieceLaunchImmediately();
+    }
+
+    private IEnumerator PlayAcceleratedExit()
+    {
+        var elapsed = 0f;
+        while (elapsed < mFastDropDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            var normalized = Mathf.Clamp01(elapsed / mFastDropDuration);
+            var packT = normalized * normalized * normalized;
+            if (mPackRect != null)
             {
-                if (mPieceRects[i] != null)
-                {
-                    mPieceRects[i].anchoredPosition = Vector2.LerpUnclamped(
-                        mPieceStarts[i],
-                        mPieceTargets[i],
-                        pieceT);
-                }
+                mPackRect.anchoredPosition = Vector2.LerpUnclamped(
+                    mPackLaunchPoint,
+                    mPackTarget,
+                    packT);
             }
 
             yield return null;
@@ -632,7 +713,29 @@ public sealed class CardPackGameEntranceTransition : MonoBehaviour
             mPackRect.anchoredPosition = mPackTarget;
         }
 
-        CompleteImmediately(storeExitPosition: true);
+        CompleteImmediately(storeExitPosition: false);
+    }
+
+    private void ReachPieceLaunchImmediately()
+    {
+        if (mReachedPieceLaunch)
+        {
+            return;
+        }
+
+        mReachedPieceLaunch = true;
+        if (mPackRect != null)
+        {
+            mPackRect.anchoredPosition = mPackLaunchPoint;
+        }
+
+        for (var i = 0; i < mPieceRects.Count; i++)
+        {
+            if (mPieceRects[i] != null)
+            {
+                mPieceRects[i].gameObject.SetActive(false);
+            }
+        }
     }
 
     private void CompleteImmediately(bool storeExitPosition)
@@ -642,17 +745,9 @@ public sealed class CardPackGameEntranceTransition : MonoBehaviour
             mPackRect.anchoredPosition = mPackTarget;
         }
 
-        for (var i = 0; i < mPieceRects.Count; i++)
-        {
-            if (mPieceRects[i] != null && i < mPieceTargets.Length)
-            {
-                mPieceRects[i].anchoredPosition = mPieceTargets[i];
-            }
-        }
-
         if (storeExitPosition)
         {
-            StorePieceExitPosition();
+            StorePieceOriginPosition();
         }
 
         if (mCanvas != null)
@@ -671,37 +766,21 @@ public sealed class CardPackGameEntranceTransition : MonoBehaviour
         Destroy(gameObject);
     }
 
-    private void StorePieceExitPosition()
+    private void StorePieceOriginPosition()
     {
-        if (Screen.width <= 0 || Screen.height <= 0)
+        if (mPackRect == null || Screen.width <= 0 || Screen.height <= 0)
         {
             return;
         }
 
-        var screenPositionSum = Vector2.zero;
-        var validPieceCount = 0;
         var camera = mCanvas != null && mCanvas.renderMode != RenderMode.ScreenSpaceOverlay
             ? mCanvas.worldCamera
             : null;
-        for (var i = 0; i < mPieceRects.Count; i++)
-        {
-            if (mPieceRects[i] == null)
-            {
-                continue;
-            }
-
-            screenPositionSum += RectTransformUtility.WorldToScreenPoint(
-                camera,
-                mPieceRects[i].position);
-            validPieceCount++;
-        }
-
-        if (validPieceCount <= 0)
-        {
-            return;
-        }
-
-        var screenPosition = screenPositionSum / validPieceCount;
+        var corners = new Vector3[4];
+        mPackRect.GetWorldCorners(corners);
+        var bottomLeft = RectTransformUtility.WorldToScreenPoint(camera, corners[0]);
+        var topRight = RectTransformUtility.WorldToScreenPoint(camera, corners[2]);
+        var screenPosition = (bottomLeft + topRight) * 0.5f;
         GameManager.SetOpeningPackExitPosition(new Vector2(
             screenPosition.x / Screen.width,
             screenPosition.y / Screen.height));

@@ -39,17 +39,15 @@ public class GameScene : MonoBehaviour
     private const int PieceBgSortingOrder = 500;
     private const float PieceBgAlpha = 1f;
     private const float PieceBgFillAlpha = 0.3f;
-    private const float GameEntranceBoardDelay = 0.28f;
-    private const float GameEntranceBoardDuration = 0.38f;
+    private const float GameTransitionDurationScale = 1.5f;
+    private const float GameEntranceBoardDelay = 0f;
+    private const float GameEntranceBoardDuration = 0.38f * GameTransitionDurationScale;
     private const float GameEntranceTrayDelay = 0f;
-    private const float GameEntranceTrayDuration = 0.22f;
-    private const float GameEntrancePieceLaunchDuration = 0.3f;
-    private const float GameEntrancePieceSettleDelay = 0.3f;
-    private const float GameEntranceFannedPieceSettleDelay = 0.04f;
-    private const float GameEntrancePieceSettleDuration = 0.46f;
-    private const float GameEntrancePieceStagger = 0.018f;
-    private const float GameEntranceControlDelay = 0.28f;
-    private const float GameEntranceControlDuration = 0.22f;
+    private const float GameEntranceTrayDuration = 0.22f * GameTransitionDurationScale;
+    private const float GameEntrancePieceSettleDuration = 0.46f * GameTransitionDurationScale;
+    private const float GameEntrancePieceStagger = 0.018f * GameTransitionDurationScale;
+    private const float GameEntranceControlDelay = 0f;
+    private const float GameEntranceControlDuration = 0.22f * GameTransitionDurationScale;
     private const int GameEntranceWarmupFrameCount = 2;
     private const float GameEntranceMaxFrameDelta = 1f / 30f;
     private const float GroupTransitionBoardDuration = 0.72f;
@@ -653,14 +651,6 @@ public class GameScene : MonoBehaviour
 #endif
         Canvas.ForceUpdateCanvases();
 
-        var camera = Camera.main;
-        var boardCenter = _board.GameBoardImage != null && camera != null
-            ? GameCommonUtility.RectTransformToCameraWorld(
-                _board.GameBoardImage.rectTransform,
-                camera,
-                WorldGameplayDepth)
-            : Vector3.zero;
-
         var boardRect = _loadedCardBagRect;
         var boardTarget = boardRect != null
             ? boardRect.anchoredPosition
@@ -668,10 +658,6 @@ public class GameScene : MonoBehaviour
                 ? _originalCardBagAnchoredPosition
                 : Vector2.zero;
         var boardStart = boardTarget + Vector2.right * GameDefine.DesignWidth;
-        if (boardRect != null)
-        {
-            boardRect.anchoredPosition = boardStart;
-        }
 
         var trayRect = _board.PieceBoardRect;
         var trayTarget = _hasPieceBoardOriginalAnchoredPosition
@@ -681,10 +667,6 @@ public class GameScene : MonoBehaviour
             ? trayRect.rect.height + 120f
             : 420f;
         var trayStart = trayTarget - Vector2.up * trayOffset;
-        if (trayRect != null)
-        {
-            trayRect.anchoredPosition = trayStart;
-        }
 
         var returnCanvasGroup = GetOrAddCanvasGroup(
             GameCommonUtility.FindSceneObject(GameDefine.ReturnButtonObjectName));
@@ -693,9 +675,16 @@ public class GameScene : MonoBehaviour
         SetCanvasGroupAlpha(returnCanvasGroup, 0f);
         SetCanvasGroupAlpha(hintCanvasGroup, 0f);
 
-        var pieceCount = _drag.CurrentGroupDraggables.Count;
+        Coroutine pieceDealCoroutine = null;
         if (waitForPackTransition)
         {
+            // Cache tray targets and show the pieces before moving the tray off-screen.
+            pieceDealCoroutine = StartCoroutine(
+                PlayCurrentGroupPieceDealAnimation(waitForPackTransition: true));
+        }
+        else
+        {
+            var pieceCount = _drag.CurrentGroupDraggables.Count;
             for (var i = 0; i < pieceCount; i++)
             {
                 var renderer = _drag.CurrentGroupDraggables[i]?.PieceRenderer;
@@ -704,121 +693,6 @@ public class GameScene : MonoBehaviour
                     renderer.enabled = false;
                 }
             }
-
-            Debug.Log("GameScene: board/tray hidden; waiting for card pack transition.");
-            yield return CardPackGameEntranceTransition.WaitForCompletion();
-            Debug.Log("GameScene: card pack transition finished; starting board/tray entrance.");
-        }
-
-        var pieceEntranceOrigin = GetPreviousPackBottomWorldPosition(camera, boardCenter);
-        var pieceTargets = new Vector3[pieceCount];
-        var pieceStarts = new Vector3[pieceCount];
-        var pieceFanPositions = new Vector3[pieceCount];
-        var pieceTargetScales = new Vector3[pieceCount];
-        var pieceTargetRotations = new Quaternion[pieceCount];
-        var pieceStartRotations = new Quaternion[pieceCount];
-        var pieceFanRotations = new Quaternion[pieceCount];
-        var pieceTargetColors = new Color[pieceCount];
-        var visibleWorldHeight = camera != null
-            ? camera.orthographicSize * 2f
-            : ReferenceHeight / PixelsPerUnit;
-        var visibleWorldWidth = camera != null
-            ? visibleWorldHeight * camera.aspect
-            : GameDefine.DesignWidth / PixelsPerUnit;
-        for (var i = 0; i < pieceCount; i++)
-        {
-            var state = _drag.CurrentGroupDraggables[i];
-            var renderer = state?.PieceRenderer;
-            if (renderer == null)
-            {
-                continue;
-            }
-
-            renderer.enabled = true;
-
-            pieceTargets[i] = renderer.transform.position;
-            pieceTargetScales[i] = renderer.transform.localScale;
-            pieceTargetRotations[i] = renderer.transform.rotation;
-            pieceTargetColors[i] = renderer.color;
-            var normalizedIndex = pieceCount > 1
-                ? i / (float)(pieceCount - 1)
-                : 0.5f;
-            var angle = i * 137.5f * Mathf.Deg2Rad;
-            var radius = 0.025f + (i % 3) * 0.012f;
-            pieceStarts[i] = pieceEntranceOrigin + new Vector3(
-                Mathf.Cos(angle) * radius,
-                Mathf.Sin(angle) * radius,
-                0f);
-            pieceStarts[i].z = pieceTargets[i].z;
-            var fanArc = Mathf.Sin(normalizedIndex * Mathf.PI);
-            pieceFanPositions[i] = pieceEntranceOrigin + new Vector3(
-                (normalizedIndex - 0.5f) * visibleWorldWidth * 0.46f,
-                visibleWorldHeight * (0.1f + fanArc * 0.075f + (i % 2) * 0.018f),
-                0f);
-            pieceFanPositions[i].z = pieceTargets[i].z;
-            pieceStartRotations[i] = Quaternion.Euler(
-                0f,
-                0f,
-                Mathf.Sin(angle) * 18f);
-            pieceFanRotations[i] = Quaternion.SlerpUnclamped(
-                pieceStartRotations[i],
-                Quaternion.identity,
-                0.45f);
-            renderer.transform.position = piecesAlreadyFanned
-                ? pieceFanPositions[i]
-                : pieceStarts[i];
-            renderer.transform.localScale = pieceTargetScales[i];
-            renderer.transform.rotation = piecesAlreadyFanned
-                ? pieceFanRotations[i]
-                : pieceStartRotations[i];
-            var color = pieceTargetColors[i];
-            if (!piecesAlreadyFanned)
-            {
-                color.a = 0f;
-            }
-            renderer.color = color;
-        }
-
-        // Let the entrance start pose reach the screen before advancing its clock.
-        for (var frame = 0; frame < GameEntranceWarmupFrameCount; frame++)
-        {
-            yield return null;
-        }
-
-        if (boardRect != null)
-        {
-            boardRect.anchoredPosition = boardTarget;
-        }
-
-        if (trayRect != null)
-        {
-            trayRect.anchoredPosition = trayTarget;
-        }
-
-        RefreshCurrentGroupTrayScalesAndLayout();
-        for (var i = 0; i < pieceCount; i++)
-        {
-            var renderer = _drag.CurrentGroupDraggables[i]?.PieceRenderer;
-            if (renderer == null)
-            {
-                continue;
-            }
-
-            pieceTargets[i] = renderer.transform.position;
-            pieceTargetScales[i] = renderer.transform.localScale;
-            renderer.transform.position = piecesAlreadyFanned
-                ? pieceFanPositions[i]
-                : pieceStarts[i];
-            renderer.transform.localScale = pieceTargetScales[i];
-            renderer.transform.rotation = piecesAlreadyFanned
-                ? pieceFanRotations[i]
-                : pieceStartRotations[i];
-            var hiddenColor = pieceTargetColors[i];
-            if (!piecesAlreadyFanned)
-            {
-                hiddenColor.a = 0f;
-            }
-            renderer.color = hiddenColor;
         }
 
         if (boardRect != null)
@@ -831,16 +705,15 @@ public class GameScene : MonoBehaviour
             trayRect.anchoredPosition = trayStart;
         }
 
-        var pieceSettleDelay = piecesAlreadyFanned
-            ? GameEntranceFannedPieceSettleDelay
-            : GameEntrancePieceSettleDelay;
+        // Let the board and tray start pose reach the screen before advancing its clock.
+        for (var frame = 0; frame < GameEntranceWarmupFrameCount; frame++)
+        {
+            yield return null;
+        }
         var totalDuration = Mathf.Max(
             GameEntranceBoardDelay + GameEntranceBoardDuration,
             GameEntranceTrayDelay + GameEntranceTrayDuration,
-            GameEntranceControlDelay + GameEntranceControlDuration,
-            pieceSettleDelay
-                + Mathf.Max(0, pieceCount - 1) * GameEntrancePieceStagger
-                + GameEntrancePieceSettleDuration);
+            GameEntranceControlDelay + GameEntranceControlDuration);
         var elapsed = 0f;
         var didStartOutlineFade = false;
         while (elapsed < totalDuration)
@@ -881,63 +754,6 @@ public class GameScene : MonoBehaviour
             SetCanvasGroupAlpha(returnCanvasGroup, controlT);
             SetCanvasGroupAlpha(hintCanvasGroup, controlT);
 
-            for (var i = 0; i < pieceCount; i++)
-            {
-                var state = _drag.CurrentGroupDraggables[i];
-                var renderer = state?.PieceRenderer;
-                if (renderer == null)
-                {
-                    continue;
-                }
-
-                var pieceDelay = i * GameEntrancePieceStagger;
-                var launchT = piecesAlreadyFanned
-                    ? 1f
-                    : Mathf.Clamp01(
-                        (elapsed - pieceDelay) / GameEntrancePieceLaunchDuration);
-                var launchEased = 1f - Mathf.Pow(1f - launchT, 3f);
-                var settleT = Mathf.Clamp01(
-                    (elapsed - pieceSettleDelay - pieceDelay)
-                    / GameEntrancePieceSettleDuration);
-                var settleEased = Mathf.SmoothStep(
-                    0f,
-                    1f,
-                    settleT);
-                var launchPosition = Vector3.LerpUnclamped(
-                    pieceStarts[i],
-                    pieceFanPositions[i],
-                    launchEased);
-                renderer.transform.position = settleT > 0f
-                    ? Vector3.LerpUnclamped(
-                        pieceFanPositions[i],
-                        pieceTargets[i],
-                        settleEased)
-                    : launchPosition;
-                renderer.transform.localScale = pieceTargetScales[i];
-                var fanRotation = piecesAlreadyFanned
-                    ? pieceFanRotations[i]
-                    : Quaternion.SlerpUnclamped(
-                        pieceStartRotations[i],
-                        pieceFanRotations[i],
-                        launchEased);
-                renderer.transform.rotation = settleT > 0f
-                    ? Quaternion.SlerpUnclamped(
-                        fanRotation,
-                        pieceTargetRotations[i],
-                        settleEased)
-                    : fanRotation;
-                var color = pieceTargetColors[i];
-                if (!piecesAlreadyFanned)
-                {
-                    color.a *= Mathf.Clamp01(launchT * 2.5f);
-                }
-                renderer.color = color;
-                if (settleT >= 1f)
-                {
-                    EnsureDraggablePieceLight(_drag.CurrentGroupDraggables[i]);
-                }
-            }
-
             yield return null;
         }
 
@@ -958,6 +774,147 @@ public class GameScene : MonoBehaviour
 
         SetCanvasGroupAlpha(returnCanvasGroup, 1f);
         SetCanvasGroupAlpha(hintCanvasGroup, 1f);
+        Debug.Log("GameScene: board and tray entrance completed.");
+
+        if (pieceDealCoroutine != null)
+        {
+            yield return pieceDealCoroutine;
+        }
+        else
+        {
+            yield return PlayCurrentGroupPieceDealAnimation(
+                waitForPackTransition: false);
+        }
+
+        _isEntranceAnimating = false;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        if (_testCompleteButton != null)
+        {
+            _testCompleteButton.interactable = !_isGameFinished;
+        }
+#endif
+        TryStartPiecePlacementTutorial();
+    }
+
+    private IEnumerator PlayCurrentGroupPieceDealAnimation(
+        bool waitForPackTransition)
+    {
+        var camera = Camera.main;
+        var boardCenter = _board.GameBoardImage != null && camera != null
+            ? GameCommonUtility.RectTransformToCameraWorld(
+                _board.GameBoardImage.rectTransform,
+                camera,
+                WorldGameplayDepth)
+            : Vector3.zero;
+        var pieceEntranceOrigin = GetOpeningPackPieceOriginWorldPosition(camera, boardCenter);
+        RefreshCurrentGroupTrayScalesAndLayout();
+
+        var pieceCount = _drag.CurrentGroupDraggables.Count;
+        var pieceTargets = new Vector3[pieceCount];
+        var pieceStarts = new Vector3[pieceCount];
+        var pieceTargetScales = new Vector3[pieceCount];
+        var pieceTargetRotations = new Quaternion[pieceCount];
+        var pieceStartRotations = new Quaternion[pieceCount];
+        var pieceTargetColors = new Color[pieceCount];
+        for (var i = 0; i < pieceCount; i++)
+        {
+            var renderer = _drag.CurrentGroupDraggables[i]?.PieceRenderer;
+            if (renderer == null)
+            {
+                continue;
+            }
+
+            pieceTargets[i] = renderer.transform.position;
+            pieceTargetScales[i] = renderer.transform.localScale;
+            pieceTargetRotations[i] = renderer.transform.rotation;
+            pieceTargetColors[i] = renderer.color;
+            var angle = i * 137.5f * Mathf.Deg2Rad;
+            var radius = 0.025f + (i % 3) * 0.012f;
+            pieceStarts[i] = waitForPackTransition
+                ? pieceEntranceOrigin
+                : pieceEntranceOrigin + new Vector3(
+                    Mathf.Cos(angle) * radius,
+                    Mathf.Sin(angle) * radius,
+                    0f);
+            pieceStarts[i].z = pieceTargets[i].z;
+            pieceStartRotations[i] = waitForPackTransition
+                ? Quaternion.identity
+                : Quaternion.Euler(
+                    0f,
+                    0f,
+                    Mathf.Sin(angle) * 18f);
+            renderer.enabled = true;
+            renderer.transform.position = pieceStarts[i];
+            renderer.transform.localScale = pieceTargetScales[i];
+            renderer.transform.rotation = pieceStartRotations[i];
+            var color = pieceTargetColors[i];
+            if (!waitForPackTransition)
+            {
+                color.a = 0f;
+            }
+            renderer.color = color;
+        }
+
+        for (var frame = 0;
+             !waitForPackTransition && frame < GameEntranceWarmupFrameCount;
+             frame++)
+        {
+            yield return null;
+        }
+
+        Coroutine packExitCoroutine = null;
+        if (waitForPackTransition)
+        {
+            Debug.Log(
+                "GameScene: pieces created at the pack origin; "
+                + "waiting for the pack to drop below them.");
+            yield return CardPackGameEntranceTransition.WaitForPieceLaunch();
+            if (CardPackGameEntranceTransition.IsPending)
+            {
+                packExitCoroutine = StartCoroutine(
+                    CardPackGameEntranceTransition.FinishAfterPieceLaunch());
+            }
+        }
+
+        var totalDuration = Mathf.Max(0, pieceCount - 1) * GameEntrancePieceStagger
+                            + GameEntrancePieceSettleDuration;
+        var elapsed = 0f;
+        while (elapsed < totalDuration)
+        {
+            elapsed += Mathf.Min(Time.unscaledDeltaTime, GameEntranceMaxFrameDelta);
+            for (var i = 0; i < pieceCount; i++)
+            {
+                var renderer = _drag.CurrentGroupDraggables[i]?.PieceRenderer;
+                if (renderer == null)
+                {
+                    continue;
+                }
+
+                var pieceDelay = i * GameEntrancePieceStagger;
+                var flightT = Mathf.Clamp01(
+                    (elapsed - pieceDelay)
+                    / GameEntrancePieceSettleDuration);
+                var flightEased = Mathf.SmoothStep(0f, 1f, flightT);
+                renderer.transform.position = Vector3.LerpUnclamped(
+                    pieceStarts[i],
+                    pieceTargets[i],
+                    flightEased);
+                renderer.transform.localScale = pieceTargetScales[i];
+                renderer.transform.rotation = Quaternion.SlerpUnclamped(
+                    pieceStartRotations[i],
+                    pieceTargetRotations[i],
+                    flightEased);
+                var color = pieceTargetColors[i];
+                if (!waitForPackTransition)
+                {
+                    color.a *= Mathf.Clamp01(flightT * 2.5f);
+                }
+                renderer.color = color;
+            }
+
+            yield return null;
+        }
+
         for (var i = 0; i < pieceCount; i++)
         {
             var renderer = _drag.CurrentGroupDraggables[i]?.PieceRenderer;
@@ -973,17 +930,13 @@ public class GameScene : MonoBehaviour
             EnsureDraggablePieceLight(_drag.CurrentGroupDraggables[i]);
         }
 
-        _isEntranceAnimating = false;
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-        if (_testCompleteButton != null)
+        if (packExitCoroutine != null)
         {
-            _testCompleteButton.interactable = !_isGameFinished;
+            yield return packExitCoroutine;
         }
-#endif
-        TryStartPiecePlacementTutorial();
     }
 
-    private static Vector3 GetPreviousPackBottomWorldPosition(
+    private static Vector3 GetOpeningPackPieceOriginWorldPosition(
         Camera camera,
         Vector3 fallback)
     {

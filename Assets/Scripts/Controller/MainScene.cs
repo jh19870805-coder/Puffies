@@ -57,23 +57,21 @@ public class MainScene : MonoBehaviour
     private const float MainCanvasWorldDepth = 0f;
     private const float OpeningStageBackgroundWorldDepth = 0f;
     private const float BagSelectGaussianBlurRadius = 8f;
-    private const float OpeningStageTransitionDuration = 0.28f;
-    private const float OpeningStageSettleDuration = 0.22f;
-    private const float OpeningStageScaleRatio = 0.92f;
-    private const float OpeningStagePunchScaleRatio = 1.04f;
+    private const float GameTransitionDurationScale = 1.5f;
+    private const float OpeningStageTransitionDuration = 0.28f * GameTransitionDurationScale;
     private const float OpeningModelHandoffHoldDuration = 0.06f;
     private const float OpeningModelHandoffFadeDuration = 0.12f;
     private const float TearGestureTravelRatio = 0.06f;
     private const float TearGestureMinTravelPixels = 18f;
-    private const float InProgressGameTransitionFadeDuration = 0.22f;
-    private const float InProgressGameTransitionHoldDuration = 0.68f;
+    private const float InProgressGameTransitionHoldDuration = 0.17f * GameTransitionDurationScale;
     private const float InProgressGameTransitionPreloadTimeout = 5f;
-    private const float InProgressPackExitDuration = 0.46f;
+    private const float InProgressPackExitDuration = 0.46f * GameTransitionDurationScale;
     private const float InProgressPackExitScreenHeightRatio = 0.62f;
     private const float InProgressPieceExitCompensation = 0.62f;
     private const float InProgressPieceExitHorizontalSpread = 90f;
     private const int MainPackageBagId = GameDefine.DefaultBagId;
     private const string BootstrapObjectName = "MainSceneBootstrap";
+    private const string MainPageTransitionRootObjectName = "MainPageTransitionRoot";
     private const string PackageScrollViewObjectName = "PackageScrollView";
     private const string PackagePageObjectPrefix = "Page_";
     private const string PackageFirstPageObjectName = "Page_1";
@@ -173,6 +171,7 @@ public class MainScene : MonoBehaviour
     private GameObject mOpeningHintAnimationRoot;
     private CardPackOpeningEffect mCardPackOpeningEffect;
     private CanvasGroup mMainCanvasGroup;
+    private RectTransform mMainPageTransitionRect;
     private CanvasGroup mBagSelectPanelCanvasGroup;
     private RawImage mBagSelectBackdropImage;
     private GameObject mOpeningStageBackgroundRoot;
@@ -926,6 +925,7 @@ public class MainScene : MonoBehaviour
         mMainCanvasGroup.alpha = 1f;
         mMainCanvasGroup.interactable = true;
         mMainCanvasGroup.blocksRaycasts = true;
+        ConfigureMainPageTransitionRoot(sourceCanvas);
 
         var canvasObject = new GameObject(
             BagSelectCanvasObjectName,
@@ -957,6 +957,56 @@ public class MainScene : MonoBehaviour
         }
 
         CreateSelectedPackageOverlayCanvas(sourceCanvas);
+    }
+
+    private void ConfigureMainPageTransitionRoot(Canvas sourceCanvas)
+    {
+        if (sourceCanvas == null || mMainPageTransitionRect != null)
+        {
+            return;
+        }
+
+        var sourceTransform = sourceCanvas.transform;
+        var pageChildren = new List<RectTransform>();
+        var backgroundTransform = sourceTransform.Find(GameDefine.BackgroundObjectName)
+            as RectTransform;
+        if (backgroundTransform != null)
+        {
+            pageChildren.Add(backgroundTransform);
+        }
+
+        var packageScrollRect = mPackageScrollRect != null
+            ? mPackageScrollRect.transform as RectTransform
+            : sourceTransform.Find(PackageScrollViewObjectName) as RectTransform;
+        if (packageScrollRect != null
+            && packageScrollRect.parent == sourceTransform
+            && !pageChildren.Contains(packageScrollRect))
+        {
+            pageChildren.Add(packageScrollRect);
+        }
+
+        if (pageChildren.Count == 0)
+        {
+            Debug.LogWarning("MainScene: no homepage content was found for the game transition.");
+            return;
+        }
+
+        pageChildren.Sort((left, right) =>
+            left.GetSiblingIndex().CompareTo(right.GetSiblingIndex()));
+        var firstSiblingIndex = pageChildren[0].GetSiblingIndex();
+        var transitionRoot = new GameObject(
+            MainPageTransitionRootObjectName,
+            typeof(RectTransform));
+        transitionRoot.layer = sourceCanvas.gameObject.layer;
+        mMainPageTransitionRect = transitionRoot.GetComponent<RectTransform>();
+        StretchToParent(mMainPageTransitionRect, sourceTransform);
+        mMainPageTransitionRect.SetSiblingIndex(firstSiblingIndex);
+
+        for (var i = 0; i < pageChildren.Count; i++)
+        {
+            pageChildren[i].SetParent(mMainPageTransitionRect, false);
+            pageChildren[i].SetSiblingIndex(i);
+        }
     }
 
     private void SetSelectedPackageImageVisible(bool visible)
@@ -1437,14 +1487,6 @@ public class MainScene : MonoBehaviour
         if (mSelectedPackageEntry == null)
         {
             return;
-        }
-
-        if (mSelectedPackageEntry.ProgressPiecesRoot == null)
-        {
-            ApplyInProgressPackagePieces(
-                mSelectedPackageEntry,
-                mSelectedBagId,
-                shouldShowPieces: true);
         }
 
         if (!CreateSelectedPackageVisual(mSelectedPackageEntry))
@@ -3950,83 +3992,9 @@ public class MainScene : MonoBehaviour
         StopOpeningHintAnimation();
         mIsPlayingAnimation = true;
         SetBagSelectButtonsInteractable(false);
-        SetUnselectedPackageVisualsVisible(false);
-        if (mOpeningStageBackgroundRoot != null)
-        {
-            FitOpeningStageBackgroundToCamera();
-            mOpeningStageBackgroundRoot.SetActive(true);
-            SetOpeningStageBackgroundAlpha(0f);
-        }
-
-        if (mBagSelectPanelCanvasGroup != null)
-        {
-            mBagSelectPanelCanvasGroup.alpha = 1f;
-            mBagSelectPanelCanvasGroup.interactable = false;
-            mBagSelectPanelCanvasGroup.blocksRaycasts = false;
-        }
-
-        mSelectedPackageStageSize = mSelectedPackageDisplaySize * OpeningStageScaleRatio;
-        var elapsed = 0f;
-        while (elapsed < OpeningStageTransitionDuration)
-        {
-            elapsed += Time.unscaledDeltaTime;
-            var normalized = Mathf.Clamp01(elapsed / OpeningStageTransitionDuration);
-            var eased = Mathf.SmoothStep(0f, 1f, normalized);
-            SetOpeningStageBackgroundAlpha(eased);
-            if (mMainCanvasGroup != null)
-            {
-                mMainCanvasGroup.alpha = 1f - eased;
-            }
-
-            if (mBagSelectPanelCanvasGroup != null)
-            {
-                mBagSelectPanelCanvasGroup.alpha = 1f - eased;
-            }
-
-            if (mBagSelectBackdropImage != null)
-            {
-                var color = mBagSelectBackdropImage.color;
-                color.a = 1f - eased;
-                mBagSelectBackdropImage.color = color;
-            }
-
-            if (mSelectedPackageOverlayRect != null)
-            {
-                SetSelectedPackageVisualSize(Vector2.LerpUnclamped(
-                    mSelectedPackageDisplaySize,
-                    mSelectedPackageStageSize,
-                    eased));
-            }
-            yield return null;
-        }
-
-        SetOpeningStageBackgroundAlpha(1f);
-        SetBagSelectPanelVisible(false);
-        SetBagSelectBackdropVisible(false);
-        ReleaseBagSelectBackdropTexture();
-        if (mMainCanvasGroup != null)
-        {
-            mMainCanvasGroup.alpha = 0f;
-            mMainCanvasGroup.interactable = false;
-            mMainCanvasGroup.blocksRaycasts = false;
-        }
-
-        var punchSize = mSelectedPackageStageSize * OpeningStagePunchScaleRatio;
-        var halfSettleDuration = OpeningStageSettleDuration * 0.5f;
-        yield return AnimateSelectedPackageImage(
-            mSelectedPackageDisplayPosition,
-            mSelectedPackageDisplayPosition,
-            mSelectedPackageStageSize,
-            punchSize,
-            halfSettleDuration);
-        yield return AnimateSelectedPackageImage(
-            mSelectedPackageDisplayPosition,
-            mSelectedPackageDisplayPosition,
-            punchSize,
-            mSelectedPackageStageSize,
-            halfSettleDuration);
-
         StartCoroutine(GameManager.PreloadGameScene(mSelectedBagId));
+        yield return PlayMainToGameBackgroundHandoff();
+        mSelectedPackageStageSize = mSelectedPackageDisplaySize;
         StartOpeningHintAnimation();
         mIsPlayingAnimation = false;
         mIsAwaitingTearSwipe = true;
@@ -4035,61 +4003,17 @@ public class MainScene : MonoBehaviour
         mPlayAnimationCoroutine = null;
     }
 
-    private IEnumerator PlayTornPackageGameTransition(bool isReplaySession)
+    private IEnumerator PlayTornPackageGameTransition(
+        bool isReplaySession,
+        bool backgroundHandoffCompleted = false)
     {
         StopOpeningHintAnimation();
         mIsPlayingAnimation = true;
         SetBagSelectButtonsInteractable(false);
-        SetUnselectedPackageVisualsVisible(false);
         StartCoroutine(GameManager.PreloadGameScene(mSelectedBagId));
-
-        if (mOpeningStageBackgroundRoot != null)
+        if (!backgroundHandoffCompleted)
         {
-            FitOpeningStageBackgroundToCamera();
-            mOpeningStageBackgroundRoot.SetActive(true);
-            SetOpeningStageBackgroundAlpha(0f);
-        }
-
-        var backdropStartAlpha = mBagSelectBackdropImage != null
-            ? mBagSelectBackdropImage.color.a
-            : 0f;
-        var fadeElapsed = 0f;
-        while (fadeElapsed < InProgressGameTransitionFadeDuration)
-        {
-            fadeElapsed += Time.unscaledDeltaTime;
-            var normalized = Mathf.Clamp01(
-                fadeElapsed / InProgressGameTransitionFadeDuration);
-            var eased = Mathf.SmoothStep(0f, 1f, normalized);
-            SetOpeningStageBackgroundAlpha(eased);
-            if (mMainCanvasGroup != null)
-            {
-                mMainCanvasGroup.alpha = 1f - eased;
-            }
-
-            if (mBagSelectPanelCanvasGroup != null)
-            {
-                mBagSelectPanelCanvasGroup.alpha = 1f - eased;
-            }
-
-            if (mBagSelectBackdropImage != null)
-            {
-                var color = mBagSelectBackdropImage.color;
-                color.a = backdropStartAlpha * (1f - eased);
-                mBagSelectBackdropImage.color = color;
-            }
-
-            yield return null;
-        }
-
-        SetOpeningStageBackgroundAlpha(1f);
-        SetBagSelectPanelVisible(false);
-        SetBagSelectBackdropVisible(false);
-        ReleaseBagSelectBackdropTexture();
-        if (mMainCanvasGroup != null)
-        {
-            mMainCanvasGroup.alpha = 0f;
-            mMainCanvasGroup.interactable = false;
-            mMainCanvasGroup.blocksRaycasts = false;
+            yield return PlayMainToGameBackgroundHandoff();
         }
 
         var holdElapsed = 0f;
@@ -4101,6 +4025,7 @@ public class MainScene : MonoBehaviour
             yield return null;
         }
 
+        StoreOpeningPackExitPosition();
         var transitionPieceRects = new List<RectTransform>();
         if (mSelectedPackageProgressPieceAnimations != null)
         {
@@ -4137,7 +4062,7 @@ public class MainScene : MonoBehaviour
                 mSelectedBagId,
                 playEntranceAnimation: true,
                 isReplaySession: isReplaySession,
-                entrancePiecesAlreadyFanned: true);
+                entrancePiecesAlreadyFanned: false);
             yield break;
         }
 
@@ -4203,14 +4128,117 @@ public class MainScene : MonoBehaviour
             packRect.anchoredPosition = packTarget;
         }
 
-        StoreInProgressPieceExitPosition();
         mPlayAnimationCoroutine = null;
         mHasSwitchedToGameScene = true;
         GameManager.EnterGameScene(
             mSelectedBagId,
             playEntranceAnimation: true,
             isReplaySession: isReplaySession,
-            entrancePiecesAlreadyFanned: true);
+            entrancePiecesAlreadyFanned: false);
+    }
+
+    private IEnumerator PlayMainToGameBackgroundHandoff()
+    {
+        var mainPageRect = mMainPageTransitionRect;
+        var panelRect = mBagSelectPanelRoot != null
+            ? mBagSelectPanelRoot.transform as RectTransform
+            : null;
+        var backdropRect = mBagSelectBackdropImage != null
+            ? mBagSelectBackdropImage.rectTransform
+            : null;
+        var mainStart = mainPageRect != null
+            ? mainPageRect.anchoredPosition
+            : Vector2.zero;
+        var panelStart = panelRect != null
+            ? panelRect.anchoredPosition
+            : Vector2.zero;
+        var backdropStart = backdropRect != null
+            ? backdropRect.anchoredPosition
+            : Vector2.zero;
+
+        var camera = Camera.main;
+        var gameBackgroundCenter = Vector3.zero;
+        var gameBackgroundStart = Vector3.zero;
+        if (mOpeningStageBackgroundRoot != null)
+        {
+            FitOpeningStageBackgroundToCamera();
+            mOpeningStageBackgroundRoot.SetActive(true);
+            SetOpeningStageBackgroundAlpha(1f);
+            gameBackgroundCenter = mOpeningStageBackgroundRoot.transform.position;
+            var visibleWorldWidth = camera != null && camera.orthographic
+                ? camera.orthographicSize * 2f * camera.aspect
+                : GameDefine.DesignWidth / PixelsPerUnit;
+            gameBackgroundStart = gameBackgroundCenter + Vector3.right * visibleWorldWidth;
+            mOpeningStageBackgroundRoot.transform.position = gameBackgroundStart;
+        }
+
+        if (mMainCanvasGroup != null)
+        {
+            mMainCanvasGroup.alpha = 1f;
+            mMainCanvasGroup.interactable = false;
+            mMainCanvasGroup.blocksRaycasts = false;
+        }
+
+        if (mBagSelectPanelCanvasGroup != null)
+        {
+            mBagSelectPanelCanvasGroup.alpha = 1f;
+            mBagSelectPanelCanvasGroup.interactable = false;
+            mBagSelectPanelCanvasGroup.blocksRaycasts = false;
+        }
+
+        var elapsed = 0f;
+        while (elapsed < OpeningStageTransitionDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            var normalized = Mathf.Clamp01(elapsed / OpeningStageTransitionDuration);
+            var eased = 1f - Mathf.Pow(1f - normalized, 3f);
+            if (mainPageRect != null)
+            {
+                mainPageRect.anchoredPosition = Vector2.LerpUnclamped(
+                    mainStart,
+                    mainStart + Vector2.left * GameDefine.DesignWidth,
+                    eased);
+            }
+
+            if (backdropRect != null)
+            {
+                backdropRect.anchoredPosition = Vector2.LerpUnclamped(
+                    backdropStart,
+                    backdropStart + Vector2.left * GameDefine.DesignWidth,
+                    eased);
+            }
+
+            if (panelRect != null)
+            {
+                panelRect.anchoredPosition = Vector2.LerpUnclamped(
+                    panelStart,
+                    panelStart + Vector2.down * ReferenceHeight,
+                    eased);
+            }
+
+            if (mOpeningStageBackgroundRoot != null)
+            {
+                mOpeningStageBackgroundRoot.transform.position = Vector3.LerpUnclamped(
+                    gameBackgroundStart,
+                    gameBackgroundCenter,
+                    eased);
+            }
+
+            yield return null;
+        }
+
+        if (mOpeningStageBackgroundRoot != null)
+        {
+            mOpeningStageBackgroundRoot.transform.position = gameBackgroundCenter;
+        }
+
+        SetBagSelectPanelVisible(false);
+        SetBagSelectBackdropVisible(false);
+        ReleaseBagSelectBackdropTexture();
+        if (mMainCanvasGroup != null)
+        {
+            mMainCanvasGroup.alpha = 0f;
+        }
     }
 
     private IEnumerator PlaySelectedPackage()
@@ -4278,12 +4306,28 @@ public class MainScene : MonoBehaviour
             yield return null;
         }
 
-        mPlayAnimationCoroutine = null;
-        mHasSwitchedToGameScene = true;
-        GameManager.EnterGameScene(
-            selectedBagId,
-            playEntranceAnimation: true,
-            isReplaySession: isReplaySession);
+        PrepareOpenedPackageTransitionVisual();
+        yield return PlayTornPackageGameTransition(
+            isReplaySession,
+            backgroundHandoffCompleted: true);
+    }
+
+    private void PrepareOpenedPackageTransitionVisual()
+    {
+        if (mSelectedPackageOverlayImage == null || mSelectedPackageOverlayRect == null)
+        {
+            return;
+        }
+
+        ApplyPackageTornMask(
+            mSelectedPackageOverlayImage,
+            mSelectedPackageEntry?.VisualSettings,
+            shouldShowTornState: true,
+            isCompleted: false);
+        mSelectedPackageOverlayRect.anchoredPosition = mSelectedPackageDisplayPosition;
+        SetSelectedPackageVisualSize(mSelectedPackageDisplaySize);
+        SetSelectedPackageImageAlpha(1f);
+        SetSelectedPackageImageVisible(true);
     }
 
     private void StoreOpeningPackExitPosition()
@@ -4297,51 +4341,11 @@ public class MainScene : MonoBehaviour
         mSelectedPackageOverlayRect.GetWorldCorners(corners);
         var camera = ResolveCanvasCamera(mSelectedPackageOverlayRect);
         var bottomLeft = RectTransformUtility.WorldToScreenPoint(camera, corners[0]);
-        var bottomRight = RectTransformUtility.WorldToScreenPoint(camera, corners[3]);
-        var bottomCenter = (bottomLeft + bottomRight) * 0.5f;
+        var topRight = RectTransformUtility.WorldToScreenPoint(camera, corners[2]);
+        var packCenter = (bottomLeft + topRight) * 0.5f;
         GameManager.SetOpeningPackExitPosition(new Vector2(
-            bottomCenter.x / Screen.width,
-            bottomCenter.y / Screen.height));
-    }
-
-    private void StoreInProgressPieceExitPosition()
-    {
-        if (Screen.width <= 0 || Screen.height <= 0)
-        {
-            return;
-        }
-
-        var animations = mSelectedPackageProgressPieceAnimations;
-        var screenPositionSum = Vector2.zero;
-        var validPieceCount = 0;
-        if (animations != null)
-        {
-            for (var i = 0; i < animations.Count; i++)
-            {
-                var pieceRect = animations[i]?.RectTransform;
-                if (pieceRect == null)
-                {
-                    continue;
-                }
-
-                var camera = ResolveCanvasCamera(pieceRect);
-                screenPositionSum += RectTransformUtility.WorldToScreenPoint(
-                    camera,
-                    pieceRect.position);
-                validPieceCount++;
-            }
-        }
-
-        if (validPieceCount > 0)
-        {
-            var screenPosition = screenPositionSum / validPieceCount;
-            GameManager.SetOpeningPackExitPosition(new Vector2(
-                screenPosition.x / Screen.width,
-                screenPosition.y / Screen.height));
-            return;
-        }
-
-        StoreOpeningPackExitPosition();
+            packCenter.x / Screen.width,
+            packCenter.y / Screen.height));
     }
 
     private IEnumerator HidePackageSelection()
