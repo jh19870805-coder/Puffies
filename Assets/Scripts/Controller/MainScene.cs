@@ -71,7 +71,6 @@ public class MainScene : MonoBehaviour
     private const float InProgressPieceExitHorizontalSpread = 90f;
     private const int MainPackageBagId = GameDefine.DefaultBagId;
     private const string BootstrapObjectName = "MainSceneBootstrap";
-    private const string MainPageTransitionRootObjectName = "MainPageTransitionRoot";
     private const string PackageScrollViewObjectName = "PackageScrollView";
     private const string PackagePageObjectPrefix = "Page_";
     private const string PackageFirstPageObjectName = "Page_1";
@@ -171,7 +170,6 @@ public class MainScene : MonoBehaviour
     private GameObject mOpeningHintAnimationRoot;
     private CardPackOpeningEffect mCardPackOpeningEffect;
     private CanvasGroup mMainCanvasGroup;
-    private RectTransform mMainPageTransitionRect;
     private CanvasGroup mBagSelectPanelCanvasGroup;
     private RawImage mBagSelectBackdropImage;
     private GameObject mOpeningStageBackgroundRoot;
@@ -925,7 +923,6 @@ public class MainScene : MonoBehaviour
         mMainCanvasGroup.alpha = 1f;
         mMainCanvasGroup.interactable = true;
         mMainCanvasGroup.blocksRaycasts = true;
-        ConfigureMainPageTransitionRoot(sourceCanvas);
 
         var canvasObject = new GameObject(
             BagSelectCanvasObjectName,
@@ -957,56 +954,6 @@ public class MainScene : MonoBehaviour
         }
 
         CreateSelectedPackageOverlayCanvas(sourceCanvas);
-    }
-
-    private void ConfigureMainPageTransitionRoot(Canvas sourceCanvas)
-    {
-        if (sourceCanvas == null || mMainPageTransitionRect != null)
-        {
-            return;
-        }
-
-        var sourceTransform = sourceCanvas.transform;
-        var pageChildren = new List<RectTransform>();
-        var backgroundTransform = sourceTransform.Find(GameDefine.BackgroundObjectName)
-            as RectTransform;
-        if (backgroundTransform != null)
-        {
-            pageChildren.Add(backgroundTransform);
-        }
-
-        var packageScrollRect = mPackageScrollRect != null
-            ? mPackageScrollRect.transform as RectTransform
-            : sourceTransform.Find(PackageScrollViewObjectName) as RectTransform;
-        if (packageScrollRect != null
-            && packageScrollRect.parent == sourceTransform
-            && !pageChildren.Contains(packageScrollRect))
-        {
-            pageChildren.Add(packageScrollRect);
-        }
-
-        if (pageChildren.Count == 0)
-        {
-            Debug.LogWarning("MainScene: no homepage content was found for the game transition.");
-            return;
-        }
-
-        pageChildren.Sort((left, right) =>
-            left.GetSiblingIndex().CompareTo(right.GetSiblingIndex()));
-        var firstSiblingIndex = pageChildren[0].GetSiblingIndex();
-        var transitionRoot = new GameObject(
-            MainPageTransitionRootObjectName,
-            typeof(RectTransform));
-        transitionRoot.layer = sourceCanvas.gameObject.layer;
-        mMainPageTransitionRect = transitionRoot.GetComponent<RectTransform>();
-        StretchToParent(mMainPageTransitionRect, sourceTransform);
-        mMainPageTransitionRect.SetSiblingIndex(firstSiblingIndex);
-
-        for (var i = 0; i < pageChildren.Count; i++)
-        {
-            pageChildren[i].SetParent(mMainPageTransitionRect, false);
-            pageChildren[i].SetSiblingIndex(i);
-        }
     }
 
     private void SetSelectedPackageImageVisible(bool visible)
@@ -4154,38 +4101,24 @@ public class MainScene : MonoBehaviour
 
     private IEnumerator PlayMainToGameBackgroundHandoff()
     {
-        var mainPageRect = mMainPageTransitionRect;
         var panelRect = mBagSelectPanelRoot != null
             ? mBagSelectPanelRoot.transform as RectTransform
             : null;
-        var backdropRect = mBagSelectBackdropImage != null
-            ? mBagSelectBackdropImage.rectTransform
-            : null;
-        var mainStart = mainPageRect != null
-            ? mainPageRect.anchoredPosition
-            : Vector2.zero;
         var panelStart = panelRect != null
             ? panelRect.anchoredPosition
             : Vector2.zero;
-        var backdropStart = backdropRect != null
-            ? backdropRect.anchoredPosition
-            : Vector2.zero;
 
-        var camera = Camera.main;
         var gameBackgroundCenter = Vector3.zero;
-        var gameBackgroundStart = Vector3.zero;
         if (mOpeningStageBackgroundRoot != null)
         {
             FitOpeningStageBackgroundToCamera();
             mOpeningStageBackgroundRoot.SetActive(true);
-            SetOpeningStageBackgroundAlpha(1f);
+            SetOpeningStageBackgroundAlpha(0f);
             gameBackgroundCenter = mOpeningStageBackgroundRoot.transform.position;
-            var visibleWorldWidth = camera != null && camera.orthographic
-                ? camera.orthographicSize * 2f * camera.aspect
-                : GameDefine.DesignWidth / PixelsPerUnit;
-            gameBackgroundStart = gameBackgroundCenter + Vector3.right * visibleWorldWidth;
-            mOpeningStageBackgroundRoot.transform.position = gameBackgroundStart;
+            mOpeningStageBackgroundRoot.transform.position = gameBackgroundCenter;
         }
+
+        SetBagSelectBackdropAlpha(1f);
 
         if (mMainCanvasGroup != null)
         {
@@ -4207,22 +4140,6 @@ public class MainScene : MonoBehaviour
             elapsed += Time.unscaledDeltaTime;
             var normalized = Mathf.Clamp01(elapsed / OpeningStageTransitionDuration);
             var eased = 1f - Mathf.Pow(1f - normalized, 3f);
-            if (mainPageRect != null)
-            {
-                mainPageRect.anchoredPosition = Vector2.LerpUnclamped(
-                    mainStart,
-                    mainStart + Vector2.left * GameDefine.DesignWidth,
-                    eased);
-            }
-
-            if (backdropRect != null)
-            {
-                backdropRect.anchoredPosition = Vector2.LerpUnclamped(
-                    backdropStart,
-                    backdropStart + Vector2.left * GameDefine.DesignWidth,
-                    eased);
-            }
-
             if (panelRect != null)
             {
                 panelRect.anchoredPosition = Vector2.LerpUnclamped(
@@ -4231,20 +4148,22 @@ public class MainScene : MonoBehaviour
                     eased);
             }
 
-            if (mOpeningStageBackgroundRoot != null)
+            if (mMainCanvasGroup != null)
             {
-                mOpeningStageBackgroundRoot.transform.position = Vector3.LerpUnclamped(
-                    gameBackgroundStart,
-                    gameBackgroundCenter,
-                    eased);
+                mMainCanvasGroup.alpha = 1f - eased;
             }
+
+            SetBagSelectBackdropAlpha(1f - eased);
+            SetOpeningStageBackgroundAlpha(eased);
 
             yield return null;
         }
 
+        SetBagSelectBackdropAlpha(0f);
         if (mOpeningStageBackgroundRoot != null)
         {
             mOpeningStageBackgroundRoot.transform.position = gameBackgroundCenter;
+            SetOpeningStageBackgroundAlpha(1f);
         }
 
         SetBagSelectPanelVisible(false);
@@ -4488,6 +4407,18 @@ public class MainScene : MonoBehaviour
             mBagSelectBackdropImage.gameObject.SetActive(
                 visible && mBagSelectBackdropTexture != null);
         }
+    }
+
+    private void SetBagSelectBackdropAlpha(float alpha)
+    {
+        if (mBagSelectBackdropImage == null)
+        {
+            return;
+        }
+
+        var color = mBagSelectBackdropImage.color;
+        color.a = Mathf.Clamp01(alpha);
+        mBagSelectBackdropImage.color = color;
     }
 
     private void SetOpeningStageBackgroundAlpha(float alpha)
