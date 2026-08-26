@@ -443,9 +443,11 @@ public class GameScene : MonoBehaviour
             ShowRewardPanel();
         }
 
+        CardPackGameEntranceTransition.NotifyGameSceneReady(camera);
+
         if (playEntranceAnimation && !_isGameFinished)
         {
-            StartCoroutine(PlayGameEntranceAnimation(entrancePiecesAlreadyFanned));
+            StartCoroutine(PlayGameEntranceAfterPackTransition(entrancePiecesAlreadyFanned));
         }
         else
         {
@@ -457,6 +459,13 @@ public class GameScene : MonoBehaviour
         Debug.Log(
             $"GameScene bootstrap completed in "
             + $"{(Time.realtimeSinceStartup - bootstrapStartedAt) * 1000f:F1}ms.");
+    }
+
+    private IEnumerator PlayGameEntranceAfterPackTransition(bool piecesAlreadyFanned)
+    {
+        yield return PlayGameEntranceAnimation(
+            piecesAlreadyFanned,
+            waitForPackTransition: CardPackGameEntranceTransition.IsPending);
     }
 
     private void OnDestroy()
@@ -621,7 +630,9 @@ public class GameScene : MonoBehaviour
         _configuredBoardScale = config.BoardScale;
     }
 
-    private IEnumerator PlayGameEntranceAnimation(bool piecesAlreadyFanned)
+    private IEnumerator PlayGameEntranceAnimation(
+        bool piecesAlreadyFanned,
+        bool waitForPackTransition = false)
     {
         _isEntranceAnimating = true;
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
@@ -639,7 +650,6 @@ public class GameScene : MonoBehaviour
                 camera,
                 WorldGameplayDepth)
             : Vector3.zero;
-        var pieceEntranceOrigin = GetPreviousPackBottomWorldPosition(camera, boardCenter);
 
         var boardRect = _loadedCardBagRect;
         var boardTarget = boardRect != null
@@ -674,6 +684,21 @@ public class GameScene : MonoBehaviour
         SetCanvasGroupAlpha(hintCanvasGroup, 0f);
 
         var pieceCount = _drag.CurrentGroupDraggables.Count;
+        if (waitForPackTransition)
+        {
+            for (var i = 0; i < pieceCount; i++)
+            {
+                var renderer = _drag.CurrentGroupDraggables[i]?.PieceRenderer;
+                if (renderer != null)
+                {
+                    renderer.enabled = false;
+                }
+            }
+
+            yield return CardPackGameEntranceTransition.WaitForCompletion();
+        }
+
+        var pieceEntranceOrigin = GetPreviousPackBottomWorldPosition(camera, boardCenter);
         var pieceTargets = new Vector3[pieceCount];
         var pieceStarts = new Vector3[pieceCount];
         var pieceFanPositions = new Vector3[pieceCount];
@@ -696,6 +721,8 @@ public class GameScene : MonoBehaviour
             {
                 continue;
             }
+
+            renderer.enabled = true;
 
             pieceTargets[i] = renderer.transform.position;
             pieceTargetScales[i] = renderer.transform.localScale;

@@ -1,5 +1,31 @@
 # Spec Driven Development
 
+## 2026-08-26 - Loading 与撕开卡包入场卡顿优化
+
+### 需求
+
+1. WHEN 游戏从 LoadingScene 进入 MainScene THEN Loading 动画 SHALL 在首页场景和列表图片准备期间保持连续，不得在 MainScene 首帧集中读取、解码并创建全部卡包。
+2. WHEN 彩色撕开进行中卡包或灰色撕开重玩卡包进入 GameScene THEN Scene Integration、资源卸载和 `GameScene.Start()` 同步初始化 SHALL 发生在卡包静止阶段，不得夹在卡包下收、碎片分开与发牌动画之间。
+3. WHEN 选中卡包视觉跨场景保留 THEN 系统 SHALL 保持现有卡包状态、撕口、碎片、尺寸、Animator 和动画参数；MainScene 卸载 SHALL NOT 释放该转场仍在使用的撕口材质或蒙版纹理。
+4. IF 异步预加载或跨场景视觉移交失败 THEN 系统 SHALL 回退现有同步加载或 MainScene 内退场路径，不得阻止进入首页或游戏。
+
+### 设计与任务
+
+- [x] LoadingScene 使用 `LoadSceneAsync` 将 MainScene 保持在 `90%`，同时异步预热已解锁卡包封面和尺寸图。
+- [x] 使用 `UnityWebRequestTexture` 代替 Loading 阶段主线程 `Texture2D.LoadImage`，并在场景与图片均准备好后开放激活。
+- [x] MainScene 复用 Sprite 缓存，并按每帧 4 个分批创建卡包列表。
+- [x] 修复 inactive 选中卡包 Animator 的 `Play/Update` 调用顺序。
+- [x] 将选中卡包 Canvas 临时跨场景保留；GameScene 初始化完成并稳定两帧后执行原下收/分片参数，再启动发牌。
+- [x] 为跨场景撕口视觉复制独立 Material 和蒙版 Texture，并在转场结束时释放。
+- [ ] 从 LoadingScene 冷启动目视验证 Loading 动画与列表出现节奏。
+- [ ] 分别验证彩色撕开进行中和灰色撕开重玩转场的材质、下收、分片和发牌连续性。
+
+### 验证
+
+- Unity `Editor.log` 基线：MainScene/GameScene Scene Integration 各约 `142~150ms`，`GameScene.Start()` 约 `83~145ms`，每次切场景后卸载约 `2500~2700` 个资源；原 MainScene 首帧还同步创建 22 个列表项并逐张读取/解码图片。
+- `Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译通过，均为 `0` 警告、`0` 错误。
+- `git diff --check` 通过。
+
 ## 2026-08-20 - 缩短开包滑光结束后的切场景等待
 
 ### 需求

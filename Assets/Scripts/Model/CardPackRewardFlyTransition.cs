@@ -368,3 +368,275 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
         }
     }
 }
+
+public sealed class CardPackGameEntranceTransition : MonoBehaviour
+{
+    private const int GameSceneSettleFrameCount = 2;
+
+    private static CardPackGameEntranceTransition sInstance;
+
+    private readonly List<RectTransform> mPieceRects = new List<RectTransform>();
+    private Canvas mCanvas;
+    private RectTransform mPackRect;
+    private Vector2 mPackStart;
+    private Vector2 mPackTarget;
+    private Vector2[] mPieceStarts;
+    private Vector2[] mPieceTargets;
+    private float mDuration;
+    private bool mGameSceneReady;
+    private Material mOwnedCoverMaterial;
+    private Texture mOwnedMaskTexture;
+
+    public static bool IsPending => sInstance != null;
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetState()
+    {
+        sInstance = null;
+    }
+
+    public static bool TryBegin(
+        Canvas canvas,
+        RectTransform packRect,
+        Image coverImage,
+        IReadOnlyList<RectTransform> pieceRects,
+        float dropDistance,
+        float horizontalSpread,
+        float pieceVerticalCompensation,
+        float duration)
+    {
+        if (sInstance != null
+            || canvas == null
+            || packRect == null
+            || duration <= 0f)
+        {
+            return false;
+        }
+
+        var transition = canvas.gameObject.AddComponent<CardPackGameEntranceTransition>();
+        if (!transition.Initialize(
+                canvas,
+                packRect,
+                coverImage,
+                pieceRects,
+                dropDistance,
+                horizontalSpread,
+                pieceVerticalCompensation,
+                duration))
+        {
+            Destroy(transition);
+            return false;
+        }
+
+        sInstance = transition;
+        DontDestroyOnLoad(canvas.gameObject);
+        return true;
+    }
+
+    public static void NotifyGameSceneReady(Camera gameCamera)
+    {
+        if (sInstance == null)
+        {
+            return;
+        }
+
+        if (sInstance.mCanvas != null
+            && sInstance.mCanvas.renderMode != RenderMode.ScreenSpaceOverlay)
+        {
+            sInstance.mCanvas.worldCamera = gameCamera;
+        }
+
+        sInstance.mGameSceneReady = true;
+    }
+
+    public static IEnumerator WaitForCompletion()
+    {
+        while (sInstance != null)
+        {
+            yield return null;
+        }
+    }
+
+    private bool Initialize(
+        Canvas canvas,
+        RectTransform packRect,
+        Image coverImage,
+        IReadOnlyList<RectTransform> pieceRects,
+        float dropDistance,
+        float horizontalSpread,
+        float pieceVerticalCompensation,
+        float duration)
+    {
+        mCanvas = canvas;
+        mPackRect = packRect;
+        mDuration = duration;
+        mPackStart = packRect.anchoredPosition;
+        mPackTarget = mPackStart + Vector2.down * dropDistance;
+
+        if (pieceRects != null)
+        {
+            for (var i = 0; i < pieceRects.Count; i++)
+            {
+                if (pieceRects[i] != null)
+                {
+                    mPieceRects.Add(pieceRects[i]);
+                }
+            }
+        }
+
+        mPieceStarts = new Vector2[mPieceRects.Count];
+        mPieceTargets = new Vector2[mPieceRects.Count];
+        for (var i = 0; i < mPieceRects.Count; i++)
+        {
+            mPieceStarts[i] = mPieceRects[i].anchoredPosition;
+            var centeredIndex = i - (mPieceRects.Count - 1) * 0.5f;
+            mPieceTargets[i] = mPieceStarts[i] + new Vector2(
+                centeredIndex * horizontalSpread,
+                dropDistance * pieceVerticalCompensation);
+        }
+
+        CloneTransientCoverMaterial(coverImage);
+        StartCoroutine(PlayAfterGameSceneIsReady());
+        return true;
+    }
+
+    private void CloneTransientCoverMaterial(Image coverImage)
+    {
+        if (coverImage == null || coverImage.material == null)
+        {
+            return;
+        }
+
+        var sourceMaterial = coverImage.material;
+        var tornMaskTextureId = Shader.PropertyToID("_TornMaskTex");
+        var useTornMaskId = Shader.PropertyToID("_UseTornMask");
+        if (!sourceMaterial.HasProperty(tornMaskTextureId)
+            || !sourceMaterial.HasProperty(useTornMaskId)
+            || sourceMaterial.GetFloat(useTornMaskId) <= 0f)
+        {
+            return;
+        }
+
+        mOwnedCoverMaterial = new Material(sourceMaterial)
+        {
+            name = sourceMaterial.name + " (Game Entrance)"
+        };
+        var sourceMask = sourceMaterial.GetTexture(tornMaskTextureId);
+        if (sourceMask != null)
+        {
+            mOwnedMaskTexture = Instantiate(sourceMask);
+            mOwnedCoverMaterial.SetTexture(tornMaskTextureId, mOwnedMaskTexture);
+        }
+
+        coverImage.material = mOwnedCoverMaterial;
+    }
+
+    private IEnumerator PlayAfterGameSceneIsReady()
+    {
+        while (!mGameSceneReady)
+        {
+            yield return null;
+        }
+
+        for (var frame = 0; frame < GameSceneSettleFrameCount; frame++)
+        {
+            yield return null;
+        }
+
+        var elapsed = 0f;
+        while (elapsed < mDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            var normalized = Mathf.Clamp01(elapsed / mDuration);
+            var packT = Mathf.SmoothStep(0f, 1f, normalized);
+            var pieceT = 1f - Mathf.Pow(1f - normalized, 3f);
+            if (mPackRect != null)
+            {
+                mPackRect.anchoredPosition = Vector2.LerpUnclamped(
+                    mPackStart,
+                    mPackTarget,
+                    packT);
+            }
+
+            for (var i = 0; i < mPieceRects.Count; i++)
+            {
+                if (mPieceRects[i] != null)
+                {
+                    mPieceRects[i].anchoredPosition = Vector2.LerpUnclamped(
+                        mPieceStarts[i],
+                        mPieceTargets[i],
+                        pieceT);
+                }
+            }
+
+            yield return null;
+        }
+
+        if (mPackRect != null)
+        {
+            mPackRect.anchoredPosition = mPackTarget;
+        }
+
+        StorePieceExitPosition();
+        if (mCanvas != null)
+        {
+            mCanvas.gameObject.SetActive(false);
+        }
+
+        Destroy(gameObject);
+    }
+
+    private void StorePieceExitPosition()
+    {
+        if (Screen.width <= 0 || Screen.height <= 0)
+        {
+            return;
+        }
+
+        var screenPositionSum = Vector2.zero;
+        var validPieceCount = 0;
+        var camera = mCanvas != null && mCanvas.renderMode != RenderMode.ScreenSpaceOverlay
+            ? mCanvas.worldCamera
+            : null;
+        for (var i = 0; i < mPieceRects.Count; i++)
+        {
+            if (mPieceRects[i] == null)
+            {
+                continue;
+            }
+
+            screenPositionSum += RectTransformUtility.WorldToScreenPoint(
+                camera,
+                mPieceRects[i].position);
+            validPieceCount++;
+        }
+
+        if (validPieceCount <= 0)
+        {
+            return;
+        }
+
+        var screenPosition = screenPositionSum / validPieceCount;
+        GameManager.SetOpeningPackExitPosition(new Vector2(
+            screenPosition.x / Screen.width,
+            screenPosition.y / Screen.height));
+    }
+
+    private void OnDestroy()
+    {
+        if (mOwnedCoverMaterial != null)
+        {
+            Destroy(mOwnedCoverMaterial);
+        }
+
+        if (mOwnedMaskTexture != null)
+        {
+            Destroy(mOwnedMaskTexture);
+        }
+
+        if (sInstance == this)
+        {
+            sInstance = null;
+        }
+    }
+}

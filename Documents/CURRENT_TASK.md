@@ -1,5 +1,15 @@
 # 当前任务
 
+## 2026-08-26 Loading 与入场动画卡顿优化
+
+- 状态：实现完成并通过 Runtime/Editor 编译，等待 Unity Play Mode 性能与视觉验收。
+- Unity `Editor.log` 显示 MainScene/GameScene 的 Scene Integration 各约 `142~150ms`，`GameScene.Start()` 同步初始化约 `83~145ms`，场景切换后还会卸载约 `2500~2700` 个资源；此外 MainScene 原先在首帧同步创建 22 个卡包，并逐张执行 `File.ReadAllBytes + Texture2D.LoadImage`。这些工作集中在主线程单帧时会形成约 `150~300ms` 的停顿，不是调动画曲线能够消除的问题。
+- LoadingScene 现在从开始阶段异步加载 MainScene，并把场景保持在 `90%` 待激活状态；卡包封面和尺寸图通过 `UnityWebRequestTexture` 在 Loading 期间异步读取/解码并写入静态 Sprite 缓存，Loading 至少播放 `2.5s`，且只有场景和列表图片均准备好后才显示 `100%` 并激活首页。
+- MainScene 列表复用预热后的封面和尺寸 Sprite，不再对每个列表项重复从磁盘读取图片；22 个卡包按每帧最多 4 个分批创建，避免首帧一次完成全部 Instantiate、绑定和布局。选中卡包 Animator 改为在视觉节点激活后同步，消除了对 inactive Animator 调用 `Play/Update` 的警告。
+- 撕开彩色进行中卡包和灰色重玩卡包进入 GameScene 时，选中卡包 Canvas 会临时 `DontDestroyOnLoad`。GameScene 的激活、反序列化、资源卸载和同步初始化发生在卡包居中静止期间；GameScene 初始化完成并稳定两帧后，跨场景卡包才按原 `0.46s` 参数下收、碎片分开并记录实际发牌起点，随后立即启动现有发牌动画。撕口蒙版 Material 和 Texture 在移交时独立复制，避免 MainScene 卸载资源导致转场卡包丢材质。
+- 修改文件：`Assets/Scripts/Controller/LoadingScene.cs`、`Assets/Scripts/Controller/MainScene.cs`、`Assets/Scripts/Controller/GameScene.cs`、`Assets/Scripts/Model/CardPackRewardFlyTransition.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
+- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译通过，均为 `0` 警告、`0` 错误；`git diff --check` 通过。仍需从 LoadingScene 冷启动验收 Loading 文本/动画连续性、首页列表出现节奏，并分别用彩色撕开进行中卡包和灰色撕开重玩卡包验收场景交接、撕口材质、卡包下收与发牌是否连续。
+
 ## 2026-08-26 撕开卡包进入游戏转场
 
 - 状态：实现完成并通过 Runtime/Editor 编译，等待 MainScene 到 GameScene 的完整视觉验收。

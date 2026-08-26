@@ -7,6 +7,7 @@ using TMPro;
 using UnityEditor;
 #endif
 using UnityEngine;
+using UnityEngine.Networking;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
@@ -28,6 +29,7 @@ public class MainScene : MonoBehaviour
     private const int PackagesPerPageRowCount = 3;
     private const int PackagesPerPageColumnCount = 6;
     private const int PackagesPerPage = PackagesPerPageRowCount * PackagesPerPageColumnCount;
+    private const int PackageListBuildBatchSize = 4;
     private const int PackTornMaskCount = 6;
     private const int InProgressPackPieceCount = 3;
     private const float InProgressPackPieceMaxSize = 86f;
@@ -135,6 +137,11 @@ public class MainScene : MonoBehaviour
     private const string BagSelectNewPackActionText = "玩";
     private const string BagSelectReplayActionText = "重玩";
     private const string TaskItemObjectName = "TaskItem";
+    private static readonly Dictionary<int, Sprite> sPackageCoverSpriteCache =
+        new Dictionary<int, Sprite>();
+    private static readonly Dictionary<CardPackSize, Sprite> sPackageSizeSpriteCache =
+        new Dictionary<CardPackSize, Sprite>();
+    private static bool sPackageListVisualPreloadComplete;
     private static bool sHookedSceneLoaded;
     private static readonly int TornMaskTextureId = Shader.PropertyToID("_TornMaskTex");
     private static readonly int UseTornMaskId = Shader.PropertyToID("_UseTornMask");
@@ -270,6 +277,170 @@ public class MainScene : MonoBehaviour
             BootstrapObjectName);
     }
 
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetPackageVisualCache()
+    {
+        sPackageCoverSpriteCache.Clear();
+        sPackageSizeSpriteCache.Clear();
+        sPackageListVisualPreloadComplete = false;
+    }
+
+    public static bool ArePackageListVisualsPreloaded => sPackageListVisualPreloadComplete;
+
+    public static IEnumerator PreloadPackageListVisuals()
+    {
+        sPackageListVisualPreloadComplete = false;
+        if (!CardPackDataUtility.Initialize())
+        {
+            sPackageListVisualPreloadComplete = true;
+            yield break;
+        }
+
+        var records = CardPackDataUtility.GetAllPacks();
+        var preloadedSizes = new HashSet<CardPackSize>();
+        for (var i = 0; i < records.Count; i++)
+        {
+            var record = records[i];
+            if (record.LifecycleState == CardPackLifecycleState.Locked)
+            {
+                continue;
+            }
+
+            yield return PreloadPackageCoverSprite(record.PackId);
+            if (GameConfigRepository.TryGetCardPackConfig(record.PackId, out var config)
+                && config.PackSize >= CardPackSize.XS
+                && config.PackSize <= CardPackSize.XXXL)
+            {
+                preloadedSizes.Add(config.PackSize);
+            }
+
+        }
+
+        foreach (var packSize in preloadedSizes)
+        {
+            yield return PreloadPackageSizeSprite(packSize);
+        }
+
+        sPackageListVisualPreloadComplete = true;
+    }
+
+    private static IEnumerator PreloadPackageCoverSprite(int packId)
+    {
+        if (sPackageCoverSpriteCache.TryGetValue(packId, out var cachedSprite)
+            && cachedSprite != null)
+        {
+            yield break;
+        }
+
+        Sprite loadedSprite = null;
+        yield return LoadSpriteByPathAsync(
+            GameDefine.FormatPackImagePath(packId),
+            sprite => loadedSprite = sprite);
+        if (loadedSprite != null)
+        {
+            sPackageCoverSpriteCache[packId] = loadedSprite;
+        }
+    }
+
+    private static IEnumerator PreloadPackageSizeSprite(CardPackSize packSize)
+    {
+        if (sPackageSizeSpriteCache.TryGetValue(packSize, out var cachedSprite)
+            && cachedSprite != null)
+        {
+            yield break;
+        }
+
+        Sprite loadedSprite = null;
+        yield return LoadSpriteByPathAsync(
+            GameDefine.FormatPackSizeImagePath(packSize),
+            sprite => loadedSprite = sprite);
+        if (loadedSprite != null)
+        {
+            sPackageSizeSpriteCache[packSize] = loadedSprite;
+        }
+    }
+
+    private static IEnumerator LoadSpriteByPathAsync(
+        string imageResourcePath,
+        Action<Sprite> onCompleted)
+    {
+        var imagePathOnDisk = GameCommonUtility.ToDiskPath(imageResourcePath);
+        if (!File.Exists(imagePathOnDisk))
+        {
+            onCompleted?.Invoke(null);
+            yield break;
+        }
+
+        using (var request = UnityWebRequestTexture.GetTexture(
+                   new Uri(imagePathOnDisk).AbsoluteUri,
+                   nonReadable: true))
+        {
+            yield return request.SendWebRequest();
+            if (request.result != UnityWebRequest.Result.Success)
+            {
+                Debug.LogWarning(
+                    $"MainScene: async package image preload failed. "
+                    + $"path={imagePathOnDisk}, error={request.error}");
+                onCompleted?.Invoke(null);
+                yield break;
+            }
+
+            var texture = DownloadHandlerTexture.GetContent(request);
+            if (texture == null)
+            {
+                onCompleted?.Invoke(null);
+                yield break;
+            }
+
+            texture.name = Path.GetFileNameWithoutExtension(imagePathOnDisk);
+            var sprite = Sprite.Create(
+                texture,
+                new Rect(0f, 0f, texture.width, texture.height),
+                new Vector2(0.5f, 0.5f),
+                PixelsPerUnit);
+            sprite.name = texture.name;
+            onCompleted?.Invoke(sprite);
+        }
+    }
+
+    private static Sprite GetOrLoadPackageCoverSprite(int packId)
+    {
+        if (sPackageCoverSpriteCache.TryGetValue(packId, out var sprite)
+            && sprite != null)
+        {
+            return sprite;
+        }
+
+        sprite = GameCommonUtility.LoadSpriteByPath(
+            GameDefine.FormatPackImagePath(packId),
+            PixelsPerUnit);
+        if (sprite != null)
+        {
+            sPackageCoverSpriteCache[packId] = sprite;
+        }
+
+        return sprite;
+    }
+
+    private static Sprite GetOrLoadPackageSizeSprite(CardPackSize packSize)
+    {
+        if (sPackageSizeSpriteCache.TryGetValue(packSize, out var sprite)
+            && sprite != null)
+        {
+            return sprite;
+        }
+
+        sprite = GameCommonUtility.LoadSpriteByPath(
+            GameDefine.FormatPackSizeImagePath(packSize),
+            PixelsPerUnit);
+        if (sprite != null)
+        {
+            sPackageSizeSpriteCache[packSize] = sprite;
+        }
+
+        return sprite;
+    }
+
     private void OnDestroy()
     {
         StopOpeningHintAnimation();
@@ -364,7 +535,7 @@ public class MainScene : MonoBehaviour
         }
         else
         {
-            RefreshPackageList();
+            StartCoroutine(RefreshPackageList());
         }
 
         ConfigureRankButton();
@@ -904,21 +1075,29 @@ public class MainScene : MonoBehaviour
 
         BindSelectedPackageProgressPieceAnimations(entry, visualObject.transform);
 
-        var sourceAnimator = entry.PackAnimator;
-        var visualAnimator = visualObject.GetComponent<Animator>();
-        if (sourceAnimator != null
-            && visualAnimator != null
-            && sourceAnimator.runtimeAnimatorController == visualAnimator.runtimeAnimatorController
-            && sourceAnimator.layerCount > 0)
-        {
-            var sourceState = sourceAnimator.GetCurrentAnimatorStateInfo(0);
-            visualAnimator.speed = sourceAnimator.speed;
-            visualAnimator.Play(sourceState.fullPathHash, 0, sourceState.normalizedTime);
-            visualAnimator.Update(0f);
-        }
-
         SetSelectedPackageImageAlpha(1f);
         return true;
+    }
+
+    private void SyncSelectedPackageAnimator(PackageEntry entry)
+    {
+        var sourceAnimator = entry?.PackAnimator;
+        var visualAnimator = mSelectedPackageVisualContent != null
+            ? mSelectedPackageVisualContent.GetComponent<Animator>()
+            : null;
+        if (sourceAnimator == null
+            || visualAnimator == null
+            || !visualAnimator.isActiveAndEnabled
+            || sourceAnimator.runtimeAnimatorController != visualAnimator.runtimeAnimatorController
+            || sourceAnimator.layerCount <= 0)
+        {
+            return;
+        }
+
+        var sourceState = sourceAnimator.GetCurrentAnimatorStateInfo(0);
+        visualAnimator.speed = sourceAnimator.speed;
+        visualAnimator.Play(sourceState.fullPathHash, 0, sourceState.normalizedTime);
+        visualAnimator.Update(0f);
     }
 
     private void ClearSelectedPackageVisual()
@@ -1276,6 +1455,7 @@ public class MainScene : MonoBehaviour
 
         SetSelectedPackageVisualSize(mSelectedPackageDisplaySize);
         SetSelectedPackageImageVisible(true);
+        SyncSelectedPackageAnimator(mSelectedPackageEntry);
     }
 
     private void OnReplayCancelled()
@@ -1463,21 +1643,23 @@ public class MainScene : MonoBehaviour
         return true;
     }
 
-    private void RefreshPackageList()
+    private IEnumerator RefreshPackageList()
     {
         if (mPackageContentRoot == null || mPackageItemTemplate == null)
         {
-            return;
+            yield break;
         }
 
         if (!CardPackDataUtility.Initialize())
         {
             Debug.LogWarning("MainScene: CardPackDataUtility is not ready, package list refresh skipped.");
-            return;
+            yield break;
         }
 
+        var startedAt = Time.realtimeSinceStartup;
         var unlockedPackIds = CardPackDataUtility.TakeMainSceneOrderedPackIds();
         ClearPackageSlots();
+        yield return null;
 
         for (var i = 0; i < unlockedPackIds.Count; i++)
         {
@@ -1491,6 +1673,10 @@ public class MainScene : MonoBehaviour
             ApplyPackageSlotVisual(entry, packId);
             entry.Root.SetActive(true);
             mPackageSlotsById[packId] = entry;
+            if ((i + 1) % PackageListBuildBatchSize == 0)
+            {
+                yield return null;
+            }
         }
 
         RefreshPackagePageLayout();
@@ -1499,7 +1685,9 @@ public class MainScene : MonoBehaviour
             mPackageScrollRect.horizontalNormalizedPosition = 0f;
         }
 
-        Debug.Log($"MainScene: package list refreshed. unlocked={unlockedPackIds.Count}");
+        Debug.Log(
+            $"MainScene: package list refreshed. unlocked={unlockedPackIds.Count}, "
+            + $"elapsed={(Time.realtimeSinceStartup - startedAt) * 1000f:F1}ms");
     }
 
     private void ClearPackageSlots()
@@ -1636,8 +1824,7 @@ public class MainScene : MonoBehaviour
 
         entry.Image.enabled = true;
         entry.Image.raycastTarget = false;
-        var packImagePath = GameDefine.FormatPackImagePath(packId);
-        var packSprite = GameCommonUtility.LoadSpriteByPath(packImagePath, PixelsPerUnit);
+        var packSprite = GetOrLoadPackageCoverSprite(packId);
         if (packSprite != null)
         {
             entry.Image.sprite = packSprite;
@@ -2263,9 +2450,7 @@ public class MainScene : MonoBehaviour
             return;
         }
 
-        var sizeSprite = GameCommonUtility.LoadSpriteByPath(
-            GameDefine.FormatPackSizeImagePath(config.PackSize),
-            PixelsPerUnit);
+        var sizeSprite = GetOrLoadPackageSizeSprite(config.PackSize);
         if (sizeSprite == null)
         {
             sizeImage.gameObject.SetActive(false);
@@ -3274,6 +3459,7 @@ public class MainScene : MonoBehaviour
         mSelectedPackageOverlayRect.anchoredPosition = mSelectedPackageStartPosition;
         SetSelectedPackageVisualSize(mSelectedPackageStartSize);
         SetSelectedPackageImageVisible(true);
+        SyncSelectedPackageAnimator(entry);
         RefreshBagSelectPackState(bagId);
         SetBagSelectBackdropVisible(true);
         SetBagSelectPanelVisible(true);
@@ -3911,6 +4097,46 @@ public class MainScene : MonoBehaviour
         {
             holdElapsed += Time.unscaledDeltaTime;
             yield return null;
+        }
+
+        var transitionPieceRects = new List<RectTransform>();
+        if (mSelectedPackageProgressPieceAnimations != null)
+        {
+            for (var i = 0; i < mSelectedPackageProgressPieceAnimations.Count; i++)
+            {
+                var pieceRect = mSelectedPackageProgressPieceAnimations[i]?.RectTransform;
+                if (pieceRect != null)
+                {
+                    transitionPieceRects.Add(pieceRect);
+                }
+            }
+        }
+
+        if (CardPackGameEntranceTransition.TryBegin(
+                mSelectedPackageOverlayCanvas,
+                mSelectedPackageOverlayRect,
+                mSelectedPackageOverlayImage,
+                transitionPieceRects,
+                ReferenceHeight * InProgressPackExitScreenHeightRatio,
+                InProgressPieceExitHorizontalSpread,
+                InProgressPieceExitCompensation,
+                InProgressPackExitDuration))
+        {
+            mSelectedPackageOverlayCanvas = null;
+            mSelectedPackageOverlayCanvasGroup = null;
+            mSelectedPackageOverlayImage = null;
+            mSelectedPackageOverlayRect = null;
+            mSelectedPackageVisualContent = null;
+            mSelectedPackageProgressPieceAnimations = null;
+            mIsSelectedPackageProgressPieceTransitioning = false;
+            mPlayAnimationCoroutine = null;
+            mHasSwitchedToGameScene = true;
+            GameManager.EnterGameScene(
+                mSelectedBagId,
+                playEntranceAnimation: true,
+                isReplaySession: isReplaySession,
+                entrancePiecesAlreadyFanned: true);
+            yield break;
         }
 
         var packRect = mSelectedPackageOverlayRect;

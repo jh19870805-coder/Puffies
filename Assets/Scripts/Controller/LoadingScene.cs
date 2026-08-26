@@ -48,6 +48,7 @@ public class LoadingScene : MonoBehaviour
 
         ApplyLoadingTextFont();
 
+        StartCoroutine(MainScene.PreloadPackageListVisuals());
         mLoadingCoroutine = StartCoroutine(RunLoadingProgress());
     }
 
@@ -102,19 +103,35 @@ public class LoadingScene : MonoBehaviour
 
     private IEnumerator RunLoadingProgress()
     {
+        var loadOperation = SceneManager.LoadSceneAsync(GameDefine.SceneMain);
+        if (loadOperation == null)
+        {
+            Debug.LogWarning("LoadingScene: failed to preload MainScene; using synchronous fallback.");
+            GameManager.EnterMainScene();
+            yield break;
+        }
+
+        loadOperation.allowSceneActivation = false;
         var elapsed = 0f;
         var duration = GameDefine.LoadingDurationSeconds;
-        while (elapsed < duration)
+        while (elapsed < duration
+               || loadOperation.progress < 0.9f
+               || !MainScene.ArePackageListVisualsPreloaded)
         {
-            elapsed += Time.deltaTime;
-            var percent = Mathf.Clamp(Mathf.RoundToInt(elapsed / duration * 100f), 0, 100);
+            elapsed += Time.unscaledDeltaTime;
+            var timeProgress = Mathf.Clamp01(elapsed / duration);
+            var sceneProgress = Mathf.Clamp01(loadOperation.progress / 0.9f);
+            var percent = Mathf.Clamp(
+                Mathf.RoundToInt(Mathf.Min(timeProgress, sceneProgress) * 99f),
+                0,
+                99);
             UpdateLoadingText(percent);
             yield return null;
         }
 
         UpdateLoadingText(100);
         mLoadingCoroutine = null;
-        GameManager.EnterMainScene();
+        loadOperation.allowSceneActivation = true;
     }
 
     private void UpdateLoadingText(int percent)
