@@ -784,6 +784,10 @@
 9. WHEN 活动会话的全部第一组 `Piece01II` 均已正确拼入 THEN 系统 SHALL 显示彩色撕开卡包、`PackBg` 和进行中装饰贴纸；第一组片数 SHALL 从 Prefab 实际内容读取，不得写死。
 10. WHEN 已完成卡包确认重玩 THEN 系统 SHALL 清除上一局进度并立即创建新的空活动会话；WHEN 本次重玩开始后任意 Piece 正确拼入 THEN 系统 SHALL 立即记录该 Piece；WHEN 玩家在任意组中途返回首页 THEN 系统 SHALL 保留全部进度并支持再次进入后恢复。第一组未全部完成时首页 SHALL 显示完整彩色卡包；第一组全部完成后首页 SHALL 显示彩色撕开状态和本关碎片。
 11. `PackSize` SHALL 直接使用 `PackItem.prefab` 中美术配置的尺寸、位置、锚点和 Pivot；程序 SHALL 只替换对应尺寸图片及状态材质，不得直接调整其 RectTransform。首页列表 SHALL 通过统一缩放共同父节点 `PackNode`，让尺寸标签与卡包其他视觉保持相对布局并同步缩小。
+12. WHEN 玩家选中卡包 THEN 选中层 SHALL 复制列表当前完整 `PackNode` 并统一放大，撕口、`PackBg`、`ProgressPieces`、封面、尺寸标签和状态材质 SHALL 与列表一致。
+13. WHEN 选中状态为完整彩色 THEN 点击“玩” SHALL 进入拆包舞台并执行等待操作、拆包模型、粒子和后续 GameScene 入场完整流程。
+14. WHEN 选中状态为彩色撕开进行中 THEN 点击“玩” SHALL 跳过拆包舞台和拆包特效，直接进入 GameScene 并播放棋盘、托盘和当前组碎片入场。
+15. WHEN 选中状态为灰色撕开已完成 THEN 点击“重玩” SHALL 先显示 `PanelReplay`；确认后清除旧会话、创建空会话并直接进入 GameScene，不得播放拆包动画。
 
 ### 设计与任务
 
@@ -795,12 +799,13 @@
 - [x] 6. 将活动会话撕开判定改为 Prefab 第一组 Piece 全量完成判定，并让进行中装饰贴纸使用同一门槛。
 - [x] 7. 确认重玩时建立新的空会话；首次游玩和重玩均在返回时保留所有组的已拼 Piece，首页仅按第一组是否完整完成切换完整或撕开表现。
 - [x] 8. 删除 `PackSize` 子节点的运行时缩放与定位，改为按封面比例统一缩放 `PackNode`，让全部卡包子视觉使用最新美术 Prefab 相对布局。
+- [x] 9. 选中层改为克隆列表当前完整 `PackNode`，并按完整彩色、彩色撕开进行中、灰色撕开已完成三种状态分流拆包、直接继续和确认重玩流程。
 
 ## 2026-08-25 - 等待撕包页循环滑光提示
 
 ### 需求
 
-1. WHEN 玩家点击“玩”或确认重玩并完成开包舞台转场 THEN 系统 SHALL 在居中卡包上循环播放 `PackItem.prefab/PackNode/ImgLight` 的现有 `PackAni` 滑动动画。
+1. WHEN 完整彩色卡包点击“玩”并完成开包舞台转场 THEN 系统 SHALL 在居中卡包上循环播放 `PackItem.prefab/PackNode/ImgLight` 的现有 `PackAni` 滑动动画；彩色撕开进行中和灰色撕开重玩 SHALL 跳过该舞台与提示动画。
 2. WHILE 系统等待玩家操作卡包 THEN 滑光 SHALL 持续循环，不得在一次动画结束后停止。
 3. WHEN 玩家在卡包上完成有效轻点，或从卡包矩形内起手并保持在范围内滑动达到最小距离 THEN 系统 SHALL 等到鼠标左键或触摸抬起后，再停止并隐藏循环滑光，然后播放现有卡包撕开模型和粒子动画。
 4. IF 点击或滑动没有通过现有开包输入判定 THEN 系统 SHALL 继续播放循环滑光，不得提前停止。

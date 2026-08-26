@@ -1,5 +1,22 @@
 # 当前任务
 
+## 2026-08-26 进行中卡包碎片显示恢复
+
+- 状态：代码修复完成并通过 Runtime/Editor 编译，等待 MainScene 视觉验收。
+- 第一组完成判定、彩色撕开状态和运行时碎片创建逻辑仍然存在；问题来自列表改为统一缩放 `PackNode` 后，动态创建的 `ProgressPieces` 仍使用旧列表像素尺寸，随后又被父节点缩小到 `0.4`，视觉上接近消失。
+- MainScene 现在根据 `PackCover` 当前设计尺寸与列表目标 `240 x 272` 计算动态碎片的设计空间换算比例。当前封面为 `600 x 680`，换算比例为 `2.5`；碎片尺寸、位置、横向边界、阴影偏移和浮动距离统一乘以该比例，再随 `PackNode` 缩放到列表尺寸。
+- 选中卡包继续复制完整 `PackNode`，因此进行中的撕口、`PackBg` 和碎片会一起从列表状态放大，不单独重建或丢失碎片。选中克隆里的 `ProgressPieceXX` 会复用列表碎片的基准位置、浮动距离和动画相位，并接入同一个逐帧动画更新，放大移动和中央停留期间不再静止；关闭选中页时同步清理动画引用。
+- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Documents/CURRENT_TASK.md`。
+- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 编译通过，均为 `0` 警告、`0` 错误。仍需在 MainScene Play Mode 验收完成第一组后的彩色撕开带碎片状态，以及点击后选中层的碎片尺寸、位置和持续浮动动画。
+
+## 2026-08-26 卡包选中视觉与流程按列表状态分流
+
+- 状态：实现完成并通过 Runtime/Editor 编译，等待 MainScene 三态视觉/流程验收。
+- 列表项统一记录 `完整彩色`、`彩色撕开进行中`、`灰色撕开已完成` 三种显示状态；选中层不再单独创建封面 Image，而是复制当前列表实例的完整 `PackNode`，保留撕口、`PackBg`、进行中碎片、封面、尺寸标签、状态材质和 Animator 状态，再由外层从列表尺寸统一放大到 `600 x 680`。
+- 完整彩色点击“玩”继续进入现有拆包舞台并播放完整拆包流程；彩色撕开进行中点击“玩”跳过拆包舞台和特效，直接进入 GameScene 并播放棋盘、托盘和碎片入场；灰色撕开已完成点击“重玩”显示 `PanelReplay`，确认后清除并重建空会话，再直接进入 GameScene，不播放拆包动画。
+- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。工作期间外部提交 `25e6b10` 已包含此前的 `PackItem.prefab` 完成态尺寸材质引用与父节点缩放修改，本任务在该最新提交上继续实现。
+- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 编译通过，均为 `0` 警告、`0` 错误；旧的选中封面 Sprite 赋值和统一进入拆包舞台逻辑已移除，直接进入 GameScene 前仍记录选中卡包下沿并启用现有发碎片入场。仍需在 MainScene Play Mode 分别验收三种列表/选中视觉一致性、按钮文字、重玩确认和拆包跳过行为。
+
 ## 2026-08-26 首页卡包整体父节点缩放
 
 - 状态：实现完成并通过 Runtime/Editor 编译，等待 MainScene 视觉验收。

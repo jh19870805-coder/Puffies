@@ -151,8 +151,11 @@ public class MainScene : MonoBehaviour
     private GameObject mBagSelectPanelRoot;
     private Canvas mBagSelectOverlayCanvas;
     private Canvas mSelectedPackageOverlayCanvas;
+    private CanvasGroup mSelectedPackageOverlayCanvasGroup;
     private Image mSelectedPackageOverlayImage;
     private RectTransform mSelectedPackageOverlayRect;
+    private RectTransform mSelectedPackageVisualContent;
+    private List<InProgressPackagePieceAnimation> mSelectedPackageProgressPieceAnimations;
     private GameObject mOpeningHintAnimationRoot;
     private CardPackOpeningEffect mCardPackOpeningEffect;
     private CanvasGroup mMainCanvasGroup;
@@ -218,6 +221,13 @@ public class MainScene : MonoBehaviour
     private Vector2 mTearSwipeStartScreenPosition;
     private Rect mTearSwipeScreenRect;
 
+    private enum PackageDisplayState
+    {
+        IntactColor,
+        TornColorInProgress,
+        TornCompleted
+    }
+
     private sealed class PackageEntry
     {
         public int BagId;
@@ -232,12 +242,14 @@ public class MainScene : MonoBehaviour
         public RectTransform RectTransform;
         public bool SuppressDisplay;
         public bool ShowTornBackground;
+        public PackageDisplayState DisplayState;
     }
 
     private sealed class InProgressPackagePieceAnimation
     {
         public RectTransform RectTransform;
         public Vector2 BasePosition;
+        public float FloatDistance;
         public float PhaseRadians;
     }
 
@@ -772,24 +784,16 @@ public class MainScene : MonoBehaviour
         {
             mSelectedPackageOverlayCanvas.gameObject.SetActive(visible);
         }
-
-        if (mSelectedPackageOverlayImage != null)
-        {
-            mSelectedPackageOverlayImage.enabled = visible
-                && mSelectedPackageOverlayImage.sprite != null;
-        }
     }
 
     private void SetSelectedPackageImageAlpha(float alpha)
     {
-        if (mSelectedPackageOverlayImage == null)
+        if (mSelectedPackageOverlayCanvasGroup == null)
         {
             return;
         }
 
-        var color = mSelectedPackageOverlayImage.color;
-        color.a = Mathf.Clamp01(alpha);
-        mSelectedPackageOverlayImage.color = color;
+        mSelectedPackageOverlayCanvasGroup.alpha = Mathf.Clamp01(alpha);
     }
 
     private void CreateSelectedPackageOverlayCanvas(Canvas sourceCanvas)
@@ -827,8 +831,7 @@ public class MainScene : MonoBehaviour
         var imageObject = new GameObject(
             SelectedPackageImageObjectName,
             typeof(RectTransform),
-            typeof(CanvasRenderer),
-            typeof(Image));
+            typeof(CanvasGroup));
         imageObject.layer = canvasObject.layer;
         mSelectedPackageOverlayRect = imageObject.GetComponent<RectTransform>();
         mSelectedPackageOverlayRect.SetParent(canvasObject.transform, false);
@@ -837,12 +840,154 @@ public class MainScene : MonoBehaviour
         mSelectedPackageOverlayRect.pivot = new Vector2(0.5f, 0.5f);
         mSelectedPackageOverlayRect.anchoredPosition = Vector2.zero;
         mSelectedPackageOverlayRect.sizeDelta = new Vector2(PackageCoverWidth, PackageCoverHeight);
-
-        mSelectedPackageOverlayImage = imageObject.GetComponent<Image>();
-        mSelectedPackageOverlayImage.color = Color.white;
-        mSelectedPackageOverlayImage.preserveAspect = true;
-        mSelectedPackageOverlayImage.raycastTarget = false;
+        mSelectedPackageOverlayCanvasGroup = imageObject.GetComponent<CanvasGroup>();
+        mSelectedPackageOverlayCanvasGroup.alpha = 1f;
+        mSelectedPackageOverlayCanvasGroup.interactable = false;
+        mSelectedPackageOverlayCanvasGroup.blocksRaycasts = false;
         canvasObject.SetActive(false);
+    }
+
+    private bool CreateSelectedPackageVisual(PackageEntry entry)
+    {
+        ClearSelectedPackageVisual();
+        if (entry?.Root == null || mSelectedPackageOverlayRect == null)
+        {
+            return false;
+        }
+
+        var sourcePackNode = FindChild(entry.Root.transform, PackNodeObjectName) as RectTransform;
+        if (sourcePackNode == null)
+        {
+            return false;
+        }
+
+        var visualObject = Instantiate(
+            sourcePackNode.gameObject,
+            mSelectedPackageOverlayRect,
+            false);
+        visualObject.name = "SelectedPackNode";
+        SetLayerRecursively(visualObject.transform, mSelectedPackageOverlayRect.gameObject.layer);
+        mSelectedPackageVisualContent = visualObject.GetComponent<RectTransform>();
+        if (mSelectedPackageVisualContent == null)
+        {
+            Destroy(visualObject);
+            return false;
+        }
+
+        mSelectedPackageVisualContent.anchorMin = new Vector2(0.5f, 0.5f);
+        mSelectedPackageVisualContent.anchorMax = new Vector2(0.5f, 0.5f);
+        mSelectedPackageVisualContent.pivot = new Vector2(0.5f, 0.5f);
+        mSelectedPackageVisualContent.anchoredPosition = Vector2.zero;
+        mSelectedPackageVisualContent.localScale = Vector3.one;
+
+        mSelectedPackageOverlayImage =
+            FindChild(visualObject.transform, PackCoverObjectName)?.GetComponent<Image>();
+        if (mSelectedPackageOverlayImage == null || mSelectedPackageOverlayImage.sprite == null)
+        {
+            ClearSelectedPackageVisual();
+            return false;
+        }
+
+        var graphics = visualObject.GetComponentsInChildren<Graphic>(true);
+        for (var i = 0; i < graphics.Length; i++)
+        {
+            graphics[i].raycastTarget = false;
+        }
+
+        BindSelectedPackageProgressPieceAnimations(entry, visualObject.transform);
+
+        var sourceAnimator = entry.PackAnimator;
+        var visualAnimator = visualObject.GetComponent<Animator>();
+        if (sourceAnimator != null
+            && visualAnimator != null
+            && sourceAnimator.runtimeAnimatorController == visualAnimator.runtimeAnimatorController
+            && sourceAnimator.layerCount > 0)
+        {
+            var sourceState = sourceAnimator.GetCurrentAnimatorStateInfo(0);
+            visualAnimator.speed = sourceAnimator.speed;
+            visualAnimator.Play(sourceState.fullPathHash, 0, sourceState.normalizedTime);
+            visualAnimator.Update(0f);
+        }
+
+        SetSelectedPackageImageAlpha(1f);
+        return true;
+    }
+
+    private void ClearSelectedPackageVisual()
+    {
+        if (mSelectedPackageVisualContent != null)
+        {
+            Destroy(mSelectedPackageVisualContent.gameObject);
+        }
+
+        mSelectedPackageVisualContent = null;
+        mSelectedPackageOverlayImage = null;
+        mSelectedPackageProgressPieceAnimations = null;
+        SetSelectedPackageImageAlpha(1f);
+    }
+
+    private void BindSelectedPackageProgressPieceAnimations(
+        PackageEntry entry,
+        Transform selectedVisualRoot)
+    {
+        var sourceAnimations = entry?.ProgressPieceAnimations;
+        if (sourceAnimations == null || selectedVisualRoot == null)
+        {
+            return;
+        }
+
+        mSelectedPackageProgressPieceAnimations =
+            new List<InProgressPackagePieceAnimation>(sourceAnimations.Count);
+        for (var i = 0; i < sourceAnimations.Count; i++)
+        {
+            var sourceAnimation = sourceAnimations[i];
+            if (sourceAnimation?.RectTransform == null)
+            {
+                continue;
+            }
+
+            var selectedPiece = FindChild(
+                selectedVisualRoot,
+                sourceAnimation.RectTransform.gameObject.name) as RectTransform;
+            if (selectedPiece == null)
+            {
+                continue;
+            }
+
+            mSelectedPackageProgressPieceAnimations.Add(
+                new InProgressPackagePieceAnimation
+                {
+                    RectTransform = selectedPiece,
+                    BasePosition = sourceAnimation.BasePosition,
+                    FloatDistance = sourceAnimation.FloatDistance,
+                    PhaseRadians = sourceAnimation.PhaseRadians
+                });
+        }
+    }
+
+    private void SetSelectedPackageVisualSize(Vector2 displaySize)
+    {
+        if (mSelectedPackageOverlayRect == null)
+        {
+            return;
+        }
+
+        mSelectedPackageOverlayRect.sizeDelta = displaySize;
+        if (mSelectedPackageVisualContent == null || mSelectedPackageOverlayImage == null)
+        {
+            return;
+        }
+
+        var sourceSize = mSelectedPackageOverlayImage.rectTransform.rect.size;
+        if (sourceSize.x <= 0f || sourceSize.y <= 0f)
+        {
+            return;
+        }
+
+        var scale = Mathf.Min(
+            displaySize.x / sourceSize.x,
+            displaySize.y / sourceSize.y);
+        mSelectedPackageVisualContent.localScale = Vector3.one * scale;
     }
 
     private bool TryGetSelectedOverlayRect(
@@ -917,15 +1062,15 @@ public class MainScene : MonoBehaviour
                 fromPosition,
                 toPosition,
                 eased);
-            mSelectedPackageOverlayRect.sizeDelta = Vector2.LerpUnclamped(
+            SetSelectedPackageVisualSize(Vector2.LerpUnclamped(
                 fromSize,
                 toSize,
-                eased);
+                eased));
             yield return null;
         }
 
         mSelectedPackageOverlayRect.anchoredPosition = toPosition;
-        mSelectedPackageOverlayRect.sizeDelta = toSize;
+        SetSelectedPackageVisualSize(toSize);
     }
 
     private void CreateOpeningStageBackground()
@@ -1034,13 +1179,26 @@ public class MainScene : MonoBehaviour
             return;
         }
 
-        if (ShouldConfirmReplay(mSelectedBagId) && mReplayPanelRoot != null)
+        if (mSelectedPackageEntry.DisplayState == PackageDisplayState.TornCompleted)
         {
-            ShowReplayConfirmation();
+            if (mReplayPanelRoot != null)
+            {
+                ShowReplayConfirmation();
+            }
+            else
+            {
+                Debug.LogWarning("MainScene: completed pack replay requires PanelReplay.");
+            }
             return;
         }
 
         mIsSelectedPackageReplay = false;
+        if (mSelectedPackageEntry.DisplayState == PackageDisplayState.TornColorInProgress)
+        {
+            EnterSelectedPackageGame(isReplaySession: false);
+            return;
+        }
+
         mPlayAnimationCoroutine = StartCoroutine(EnterCardPackOpeningStage());
     }
 
@@ -1078,8 +1236,7 @@ public class MainScene : MonoBehaviour
                 $"MainScene: failed to create puzzle session for replay. packId={mSelectedBagId}");
         }
 
-        SetSelectedPackageImageVisible(true);
-        mPlayAnimationCoroutine = StartCoroutine(EnterCardPackOpeningStage());
+        EnterSelectedPackageGame(isReplaySession: true);
     }
 
     private void OnReplayCancelled()
@@ -1453,7 +1610,12 @@ public class MainScene : MonoBehaviour
         var showCompletedState = wasCompleted && !hasActiveSession;
         var hasCompletedFirstGroup = hasActiveSession
             && CardPackDataUtility.HasCompletedFirstPuzzleGroup(packId);
-        var showTornState = showCompletedState || hasCompletedFirstGroup;
+        entry.DisplayState = showCompletedState
+            ? PackageDisplayState.TornCompleted
+            : hasCompletedFirstGroup
+                ? PackageDisplayState.TornColorInProgress
+                : PackageDisplayState.IntactColor;
+        var showTornState = entry.DisplayState != PackageDisplayState.IntactColor;
         ApplyPackageTornMask(
             entry.Image,
             entry.VisualSettings,
@@ -1673,6 +1835,16 @@ public class MainScene : MonoBehaviour
             return;
         }
 
+        var progressVisualScale = Mathf.Min(
+            coverRect.rect.width / PackageCoverWidth,
+            coverRect.rect.height / PackageCoverHeight);
+        if (float.IsNaN(progressVisualScale)
+            || float.IsInfinity(progressVisualScale)
+            || progressVisualScale <= 0f)
+        {
+            progressVisualScale = 1f;
+        }
+
         EnsurePackageBackgroundBehindCover(entry.BackgroundImage, entry.Image);
 
         var piecesRootObject = new GameObject(
@@ -1699,7 +1871,8 @@ public class MainScene : MonoBehaviour
                     piecesRoot,
                     selectedPieces[i].sprite,
                     packId,
-                    i));
+                    i,
+                    progressVisualScale));
         }
     }
 
@@ -1730,7 +1903,8 @@ public class MainScene : MonoBehaviour
         RectTransform parent,
         Sprite sprite,
         int packId,
-        int index)
+        int index,
+        float progressVisualScale)
     {
         var pieceObject = new GameObject(
             $"ProgressPiece{index + 1:D2}",
@@ -1749,10 +1923,11 @@ public class MainScene : MonoBehaviour
         pieceRect.localScale = Vector3.one;
 
         var spriteSize = sprite.rect.size;
-        var scale = InProgressPackPieceMaxSize / Mathf.Max(spriteSize.x, spriteSize.y, 1f);
+        var targetMaxSize = InProgressPackPieceMaxSize * progressVisualScale;
+        var scale = targetMaxSize / Mathf.Max(spriteSize.x, spriteSize.y, 1f);
         var previousSize = spriteSize * scale;
         var displayedSize = previousSize * InProgressPackPieceScaleMultiplier;
-        var basePosition = GetInProgressPackagePiecePosition(index);
+        var basePosition = GetInProgressPackagePiecePosition(index) * progressVisualScale;
         basePosition.y -= (displayedSize.y - previousSize.y) * 0.5f;
         var rotationRadians = rotationDegrees * Mathf.Deg2Rad;
         var rotatedHalfWidth = (
@@ -1760,10 +1935,10 @@ public class MainScene : MonoBehaviour
             + Mathf.Abs(Mathf.Sin(rotationRadians)) * displayedSize.y) * 0.5f;
         var minimumCenterX = parent.rect.xMin
             + rotatedHalfWidth
-            + InProgressPackPieceHorizontalMargin;
+            + InProgressPackPieceHorizontalMargin * progressVisualScale;
         var maximumCenterX = parent.rect.xMax
             - rotatedHalfWidth
-            - InProgressPackPieceHorizontalMargin;
+            - InProgressPackPieceHorizontalMargin * progressVisualScale;
         basePosition.x = minimumCenterX <= maximumCenterX
             ? Mathf.Clamp(basePosition.x, minimumCenterX, maximumCenterX)
             : parent.rect.center.x;
@@ -1779,7 +1954,7 @@ public class MainScene : MonoBehaviour
 
         var shadow = pieceObject.GetComponent<Shadow>();
         shadow.effectColor = new Color(0f, 0f, 0f, 0.34f);
-        shadow.effectDistance = new Vector2(2f, -3f);
+        shadow.effectDistance = new Vector2(2f, -3f) * progressVisualScale;
         shadow.useGraphicAlpha = true;
 
         var normalizedPhase = Mathf.Repeat(
@@ -1790,40 +1965,48 @@ public class MainScene : MonoBehaviour
         {
             RectTransform = pieceRect,
             BasePosition = basePosition,
+            FloatDistance = InProgressPackPieceFloatDistance * progressVisualScale,
             PhaseRadians = normalizedPhase * Mathf.PI * 2f
         };
     }
 
     private void UpdateInProgressPackagePieceAnimations()
     {
-        if (mPackageSlotsById.Count == 0)
-        {
-            return;
-        }
-
         var cycleRadians = Time.unscaledTime
             * (Mathf.PI * 2f / InProgressPackPieceFloatDuration);
         foreach (var pair in mPackageSlotsById)
         {
-            var animations = pair.Value?.ProgressPieceAnimations;
-            if (animations == null)
+            UpdateInProgressPackagePieceAnimations(
+                pair.Value?.ProgressPieceAnimations,
+                cycleRadians);
+        }
+
+        UpdateInProgressPackagePieceAnimations(
+            mSelectedPackageProgressPieceAnimations,
+            cycleRadians);
+    }
+
+    private static void UpdateInProgressPackagePieceAnimations(
+        List<InProgressPackagePieceAnimation> animations,
+        float cycleRadians)
+    {
+        if (animations == null)
+        {
+            return;
+        }
+
+        for (var i = 0; i < animations.Count; i++)
+        {
+            var animation = animations[i];
+            if (animation?.RectTransform == null)
             {
                 continue;
             }
 
-            for (var i = 0; i < animations.Count; i++)
-            {
-                var animation = animations[i];
-                if (animation?.RectTransform == null)
-                {
-                    continue;
-                }
-
-                var position = animation.BasePosition;
-                position.y += Mathf.Sin(cycleRadians + animation.PhaseRadians)
-                    * InProgressPackPieceFloatDistance;
-                animation.RectTransform.anchoredPosition = position;
-            }
+            var position = animation.BasePosition;
+            position.y += Mathf.Sin(cycleRadians + animation.PhaseRadians)
+                * animation.FloatDistance;
+            animation.RectTransform.anchoredPosition = position;
         }
     }
 
@@ -3007,7 +3190,6 @@ public class MainScene : MonoBehaviour
         mSelectedPackageEntry = entry;
         mSelectedBagId = bagId;
         var anchor = entry.Image != null ? entry.Image.rectTransform : entry.RectTransform;
-        var coverSprite = entry.Image != null ? entry.Image.sprite : null;
         Canvas.ForceUpdateCanvases();
         if (!TryGetSelectedOverlayRect(
                 anchor,
@@ -3027,9 +3209,12 @@ public class MainScene : MonoBehaviour
         }
 
         mSelectedPackageDisplaySize = new Vector2(PackageOpenWidth, PackageOpenHeight);
+        var didCreateSelectedVisual = CreateSelectedPackageVisual(entry);
         SetPackageVisualsVisible(entry, false);
         yield return CaptureBagSelectBackdrop();
-        if (mSelectedPackageOverlayImage == null || mSelectedPackageOverlayRect == null)
+        if (!didCreateSelectedVisual
+            || mSelectedPackageOverlayImage == null
+            || mSelectedPackageOverlayRect == null)
         {
             Debug.LogWarning($"MainScene: static card pack selection image is unavailable. packId={bagId}");
             SetBagSelectBackdropVisible(false);
@@ -3044,9 +3229,8 @@ public class MainScene : MonoBehaviour
             yield break;
         }
 
-        mSelectedPackageOverlayImage.sprite = coverSprite;
         mSelectedPackageOverlayRect.anchoredPosition = mSelectedPackageStartPosition;
-        mSelectedPackageOverlayRect.sizeDelta = mSelectedPackageStartSize;
+        SetSelectedPackageVisualSize(mSelectedPackageStartSize);
         SetSelectedPackageImageVisible(true);
         RefreshBagSelectPackState(bagId);
         SetBagSelectBackdropVisible(true);
@@ -3578,10 +3762,10 @@ public class MainScene : MonoBehaviour
 
             if (mSelectedPackageOverlayRect != null)
             {
-                mSelectedPackageOverlayRect.sizeDelta = Vector2.LerpUnclamped(
+                SetSelectedPackageVisualSize(Vector2.LerpUnclamped(
                     mSelectedPackageDisplaySize,
                     mSelectedPackageStageSize,
-                    eased);
+                    eased));
             }
             yield return null;
         }
@@ -3619,6 +3803,24 @@ public class MainScene : MonoBehaviour
         mIsTrackingTearSwipe = false;
         mIsTrackingTearTap = false;
         mPlayAnimationCoroutine = null;
+    }
+
+    private void EnterSelectedPackageGame(bool isReplaySession)
+    {
+        StopOpeningHintAnimation();
+        mIsPlayingAnimation = true;
+        SetBagSelectButtonsInteractable(false);
+        StoreOpeningPackExitPosition();
+        SetBagSelectPanelVisible(false);
+        SetBagSelectBackdropVisible(false);
+        ReleaseBagSelectBackdropTexture();
+        SetSelectedPackageImageVisible(false);
+        mPlayAnimationCoroutine = null;
+        mHasSwitchedToGameScene = true;
+        GameManager.EnterGameScene(
+            mSelectedBagId,
+            playEntranceAnimation: true,
+            isReplaySession: isReplaySession);
     }
 
     private IEnumerator PlaySelectedPackage()
@@ -3754,7 +3956,8 @@ public class MainScene : MonoBehaviour
     private void RefreshBagSelectPackState(int bagId)
     {
         var isCompleted = CardPackDataUtility.IsPackCompleted(bagId);
-        var shouldConfirmReplay = ShouldConfirmReplay(bagId);
+        var shouldConfirmReplay = mSelectedPackageEntry != null
+            && mSelectedPackageEntry.DisplayState == PackageDisplayState.TornCompleted;
         if (mBagSelectPlayLabel != null)
         {
             mBagSelectPlayLabel.text = shouldConfirmReplay
@@ -3766,12 +3969,6 @@ public class MainScene : MonoBehaviour
         {
             mBagSelectCameraButtonRoot.SetActive(isCompleted);
         }
-    }
-
-    private static bool ShouldConfirmReplay(int bagId)
-    {
-        return CardPackDataUtility.IsPackCompleted(bagId)
-            && !CardPackDataUtility.HasActivePuzzleSession(bagId);
     }
 
     private void SetBagSelectPanelVisible(bool visible)
@@ -3939,10 +4136,7 @@ public class MainScene : MonoBehaviour
         mIsReplayConfirmationVisible = false;
         mIsSelectedPackageReplay = false;
         SetSelectedPackageImageVisible(false);
-        if (mSelectedPackageOverlayImage != null)
-        {
-            mSelectedPackageOverlayImage.sprite = null;
-        }
+        ClearSelectedPackageVisual();
 
         mSelectedPackageEntry = null;
         mSelectedBagId = 0;
