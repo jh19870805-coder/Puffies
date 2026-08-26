@@ -786,8 +786,8 @@
 11. `PackSize` SHALL 直接使用 `PackItem.prefab` 中美术配置的尺寸、位置、锚点和 Pivot；程序 SHALL 只替换对应尺寸图片及状态材质，不得直接调整其 RectTransform。首页列表 SHALL 通过统一缩放共同父节点 `PackNode`，让尺寸标签与卡包其他视觉保持相对布局并同步缩小。
 12. WHEN 玩家选中卡包 THEN 选中层 SHALL 复制列表当前完整 `PackNode` 并统一放大，撕口、`PackBg`、`ProgressPieces`、封面、尺寸标签和状态材质 SHALL 与列表一致。
 13. WHEN 选中状态为完整彩色 THEN 点击“玩” SHALL 进入拆包舞台并执行等待操作、拆包模型、粒子和后续 GameScene 入场完整流程。
-14. WHEN 选中状态为彩色撕开进行中 THEN 点击“玩” SHALL 跳过拆包舞台和拆包特效，直接进入 GameScene 并播放棋盘、托盘和当前组碎片入场。
-15. WHEN 选中状态为灰色撕开已完成 THEN 点击“重玩” SHALL 先显示 `PanelReplay`；确认后清除旧会话、创建空会话并直接进入 GameScene，不得播放拆包动画。
+14. WHEN 选中状态为彩色撕开进行中 THEN 点击“玩” SHALL 跳过拆包特效；选择 UI SHALL 先退场并只保留展开卡包，卡包短暂停顿后 SHALL 向下收走，`ProgressPieces` SHALL 相对撕口向上脱出；随后 GameScene SHALL 从该实际碎片位置发出当前组 Piece，PieceBoard SHALL 先进入，棋盘 SHALL 延迟从右侧滑入，Piece SHALL 最后落入托盘。
+15. WHEN 选中状态为灰色撕开已完成 THEN 点击“重玩” SHALL 先显示 `PanelReplay`；确认后 SHALL 清除旧会话、创建空会话，并在保持灰色撕开卡包样式的前提下临时显示本关转场碎片，再执行与彩色撕开进行中卡包相同的卡包下收、碎片发出、棋盘右侧滑入和碎片落入托盘流程；不得播放完整拆包动画。
 
 ### 设计与任务
 

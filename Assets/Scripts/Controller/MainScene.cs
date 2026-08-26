@@ -63,6 +63,12 @@ public class MainScene : MonoBehaviour
     private const float OpeningModelHandoffFadeDuration = 0.12f;
     private const float TearGestureTravelRatio = 0.06f;
     private const float TearGestureMinTravelPixels = 18f;
+    private const float InProgressGameTransitionFadeDuration = 0.22f;
+    private const float InProgressGameTransitionHoldDuration = 0.68f;
+    private const float InProgressPackExitDuration = 0.46f;
+    private const float InProgressPackExitScreenHeightRatio = 0.62f;
+    private const float InProgressPieceExitCompensation = 0.62f;
+    private const float InProgressPieceExitHorizontalSpread = 90f;
     private const int MainPackageBagId = GameDefine.DefaultBagId;
     private const string BootstrapObjectName = "MainSceneBootstrap";
     private const string PackageScrollViewObjectName = "PackageScrollView";
@@ -217,6 +223,7 @@ public class MainScene : MonoBehaviour
     private bool mIsAwaitingTearSwipe;
     private bool mIsTrackingTearSwipe;
     private bool mIsTrackingTearTap;
+    private bool mIsSelectedPackageProgressPieceTransitioning;
     private bool mDidWarnPackTornMaskUnavailable;
     private Vector2 mTearSwipeStartScreenPosition;
     private Rect mTearSwipeScreenRect;
@@ -923,6 +930,7 @@ public class MainScene : MonoBehaviour
         mSelectedPackageVisualContent = null;
         mSelectedPackageOverlayImage = null;
         mSelectedPackageProgressPieceAnimations = null;
+        mIsSelectedPackageProgressPieceTransitioning = false;
         SetSelectedPackageImageAlpha(1f);
     }
 
@@ -1195,7 +1203,8 @@ public class MainScene : MonoBehaviour
         mIsSelectedPackageReplay = false;
         if (mSelectedPackageEntry.DisplayState == PackageDisplayState.TornColorInProgress)
         {
-            EnterSelectedPackageGame(isReplaySession: false);
+            mPlayAnimationCoroutine = StartCoroutine(
+                PlayTornPackageGameTransition(isReplaySession: false));
             return;
         }
 
@@ -1236,7 +1245,36 @@ public class MainScene : MonoBehaviour
                 $"MainScene: failed to create puzzle session for replay. packId={mSelectedBagId}");
         }
 
-        EnterSelectedPackageGame(isReplaySession: true);
+        PrepareCompletedReplayTransitionVisual();
+        mPlayAnimationCoroutine = StartCoroutine(
+            PlayTornPackageGameTransition(isReplaySession: true));
+    }
+
+    private void PrepareCompletedReplayTransitionVisual()
+    {
+        if (mSelectedPackageEntry == null)
+        {
+            return;
+        }
+
+        if (mSelectedPackageEntry.ProgressPiecesRoot == null)
+        {
+            ApplyInProgressPackagePieces(
+                mSelectedPackageEntry,
+                mSelectedBagId,
+                shouldShowPieces: true);
+        }
+
+        if (!CreateSelectedPackageVisual(mSelectedPackageEntry))
+        {
+            Debug.LogWarning(
+                $"MainScene: completed replay transition visual is unavailable. "
+                + $"packId={mSelectedBagId}");
+            return;
+        }
+
+        SetSelectedPackageVisualSize(mSelectedPackageDisplaySize);
+        SetSelectedPackageImageVisible(true);
     }
 
     private void OnReplayCancelled()
@@ -1981,9 +2019,12 @@ public class MainScene : MonoBehaviour
                 cycleRadians);
         }
 
-        UpdateInProgressPackagePieceAnimations(
-            mSelectedPackageProgressPieceAnimations,
-            cycleRadians);
+        if (!mIsSelectedPackageProgressPieceTransitioning)
+        {
+            UpdateInProgressPackagePieceAnimations(
+                mSelectedPackageProgressPieceAnimations,
+                cycleRadians);
+        }
     }
 
     private static void UpdateInProgressPackagePieceAnimations(
@@ -3805,15 +3846,133 @@ public class MainScene : MonoBehaviour
         mPlayAnimationCoroutine = null;
     }
 
-    private void EnterSelectedPackageGame(bool isReplaySession)
+    private IEnumerator PlayTornPackageGameTransition(bool isReplaySession)
     {
         StopOpeningHintAnimation();
         mIsPlayingAnimation = true;
         SetBagSelectButtonsInteractable(false);
-        StoreOpeningPackExitPosition();
+        SetUnselectedPackageVisualsVisible(false);
+        StartCoroutine(GameManager.PreloadGameScene(mSelectedBagId));
+
+        if (mOpeningStageBackgroundRoot != null)
+        {
+            FitOpeningStageBackgroundToCamera();
+            mOpeningStageBackgroundRoot.SetActive(true);
+            SetOpeningStageBackgroundAlpha(0f);
+        }
+
+        var backdropStartAlpha = mBagSelectBackdropImage != null
+            ? mBagSelectBackdropImage.color.a
+            : 0f;
+        var fadeElapsed = 0f;
+        while (fadeElapsed < InProgressGameTransitionFadeDuration)
+        {
+            fadeElapsed += Time.unscaledDeltaTime;
+            var normalized = Mathf.Clamp01(
+                fadeElapsed / InProgressGameTransitionFadeDuration);
+            var eased = Mathf.SmoothStep(0f, 1f, normalized);
+            SetOpeningStageBackgroundAlpha(eased);
+            if (mMainCanvasGroup != null)
+            {
+                mMainCanvasGroup.alpha = 1f - eased;
+            }
+
+            if (mBagSelectPanelCanvasGroup != null)
+            {
+                mBagSelectPanelCanvasGroup.alpha = 1f - eased;
+            }
+
+            if (mBagSelectBackdropImage != null)
+            {
+                var color = mBagSelectBackdropImage.color;
+                color.a = backdropStartAlpha * (1f - eased);
+                mBagSelectBackdropImage.color = color;
+            }
+
+            yield return null;
+        }
+
+        SetOpeningStageBackgroundAlpha(1f);
         SetBagSelectPanelVisible(false);
         SetBagSelectBackdropVisible(false);
         ReleaseBagSelectBackdropTexture();
+        if (mMainCanvasGroup != null)
+        {
+            mMainCanvasGroup.alpha = 0f;
+            mMainCanvasGroup.interactable = false;
+            mMainCanvasGroup.blocksRaycasts = false;
+        }
+
+        var holdElapsed = 0f;
+        while (holdElapsed < InProgressGameTransitionHoldDuration)
+        {
+            holdElapsed += Time.unscaledDeltaTime;
+            yield return null;
+        }
+
+        var packRect = mSelectedPackageOverlayRect;
+        var packStart = packRect != null
+            ? packRect.anchoredPosition
+            : mSelectedPackageDisplayPosition;
+        var packDropDistance = ReferenceHeight * InProgressPackExitScreenHeightRatio;
+        var packTarget = packStart + Vector2.down * packDropDistance;
+        var pieceAnimations = mSelectedPackageProgressPieceAnimations;
+        var pieceStarts = pieceAnimations != null
+            ? new Vector2[pieceAnimations.Count]
+            : Array.Empty<Vector2>();
+        var pieceTargets = new Vector2[pieceStarts.Length];
+        for (var i = 0; i < pieceStarts.Length; i++)
+        {
+            var animation = pieceAnimations[i];
+            if (animation?.RectTransform == null)
+            {
+                continue;
+            }
+
+            pieceStarts[i] = animation.RectTransform.anchoredPosition;
+            var centeredIndex = i - (pieceStarts.Length - 1) * 0.5f;
+            pieceTargets[i] = pieceStarts[i] + new Vector2(
+                centeredIndex * InProgressPieceExitHorizontalSpread,
+                packDropDistance * InProgressPieceExitCompensation);
+        }
+
+        mIsSelectedPackageProgressPieceTransitioning = true;
+        var exitElapsed = 0f;
+        while (exitElapsed < InProgressPackExitDuration)
+        {
+            exitElapsed += Time.unscaledDeltaTime;
+            var normalized = Mathf.Clamp01(exitElapsed / InProgressPackExitDuration);
+            var packT = Mathf.SmoothStep(0f, 1f, normalized);
+            var pieceT = 1f - Mathf.Pow(1f - normalized, 3f);
+            if (packRect != null)
+            {
+                packRect.anchoredPosition = Vector2.LerpUnclamped(
+                    packStart,
+                    packTarget,
+                    packT);
+            }
+
+            for (var i = 0; i < pieceStarts.Length; i++)
+            {
+                var pieceRect = pieceAnimations[i]?.RectTransform;
+                if (pieceRect != null)
+                {
+                    pieceRect.anchoredPosition = Vector2.LerpUnclamped(
+                        pieceStarts[i],
+                        pieceTargets[i],
+                        pieceT);
+                }
+            }
+
+            yield return null;
+        }
+
+        if (packRect != null)
+        {
+            packRect.anchoredPosition = packTarget;
+        }
+
+        StoreInProgressPieceExitPosition();
         SetSelectedPackageImageVisible(false);
         mPlayAnimationCoroutine = null;
         mHasSwitchedToGameScene = true;
@@ -3912,6 +4071,46 @@ public class MainScene : MonoBehaviour
         GameManager.SetOpeningPackExitPosition(new Vector2(
             bottomCenter.x / Screen.width,
             bottomCenter.y / Screen.height));
+    }
+
+    private void StoreInProgressPieceExitPosition()
+    {
+        if (Screen.width <= 0 || Screen.height <= 0)
+        {
+            return;
+        }
+
+        var animations = mSelectedPackageProgressPieceAnimations;
+        var screenPositionSum = Vector2.zero;
+        var validPieceCount = 0;
+        if (animations != null)
+        {
+            for (var i = 0; i < animations.Count; i++)
+            {
+                var pieceRect = animations[i]?.RectTransform;
+                if (pieceRect == null)
+                {
+                    continue;
+                }
+
+                var camera = ResolveCanvasCamera(pieceRect);
+                screenPositionSum += RectTransformUtility.WorldToScreenPoint(
+                    camera,
+                    pieceRect.position);
+                validPieceCount++;
+            }
+        }
+
+        if (validPieceCount > 0)
+        {
+            var screenPosition = screenPositionSum / validPieceCount;
+            GameManager.SetOpeningPackExitPosition(new Vector2(
+                screenPosition.x / Screen.width,
+                screenPosition.y / Screen.height));
+            return;
+        }
+
+        StoreOpeningPackExitPosition();
     }
 
     private IEnumerator HidePackageSelection()

@@ -39,14 +39,16 @@ public class GameScene : MonoBehaviour
     private const int PieceBgSortingOrder = 500;
     private const float PieceBgAlpha = 1f;
     private const float PieceBgFillAlpha = 0.3f;
-    private const float GameEntranceBoardDuration = 0.46f;
-    private const float GameEntranceTrayDelay = 0.12f;
-    private const float GameEntranceTrayDuration = 0.38f;
-    private const float GameEntrancePieceDelay = 0.28f;
-    private const float GameEntrancePieceDuration = 0.34f;
-    private const float GameEntrancePieceStagger = 0.035f;
-    private const float GameEntranceControlDelay = 0.18f;
-    private const float GameEntranceControlDuration = 0.24f;
+    private const float GameEntranceBoardDelay = 0.28f;
+    private const float GameEntranceBoardDuration = 0.38f;
+    private const float GameEntranceTrayDelay = 0f;
+    private const float GameEntranceTrayDuration = 0.22f;
+    private const float GameEntrancePieceLaunchDuration = 0.3f;
+    private const float GameEntrancePieceSettleDelay = 0.3f;
+    private const float GameEntrancePieceSettleDuration = 0.46f;
+    private const float GameEntrancePieceStagger = 0.018f;
+    private const float GameEntranceControlDelay = 0.28f;
+    private const float GameEntranceControlDuration = 0.22f;
     private const int GameEntranceWarmupFrameCount = 2;
     private const float GameEntranceMaxFrameDelta = 1f / 30f;
     private const float GroupTransitionBoardDuration = 0.72f;
@@ -642,7 +644,7 @@ public class GameScene : MonoBehaviour
             : _hasOriginalCardBagAnchoredPosition
                 ? _originalCardBagAnchoredPosition
                 : Vector2.zero;
-        var boardStart = boardTarget + Vector2.up * ReferenceHeight;
+        var boardStart = boardTarget + Vector2.right * GameDefine.DesignWidth;
         if (boardRect != null)
         {
             boardRect.anchoredPosition = boardStart;
@@ -671,9 +673,17 @@ public class GameScene : MonoBehaviour
         var pieceCount = _drag.CurrentGroupDraggables.Count;
         var pieceTargets = new Vector3[pieceCount];
         var pieceStarts = new Vector3[pieceCount];
+        var pieceFanPositions = new Vector3[pieceCount];
         var pieceTargetScales = new Vector3[pieceCount];
         var pieceTargetRotations = new Quaternion[pieceCount];
+        var pieceStartRotations = new Quaternion[pieceCount];
         var pieceTargetColors = new Color[pieceCount];
+        var visibleWorldHeight = camera != null
+            ? camera.orthographicSize * 2f
+            : ReferenceHeight / PixelsPerUnit;
+        var visibleWorldWidth = camera != null
+            ? visibleWorldHeight * camera.aspect
+            : GameDefine.DesignWidth / PixelsPerUnit;
         for (var i = 0; i < pieceCount; i++)
         {
             var state = _drag.CurrentGroupDraggables[i];
@@ -687,16 +697,29 @@ public class GameScene : MonoBehaviour
             pieceTargetScales[i] = renderer.transform.localScale;
             pieceTargetRotations[i] = renderer.transform.rotation;
             pieceTargetColors[i] = renderer.color;
+            var normalizedIndex = pieceCount > 1
+                ? i / (float)(pieceCount - 1)
+                : 0.5f;
             var angle = i * 137.5f * Mathf.Deg2Rad;
-            var radius = 0.12f + (i % 4) * 0.07f;
+            var radius = 0.025f + (i % 3) * 0.012f;
             pieceStarts[i] = pieceEntranceOrigin + new Vector3(
                 Mathf.Cos(angle) * radius,
                 Mathf.Sin(angle) * radius,
                 0f);
             pieceStarts[i].z = pieceTargets[i].z;
+            var fanArc = Mathf.Sin(normalizedIndex * Mathf.PI);
+            pieceFanPositions[i] = pieceEntranceOrigin + new Vector3(
+                (normalizedIndex - 0.5f) * visibleWorldWidth * 0.46f,
+                visibleWorldHeight * (0.1f + fanArc * 0.075f + (i % 2) * 0.018f),
+                0f);
+            pieceFanPositions[i].z = pieceTargets[i].z;
+            pieceStartRotations[i] = Quaternion.Euler(
+                0f,
+                0f,
+                Mathf.Sin(angle) * 18f);
             renderer.transform.position = pieceStarts[i];
             renderer.transform.localScale = pieceTargetScales[i];
-            renderer.transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Sin(angle) * 18f);
+            renderer.transform.rotation = pieceStartRotations[i];
             var color = pieceTargetColors[i];
             color.a = 0f;
             renderer.color = color;
@@ -731,11 +754,7 @@ public class GameScene : MonoBehaviour
             pieceTargetScales[i] = renderer.transform.localScale;
             renderer.transform.position = pieceStarts[i];
             renderer.transform.localScale = pieceTargetScales[i];
-            var angle = i * 137.5f * Mathf.Deg2Rad;
-            renderer.transform.rotation = Quaternion.Euler(
-                0f,
-                0f,
-                Mathf.Sin(angle) * 18f);
+            renderer.transform.rotation = pieceStartRotations[i];
             var hiddenColor = pieceTargetColors[i];
             hiddenColor.a = 0f;
             renderer.color = hiddenColor;
@@ -752,12 +771,12 @@ public class GameScene : MonoBehaviour
         }
 
         var totalDuration = Mathf.Max(
-            GameEntranceBoardDuration,
+            GameEntranceBoardDelay + GameEntranceBoardDuration,
             GameEntranceTrayDelay + GameEntranceTrayDuration,
             GameEntranceControlDelay + GameEntranceControlDuration,
-            GameEntrancePieceDelay
+            GameEntrancePieceSettleDelay
                 + Mathf.Max(0, pieceCount - 1) * GameEntrancePieceStagger
-                + GameEntrancePieceDuration);
+                + GameEntrancePieceSettleDuration);
         var elapsed = 0f;
         var didStartOutlineFade = false;
         while (elapsed < totalDuration)
@@ -768,11 +787,13 @@ public class GameScene : MonoBehaviour
                 var boardT = Mathf.SmoothStep(
                     0f,
                     1f,
-                    Mathf.Clamp01(elapsed / GameEntranceBoardDuration));
+                    Mathf.Clamp01(
+                        (elapsed - GameEntranceBoardDelay) / GameEntranceBoardDuration));
                 boardRect.anchoredPosition = Vector2.LerpUnclamped(boardStart, boardTarget, boardT);
             }
 
-            if (!didStartOutlineFade && elapsed >= GameEntranceBoardDuration)
+            if (!didStartOutlineFade
+                && elapsed >= GameEntranceBoardDelay + GameEntranceBoardDuration)
             {
                 didStartOutlineFade = true;
                 FadeInActiveGroupOutline();
@@ -805,25 +826,42 @@ public class GameScene : MonoBehaviour
                     continue;
                 }
 
-                var pieceT = Mathf.SmoothStep(
+                var pieceDelay = i * GameEntrancePieceStagger;
+                var launchT = Mathf.Clamp01(
+                    (elapsed - pieceDelay) / GameEntrancePieceLaunchDuration);
+                var launchEased = 1f - Mathf.Pow(1f - launchT, 3f);
+                var settleT = Mathf.Clamp01(
+                    (elapsed - GameEntrancePieceSettleDelay - pieceDelay)
+                    / GameEntrancePieceSettleDuration);
+                var settleEased = Mathf.SmoothStep(
                     0f,
                     1f,
-                    Mathf.Clamp01(
-                        (elapsed - GameEntrancePieceDelay - i * GameEntrancePieceStagger)
-                        / GameEntrancePieceDuration));
-                renderer.transform.position = Vector3.LerpUnclamped(
+                    settleT);
+                var launchPosition = Vector3.LerpUnclamped(
                     pieceStarts[i],
-                    pieceTargets[i],
-                    pieceT);
+                    pieceFanPositions[i],
+                    launchEased);
+                renderer.transform.position = settleT > 0f
+                    ? Vector3.LerpUnclamped(
+                        pieceFanPositions[i],
+                        pieceTargets[i],
+                        settleEased)
+                    : launchPosition;
                 renderer.transform.localScale = pieceTargetScales[i];
-                renderer.transform.rotation = Quaternion.SlerpUnclamped(
-                    Quaternion.Euler(0f, 0f, Mathf.Sin(i * 137.5f * Mathf.Deg2Rad) * 18f),
-                    pieceTargetRotations[i],
-                    pieceT);
+                var fanRotation = Quaternion.SlerpUnclamped(
+                    pieceStartRotations[i],
+                    Quaternion.identity,
+                    launchEased * 0.45f);
+                renderer.transform.rotation = settleT > 0f
+                    ? Quaternion.SlerpUnclamped(
+                        fanRotation,
+                        pieceTargetRotations[i],
+                        settleEased)
+                    : fanRotation;
                 var color = pieceTargetColors[i];
-                color.a *= pieceT;
+                color.a *= Mathf.Clamp01(launchT * 2.5f);
                 renderer.color = color;
-                if (pieceT >= 1f)
+                if (settleT >= 1f)
                 {
                     EnsureDraggablePieceLight(_drag.CurrentGroupDraggables[i]);
                 }
