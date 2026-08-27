@@ -1,5 +1,13 @@
 # 当前任务
 
+## 2026-08-27 彩色撕开真实碎片预创建
+
+- 状态：代码修改完成并通过 Runtime/Editor 编译，等待 Unity Play Mode 视觉验收。
+- 彩色撕开进入 GameScene 后，当前组真实 Piece 仍在跨场景卡包中心附近的小范围散点创建，但不再先设为透明并等到卡包下移 `72%` 后补显；真实 Piece 在卡包开始移动前就以最终 `TrayScale` 和正常 Alpha 准备完成，由上层跨场景卡包遮挡。
+- GameScene 保留两帧稳定和最终托盘目标缓存，完成后才调用跨场景卡包的下移动画。卡包移开时会自然露出已经存在的真实 Piece；到 `72%` 位置只负责开始飞向托盘，不再负责临时显示，从而避免卡包先越过碎片位置后出现空档。
+- 修改文件：`Assets/Scripts/Controller/GameScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
+- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译通过，均为 `0` 警告、`0` 错误；`git diff --check` 通过。仍需在 Play Mode 验收彩色撕开卡包下移时真实 Piece 已在卡包后方、卡包越过碎片位置时无空帧或补显跳变，并确认 `72%` 起飞节奏保持不变。
+
 ## 2026-08-27 完整彩色卡包碎片蹦出节奏
 
 - 状态：代码修改完成并通过 Runtime/Editor 编译，等待 Unity Play Mode 视觉验收。

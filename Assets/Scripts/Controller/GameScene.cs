@@ -912,8 +912,7 @@ public class GameScene : MonoBehaviour
             renderer.transform.localScale = pieceTargetScales[i];
             renderer.transform.rotation = pieceStartRotations[i];
             var color = pieceTargetColors[i];
-            if (spreadAtOpeningOrigin
-                || (!waitForPackTransition && !startVisibleAtOpeningOrigin))
+            if (!waitForPackTransition && !startVisibleAtOpeningOrigin)
             {
                 color.a = 0f;
             }
@@ -945,18 +944,6 @@ public class GameScene : MonoBehaviour
             {
                 packExitCoroutine = StartCoroutine(
                     CardPackGameEntranceTransition.FinishAfterPieceLaunch());
-            }
-        }
-
-        if (spreadAtOpeningOrigin)
-        {
-            for (var i = 0; i < pieceCount; i++)
-            {
-                var renderer = _drag.CurrentGroupDraggables[i]?.PieceRenderer;
-                if (renderer != null)
-                {
-                    renderer.color = pieceTargetColors[i];
-                }
             }
         }
 
