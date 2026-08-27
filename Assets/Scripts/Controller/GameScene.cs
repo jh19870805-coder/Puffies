@@ -46,6 +46,8 @@ public class GameScene : MonoBehaviour
     private const float GameEntranceTrayDuration = 0.22f * GameTransitionDurationScale;
     private const float GameEntrancePieceSettleDuration = 0.46f * GameTransitionDurationScale;
     private const float GameEntrancePieceStagger = 0.018f * GameTransitionDurationScale;
+    private const float TornColorPieceSettleReduction = 0.3f;
+    private const float TornColorPieceStagger = GameEntrancePieceStagger * 0.5f;
     private const float GameEntranceControlDelay = 0f;
     private const float GameEntranceControlDuration = 0.22f * GameTransitionDurationScale;
     private const int GameEntranceWarmupFrameCount = 2;
@@ -450,7 +452,9 @@ public class GameScene : MonoBehaviour
 
         if (playEntranceAnimation && !_isGameFinished)
         {
-            StartCoroutine(PlayGameEntranceAfterPackTransition(entrancePiecesAlreadyFanned));
+            StartCoroutine(PlayGameEntranceAfterPackTransition(
+                entrancePiecesAlreadyFanned,
+                isReplaySession));
         }
         else
         {
@@ -464,7 +468,9 @@ public class GameScene : MonoBehaviour
             + $"{(Time.realtimeSinceStartup - bootstrapStartedAt) * 1000f:F1}ms.");
     }
 
-    private IEnumerator PlayGameEntranceAfterPackTransition(bool piecesAlreadyFanned)
+    private IEnumerator PlayGameEntranceAfterPackTransition(
+        bool piecesAlreadyFanned,
+        bool isReplaySession)
     {
         Debug.Log(
             $"GameScene: entrance coroutine started. "
@@ -472,7 +478,8 @@ public class GameScene : MonoBehaviour
             + $"transitionPending={CardPackGameEntranceTransition.IsPending}");
         yield return PlayGameEntranceAnimation(
             piecesAlreadyFanned,
-            waitForPackTransition: CardPackGameEntranceTransition.IsPending);
+            waitForPackTransition: CardPackGameEntranceTransition.IsPending,
+            isReplaySession: isReplaySession);
         Debug.Log("GameScene: entrance coroutine completed.");
     }
 
@@ -640,7 +647,8 @@ public class GameScene : MonoBehaviour
 
     private IEnumerator PlayGameEntranceAnimation(
         bool piecesAlreadyFanned,
-        bool waitForPackTransition = false)
+        bool waitForPackTransition = false,
+        bool isReplaySession = false)
     {
         _isEntranceAnimating = true;
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
@@ -675,6 +683,15 @@ public class GameScene : MonoBehaviour
         SetCanvasGroupAlpha(returnCanvasGroup, 0f);
         SetCanvasGroupAlpha(hintCanvasGroup, 0f);
 
+        var pieceSettleDuration = waitForPackTransition && !isReplaySession
+            ? Mathf.Max(
+                0.01f,
+                GameEntrancePieceSettleDuration - TornColorPieceSettleReduction)
+            : GameEntrancePieceSettleDuration;
+        var pieceStagger = waitForPackTransition && !isReplaySession
+            ? TornColorPieceStagger
+            : GameEntrancePieceStagger;
+
         Coroutine pieceDealCoroutine = null;
         if (piecesAlreadyFanned)
         {
@@ -685,7 +702,9 @@ public class GameScene : MonoBehaviour
                     boardRect,
                     boardTarget,
                     trayRect,
-                    trayTarget));
+                    trayTarget,
+                    pieceSettleDuration,
+                    pieceStagger));
         }
         else if (waitForPackTransition)
         {
@@ -697,7 +716,9 @@ public class GameScene : MonoBehaviour
                     boardRect,
                     boardTarget,
                     trayRect,
-                    trayTarget));
+                    trayTarget,
+                    pieceSettleDuration,
+                    pieceStagger));
         }
         else
         {
@@ -805,7 +826,9 @@ public class GameScene : MonoBehaviour
                 boardRect,
                 boardTarget,
                 trayRect,
-                trayTarget);
+                trayTarget,
+                pieceSettleDuration,
+                pieceStagger);
         }
 
         _isEntranceAnimating = false;
@@ -824,7 +847,9 @@ public class GameScene : MonoBehaviour
         RectTransform boardRect,
         Vector2 boardTarget,
         RectTransform trayRect,
-        Vector2 trayTarget)
+        Vector2 trayTarget,
+        float pieceSettleDuration,
+        float pieceStagger)
     {
         var camera = Camera.main;
         var boardCenter = _board.GameBoardImage != null && camera != null
@@ -910,8 +935,8 @@ public class GameScene : MonoBehaviour
             }
         }
 
-        var totalDuration = Mathf.Max(0, pieceCount - 1) * GameEntrancePieceStagger
-                            + GameEntrancePieceSettleDuration;
+        var totalDuration = Mathf.Max(0, pieceCount - 1) * pieceStagger
+                            + pieceSettleDuration;
         var elapsed = 0f;
         while (elapsed < totalDuration)
         {
@@ -924,10 +949,10 @@ public class GameScene : MonoBehaviour
                     continue;
                 }
 
-                var pieceDelay = i * GameEntrancePieceStagger;
+                var pieceDelay = i * pieceStagger;
                 var flightT = Mathf.Clamp01(
                     (elapsed - pieceDelay)
-                    / GameEntrancePieceSettleDuration);
+                    / pieceSettleDuration);
                 var flightEased = Mathf.SmoothStep(0f, 1f, flightT);
                 renderer.transform.position = Vector3.LerpUnclamped(
                     pieceStarts[i],

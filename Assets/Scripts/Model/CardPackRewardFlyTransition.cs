@@ -387,6 +387,7 @@ public sealed class CardPackGameEntranceTransition : MonoBehaviour
     private float mDuration;
     private float mSlowDropDuration;
     private float mFastDropDuration;
+    private bool mHideProgressPiecesOnDrop;
     private bool mReachedPieceLaunch;
     private Material mOwnedCoverMaterial;
     private Texture mOwnedMaskTexture;
@@ -407,7 +408,8 @@ public sealed class CardPackGameEntranceTransition : MonoBehaviour
         float dropDistance,
         float horizontalSpread,
         float pieceVerticalCompensation,
-        float duration)
+        float duration,
+        bool hideProgressPiecesOnDrop)
     {
         if (sInstance != null
             || canvas == null
@@ -426,7 +428,8 @@ public sealed class CardPackGameEntranceTransition : MonoBehaviour
                 dropDistance,
                 horizontalSpread,
                 pieceVerticalCompensation,
-                duration))
+                duration,
+                hideProgressPiecesOnDrop))
         {
             Destroy(transition);
             return false;
@@ -577,11 +580,13 @@ public sealed class CardPackGameEntranceTransition : MonoBehaviour
         float dropDistance,
         float horizontalSpread,
         float pieceVerticalCompensation,
-        float duration)
+        float duration,
+        bool hideProgressPiecesOnDrop)
     {
         mCanvas = canvas;
         mPackRect = packRect;
         mDuration = duration;
+        mHideProgressPiecesOnDrop = hideProgressPiecesOnDrop;
         mPackStart = packRect.anchoredPosition;
         var displayedPackHeight = GetDisplayedHeightInParent(packRect);
         var launchDropDistance = displayedPackHeight > 0.01f
@@ -669,6 +674,11 @@ public sealed class CardPackGameEntranceTransition : MonoBehaviour
             yield return null;
         }
 
+        if (mHideProgressPiecesOnDrop)
+        {
+            HideProgressPiecesImmediately();
+        }
+
         var elapsed = 0f;
         while (elapsed < mSlowDropDuration)
         {
@@ -687,6 +697,17 @@ public sealed class CardPackGameEntranceTransition : MonoBehaviour
         }
 
         ReachPieceLaunchImmediately();
+    }
+
+    private void HideProgressPiecesImmediately()
+    {
+        for (var i = 0; i < mPieceRects.Count; i++)
+        {
+            if (mPieceRects[i] != null)
+            {
+                mPieceRects[i].gameObject.SetActive(false);
+            }
+        }
     }
 
     private IEnumerator PlayAcceleratedExit()

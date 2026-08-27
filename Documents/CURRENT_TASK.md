@@ -1,5 +1,15 @@
 # 当前任务
 
+## 2026-08-27 彩色撕开卡包退场节奏
+
+- 状态：代码修改完成并通过 Runtime/Editor 编译，等待 Unity Play Mode 视觉验收。
+- 本次只调整 `彩色撕开`：卡包下落总时长从 `0.69s` 缩短为 `0.345s`，速度提高一倍；`完整彩色卡包` 和 `灰色撕开` 保持原流程与参数。
+- 彩色撕开卡包内随跨场景 Canvas 带入的是展示碎片，不参与实际发牌；卡包开始下移的同一帧立即将它们隐藏，避免与 GameScene 创建的真实 Piece 重影。灰色撕开仍沿用原展示碎片显隐行为。
+- 彩色撕开在首页背景交接后的最短静止等待由 `0.255s` 减少 `0.3s` 后归零；GameScene 预加载未完成时仍保留最长 `5s` 的安全等待。
+- GameScene 的真实 Piece 全部同时创建并重叠停留在卡包中心共同起点；展示碎片隐藏后，真实 Piece 从共同起点按 `0.0135s` 错峰飞向各自托盘终点，单片飞行时长为 `0.39s`。完整彩色卡包与灰色撕开仍使用 `0.69s` 和 `0.027s` 错峰；GameScene 棋盘和托盘时长未修改。
+- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Assets/Scripts/Controller/GameScene.cs`、`Assets/Scripts/Model/CardPackRewardFlyTransition.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
+- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译通过，均为 `0` 警告、`0` 错误；`git diff --check` 通过。仍需在 Play Mode 验收彩色撕开的卡包下落速度、展示碎片首帧隐藏、真实 Piece 共同起点与错峰发牌节奏，并回归完整彩色卡包与灰色撕开未发生变化。
+
 ## 2026-08-27 发牌动画托盘尺寸回归修复
 
 - 状态：代码修复完成并通过 Runtime/Editor 编译，等待 Unity Play Mode 视觉验收。
