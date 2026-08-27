@@ -1,5 +1,15 @@
 # 当前任务
 
+## 2026-08-27 完整彩包撕开与发牌节奏统一
+
+- 状态：代码修改完成并通过 Runtime/Editor 编译，等待 Unity Play Mode 视觉验收。
+- 完整彩色卡包的第一组交接碎片继续读取 `CardBagNNN.prefab` 的真实 Piece Sprite。碎片启用时间由原动画启动后 `0.08s` 改为与撕开滑光完全相同的 `0.5s`；全部碎片在滑光启动同一帧从实际撕口下方、卡包模型后层显示，并用 `0.16s` EaseOut 快速向上短跳，跳跃中心高度保持卡包显示高度约 `8%`。
+- 交接碎片不再从最终尺寸 `40%` 慢速放大，也不再逐片延迟启动；从第一帧直接使用最终显示尺寸并同时短跳。跳跃终点使用与彩色撕开相同的黄金角散点公式和 `20` 倍半径，MainScene 保存的是散点中心而非最终位置平均值。
+- GameScene 接管完整彩包第一组后，真实可交互 Piece 从同一个散点中心按相同公式重建，因此不再聚拢。完整彩包和彩色撕开统一使用 `20` 倍起始散点、最终 `TrayScale`、`0.027s` 错峰、`0.39s` 单片飞行，以及相同的棋盘、托盘和按钮并行入场参数。完整彩包已经完成模型撕开，不恢复静态撕开包，也不重复播放卡包下落。
+- 共享散点公式收敛到 `GameDefine.CalculatePieceDealScatterOffset`，MainScene 交接视觉和 GameScene 真实 Piece 使用同一数据规则。
+- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Assets/Scripts/Controller/GameScene.cs`、`Assets/Scripts/Model/GameDefine.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
+- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译通过，均为 `0` 警告、`0` 错误；`git diff --check` 通过。仍需在 Play Mode 验收滑光和碎片同帧启动、碎片位于卡包后层、`0.16s` 短跳高度、场景交接前后散点不跳变，以及完整彩包与彩色撕开的棋盘/托盘/发牌节奏一致。
+
 ## 2026-08-27 撕开卡包真实碎片起点分散
 
 - 状态：代码修改完成并通过 Runtime/Editor 编译，等待 Unity Play Mode 视觉验收。

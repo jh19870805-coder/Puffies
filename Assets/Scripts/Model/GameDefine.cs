@@ -40,6 +40,20 @@ public sealed class DragState
 
 public static class GameDefine
 {
+    public const float TornPackPieceStartSpreadMultiplier = 20f;
+
+    public static Vector2 CalculatePieceDealScatterOffset(
+        int pieceIndex,
+        float spreadMultiplier = 1f)
+    {
+        var angle = pieceIndex * 137.5f * Mathf.Deg2Rad;
+        var radius = (0.025f + pieceIndex % 3 * 0.012f)
+                     * Mathf.Max(1f, spreadMultiplier);
+        return new Vector2(
+            Mathf.Cos(angle) * radius,
+            Mathf.Sin(angle) * radius);
+    }
+
     // Scene names
     public const string SceneLoading = "LoadingScene";
     public const string SceneMain = "MainScene";

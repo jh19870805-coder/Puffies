@@ -47,9 +47,7 @@ public class GameScene : MonoBehaviour
     private const float GameEntrancePieceSettleDuration = 0.46f * GameTransitionDurationScale;
     private const float GameEntrancePieceStagger = 0.018f * GameTransitionDurationScale;
     private const float TornPackPieceSettleReduction = 0.3f;
-    private const float OpeningPieceStagger = GameEntrancePieceStagger * 0.5f;
     private const float TornPackPieceStagger = GameEntrancePieceStagger;
-    private const float TornPackPieceStartSpreadMultiplier = 20f;
     private const float GameEntranceControlDelay = 0f;
     private const float GameEntranceControlDuration = 0.22f * GameTransitionDurationScale;
     private const int GameEntranceWarmupFrameCount = 2;
@@ -681,20 +679,18 @@ public class GameScene : MonoBehaviour
         SetCanvasGroupAlpha(hintCanvasGroup, 0f);
 
         var isTornPackTransition = waitForPackTransition;
-        var pieceStartSpreadMultiplier = isTornPackTransition
-            ? TornPackPieceStartSpreadMultiplier
+        var useTornPackPieceMotion = piecesAlreadyFanned || isTornPackTransition;
+        var pieceStartSpreadMultiplier = useTornPackPieceMotion
+            ? GameDefine.TornPackPieceStartSpreadMultiplier
             : 1f;
-        var useFastPieceFlight = piecesAlreadyFanned || isTornPackTransition;
-        var pieceSettleDuration = useFastPieceFlight
+        var pieceSettleDuration = useTornPackPieceMotion
             ? Mathf.Max(
                 0.01f,
                 GameEntrancePieceSettleDuration - TornPackPieceSettleReduction)
             : GameEntrancePieceSettleDuration;
-        var pieceStagger = isTornPackTransition
+        var pieceStagger = useTornPackPieceMotion
             ? TornPackPieceStagger
-            : piecesAlreadyFanned
-                ? OpeningPieceStagger
-                : GameEntrancePieceStagger;
+            : GameEntrancePieceStagger;
 
         Coroutine pieceDealCoroutine = null;
         if (piecesAlreadyFanned)
@@ -703,14 +699,14 @@ public class GameScene : MonoBehaviour
                 PlayCurrentGroupPieceDealAnimation(
                     waitForPackTransition: false,
                     startVisibleAtOpeningOrigin: true,
-                    spreadAtOpeningOrigin: false,
+                    spreadAtOpeningOrigin: true,
                     boardRect,
                     boardTarget,
                     trayRect,
                     trayTarget,
                     pieceSettleDuration,
                     pieceStagger,
-                    1f));
+                    pieceStartSpreadMultiplier));
         }
         else if (waitForPackTransition)
         {
@@ -892,16 +888,16 @@ public class GameScene : MonoBehaviour
             pieceTargetScales[i] = SanitizeTrayPieceScale(state.TrayScale);
             pieceTargetRotations[i] = renderer.transform.rotation;
             pieceTargetColors[i] = renderer.color;
-            var angle = i * 137.5f * Mathf.Deg2Rad;
-            var radius = (0.025f + (i % 3) * 0.012f)
-                         * Mathf.Max(1f, pieceStartSpreadMultiplier);
+            var scatterOffset = GameDefine.CalculatePieceDealScatterOffset(
+                i,
+                pieceStartSpreadMultiplier);
             var shouldSpreadPieceStart = spreadAtOpeningOrigin
                                          || (!waitForPackTransition
                                              && !startVisibleAtOpeningOrigin);
             pieceStarts[i] = shouldSpreadPieceStart
                 ? pieceEntranceOrigin + new Vector3(
-                    Mathf.Cos(angle) * radius,
-                    Mathf.Sin(angle) * radius,
+                    scatterOffset.x,
+                    scatterOffset.y,
                     0f)
                 : pieceEntranceOrigin;
             pieceStarts[i].z = pieceTargets[i].z;
@@ -910,7 +906,7 @@ public class GameScene : MonoBehaviour
                 : Quaternion.Euler(
                     0f,
                     0f,
-                    Mathf.Sin(angle) * 18f);
+                    Mathf.Sin(i * 137.5f * Mathf.Deg2Rad) * 18f);
             renderer.enabled = true;
             renderer.transform.position = pieceStarts[i];
             renderer.transform.localScale = pieceTargetScales[i];
