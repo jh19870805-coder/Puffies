@@ -375,10 +375,14 @@ public sealed class CardPackGameEntranceTransition : MonoBehaviour
     private const int GameSceneSettleFrameCount = 2;
     private const float PlaybackGraceSeconds = 1f;
     private const float SlowDropDurationRatio = 0.42f;
+    private const float TornColorPieceLaunchPackHeightRatio = 0.72f;
+    private const float ProgressPieceRetractionParentHeightRatio = 0.28f;
 
     private static CardPackGameEntranceTransition sInstance;
 
     private readonly List<RectTransform> mPieceRects = new List<RectTransform>();
+    private readonly List<Vector2> mPieceStartPositions = new List<Vector2>();
+    private readonly List<Vector2> mPieceRetractionTargets = new List<Vector2>();
     private Canvas mCanvas;
     private RectTransform mPackRect;
     private Vector2 mPackStart;
@@ -387,7 +391,8 @@ public sealed class CardPackGameEntranceTransition : MonoBehaviour
     private float mDuration;
     private float mSlowDropDuration;
     private float mFastDropDuration;
-    private bool mHideProgressPiecesOnDrop;
+    private bool mRetractProgressPiecesOnDrop;
+    private bool mUseContinuousLinearDrop;
     private bool mReachedPieceLaunch;
     private Material mOwnedCoverMaterial;
     private Texture mOwnedMaskTexture;
@@ -409,7 +414,8 @@ public sealed class CardPackGameEntranceTransition : MonoBehaviour
         float horizontalSpread,
         float pieceVerticalCompensation,
         float duration,
-        bool hideProgressPiecesOnDrop)
+        bool retractProgressPiecesOnDrop,
+        bool useContinuousLinearDrop)
     {
         if (sInstance != null
             || canvas == null
@@ -429,7 +435,8 @@ public sealed class CardPackGameEntranceTransition : MonoBehaviour
                 horizontalSpread,
                 pieceVerticalCompensation,
                 duration,
-                hideProgressPiecesOnDrop))
+                retractProgressPiecesOnDrop,
+                useContinuousLinearDrop))
         {
             Destroy(transition);
             return false;
@@ -581,16 +588,28 @@ public sealed class CardPackGameEntranceTransition : MonoBehaviour
         float horizontalSpread,
         float pieceVerticalCompensation,
         float duration,
-        bool hideProgressPiecesOnDrop)
+        bool retractProgressPiecesOnDrop,
+        bool useContinuousLinearDrop)
     {
         mCanvas = canvas;
         mPackRect = packRect;
         mDuration = duration;
-        mHideProgressPiecesOnDrop = hideProgressPiecesOnDrop;
+        mRetractProgressPiecesOnDrop = retractProgressPiecesOnDrop;
+        mUseContinuousLinearDrop = useContinuousLinearDrop;
         mPackStart = packRect.anchoredPosition;
         var displayedPackHeight = GetDisplayedHeightInParent(packRect);
+        if (mUseContinuousLinearDrop)
+        {
+            dropDistance = Mathf.Max(
+                dropDistance,
+                GetDropDistanceToClearParentBottom(packRect));
+        }
+
+        var launchPackHeight = mUseContinuousLinearDrop
+            ? displayedPackHeight * TornColorPieceLaunchPackHeightRatio
+            : displayedPackHeight;
         var launchDropDistance = displayedPackHeight > 0.01f
-            ? Mathf.Min(dropDistance, displayedPackHeight)
+            ? Mathf.Min(dropDistance, launchPackHeight)
             : dropDistance * SlowDropDurationRatio;
         mPackLaunchPoint = mPackStart
                            + Vector2.down * launchDropDistance;
@@ -607,7 +626,18 @@ public sealed class CardPackGameEntranceTransition : MonoBehaviour
             {
                 if (pieceRects[i] != null)
                 {
-                    mPieceRects.Add(pieceRects[i]);
+                    var pieceRect = pieceRects[i];
+                    mPieceRects.Add(pieceRect);
+                    mPieceStartPositions.Add(pieceRect.anchoredPosition);
+                    var pieceParent = pieceRect.parent as RectTransform;
+                    var parentHeight = pieceParent != null
+                        ? pieceParent.rect.height
+                        : packRect.rect.height;
+                    mPieceRetractionTargets.Add(
+                        pieceRect.anchoredPosition
+                        + Vector2.down
+                        * parentHeight
+                        * ProgressPieceRetractionParentHeightRatio);
                 }
             }
         }
@@ -629,6 +659,27 @@ public sealed class CardPackGameEntranceTransition : MonoBehaviour
         var bottom = rectTransform.parent.InverseTransformPoint(corners[0]);
         var top = rectTransform.parent.InverseTransformPoint(corners[1]);
         return Mathf.Abs(top.y - bottom.y);
+    }
+
+    private static float GetDropDistanceToClearParentBottom(RectTransform rectTransform)
+    {
+        var parentRect = rectTransform != null
+            ? rectTransform.parent as RectTransform
+            : null;
+        if (parentRect == null)
+        {
+            return 0f;
+        }
+
+        var corners = new Vector3[4];
+        rectTransform.GetWorldCorners(corners);
+        var top = float.NegativeInfinity;
+        for (var i = 0; i < corners.Length; i++)
+        {
+            top = Mathf.Max(top, parentRect.InverseTransformPoint(corners[i]).y);
+        }
+
+        return Mathf.Max(0f, top - parentRect.rect.yMin + 1f);
     }
 
     private void CloneTransientCoverMaterial(Image coverImage)
@@ -674,17 +725,14 @@ public sealed class CardPackGameEntranceTransition : MonoBehaviour
             yield return null;
         }
 
-        if (mHideProgressPiecesOnDrop)
-        {
-            HideProgressPiecesImmediately();
-        }
-
         var elapsed = 0f;
         while (elapsed < mSlowDropDuration)
         {
             elapsed += Time.unscaledDeltaTime;
             var normalized = Mathf.Clamp01(elapsed / mSlowDropDuration);
-            var packT = Mathf.SmoothStep(0f, 1f, normalized);
+            var packT = mUseContinuousLinearDrop
+                ? normalized
+                : Mathf.SmoothStep(0f, 1f, normalized);
             if (mPackRect != null)
             {
                 mPackRect.anchoredPosition = Vector2.LerpUnclamped(
@@ -693,19 +741,34 @@ public sealed class CardPackGameEntranceTransition : MonoBehaviour
                     packT);
             }
 
+            if (mRetractProgressPiecesOnDrop)
+            {
+                RetractProgressPieces(normalized);
+            }
+
             yield return null;
         }
 
         ReachPieceLaunchImmediately();
     }
 
-    private void HideProgressPiecesImmediately()
+    private void RetractProgressPieces(float normalized)
     {
         for (var i = 0; i < mPieceRects.Count; i++)
         {
-            if (mPieceRects[i] != null)
+            var pieceRect = mPieceRects[i];
+            if (pieceRect == null)
             {
-                mPieceRects[i].gameObject.SetActive(false);
+                continue;
+            }
+
+            pieceRect.anchoredPosition = Vector2.LerpUnclamped(
+                mPieceStartPositions[i],
+                mPieceRetractionTargets[i],
+                Mathf.SmoothStep(0f, 1f, normalized));
+            if (normalized >= 1f)
+            {
+                pieceRect.gameObject.SetActive(false);
             }
         }
     }
@@ -717,7 +780,9 @@ public sealed class CardPackGameEntranceTransition : MonoBehaviour
         {
             elapsed += Time.unscaledDeltaTime;
             var normalized = Mathf.Clamp01(elapsed / mFastDropDuration);
-            var packT = normalized * normalized * normalized;
+            var packT = mUseContinuousLinearDrop
+                ? normalized
+                : normalized * normalized * normalized;
             if (mPackRect != null)
             {
                 mPackRect.anchoredPosition = Vector2.LerpUnclamped(

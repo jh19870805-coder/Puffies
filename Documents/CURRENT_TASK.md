@@ -1,14 +1,24 @@
 # 当前任务
 
+## 2026-08-27 完整彩色卡包碎片蹦出节奏
+
+- 状态：代码修改完成并通过 Runtime/Editor 编译，等待 Unity Play Mode 视觉验收。
+- 本次只调整 `完整彩色卡包` 拆包阶段从撕口蹦出的第一组临时碎片；彩色撕开、灰色撕开和 GameScene 真实 Piece 发牌未修改。
+- 临时碎片不再从 Alpha `0` 渐显；到各自原有启动时间时直接启用 Renderer，并始终保持 Alpha `1`。原逐片启动间隔保留。
+- 临时碎片从最终尺寸的 `40%` 使用现有 SmoothStep 进度放大到 `100%`；全部放在卡包模型背面，使用同一个水平中心、约卡包高度 `8%` 的竖向终点和统一旋转，只从撕口向上露出少量距离，不再横向散开或使用不同高度。
+- 临时碎片完成蹦出后保持重叠停在共同位置。进入 GameScene 后由真实 Piece 在同一屏幕位置接管，并继续使用完整彩色卡包原有的 `0.0135s` 错峰和 `0.39s` 单片时长飞向托盘；灰色撕开未修改。
+- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
+- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译通过，均为 `0` 警告、`0` 错误；`git diff --check` 通过。仍需在 Play Mode 验收碎片位于卡包后方、直接显示、`40% -> 100%` 放大、共同位置停留及 GameScene 接管后的错峰飞行。
+
 ## 2026-08-27 彩色撕开卡包退场节奏
 
 - 状态：代码修改完成并通过 Runtime/Editor 编译，等待 Unity Play Mode 视觉验收。
-- 本次只调整 `彩色撕开`：卡包下落总时长从 `0.69s` 缩短为 `0.345s`，速度提高一倍；`完整彩色卡包` 和 `灰色撕开` 保持原流程与参数。
-- 彩色撕开卡包内随跨场景 Canvas 带入的是展示碎片，不参与实际发牌；卡包开始下移的同一帧立即将它们隐藏，避免与 GameScene 创建的真实 Piece 重影。灰色撕开仍沿用原展示碎片显隐行为。
+- 本次只调整 `彩色撕开`：卡包下落计时基准保持 `0.345s`；两段位移改为按实际距离分配时长的同一线速度，最终距离按卡包实际顶边与 Canvas 底边计算，确保卡包连续完整移出屏幕。`完整彩色卡包` 和 `灰色撕开` 保持原流程与曲线。
+- 彩色撕开卡包内随跨场景 Canvas 带入的展示碎片不参与实际发牌；它们在卡包开始下移后相对卡包向下收约父容器高度 `28%`，低于撕口后才隐藏，不再首帧直接消失。
 - 彩色撕开在首页背景交接后的最短静止等待由 `0.255s` 减少 `0.3s` 后归零；GameScene 预加载未完成时仍保留最长 `5s` 的安全等待。
-- GameScene 的真实 Piece 全部同时创建并重叠停留在卡包中心共同起点；展示碎片隐藏后，真实 Piece 从共同起点按 `0.0135s` 错峰飞向各自托盘终点，单片飞行时长为 `0.39s`。完整彩色卡包与灰色撕开仍使用 `0.69s` 和 `0.027s` 错峰；GameScene 棋盘和托盘时长未修改。
+- GameScene 的真实 Piece 全部同时创建在卡包中心附近的小范围散点并暂时隐藏；卡包下移约自身显示高度 `72%`、展示碎片收进撕口后，真实 Piece 直接显现并提前飞向托盘。单片时长保持 `0.39s`，错峰从 `0.0135s` 加倍为 `0.027s`；完整彩色卡包仍为 `0.0135s`，灰色撕开仍为 `0.027s`。GameScene 棋盘和托盘时长未修改。
 - 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Assets/Scripts/Controller/GameScene.cs`、`Assets/Scripts/Model/CardPackRewardFlyTransition.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
-- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译通过，均为 `0` 警告、`0` 错误；`git diff --check` 通过。仍需在 Play Mode 验收彩色撕开的卡包下落速度、展示碎片首帧隐藏、真实 Piece 共同起点与错峰发牌节奏，并回归完整彩色卡包与灰色撕开未发生变化。
+- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译通过，均为 `0` 警告、`0` 错误；`git diff --check` 通过。仍需在 Play Mode 验收卡包连续完整移出屏幕、展示碎片向下收进撕口后隐藏、真实 Piece 小范围散点与提前发牌、`0.027s` 错峰，并回归完整彩色卡包与灰色撕开未发生变化。
 
 ## 2026-08-27 发牌动画托盘尺寸回归修复
 

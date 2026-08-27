@@ -47,7 +47,8 @@ public class GameScene : MonoBehaviour
     private const float GameEntrancePieceSettleDuration = 0.46f * GameTransitionDurationScale;
     private const float GameEntrancePieceStagger = 0.018f * GameTransitionDurationScale;
     private const float TornColorPieceSettleReduction = 0.3f;
-    private const float TornColorPieceStagger = GameEntrancePieceStagger * 0.5f;
+    private const float OpeningPieceStagger = GameEntrancePieceStagger * 0.5f;
+    private const float TornColorPieceStagger = GameEntrancePieceStagger;
     private const float GameEntranceControlDelay = 0f;
     private const float GameEntranceControlDuration = 0.22f * GameTransitionDurationScale;
     private const int GameEntranceWarmupFrameCount = 2;
@@ -683,14 +684,18 @@ public class GameScene : MonoBehaviour
         SetCanvasGroupAlpha(returnCanvasGroup, 0f);
         SetCanvasGroupAlpha(hintCanvasGroup, 0f);
 
-        var pieceSettleDuration = waitForPackTransition && !isReplaySession
+        var isTornColorTransition = waitForPackTransition && !isReplaySession;
+        var useFastPieceFlight = piecesAlreadyFanned || isTornColorTransition;
+        var pieceSettleDuration = useFastPieceFlight
             ? Mathf.Max(
                 0.01f,
                 GameEntrancePieceSettleDuration - TornColorPieceSettleReduction)
             : GameEntrancePieceSettleDuration;
-        var pieceStagger = waitForPackTransition && !isReplaySession
+        var pieceStagger = isTornColorTransition
             ? TornColorPieceStagger
-            : GameEntrancePieceStagger;
+            : piecesAlreadyFanned
+                ? OpeningPieceStagger
+                : GameEntrancePieceStagger;
 
         Coroutine pieceDealCoroutine = null;
         if (piecesAlreadyFanned)
@@ -699,6 +704,7 @@ public class GameScene : MonoBehaviour
                 PlayCurrentGroupPieceDealAnimation(
                     waitForPackTransition: false,
                     startVisibleAtOpeningOrigin: true,
+                    spreadAtOpeningOrigin: false,
                     boardRect,
                     boardTarget,
                     trayRect,
@@ -713,6 +719,7 @@ public class GameScene : MonoBehaviour
                 PlayCurrentGroupPieceDealAnimation(
                     waitForPackTransition: true,
                     startVisibleAtOpeningOrigin: false,
+                    spreadAtOpeningOrigin: isTornColorTransition,
                     boardRect,
                     boardTarget,
                     trayRect,
@@ -823,6 +830,7 @@ public class GameScene : MonoBehaviour
             yield return PlayCurrentGroupPieceDealAnimation(
                 waitForPackTransition: false,
                 startVisibleAtOpeningOrigin: false,
+                spreadAtOpeningOrigin: false,
                 boardRect,
                 boardTarget,
                 trayRect,
@@ -844,6 +852,7 @@ public class GameScene : MonoBehaviour
     private IEnumerator PlayCurrentGroupPieceDealAnimation(
         bool waitForPackTransition,
         bool startVisibleAtOpeningOrigin,
+        bool spreadAtOpeningOrigin,
         RectTransform boardRect,
         Vector2 boardTarget,
         RectTransform trayRect,
@@ -882,12 +891,15 @@ public class GameScene : MonoBehaviour
             pieceTargetColors[i] = renderer.color;
             var angle = i * 137.5f * Mathf.Deg2Rad;
             var radius = 0.025f + (i % 3) * 0.012f;
-            pieceStarts[i] = waitForPackTransition || startVisibleAtOpeningOrigin
-                ? pieceEntranceOrigin
-                : pieceEntranceOrigin + new Vector3(
+            var shouldSpreadPieceStart = spreadAtOpeningOrigin
+                                         || (!waitForPackTransition
+                                             && !startVisibleAtOpeningOrigin);
+            pieceStarts[i] = shouldSpreadPieceStart
+                ? pieceEntranceOrigin + new Vector3(
                     Mathf.Cos(angle) * radius,
                     Mathf.Sin(angle) * radius,
-                    0f);
+                    0f)
+                : pieceEntranceOrigin;
             pieceStarts[i].z = pieceTargets[i].z;
             pieceStartRotations[i] = waitForPackTransition || startVisibleAtOpeningOrigin
                 ? Quaternion.identity
@@ -900,7 +912,8 @@ public class GameScene : MonoBehaviour
             renderer.transform.localScale = pieceTargetScales[i];
             renderer.transform.rotation = pieceStartRotations[i];
             var color = pieceTargetColors[i];
-            if (!waitForPackTransition && !startVisibleAtOpeningOrigin)
+            if (spreadAtOpeningOrigin
+                || (!waitForPackTransition && !startVisibleAtOpeningOrigin))
             {
                 color.a = 0f;
             }
@@ -932,6 +945,18 @@ public class GameScene : MonoBehaviour
             {
                 packExitCoroutine = StartCoroutine(
                     CardPackGameEntranceTransition.FinishAfterPieceLaunch());
+            }
+        }
+
+        if (spreadAtOpeningOrigin)
+        {
+            for (var i = 0; i < pieceCount; i++)
+            {
+                var renderer = _drag.CurrentGroupDraggables[i]?.PieceRenderer;
+                if (renderer != null)
+                {
+                    renderer.color = pieceTargetColors[i];
+                }
             }
         }
 

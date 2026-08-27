@@ -3998,7 +3998,7 @@ public class MainScene : MonoBehaviour
         var packExitDuration = isTornColorTransition
             ? InProgressPackExitDuration / TornColorPackExitSpeedMultiplier
             : InProgressPackExitDuration;
-        var hideProgressPiecesOnDrop = isTornColorTransition;
+        var retractProgressPiecesOnDrop = isTornColorTransition;
         StoreOpeningPackExitPosition();
         var transitionPieceRects = new List<RectTransform>();
         if (mSelectedPackageProgressPieceAnimations != null)
@@ -4022,7 +4022,8 @@ public class MainScene : MonoBehaviour
                 InProgressPieceExitHorizontalSpread,
                 InProgressPieceExitCompensation,
                 packExitDuration,
-                hideProgressPiecesOnDrop))
+                retractProgressPiecesOnDrop,
+                useContinuousLinearDrop: isTornColorTransition))
         {
             mSelectedPackageOverlayCanvas = null;
             mSelectedPackageOverlayCanvasGroup = null;
@@ -4069,7 +4070,7 @@ public class MainScene : MonoBehaviour
                     packDropDistance * InProgressPieceExitCompensation);
         }
 
-        if (hideProgressPiecesOnDrop)
+        if (retractProgressPiecesOnDrop)
         {
             for (var i = 0; i < pieceStarts.Length; i++)
             {
@@ -4715,9 +4716,9 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         MainScene.InProgressPackPieceMaxSize
         * MainScene.InProgressPackPieceScaleMultiplier
         / MainScene.PackageCoverHeight;
-    private const float PieceRisePackHeightRatio = 0.24f;
-    private const float PieceSpreadPackWidthRatio = 0.28f;
-    private const float PieceDepthBehindPack = 0.2f;
+    private const float PieceStartScaleRatio = 0.4f;
+    private const float PieceRisePackHeightRatio = 0.08f;
+    private const float PieceDepthBehindPack = 0.05f;
     private const int PieceSortingOrderBehindPack = -100;
     private const uint LightEffectRandomSeed = 1u;
     private const float FallbackAnimationDuration = 1.8333334f;
@@ -4741,6 +4742,7 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         new List<SpriteRenderer>();
     private Vector3[] mEmergedPieceStartPositions = Array.Empty<Vector3>();
     private Vector3[] mEmergedPieceFinalPositions = Array.Empty<Vector3>();
+    private float mEmergedPieceFinalScale;
     private int mOriginalCameraCullingMask;
     private bool mDidOverrideCameraCullingMask;
     private float mAnimationDuration;
@@ -5014,27 +5016,20 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
                          * PieceMaximumPackHeightRatio
                          / largestPieceSide;
         var tearPosition = mLightEffectObject.transform.position;
-        tearPosition.z = ModelWorldDepth + PieceDepthBehindPack;
+        tearPosition.z = packBounds.max.z + PieceDepthBehindPack;
         var pieceCount = pieceSprites.Count;
         mEmergedPieceStartPositions = new Vector3[pieceCount];
         mEmergedPieceFinalPositions = new Vector3[pieceCount];
         for (var i = 0; i < pieceCount; i++)
         {
-            var normalizedIndex = pieceCount > 1
-                ? i / (float)(pieceCount - 1) - 0.5f
-                : 0f;
-            var horizontalOffset = normalizedIndex
-                                   * packBounds.size.x
-                                   * PieceSpreadPackWidthRatio;
             var verticalOffset = packBounds.size.y
-                                 * (PieceRisePackHeightRatio
-                                    + (i % 3) * 0.018f);
+                                 * PieceRisePackHeightRatio;
             var startPosition = tearPosition + new Vector3(
-                horizontalOffset * 0.12f,
+                0f,
                 -packBounds.size.y * 0.015f,
                 0f);
             var finalPosition = tearPosition + new Vector3(
-                horizontalOffset,
+                0f,
                 verticalOffset,
                 0f);
             mEmergedPieceStartPositions[i] = startPosition;
@@ -5044,17 +5039,19 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
             pieceObject.layer = EffectLayer;
             pieceObject.transform.SetParent(pieceRoot.transform, false);
             pieceObject.transform.position = startPosition;
-            pieceObject.transform.localScale = Vector3.one * pieceScale;
-            pieceObject.transform.rotation = Quaternion.Euler(
-                0f,
-                0f,
-                normalizedIndex * 12f);
+            pieceObject.transform.localScale = Vector3.one
+                                               * pieceScale
+                                               * PieceStartScaleRatio;
+            pieceObject.transform.rotation = Quaternion.identity;
             var renderer = pieceObject.AddComponent<SpriteRenderer>();
             renderer.sprite = pieceSprites[i];
             renderer.sortingOrder = PieceSortingOrderBehindPack;
-            renderer.color = new Color(1f, 1f, 1f, 0f);
+            renderer.color = Color.white;
+            renderer.enabled = false;
             mEmergedPieceRenderers.Add(renderer);
         }
+
+        mEmergedPieceFinalScale = pieceScale;
     }
 
     private void UpdateEmergedPieces(float elapsed, float playbackDuration)
@@ -5068,6 +5065,13 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
             }
 
             var pieceStartTime = PieceEmergeDelay + i * PieceEmergeStagger;
+            if (elapsed < pieceStartTime)
+            {
+                renderer.enabled = false;
+                continue;
+            }
+
+            renderer.enabled = true;
             var pieceDuration = Mathf.Max(0.1f, playbackDuration - pieceStartTime);
             var normalized = Mathf.Clamp01((elapsed - pieceStartTime) / pieceDuration);
             var eased = Mathf.SmoothStep(0f, 1f, normalized);
@@ -5075,9 +5079,12 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
                 mEmergedPieceStartPositions[i],
                 mEmergedPieceFinalPositions[i],
                 eased);
-            var color = renderer.color;
-            color.a = eased;
-            renderer.color = color;
+            renderer.transform.localScale = Vector3.one
+                                            * mEmergedPieceFinalScale
+                                            * Mathf.LerpUnclamped(
+                                                PieceStartScaleRatio,
+                                                1f,
+                                                eased);
         }
     }
 
@@ -5092,9 +5099,9 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
             }
 
             renderer.transform.position = mEmergedPieceFinalPositions[i];
-            var color = renderer.color;
-            color.a = 1f;
-            renderer.color = color;
+            renderer.transform.localScale = Vector3.one * mEmergedPieceFinalScale;
+            renderer.color = Color.white;
+            renderer.enabled = true;
         }
     }
 
@@ -5400,6 +5407,7 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         mEmergedPieceRenderers.Clear();
         mEmergedPieceStartPositions = Array.Empty<Vector3>();
         mEmergedPieceFinalPositions = Array.Empty<Vector3>();
+        mEmergedPieceFinalScale = 0f;
     }
 
     private void OnDestroy()
