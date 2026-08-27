@@ -1,5 +1,13 @@
 # 当前任务
 
+## 2026-08-27 发牌动画托盘尺寸回归修复
+
+- 状态：代码修复完成并通过 Runtime/Editor 编译，等待 Unity Play Mode 视觉验收。
+- 修复 GameScene 首次入场发牌在首帧过早重算 Piece 尺寸的问题：发牌协程现在先等待两帧布局稳定，再临时把棋盘和托盘恢复到最终位置，统一刷新当前组的 `DragScale`、`TrayScale` 和托盘终点，缓存完成后立即恢复入场动画位置。
+- 发牌起始、飞行过程和最终落点不再从动画中的 `Transform.localScale` 反推尺寸，统一直接使用每个 `DraggablePieceState.TrayScale`；CardBag018 等带非 1 `BoardScale` 的卡包继续使用此前的“`DragScale` 与托盘高度 90% 上限取小”规则。
+- 修改文件：`Assets/Scripts/Controller/GameScene.cs`、`Documents/CURRENT_TASK.md`。
+- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译通过，均为 `0` 警告、`0` 错误；`git diff --check` 通过。仍需在 Unity Play Mode 验证 CardBag018 第一组碎片飞入托盘后尺寸不跳变，并确认 CardBag003、CardBag010 的尺寸与点击拿起行为无回归。
+
 ## 2026-08-26 卡包进入游戏动画流程重排
 
 - 状态：代码实现完成并通过 Runtime/Editor 编译，等待 Unity Play Mode 视觉验收。

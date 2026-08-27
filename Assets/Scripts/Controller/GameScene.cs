@@ -681,7 +681,11 @@ public class GameScene : MonoBehaviour
             pieceDealCoroutine = StartCoroutine(
                 PlayCurrentGroupPieceDealAnimation(
                     waitForPackTransition: false,
-                    startVisibleAtOpeningOrigin: true));
+                    startVisibleAtOpeningOrigin: true,
+                    boardRect,
+                    boardTarget,
+                    trayRect,
+                    trayTarget));
         }
         else if (waitForPackTransition)
         {
@@ -689,7 +693,11 @@ public class GameScene : MonoBehaviour
             pieceDealCoroutine = StartCoroutine(
                 PlayCurrentGroupPieceDealAnimation(
                     waitForPackTransition: true,
-                    startVisibleAtOpeningOrigin: false));
+                    startVisibleAtOpeningOrigin: false,
+                    boardRect,
+                    boardTarget,
+                    trayRect,
+                    trayTarget));
         }
         else
         {
@@ -793,7 +801,11 @@ public class GameScene : MonoBehaviour
         {
             yield return PlayCurrentGroupPieceDealAnimation(
                 waitForPackTransition: false,
-                startVisibleAtOpeningOrigin: false);
+                startVisibleAtOpeningOrigin: false,
+                boardRect,
+                boardTarget,
+                trayRect,
+                trayTarget);
         }
 
         _isEntranceAnimating = false;
@@ -808,7 +820,11 @@ public class GameScene : MonoBehaviour
 
     private IEnumerator PlayCurrentGroupPieceDealAnimation(
         bool waitForPackTransition,
-        bool startVisibleAtOpeningOrigin)
+        bool startVisibleAtOpeningOrigin,
+        RectTransform boardRect,
+        Vector2 boardTarget,
+        RectTransform trayRect,
+        Vector2 trayTarget)
     {
         var camera = Camera.main;
         var boardCenter = _board.GameBoardImage != null && camera != null
@@ -818,7 +834,6 @@ public class GameScene : MonoBehaviour
                 WorldGameplayDepth)
             : Vector3.zero;
         var pieceEntranceOrigin = GetOpeningPackPieceOriginWorldPosition(camera, boardCenter);
-        RefreshCurrentGroupTrayScalesAndLayout();
 
         var pieceCount = _drag.CurrentGroupDraggables.Count;
         var pieceTargets = new Vector3[pieceCount];
@@ -829,14 +844,15 @@ public class GameScene : MonoBehaviour
         var pieceTargetColors = new Color[pieceCount];
         for (var i = 0; i < pieceCount; i++)
         {
-            var renderer = _drag.CurrentGroupDraggables[i]?.PieceRenderer;
+            var state = _drag.CurrentGroupDraggables[i];
+            var renderer = state?.PieceRenderer;
             if (renderer == null)
             {
                 continue;
             }
 
             pieceTargets[i] = renderer.transform.position;
-            pieceTargetScales[i] = renderer.transform.localScale;
+            pieceTargetScales[i] = SanitizeTrayPieceScale(state.TrayScale);
             pieceTargetRotations[i] = renderer.transform.rotation;
             pieceTargetColors[i] = renderer.color;
             var angle = i * 137.5f * Mathf.Deg2Rad;
@@ -866,12 +882,19 @@ public class GameScene : MonoBehaviour
             renderer.color = color;
         }
 
-        for (var frame = 0;
-             !waitForPackTransition && frame < GameEntranceWarmupFrameCount;
-             frame++)
+        for (var frame = 0; frame < GameEntranceWarmupFrameCount; frame++)
         {
             yield return null;
         }
+
+        CacheCurrentGroupPieceDealTargets(
+            boardRect,
+            boardTarget,
+            trayRect,
+            trayTarget,
+            pieceStarts,
+            pieceTargets,
+            pieceTargetScales);
 
         Coroutine packExitCoroutine = null;
         if (waitForPackTransition)
@@ -945,6 +968,76 @@ public class GameScene : MonoBehaviour
         {
             yield return packExitCoroutine;
         }
+    }
+
+    private void CacheCurrentGroupPieceDealTargets(
+        RectTransform boardRect,
+        Vector2 boardTarget,
+        RectTransform trayRect,
+        Vector2 trayTarget,
+        IReadOnlyList<Vector3> pieceStarts,
+        IList<Vector3> pieceTargets,
+        IList<Vector3> pieceTargetScales)
+    {
+        var boardAnimationPosition = boardRect != null
+            ? boardRect.anchoredPosition
+            : Vector2.zero;
+        var trayAnimationPosition = trayRect != null
+            ? trayRect.anchoredPosition
+            : Vector2.zero;
+
+        if (boardRect != null)
+        {
+            boardRect.anchoredPosition = boardTarget;
+        }
+
+        if (trayRect != null)
+        {
+            trayRect.anchoredPosition = trayTarget;
+        }
+
+        Canvas.ForceUpdateCanvases();
+        Physics2D.SyncTransforms();
+        RefreshCurrentGroupTrayScalesAndLayout();
+
+        for (var i = 0; i < _drag.CurrentGroupDraggables.Count; i++)
+        {
+            var state = _drag.CurrentGroupDraggables[i];
+            var renderer = state?.PieceRenderer;
+            if (renderer == null)
+            {
+                continue;
+            }
+
+            pieceTargets[i] = renderer.transform.position;
+            pieceTargetScales[i] = SanitizeTrayPieceScale(state.TrayScale);
+        }
+
+        if (boardRect != null)
+        {
+            boardRect.anchoredPosition = boardAnimationPosition;
+        }
+
+        if (trayRect != null)
+        {
+            trayRect.anchoredPosition = trayAnimationPosition;
+        }
+
+        for (var i = 0; i < _drag.CurrentGroupDraggables.Count; i++)
+        {
+            var state = _drag.CurrentGroupDraggables[i];
+            var renderer = state?.PieceRenderer;
+            if (renderer == null)
+            {
+                continue;
+            }
+
+            renderer.transform.position = pieceStarts[i];
+            renderer.transform.localScale = pieceTargetScales[i];
+        }
+
+        Canvas.ForceUpdateCanvases();
+        Physics2D.SyncTransforms();
     }
 
     private static Vector3 GetOpeningPackPieceOriginWorldPosition(
