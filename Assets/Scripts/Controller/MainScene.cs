@@ -4233,7 +4233,7 @@ public class MainScene : MonoBehaviour
         StoreOpeningPackExitPosition();
 
         var openingEffectStarted = false;
-        var firstGroupPieceSprites = LoadFirstGroupPieceSprites(selectedBagId);
+        var openingPieceSprites = LoadCurrentGroupUnplacedPieceSprites(selectedBagId);
         var packTexture = mSelectedPackageOverlayImage != null
             && mSelectedPackageOverlayImage.sprite != null
             ? mSelectedPackageOverlayImage.sprite.texture
@@ -4252,7 +4252,7 @@ public class MainScene : MonoBehaviour
                 && mCardPackOpeningEffect.Begin(
                     packTexture,
                     mSelectedPackageOverlayRect,
-                    firstGroupPieceSprites);
+                    openingPieceSprites);
         }
 
         SetBagSelectPanelVisible(false);
@@ -4281,7 +4281,7 @@ public class MainScene : MonoBehaviour
 
             SetSelectedPackageImageVisible(false);
             SetSelectedPackageImageAlpha(1f);
-            yield return mCardPackOpeningEffect.WaitForCompletion();
+            yield return mCardPackOpeningEffect.WaitForGameEntranceHandoff();
         }
         else
         {
@@ -4300,6 +4300,7 @@ public class MainScene : MonoBehaviour
         if (piecesReadyToDealImmediately)
         {
             GameManager.SetOpeningPackExitPosition(emergedPieceOrigin);
+            mCardPackOpeningEffect.PrepareForSceneHandoff();
         }
 
         if (mSelectedPackageVisualContent != null)
@@ -4314,7 +4315,7 @@ public class MainScene : MonoBehaviour
             piecesReadyToDealImmediately: piecesReadyToDealImmediately);
     }
 
-    private static List<Sprite> LoadFirstGroupPieceSprites(int packId)
+    private static List<Sprite> LoadCurrentGroupUnplacedPieceSprites(int packId)
     {
         var sprites = new List<Sprite>();
         var cardBagPrefab = Resources.Load<GameObject>(
@@ -4326,7 +4327,8 @@ public class MainScene : MonoBehaviour
             return sprites;
         }
 
-        var indexedSprites = new List<KeyValuePair<int, Sprite>>();
+        CardPackDataUtility.TryGetPlacedPieceNumbers(packId, out var placedPieceNumbers);
+        var spritesByGroup = new SortedDictionary<int, List<KeyValuePair<int, Sprite>>>();
         var pieceImages = cardBagPrefab.GetComponentsInChildren<Image>(true);
         for (var i = 0; i < pieceImages.Length; i++)
         {
@@ -4337,26 +4339,42 @@ public class MainScene : MonoBehaviour
                     pieceImage.gameObject.name,
                     out var groupNumber,
                     out var indexInGroup,
-                    out _)
-                || groupNumber != 1)
+                    out var pieceNumber)
+                || placedPieceNumbers.Contains(pieceNumber))
             {
                 continue;
             }
 
-            indexedSprites.Add(
-                new KeyValuePair<int, Sprite>(indexInGroup, pieceImage.sprite));
+            if (!spritesByGroup.TryGetValue(groupNumber, out var groupSprites))
+            {
+                groupSprites = new List<KeyValuePair<int, Sprite>>();
+                spritesByGroup[groupNumber] = groupSprites;
+            }
+
+            groupSprites.Add(new KeyValuePair<int, Sprite>(indexInGroup, pieceImage.sprite));
         }
 
-        indexedSprites.Sort((left, right) => left.Key.CompareTo(right.Key));
-        for (var i = 0; i < indexedSprites.Count; i++)
+        foreach (var groupEntry in spritesByGroup)
         {
-            sprites.Add(indexedSprites[i].Value);
+            var groupSprites = groupEntry.Value;
+            if (groupSprites == null || groupSprites.Count == 0)
+            {
+                continue;
+            }
+
+            groupSprites.Sort((left, right) => left.Key.CompareTo(right.Key));
+            for (var i = 0; i < groupSprites.Count; i++)
+            {
+                sprites.Add(groupSprites[i].Value);
+            }
+
+            break;
         }
 
         if (sprites.Count == 0)
         {
             Debug.LogWarning(
-                $"MainScene: opening pieces skipped; first group is empty. packId={packId}");
+                $"MainScene: opening pieces skipped; no unplaced group remains. packId={packId}");
         }
 
         return sprites;
@@ -4722,28 +4740,34 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
     private const float ReferenceModelLocalZ = 0f;
     private const float ModelWorldDepth = -1f;
     private const float ModelVisibleDuration = 1.6f;
+    // Take 001 reaches its vertical apex at 0.800s and starts dropping next frame.
+    private const float GameEntranceHandoffTime = 0.8f;
     private const float LightEffectDelay = 0.5f;
     private const float LightEffectVisibleDuration = 1.1f;
     private const float PieceEmergeDelay = LightEffectDelay;
-    private const float PieceEmergeDuration = 0.16f;
+    private const float PieceEmergeDuration = 0.32f;
     private const float PieceMaximumPackHeightRatio =
         MainScene.InProgressPackPieceMaxSize
         * MainScene.InProgressPackPieceScaleMultiplier
         / MainScene.PackageCoverHeight;
     private const float PieceRisePackHeightRatio = 0.08f;
     private const float PieceDepthBehindPack = 0.05f;
-    private const int PieceSortingOrderBehindPack = -100;
+    private const int PieceSortingOrderOffsetBehindPack = -1;
     private const uint LightEffectRandomSeed = 1u;
     private const float FallbackAnimationDuration = 1.8333334f;
     private const string ModelPathFormat = "Effects/CardPack/Models/CardPackOpeningModel_{0:D3}";
     private const string AnimatorControllerPath = "Effects/CardPack/Animations/CardPackAnimation";
     private const string AnimationStateName = "Take 001";
     private const string FrontMaterialPath = "Effects/CardFx/Materials/test";
+    private const string PieceShadowMaterialPath = "IngameCoverShadow04";
+    private const string SpriteRendererShadowKeyword = "PACK_SHADOW_SPRITE_RENDERER";
     private const string SceneLightEffectParentName = "PackObject";
     private const string SceneLightEffectObjectName = "fx_chai_w_001";
     private const string CardRendererNamePrefix = "mesh_skin_cardPack_";
     private const int FrontRendererNumberLength = 3;
     private const int BackRendererNumberLength = 5;
+    private static readonly int SpritePixelsPerUnitId =
+        Shader.PropertyToID("_SpritePixelsPerUnit");
 
     private GameObject mWorldRoot;
     private GameObject mModelObject;
@@ -4751,6 +4775,11 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
     private Camera mMainCamera;
     private Animator mAnimator;
     private Material mFrontMaterial;
+    private Material mPieceShadowMaterial;
+    private MaterialPropertyBlock mPieceShadowPropertyBlock;
+    private readonly Dictionary<Sprite, Sprite> mFullRectPieceSprites =
+        new Dictionary<Sprite, Sprite>();
+    private readonly HashSet<Sprite> mRuntimeFullRectPieceSprites = new HashSet<Sprite>();
     private readonly List<SpriteRenderer> mEmergedPieceRenderers =
         new List<SpriteRenderer>();
     private Vector3[] mEmergedPieceStartPositions = Array.Empty<Vector3>();
@@ -4760,10 +4789,12 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
     private float mEmergedPieceFinalScale;
     private int mOriginalCameraCullingMask;
     private bool mDidOverrideCameraCullingMask;
+    private Coroutine mPlaybackCoroutine;
     private float mAnimationDuration;
     private float mPlaybackStartTime;
     private bool mIsPlaying;
     private bool mIsPrepared;
+    private bool mHasHandedOffToGameScene;
 
     public static void PrepareSceneLightEffect()
     {
@@ -4927,15 +4958,53 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         mAnimator.speed = 1f;
         mPlaybackStartTime = Time.time;
         mIsPlaying = true;
+        mPlaybackCoroutine = StartCoroutine(PlayToCompletion());
     }
 
-    public IEnumerator WaitForCompletion()
+    public IEnumerator WaitForGameEntranceHandoff()
     {
-        if (!mIsPlaying)
+        while (mIsPlaying
+               && Mathf.Max(0f, Time.time - mPlaybackStartTime)
+               < GameEntranceHandoffTime)
         {
-            yield break;
+            yield return null;
+        }
+    }
+
+    public void PrepareForSceneHandoff()
+    {
+        if (!mIsPlaying || mHasHandedOffToGameScene)
+        {
+            return;
         }
 
+        mHasHandedOffToGameScene = true;
+        for (var i = 0; i < mEmergedPieceRenderers.Count; i++)
+        {
+            if (mEmergedPieceRenderers[i] != null)
+            {
+                mEmergedPieceRenderers[i].enabled = false;
+            }
+        }
+
+        transform.SetParent(null, true);
+        DontDestroyOnLoad(gameObject);
+        if (mWorldRoot != null)
+        {
+            mWorldRoot.transform.SetParent(transform, true);
+        }
+
+        if (mLightEffectObject != null)
+        {
+            var persistentParent = mWorldRoot != null
+                ? mWorldRoot.transform
+                : transform;
+            mLightEffectObject.transform.SetParent(persistentParent, true);
+        }
+    }
+
+    private IEnumerator PlayToCompletion()
+    {
         var elapsed = Mathf.Max(0f, Time.time - mPlaybackStartTime);
         var lightStarted = false;
         var playbackDuration = Mathf.Max(
@@ -4958,6 +5027,12 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         CompleteEmergedPieces();
         ReleaseSceneLightEffect();
         mIsPlaying = false;
+        mPlaybackCoroutine = null;
+        if (mHasHandedOffToGameScene)
+        {
+            CleanupPlaybackResources();
+            Destroy(gameObject);
+        }
     }
 
     public bool TryGetEmergedPieceScreenOrigin(out Vector2 normalizedScreenPosition)
@@ -5000,6 +5075,16 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         {
             return;
         }
+
+        var packSortingLayerId = frontRenderers[0].sortingLayerID;
+        var pieceSortingOrder = frontRenderers[0].sortingOrder;
+        for (var i = 1; i < frontRenderers.Length; i++)
+        {
+            pieceSortingOrder = Mathf.Min(pieceSortingOrder, frontRenderers[i].sortingOrder);
+        }
+        pieceSortingOrder += PieceSortingOrderOffsetBehindPack;
+
+        PreparePieceShadowMaterial();
 
         var largestPieceSide = 0f;
         for (var i = 0; i < pieceSprites.Count; i++)
@@ -5058,18 +5143,103 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
             pieceObject.transform.localScale = Vector3.one * pieceScale;
             pieceObject.transform.rotation = Quaternion.identity;
             var renderer = pieceObject.AddComponent<SpriteRenderer>();
-            renderer.sprite = pieceSprites[i];
-            renderer.sortingOrder = PieceSortingOrderBehindPack;
+            renderer.sprite = GetOrCreateFullRectPieceSprite(pieceSprites[i]);
+            renderer.sortingLayerID = packSortingLayerId;
+            renderer.sortingOrder = pieceSortingOrder;
             renderer.color = Color.white;
             renderer.enabled = false;
+            ApplyPieceShadowMaterial(renderer);
             mEmergedPieceRenderers.Add(renderer);
         }
 
         mEmergedPieceFinalScale = pieceScale;
     }
 
+    private void PreparePieceShadowMaterial()
+    {
+        if (mPieceShadowMaterial != null)
+        {
+            return;
+        }
+
+        var template = Resources.Load<Material>(PieceShadowMaterialPath);
+        if (template == null)
+        {
+            Debug.LogWarning(
+                $"CardPackOpeningEffect: opening piece shadow material is missing: "
+                + PieceShadowMaterialPath);
+            return;
+        }
+
+        mPieceShadowMaterial = new Material(template)
+        {
+            name = template.name + " (Opening SpriteRenderer Runtime)"
+        };
+        mPieceShadowMaterial.EnableKeyword(SpriteRendererShadowKeyword);
+    }
+
+    private Sprite GetOrCreateFullRectPieceSprite(Sprite source)
+    {
+        if (source == null || mRuntimeFullRectPieceSprites.Contains(source))
+        {
+            return source;
+        }
+
+        if (mFullRectPieceSprites.TryGetValue(source, out var existing)
+            && existing != null)
+        {
+            return existing;
+        }
+
+        var rect = source.rect;
+        if (rect.width <= 0f || rect.height <= 0f || source.texture == null)
+        {
+            return source;
+        }
+
+        var pivot = new Vector2(source.pivot.x / rect.width, source.pivot.y / rect.height);
+        var fullRectSprite = Sprite.Create(
+            source.texture,
+            rect,
+            pivot,
+            source.pixelsPerUnit,
+            0,
+            SpriteMeshType.FullRect,
+            source.border);
+        fullRectSprite.name = $"{source.name} (Opening Shadow FullRect Runtime)";
+        mFullRectPieceSprites[source] = fullRectSprite;
+        mRuntimeFullRectPieceSprites.Add(fullRectSprite);
+        return fullRectSprite;
+    }
+
+    private void ApplyPieceShadowMaterial(SpriteRenderer renderer)
+    {
+        if (renderer == null || renderer.sprite == null || mPieceShadowMaterial == null)
+        {
+            return;
+        }
+
+        renderer.sharedMaterial = mPieceShadowMaterial;
+        if (mPieceShadowPropertyBlock == null)
+        {
+            mPieceShadowPropertyBlock = new MaterialPropertyBlock();
+        }
+
+        renderer.GetPropertyBlock(mPieceShadowPropertyBlock);
+        mPieceShadowPropertyBlock.SetFloat(
+            SpritePixelsPerUnitId,
+            Mathf.Max(1f, renderer.sprite.pixelsPerUnit));
+        renderer.SetPropertyBlock(mPieceShadowPropertyBlock);
+        mPieceShadowPropertyBlock.Clear();
+    }
+
     private void UpdateEmergedPieces(float elapsed)
     {
+        if (mHasHandedOffToGameScene)
+        {
+            return;
+        }
+
         for (var i = 0; i < mEmergedPieceRenderers.Count; i++)
         {
             var renderer = mEmergedPieceRenderers[i];
@@ -5098,6 +5268,11 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
 
     private void CompleteEmergedPieces()
     {
+        if (mHasHandedOffToGameScene)
+        {
+            return;
+        }
+
         for (var i = 0; i < mEmergedPieceRenderers.Count; i++)
         {
             var renderer = mEmergedPieceRenderers[i];
@@ -5383,8 +5558,15 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
 
     private void CleanupPlaybackResources()
     {
+        if (mPlaybackCoroutine != null)
+        {
+            StopCoroutine(mPlaybackCoroutine);
+            mPlaybackCoroutine = null;
+        }
+
         mIsPlaying = false;
         mIsPrepared = false;
+        mHasHandedOffToGameScene = false;
 
         if (mMainCamera != null && mDidOverrideCameraCullingMask)
         {
@@ -5406,6 +5588,24 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
             Destroy(mFrontMaterial);
             mFrontMaterial = null;
         }
+
+        if (mPieceShadowMaterial != null)
+        {
+            Destroy(mPieceShadowMaterial);
+            mPieceShadowMaterial = null;
+        }
+
+        foreach (var sprite in mRuntimeFullRectPieceSprites)
+        {
+            if (sprite != null)
+            {
+                Destroy(sprite);
+            }
+        }
+
+        mRuntimeFullRectPieceSprites.Clear();
+        mFullRectPieceSprites.Clear();
+        mPieceShadowPropertyBlock = null;
 
         mModelObject = null;
         mMainCamera = null;

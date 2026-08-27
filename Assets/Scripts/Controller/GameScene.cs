@@ -890,6 +890,8 @@ public class GameScene : MonoBehaviour
                 continue;
             }
 
+            // Every card-pack entrance uses the initial loose-piece shadow while dealing.
+            ApplyPieceRendererShadow(renderer, PieceShadowStyle.Initial);
             pieceTargets[i] = renderer.transform.position;
             pieceTargetScales[i] = SanitizeTrayPieceScale(state.TrayScale);
             pieceTargetRotations[i] = renderer.transform.rotation;

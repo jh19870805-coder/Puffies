@@ -12,6 +12,24 @@
   4. 用 `CardBag019` 进入 GameScene 验证当前组 Piece 正常显示，并检查最新 `Editor.log` 不再出现 `GameScene: groove image missing sprite`。
   5. 将本节状态更新为“已完成”，写明验证结果；本任务不得重新生成或覆盖 `CardBag019.prefab`，除非校验确实失败且用户另有指令。
 
+## 2026-08-27 拆包碎片速度、数量、阴影与层级
+
+- 状态：代码修改完成并通过 Runtime/Editor 编译，等待 Unity Play Mode 视觉验收。
+- 完整彩包拆包时不再固定读取第一组全部 Piece；MainScene 读取 SQLite 已拼编号，按照和 GameScene 相同的规则选择首个仍有未完成 Piece 的组，只创建该组尚未拼上的真实碎片。已经拼在棋盘上的 Piece 不会在拆包阶段重复出现，临时视觉数量与 GameScene 接管后的真实可交互数量一致。
+- 完整彩包碎片从撕口冒出的 EaseOut 时长由 `0.16s` 调整为 `0.32s`，启动点、最终尺寸、散点范围、`0.800s` 场景交接点和后续发牌参数不变。
+- MainScene 临时碎片使用 `IngameCoverShadow04` 的 SpriteRenderer 兼容运行时材质和 FullRect Sprite，并继承卡包 Sorting Layer、排在卡包最低 Sorting Order 下一层，同时保留比卡包更远的世界深度。GameScene 在三种卡包入口发牌前统一重新应用初始碎片阴影，因此完整彩包、彩色撕开和灰色撕开的真实碎片均带阴影。
+- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Assets/Scripts/Controller/GameScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
+- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译通过，均为 `0` 警告、`0` 错误；`git diff --check` 通过。仍需在 Play Mode 分别验证三种状态的碎片阴影、卡包遮挡关系，并用存在部分已拼进度的卡包确认拆包阶段不重复创建已拼 Piece。
+
+## 2026-08-27 完整彩包下落与游戏入场同步
+
+- 状态：代码修改完成并通过 Runtime/Editor 编译，等待 Unity Play Mode 视觉验收。
+- 使用 Unity `AnimationUtility` 读取制作方 `CardPackOpeningAnimation.FBX/Take 001` 曲线，确认卡包骨骼在 `0.800s` 到达纵向最高点、下一帧开始下落；原流程等待到 `1.600s` 才激活 GameScene，导致碎片完成 `0.16s` 短跳后存在约 `0.77s` 的额外空档。
+- `CardPackOpeningEffect` 改为自行驱动完整播放；MainScene 在 `0.800s` 真实下落节点保存散点中心并立即激活预加载完成的 GameScene。棋盘、托盘、按钮和真实 Piece 从该节点开始原有并行动画，不修改 `0.39s` 单片发牌、`0.027s` 错峰、Piece 缩放或棋盘/托盘自身时长。
+- 场景交接时隐藏 MainScene 临时 Piece，开包 3D 模型与 `fx_chai_w_001` 转为短期跨场景对象，继续完成制作方原始下落和滑光收尾，到原 `1.600s` 可见窗口结束后自动清理；不恢复静态撕开包，不创建第二份卡包下落视觉。
+- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
+- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译通过，均为 `0` 警告、`0` 错误；Unity 批处理资源刷新成功。仍需在 MainScene Play Mode 验收滑光完成、卡包开始下落、棋盘/托盘进场三者的实际同拍效果，并确认场景交接没有重复 Piece、卡包闪断或粒子残留。
+
 ## 2026-08-27 非发牌转场整体延长 20%
 
 - 状态：代码修改完成并通过 Runtime/Editor 编译，等待 Unity Play Mode 视觉验收。
