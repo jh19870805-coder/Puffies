@@ -41,15 +41,21 @@ public class GameScene : MonoBehaviour
     private const float PieceBgFillAlpha = 0.3f;
     private const float GameTransitionDurationScale = 1.5f;
     private const float GameEntranceBoardDelay = 0f;
-    private const float GameEntranceBoardDuration = 0.38f * GameTransitionDurationScale;
+    private const float GameEntranceBoardDuration = 0.38f
+                                                    * GameTransitionDurationScale
+                                                    * GameDefine.NonDealTransitionDurationMultiplier;
     private const float GameEntranceTrayDelay = 0f;
-    private const float GameEntranceTrayDuration = 0.22f * GameTransitionDurationScale;
+    private const float GameEntranceTrayDuration = 0.22f
+                                                   * GameTransitionDurationScale
+                                                   * GameDefine.NonDealTransitionDurationMultiplier;
     private const float GameEntrancePieceSettleDuration = 0.46f * GameTransitionDurationScale;
     private const float GameEntrancePieceStagger = 0.018f * GameTransitionDurationScale;
     private const float TornPackPieceSettleReduction = 0.3f;
     private const float TornPackPieceStagger = GameEntrancePieceStagger;
     private const float GameEntranceControlDelay = 0f;
-    private const float GameEntranceControlDuration = 0.22f * GameTransitionDurationScale;
+    private const float GameEntranceControlDuration = 0.22f
+                                                      * GameTransitionDurationScale
+                                                      * GameDefine.NonDealTransitionDurationMultiplier;
     private const int GameEntranceWarmupFrameCount = 2;
     private const float GameEntranceMaxFrameDelta = 1f / 30f;
     private const float GroupTransitionBoardDuration = 0.72f;

@@ -1,5 +1,13 @@
 # 当前任务
 
+## 2026-08-27 非发牌转场整体延长 20%
+
+- 状态：代码修改完成并通过 Runtime/Editor 编译，等待 Unity Play Mode 视觉验收。
+- 使用共享常量 `GameDefine.NonDealTransitionDurationMultiplier = 1.2` 统一延长非发牌段：MainScene 首页与游戏背景交接由 `0.42s` 调整为 `0.504s`；彩色/灰色撕开卡包下落由 `0.345s` 调整为 `0.414s`；GameScene 棋盘入场由 `0.57s` 调整为 `0.684s`，托盘和按钮入场由 `0.33s` 调整为 `0.396s`。
+- 完整彩包、彩色撕开和灰色撕开的棋盘/托盘/按钮参数继续共用，保持此前一致性。真实 Piece 发牌不参与本次延长，单片飞行仍为 `0.39s`，错峰仍为 `0.027s`。
+- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Assets/Scripts/Controller/GameScene.cs`、`Assets/Scripts/Model/GameDefine.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
+- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译通过，均为 `0` 警告、`0` 错误；`git diff --check` 通过。仍需 Play Mode 对比三种卡包入口，确认非发牌段整体放慢且发牌速度不变。
+
 ## 2026-08-27 完整彩包撕开与发牌节奏统一
 
 - 状态：代码修改完成并通过 Runtime/Editor 编译，等待 Unity Play Mode 视觉验收。

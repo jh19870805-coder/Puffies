@@ -40,6 +40,7 @@ public sealed class DragState
 
 public static class GameDefine
 {
+    public const float NonDealTransitionDurationMultiplier = 1.2f;
     public const float TornPackPieceStartSpreadMultiplier = 20f;
 
     public static Vector2 CalculatePieceDealScatterOffset(

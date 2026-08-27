@@ -58,14 +58,18 @@ public class MainScene : MonoBehaviour
     private const float OpeningStageBackgroundWorldDepth = 0f;
     private const float BagSelectGaussianBlurRadius = 8f;
     private const float GameTransitionDurationScale = 1.5f;
-    private const float OpeningStageTransitionDuration = 0.28f * GameTransitionDurationScale;
+    private const float OpeningStageTransitionDuration = 0.28f
+                                                         * GameTransitionDurationScale
+                                                         * GameDefine.NonDealTransitionDurationMultiplier;
     private const float OpeningModelHandoffHoldDuration = 0.06f;
     private const float OpeningModelHandoffFadeDuration = 0.12f;
     private const float TearGestureTravelRatio = 0.06f;
     private const float TearGestureMinTravelPixels = 18f;
     private const float InProgressGameTransitionHoldDuration = 0.17f * GameTransitionDurationScale;
     private const float InProgressGameTransitionPreloadTimeout = 5f;
-    private const float InProgressPackExitDuration = 0.46f * GameTransitionDurationScale;
+    private const float InProgressPackExitDuration = 0.46f
+                                                     * GameTransitionDurationScale
+                                                     * GameDefine.NonDealTransitionDurationMultiplier;
     private const float TornPackTransitionHoldReduction = 0.3f;
     private const float TornPackExitSpeedMultiplier = 2f;
     private const float InProgressPackExitScreenHeightRatio = 0.62f;
