@@ -1,5 +1,17 @@
 # 当前任务
 
+## 一次性跨设备任务：CardBag019 资源引用刷新与校验
+
+- 状态：待在其他设备首次执行。
+- 触发条件：在另一台设备打开本仓库后，用户首次要求“同步工作进度”。触发后应先完成本任务，再继续汇报或处理其他开发事项。
+- 执行次数：仅一次。完成后把本节状态改为“已完成”，记录执行设备、日期和结果；后续设备或后续同步不得重复执行。
+- 执行步骤：
+  1. 确认当前分支已包含修复提交 `1a3be43` 或其后继提交，并确认 `CardBag019.prefab`、`Assets/UI/CardBags/CardBag019` 下 29 张 Piece、`GameBoard.png`、`BoardTitle.png` 及各自 `.meta` 均被 Git 跟踪。
+  2. 在 Unity 中对 `Assets/UI/CardBags/CardBag019` 和 `Assets/Resources/CardBagPrefabs/CardBag019.prefab` 执行一次强制重新导入；如果 Unity 跨 Git 拉取持续保持打开，应先关闭并重新打开编辑器，禁止通过删除整个 `Library` 处理。
+  3. 校验 Prefab 的 31 个源 Sprite 引用与上述目录 31 个 PNG `.meta` GUID 完全一致，预期结果为 `Missing=0`、`Foreign=0`。
+  4. 用 `CardBag019` 进入 GameScene 验证当前组 Piece 正常显示，并检查最新 `Editor.log` 不再出现 `GameScene: groove image missing sprite`。
+  5. 将本节状态更新为“已完成”，写明验证结果；本任务不得重新生成或覆盖 `CardBag019.prefab`，除非校验确实失败且用户另有指令。
+
 ## 2026-08-27 非发牌转场整体延长 20%
 
 - 状态：代码修改完成并通过 Runtime/Editor 编译，等待 Unity Play Mode 视觉验收。
