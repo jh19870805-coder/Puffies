@@ -49,6 +49,7 @@ public class GameScene : MonoBehaviour
     private const float TornPackPieceSettleReduction = 0.3f;
     private const float OpeningPieceStagger = GameEntrancePieceStagger * 0.5f;
     private const float TornPackPieceStagger = GameEntrancePieceStagger;
+    private const float TornPackPieceStartSpreadMultiplier = 20f;
     private const float GameEntranceControlDelay = 0f;
     private const float GameEntranceControlDuration = 0.22f * GameTransitionDurationScale;
     private const int GameEntranceWarmupFrameCount = 2;
@@ -644,7 +645,7 @@ public class GameScene : MonoBehaviour
 
     private IEnumerator PlayGameEntranceAnimation(
         bool piecesAlreadyFanned,
-        bool waitForPackTransition = false)
+        bool waitForPackTransition)
     {
         _isEntranceAnimating = true;
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
@@ -680,6 +681,9 @@ public class GameScene : MonoBehaviour
         SetCanvasGroupAlpha(hintCanvasGroup, 0f);
 
         var isTornPackTransition = waitForPackTransition;
+        var pieceStartSpreadMultiplier = isTornPackTransition
+            ? TornPackPieceStartSpreadMultiplier
+            : 1f;
         var useFastPieceFlight = piecesAlreadyFanned || isTornPackTransition;
         var pieceSettleDuration = useFastPieceFlight
             ? Mathf.Max(
@@ -705,7 +709,8 @@ public class GameScene : MonoBehaviour
                     trayRect,
                     trayTarget,
                     pieceSettleDuration,
-                    pieceStagger));
+                    pieceStagger,
+                    1f));
         }
         else if (waitForPackTransition)
         {
@@ -720,7 +725,8 @@ public class GameScene : MonoBehaviour
                     trayRect,
                     trayTarget,
                     pieceSettleDuration,
-                    pieceStagger));
+                    pieceStagger,
+                    pieceStartSpreadMultiplier));
         }
         else
         {
@@ -831,7 +837,8 @@ public class GameScene : MonoBehaviour
                 trayRect,
                 trayTarget,
                 pieceSettleDuration,
-                pieceStagger);
+                pieceStagger,
+                1f);
         }
 
         _isEntranceAnimating = false;
@@ -853,7 +860,8 @@ public class GameScene : MonoBehaviour
         RectTransform trayRect,
         Vector2 trayTarget,
         float pieceSettleDuration,
-        float pieceStagger)
+        float pieceStagger,
+        float pieceStartSpreadMultiplier)
     {
         var camera = Camera.main;
         var boardCenter = _board.GameBoardImage != null && camera != null
@@ -885,7 +893,8 @@ public class GameScene : MonoBehaviour
             pieceTargetRotations[i] = renderer.transform.rotation;
             pieceTargetColors[i] = renderer.color;
             var angle = i * 137.5f * Mathf.Deg2Rad;
-            var radius = 0.025f + (i % 3) * 0.012f;
+            var radius = (0.025f + (i % 3) * 0.012f)
+                         * Mathf.Max(1f, pieceStartSpreadMultiplier);
             var shouldSpreadPieceStart = spreadAtOpeningOrigin
                                          || (!waitForPackTransition
                                              && !startVisibleAtOpeningOrigin);

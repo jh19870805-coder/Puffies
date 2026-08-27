@@ -1,5 +1,13 @@
 # 当前任务
 
+## 2026-08-27 撕开卡包真实碎片起点分散
+
+- 状态：代码修改完成并通过 Runtime/Editor 编译，等待 Unity Play Mode 视觉验收。
+- 根据 Play Mode 截图，将彩色撕开和灰色撕开进入 GameScene 时真实 Piece 的起始散点统一扩大：基础 `0.025~0.049` 世界单位半径使用 `20` 倍，目标屏幕散点半径约 `50~100px`；Piece 仍在卡包移动前以最终 `TrayScale` 和正常 Alpha 创建，并由卡包遮挡后自然露出。
+- 彩色与灰色撕开的真实 Piece 起点、无额外停顿、`0.345s` 卡包下落、`72%` 起飞点、`0.027s` 错峰和 `0.39s` 单片飞行时长全部一致。唯一差异仍是彩色撕开收回并隐藏已有的首页假碎片，灰色撕开不执行该步骤。完整彩包拆包后的真实 Piece 接管流程不变。
+- 修改文件：`Assets/Scripts/Controller/GameScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
+- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译通过，均为 `0` 警告、`0` 错误；`git diff --check` 通过。仍需在 Play Mode 对照验收彩色和灰色撕开的真实 Piece 起点、卡包下落和发牌节奏完全一致，并确认仅彩色撕开执行假碎片隐藏。
+
 ## 2026-08-27 灰色与彩色撕开节奏统一
 
 - 状态：代码修改完成并通过 Runtime/Editor 编译，等待 Unity Play Mode 视觉验收。
