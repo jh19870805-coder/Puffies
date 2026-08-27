@@ -66,8 +66,8 @@ public class MainScene : MonoBehaviour
     private const float InProgressGameTransitionHoldDuration = 0.17f * GameTransitionDurationScale;
     private const float InProgressGameTransitionPreloadTimeout = 5f;
     private const float InProgressPackExitDuration = 0.46f * GameTransitionDurationScale;
-    private const float TornColorTransitionHoldReduction = 0.3f;
-    private const float TornColorPackExitSpeedMultiplier = 2f;
+    private const float TornPackTransitionHoldReduction = 0.3f;
+    private const float TornPackExitSpeedMultiplier = 2f;
     private const float InProgressPackExitScreenHeightRatio = 0.62f;
     private const float InProgressPieceExitCompensation = 0.62f;
     private const float InProgressPieceExitHorizontalSpread = 90f;
@@ -3965,15 +3965,16 @@ public class MainScene : MonoBehaviour
             yield return PlayMainToGameBackgroundHandoff();
         }
 
-        var isTornColorTransition = !isReplaySession && !piecesReadyToDealImmediately;
+        var isTornPackTransition = !piecesReadyToDealImmediately;
+        var shouldRetractProgressPieces = isTornPackTransition && !isReplaySession;
         var holdElapsed = 0f;
         var requiredHoldDuration = piecesReadyToDealImmediately
             ? 0f
-            : isTornColorTransition
+            : isTornPackTransition
                 ? Mathf.Max(
                     0f,
                     InProgressGameTransitionHoldDuration
-                    - TornColorTransitionHoldReduction)
+                    - TornPackTransitionHoldReduction)
                 : InProgressGameTransitionHoldDuration;
         while (holdElapsed < requiredHoldDuration
                || (!GameManager.IsGameSceneReadyForActivation(mSelectedBagId)
@@ -3995,10 +3996,10 @@ public class MainScene : MonoBehaviour
             yield break;
         }
 
-        var packExitDuration = isTornColorTransition
-            ? InProgressPackExitDuration / TornColorPackExitSpeedMultiplier
+        var packExitDuration = isTornPackTransition
+            ? InProgressPackExitDuration / TornPackExitSpeedMultiplier
             : InProgressPackExitDuration;
-        var retractProgressPiecesOnDrop = isTornColorTransition;
+        var retractProgressPiecesOnDrop = shouldRetractProgressPieces;
         StoreOpeningPackExitPosition();
         var transitionPieceRects = new List<RectTransform>();
         if (mSelectedPackageProgressPieceAnimations != null)
@@ -4023,7 +4024,7 @@ public class MainScene : MonoBehaviour
                 InProgressPieceExitCompensation,
                 packExitDuration,
                 retractProgressPiecesOnDrop,
-                useContinuousLinearDrop: isTornColorTransition))
+                useContinuousLinearDrop: isTornPackTransition))
         {
             mSelectedPackageOverlayCanvas = null;
             mSelectedPackageOverlayCanvasGroup = null;
@@ -4062,24 +4063,20 @@ public class MainScene : MonoBehaviour
             }
 
             pieceStarts[i] = animation.RectTransform.anchoredPosition;
+            var pieceRect = animation.RectTransform;
+            var pieceParent = pieceRect.parent as RectTransform;
             var centeredIndex = i - (pieceStarts.Length - 1) * 0.5f;
-            pieceTargets[i] = isTornColorTransition
-                ? pieceStarts[i]
+            pieceTargets[i] = shouldRetractProgressPieces
+                ? pieceStarts[i] + Vector2.down
+                    * (pieceParent != null
+                        ? pieceParent.rect.height
+                        : packRect != null ? packRect.rect.height : ReferenceHeight)
+                    * 0.28f
+                : isTornPackTransition
+                    ? pieceStarts[i]
                 : pieceStarts[i] + new Vector2(
                     centeredIndex * InProgressPieceExitHorizontalSpread,
                     packDropDistance * InProgressPieceExitCompensation);
-        }
-
-        if (retractProgressPiecesOnDrop)
-        {
-            for (var i = 0; i < pieceStarts.Length; i++)
-            {
-                var pieceRect = pieceAnimations[i]?.RectTransform;
-                if (pieceRect != null)
-                {
-                    pieceRect.gameObject.SetActive(false);
-                }
-            }
         }
 
         mIsSelectedPackageProgressPieceTransitioning = true;
@@ -4088,7 +4085,9 @@ public class MainScene : MonoBehaviour
         {
             exitElapsed += Time.unscaledDeltaTime;
             var normalized = Mathf.Clamp01(exitElapsed / packExitDuration);
-            var packT = Mathf.SmoothStep(0f, 1f, normalized);
+            var packT = isTornPackTransition
+                ? normalized
+                : Mathf.SmoothStep(0f, 1f, normalized);
             var pieceT = 1f - Mathf.Pow(1f - normalized, 3f);
             if (packRect != null)
             {
@@ -4103,7 +4102,18 @@ public class MainScene : MonoBehaviour
                 var pieceRect = pieceAnimations[i]?.RectTransform;
                 if (pieceRect != null)
                 {
-                    if (isTornColorTransition)
+                    if (shouldRetractProgressPieces)
+                    {
+                        pieceRect.anchoredPosition = Vector2.LerpUnclamped(
+                            pieceStarts[i],
+                            pieceTargets[i],
+                            Mathf.SmoothStep(0f, 1f, normalized));
+                        if (normalized >= 1f)
+                        {
+                            pieceRect.gameObject.SetActive(false);
+                        }
+                    }
+                    else if (isTornPackTransition)
                     {
                         continue;
                     }

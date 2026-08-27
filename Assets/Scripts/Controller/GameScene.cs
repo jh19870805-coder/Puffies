@@ -46,9 +46,9 @@ public class GameScene : MonoBehaviour
     private const float GameEntranceTrayDuration = 0.22f * GameTransitionDurationScale;
     private const float GameEntrancePieceSettleDuration = 0.46f * GameTransitionDurationScale;
     private const float GameEntrancePieceStagger = 0.018f * GameTransitionDurationScale;
-    private const float TornColorPieceSettleReduction = 0.3f;
+    private const float TornPackPieceSettleReduction = 0.3f;
     private const float OpeningPieceStagger = GameEntrancePieceStagger * 0.5f;
-    private const float TornColorPieceStagger = GameEntrancePieceStagger;
+    private const float TornPackPieceStagger = GameEntrancePieceStagger;
     private const float GameEntranceControlDelay = 0f;
     private const float GameEntranceControlDuration = 0.22f * GameTransitionDurationScale;
     private const int GameEntranceWarmupFrameCount = 2;
@@ -454,8 +454,7 @@ public class GameScene : MonoBehaviour
         if (playEntranceAnimation && !_isGameFinished)
         {
             StartCoroutine(PlayGameEntranceAfterPackTransition(
-                entrancePiecesAlreadyFanned,
-                isReplaySession));
+                entrancePiecesAlreadyFanned));
         }
         else
         {
@@ -469,9 +468,7 @@ public class GameScene : MonoBehaviour
             + $"{(Time.realtimeSinceStartup - bootstrapStartedAt) * 1000f:F1}ms.");
     }
 
-    private IEnumerator PlayGameEntranceAfterPackTransition(
-        bool piecesAlreadyFanned,
-        bool isReplaySession)
+    private IEnumerator PlayGameEntranceAfterPackTransition(bool piecesAlreadyFanned)
     {
         Debug.Log(
             $"GameScene: entrance coroutine started. "
@@ -479,8 +476,7 @@ public class GameScene : MonoBehaviour
             + $"transitionPending={CardPackGameEntranceTransition.IsPending}");
         yield return PlayGameEntranceAnimation(
             piecesAlreadyFanned,
-            waitForPackTransition: CardPackGameEntranceTransition.IsPending,
-            isReplaySession: isReplaySession);
+            waitForPackTransition: CardPackGameEntranceTransition.IsPending);
         Debug.Log("GameScene: entrance coroutine completed.");
     }
 
@@ -648,8 +644,7 @@ public class GameScene : MonoBehaviour
 
     private IEnumerator PlayGameEntranceAnimation(
         bool piecesAlreadyFanned,
-        bool waitForPackTransition = false,
-        bool isReplaySession = false)
+        bool waitForPackTransition = false)
     {
         _isEntranceAnimating = true;
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
@@ -684,15 +679,15 @@ public class GameScene : MonoBehaviour
         SetCanvasGroupAlpha(returnCanvasGroup, 0f);
         SetCanvasGroupAlpha(hintCanvasGroup, 0f);
 
-        var isTornColorTransition = waitForPackTransition && !isReplaySession;
-        var useFastPieceFlight = piecesAlreadyFanned || isTornColorTransition;
+        var isTornPackTransition = waitForPackTransition;
+        var useFastPieceFlight = piecesAlreadyFanned || isTornPackTransition;
         var pieceSettleDuration = useFastPieceFlight
             ? Mathf.Max(
                 0.01f,
-                GameEntrancePieceSettleDuration - TornColorPieceSettleReduction)
+                GameEntrancePieceSettleDuration - TornPackPieceSettleReduction)
             : GameEntrancePieceSettleDuration;
-        var pieceStagger = isTornColorTransition
-            ? TornColorPieceStagger
+        var pieceStagger = isTornPackTransition
+            ? TornPackPieceStagger
             : piecesAlreadyFanned
                 ? OpeningPieceStagger
                 : GameEntrancePieceStagger;
@@ -719,7 +714,7 @@ public class GameScene : MonoBehaviour
                 PlayCurrentGroupPieceDealAnimation(
                     waitForPackTransition: true,
                     startVisibleAtOpeningOrigin: false,
-                    spreadAtOpeningOrigin: isTornColorTransition,
+                    spreadAtOpeningOrigin: isTornPackTransition,
                     boardRect,
                     boardTarget,
                     trayRect,

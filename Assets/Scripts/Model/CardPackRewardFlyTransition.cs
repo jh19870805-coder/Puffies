@@ -375,7 +375,7 @@ public sealed class CardPackGameEntranceTransition : MonoBehaviour
     private const int GameSceneSettleFrameCount = 2;
     private const float PlaybackGraceSeconds = 1f;
     private const float SlowDropDurationRatio = 0.42f;
-    private const float TornColorPieceLaunchPackHeightRatio = 0.72f;
+    private const float TornPackPieceLaunchPackHeightRatio = 0.72f;
     private const float ProgressPieceRetractionParentHeightRatio = 0.28f;
 
     private static CardPackGameEntranceTransition sInstance;
@@ -606,7 +606,7 @@ public sealed class CardPackGameEntranceTransition : MonoBehaviour
         }
 
         var launchPackHeight = mUseContinuousLinearDrop
-            ? displayedPackHeight * TornColorPieceLaunchPackHeightRatio
+            ? displayedPackHeight * TornPackPieceLaunchPackHeightRatio
             : displayedPackHeight;
         var launchDropDistance = displayedPackHeight > 0.01f
             ? Mathf.Min(dropDistance, launchPackHeight)

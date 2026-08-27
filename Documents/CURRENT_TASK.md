@@ -1,5 +1,13 @@
 # 当前任务
 
+## 2026-08-27 灰色与彩色撕开节奏统一
+
+- 状态：代码修改完成并通过 Runtime/Editor 编译，等待 Unity Play Mode 视觉验收。
+- 灰色撕开确认重玩后的转场改为和彩色撕开相同节奏：背景交接后不增加额外静止时间；卡包按 `0.345s` 总时长、动态离屏距离和线性速度下落；真实 Piece 在卡包移动前以最终 `TrayScale` 和正常 Alpha 创建在卡包中心附近的小范围散点，卡包下移约自身显示高度 `72%` 时开始以 `0.027s` 错峰、`0.39s` 单片时长飞向托盘。
+- 两种撕开状态仅保留一个差异：彩色撕开继续把首页展示用 `ProgressPieces` 向撕口内下收并隐藏；灰色撕开没有这组假碎片，不执行任何假碎片收回或隐藏操作。
+- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Assets/Scripts/Controller/GameScene.cs`、`Assets/Scripts/Model/CardPackRewardFlyTransition.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
+- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译通过，均为 `0` 警告、`0` 错误；`git diff --check` 通过。仍需在 Play Mode 对照验证灰色和彩色撕开卡包的停顿、下落、`72%` 起飞点和发牌速度一致，同时确认灰色流程没有假碎片显隐动作。
+
 ## 2026-08-27 彩色撕开真实碎片预创建
 
 - 状态：代码修改完成并通过 Runtime/Editor 编译，等待 Unity Play Mode 视觉验收。
