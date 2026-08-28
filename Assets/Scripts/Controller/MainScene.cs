@@ -3959,7 +3959,8 @@ public class MainScene : MonoBehaviour
     private IEnumerator PlayTornPackageGameTransition(
         bool isReplaySession,
         bool backgroundHandoffCompleted = false,
-        bool piecesReadyToDealImmediately = false)
+        bool piecesReadyToDealImmediately = false,
+        bool openingEffectReadyForSceneHandoff = false)
     {
         StopOpeningHintAnimation();
         mIsPlayingAnimation = true;
@@ -3970,10 +3971,10 @@ public class MainScene : MonoBehaviour
             yield return PlayMainToGameBackgroundHandoff();
         }
 
-        var isTornPackTransition = !piecesReadyToDealImmediately;
+        var isTornPackTransition = !openingEffectReadyForSceneHandoff;
         var shouldRetractProgressPieces = isTornPackTransition && !isReplaySession;
         var holdElapsed = 0f;
-        var requiredHoldDuration = piecesReadyToDealImmediately
+        var requiredHoldDuration = openingEffectReadyForSceneHandoff
             ? 0f
             : isTornPackTransition
                 ? Mathf.Max(
@@ -3989,8 +3990,9 @@ public class MainScene : MonoBehaviour
             yield return null;
         }
 
-        if (piecesReadyToDealImmediately)
+        if (openingEffectReadyForSceneHandoff)
         {
+            mCardPackOpeningEffect?.PrepareForSceneHandoff();
             mPlayAnimationCoroutine = null;
             mHasSwitchedToGameScene = true;
             GameManager.EnterGameScene(
@@ -4301,7 +4303,6 @@ public class MainScene : MonoBehaviour
         if (piecesReadyToDealImmediately)
         {
             GameManager.SetOpeningPackExitPosition(emergedPieceOrigin);
-            mCardPackOpeningEffect.PrepareForSceneHandoff();
         }
 
         if (mSelectedPackageVisualContent != null)
@@ -4313,7 +4314,8 @@ public class MainScene : MonoBehaviour
         yield return PlayTornPackageGameTransition(
             isReplaySession,
             backgroundHandoffCompleted: true,
-            piecesReadyToDealImmediately: piecesReadyToDealImmediately);
+            piecesReadyToDealImmediately: piecesReadyToDealImmediately,
+            openingEffectReadyForSceneHandoff: openingEffectStarted);
     }
 
     private static List<Sprite> LoadCurrentGroupUnplacedPieceSprites(int packId)
@@ -4792,11 +4794,12 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
     private bool mDidOverrideCameraCullingMask;
     private Coroutine mPlaybackCoroutine;
     private float mAnimationDuration;
-    private float mPlaybackStartTime;
+    private float mPlaybackElapsed;
     private bool mIsPlaying;
     private bool mIsPrepared;
     private bool mHasHandedOffToGameScene;
     private bool mIsWaitingForSceneCamera;
+    private bool mIsPausedForSceneHandoff;
 
     public static void PrepareSceneLightEffect()
     {
@@ -4958,7 +4961,7 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
 
         mIsPrepared = false;
         mAnimator.speed = 1f;
-        mPlaybackStartTime = Time.time;
+        mPlaybackElapsed = 0f;
         mIsPlaying = true;
         mPlaybackCoroutine = StartCoroutine(PlayToCompletion());
     }
@@ -4966,8 +4969,7 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
     public IEnumerator WaitForGameEntranceHandoff()
     {
         while (mIsPlaying
-               && Mathf.Max(0f, Time.time - mPlaybackStartTime)
-               < GameEntranceHandoffTime)
+               && mPlaybackElapsed < GameEntranceHandoffTime)
         {
             yield return null;
         }
@@ -4983,6 +4985,7 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         mHasHandedOffToGameScene = true;
         SceneManager.sceneLoaded += HandleSceneLoaded;
         mIsWaitingForSceneCamera = true;
+        PauseForSceneHandoff();
         for (var i = 0; i < mEmergedPieceRenderers.Count; i++)
         {
             if (mEmergedPieceRenderers[i] != null)
@@ -5044,25 +5047,34 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
 
         BindEffectLayerToCamera(loadedCamera);
         mIsWaitingForSceneCamera = false;
+        // Scene activation can block the main thread for multiple seconds. Resume on the
+        // following rendered frame so Animator and ParticleSystem do not consume that stall.
+        yield return null;
+        ResumeAfterSceneHandoff();
     }
 
     private IEnumerator PlayToCompletion()
     {
-        var elapsed = Mathf.Max(0f, Time.time - mPlaybackStartTime);
         var lightStarted = false;
         var controlledPlaybackDuration = Mathf.Max(
             mAnimationDuration,
             LightEffectDelay + LightEffectVisibleDuration);
-        while (elapsed < controlledPlaybackDuration)
+        while (mPlaybackElapsed < controlledPlaybackDuration)
         {
-            elapsed += Time.deltaTime;
-            if (!lightStarted && elapsed >= LightEffectDelay)
+            if (mIsPausedForSceneHandoff)
+            {
+                yield return null;
+                continue;
+            }
+
+            mPlaybackElapsed += Time.deltaTime;
+            if (!lightStarted && mPlaybackElapsed >= LightEffectDelay)
             {
                 lightStarted = true;
                 StartLightEffect();
             }
 
-            UpdateEmergedPieces(elapsed);
+            UpdateEmergedPieces(mPlaybackElapsed);
 
             yield return null;
         }
@@ -5078,6 +5090,10 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         }
 
         ReleaseSceneLightEffect();
+        Debug.Log(
+            $"CardPackOpeningEffect: playback completed. "
+            + $"controlled={controlledPlaybackDuration:F3}s, tail={tailElapsed:F3}s, "
+            + $"sceneHandoff={mHasHandedOffToGameScene}.");
         mIsPlaying = false;
         mPlaybackCoroutine = null;
         if (mHasHandedOffToGameScene)
@@ -5627,6 +5643,69 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         }
     }
 
+    private void PauseForSceneHandoff()
+    {
+        if (mIsPausedForSceneHandoff)
+        {
+            return;
+        }
+
+        mIsPausedForSceneHandoff = true;
+        if (mAnimator != null)
+        {
+            mAnimator.speed = 0f;
+        }
+
+        SetPlayingParticleSystemsPaused(true);
+        Debug.Log(
+            $"CardPackOpeningEffect: paused for scene handoff at "
+            + $"{mPlaybackElapsed:F3}s.");
+    }
+
+    private void ResumeAfterSceneHandoff()
+    {
+        if (!mIsPausedForSceneHandoff)
+        {
+            return;
+        }
+
+        mIsPausedForSceneHandoff = false;
+        if (mAnimator != null)
+        {
+            mAnimator.speed = 1f;
+        }
+
+        SetPlayingParticleSystemsPaused(false);
+        Debug.Log(
+            $"CardPackOpeningEffect: resumed after scene handoff at "
+            + $"{mPlaybackElapsed:F3}s.");
+    }
+
+    private void SetPlayingParticleSystemsPaused(bool paused)
+    {
+        if (mLightEffectObject == null || !mLightEffectObject.activeInHierarchy)
+        {
+            return;
+        }
+
+        var particleSystems = mLightEffectObject.GetComponentsInChildren<ParticleSystem>(true);
+        for (var i = 0; i < particleSystems.Length; i++)
+        {
+            var particleSystem = particleSystems[i];
+            if (paused)
+            {
+                if (particleSystem.isPlaying)
+                {
+                    particleSystem.Pause(false);
+                }
+            }
+            else if (particleSystem.isPaused)
+            {
+                particleSystem.Play(false);
+            }
+        }
+    }
+
     private bool IsSceneLightEffectAlive()
     {
         if (mLightEffectObject == null)
@@ -5679,6 +5758,7 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         mIsPlaying = false;
         mIsPrepared = false;
         mHasHandedOffToGameScene = false;
+        mIsPausedForSceneHandoff = false;
 
         SceneManager.sceneLoaded -= HandleSceneLoaded;
         mIsWaitingForSceneCamera = false;
@@ -5720,7 +5800,7 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         mMainCamera = null;
         mAnimator = null;
         mAnimationDuration = 0f;
-        mPlaybackStartTime = 0f;
+        mPlaybackElapsed = 0f;
         mEmergedPieceRenderers.Clear();
         mEmergedPieceStartPositions = Array.Empty<Vector3>();
         mEmergedPieceFinalPositions = Array.Empty<Vector3>();

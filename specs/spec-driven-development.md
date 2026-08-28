@@ -992,3 +992,20 @@
 - [x] 3. 实现导入后诊断和命令行单包/全包校验。
 - [x] 4. 使用 Unity 强制导入并验证 CardBag019 为 `Missing=0`、`Foreign=0`。
 - [x] 5. 扫描全部 23 个 CardBag Prefab，修复 CardBag006/020 的历史 BoardTitle 引用并确认 `failed=0`；Runtime/Editor 编译与差异检查通过。
+
+## 2026-08-28 - 完整彩色卡包拆包动画跨场景续播
+
+### 需求
+
+1. WHEN 完整彩色卡包在拆包动画中激活 GameScene THEN 模型和滑光 SHALL 从场景切换前的实际播放帧继续，不得把场景加载耗时计入动画进度而跳到结尾或提前销毁。
+2. 完整拆包动画是否跨场景存活 SHALL 只由拆包特效是否成功启动决定，不得依赖当前组是否存在未拼 Piece、碎片散点中心是否可投影或 `piecesReadyToDealImmediately`。
+3. `piecesReadyToDealImmediately` SHALL 只控制 GameScene 是否从已散开的碎片位置接管；即使碎片起点不可用，完整彩包拆包对象仍须跨场景完成自身动画。
+4. 彩色撕开和灰色撕开的静态卡包退场、假碎片下收、真实 Piece 发牌及现有时长 SHALL NOT 改变。
+5. 跨场景对象 SHALL 在 GameScene 自身 MainCamera 绑定 EffectLayer 后恢复播放；正常动画和粒子尾帧结束后自行释放，不得依赖 MainScene 对象继续存活。
+
+### 设计与任务
+
+- [x] 1. 将完整拆包状态与碎片接管状态拆成独立参数，并在真正开放 GameScene 激活前准备跨场景对象。
+- [x] 2. 场景交接前暂停 Animator 与现有粒子，绑定新场景摄像机后恢复；播放计时排除暂停时段。
+- [x] 3. 增加 `paused/resumed/playback completed` 关键交接日志；清理仍只发生在完整受控动画和粒子尾帧结束后。
+- [ ] 4. Runtime/Editor 编译和静态差异检查已通过；仍需在 Unity Play Mode 验证完整彩包跨场景动画不跳帧，并确认两种撕开状态无回归。

@@ -1,5 +1,14 @@
 # 当前任务
 
+## 2026-08-28 完整彩色卡包拆包动画提前移除根因修复
+
+- 状态：代码根因修复完成，Runtime/Editor 编译通过，等待 Unity Play Mode 视觉验收。
+- 根因一：完整拆包对象是否执行 `DontDestroyOnLoad` 被错误绑定到 `piecesReadyToDealImmediately`。当前组无未拼 Piece、散点中心尚未建立或屏幕投影失败时，即使拆包特效已成功启动，也会被当成普通撕开卡包处理并随 MainScene 销毁。
+- 根因二：完整彩包在 `Take 001` 的 `0.800s` 节点开放 GameScene 激活，但 Animator、ParticleSystem 和清理协程继续使用包含场景加载卡顿的 `Time.deltaTime`。本机历史日志显示场景激活阻塞约 `2.387s`，恢复渲染时动画进度会一次跳过剩余时长，表现为拆包动画尚未播完就消失。
+- 修复：完整拆包已启动和碎片是否可立即接管改为两个独立状态；只有前者决定完整拆包跨场景存活，后者只决定 GameScene Piece 起点。真正开放场景激活前暂停 Animator、当前正在播放的粒子和逻辑播放时钟；GameScene 自身 MainCamera 绑定 EffectLayer 后等待一帧再从相同逻辑时间恢复，场景加载耗时不再推进动画或触发清理。
+- 彩色撕开、灰色撕开的静态卡包下落、假碎片和真实 Piece 发牌参数未修改。
+- 验证：`dotnet build Assembly-CSharp.csproj --no-restore` 与 `dotnet build Assembly-CSharp-Editor.csproj --no-restore` 均为 `0` 警告、`0` 错误；`git diff --check` 通过。当前 Unity 编辑器未自动刷新日志，仍需退出 Play Mode/解除暂停后等待脚本刷新，再用完整彩包确认日志依次出现 `paused`、`resumed`、`playback completed`，并目视确认模型与滑光不跳帧。
+
 ## 一次性跨设备任务：CardBag019 资源引用刷新与校验
 
 - 状态：已于 2026-08-28 在 `LIN-WORK` 完成根因修复；该一次性任务不得在后续设备重复执行。
