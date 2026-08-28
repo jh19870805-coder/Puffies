@@ -4725,6 +4725,7 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
     private const float ReferenceModelLocalZ = 0f;
     private const float ModelWorldDepth = -1f;
     private const double ModelAnimationHandoffOffset = 0.8d;
+    private const double TimelineEndTolerance = 1d / 30d + 0.0001d;
     private const float PieceEmergeDuration = 0.32f;
     private const float PieceMaximumPackHeightRatio =
         MainScene.InProgressPackPieceMaxSize
@@ -5063,6 +5064,13 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
             if (!mIsPausedForSceneHandoff)
             {
                 UpdateEmergedPieces(mDirector.time);
+                if (HasReachedTimelineEnd())
+                {
+                    CompleteOpeningTimelineAndRetain(
+                        mDirector,
+                        "held final frame");
+                    break;
+                }
             }
 
             yield return null;
@@ -5080,7 +5088,7 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         }
 
         mDirector.playOnAwake = false;
-        mDirector.extrapolationMode = DirectorWrapMode.None;
+        mDirector.extrapolationMode = DirectorWrapMode.Hold;
         mDirector.timeUpdateMode = DirectorUpdateMode.GameTime;
         mDirector.playableAsset = mOpeningTimeline;
         mDirector.stopped -= HandleOpeningTimelineStopped;
@@ -5216,17 +5224,50 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
             return;
         }
 
+        CompleteOpeningTimelineAndRetain(director, "stopped callback fallback");
+    }
+
+    private bool HasReachedTimelineEnd()
+    {
+        if (mDirector == null
+            || double.IsInfinity(mDirector.duration)
+            || mDirector.duration <= 0d)
+        {
+            return false;
+        }
+
+        var remaining = mDirector.duration - mDirector.time;
+        return remaining <= TimelineEndTolerance;
+    }
+
+    private void CompleteOpeningTimelineAndRetain(
+        PlayableDirector director,
+        string completionSource)
+    {
+        if (director == null || director != mDirector || !mIsPlaying)
+        {
+            return;
+        }
+
+        var duration = director.duration;
+        if (!double.IsInfinity(duration) && duration > 0d)
+        {
+            director.time = duration;
+            director.Evaluate();
+        }
+
+        mIsPlaying = false;
+        if (director.state == PlayState.Playing)
+        {
+            director.Pause();
+        }
+
         CompleteEmergedPieces();
         var completedSceneHandoff = mHasHandedOffToGameScene;
         Debug.Log(
-            "CardPackOpeningEffect: opening timeline completed callback. "
+            "CardPackOpeningEffect: opening timeline completed and retained. "
             + $"time={director.time:F3}s, duration={director.duration:F3}s, "
-            + $"sceneHandoff={completedSceneHandoff}.");
-        mIsPlaying = false;
-        CleanupPlaybackResources();
-        Debug.Log(
-            "CardPackOpeningEffect: opening effect released after timeline callback.");
-        Destroy(gameObject);
+            + $"sceneHandoff={completedSceneHandoff}, source={completionSource}.");
     }
 
     public bool TryGetEmergedPieceScreenOrigin(out Vector2 normalizedScreenPosition)

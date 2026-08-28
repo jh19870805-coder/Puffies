@@ -818,7 +818,7 @@
 17. WHEN 选中状态为彩色撕开进行中或灰色撕开已完成重玩 THEN SHALL 跳过拆包特效；灰色重玩仍须先显示 `PanelReplay`。WHEN 玩家确认重玩 THEN `PanelReplay` SHALL 立即隐藏，系统 SHALL 恢复确认前同一份灰色撕开选中视觉，再重置会话并执行统一转场；不得从隐藏的列表槽位重新克隆卡包，卡包颜色、撕开样式、尺寸和位置不得改变。
 18. WHEN GameScene 激活 THEN 棋盘、PieceBoard 与游戏按钮入场 SHALL 和卡包慢速下落并行开始；卡包越过初始碎片区域后 SHALL 加速掉出屏幕。
 19. WHEN 卡包完整下落到初始碎片区域下方 THEN 首页装饰 `ProgressPieces` SHALL 隐藏，GameScene 当前组真实 Piece SHALL 保持叠放直到各自错峰时间到达，再与卡包加速下坠并行直飞托盘终点。
-20. WHEN 完整彩色卡包通过点击或滑动开始拆包 THEN 系统 SHALL 读取 SQLite 已拼 Piece 编号，按 GameScene 相同规则从对应 `CardBagNNN.prefab` 选择首个仍有未完成 Piece 的组，并且只创建该组尚未拼上的真实 Piece Sprite；已经拼在棋盘上的 Piece SHALL NOT 重复创建。系统 SHALL 以场景 `PackObject/fx_chai_w_001` 的实际世界位置作为撕口锚点，让碎片使用 `IngameCoverShadow04` 并在卡包后方从撕口向上冒出。碎片 SHALL 沿用首页 `86px * 1.4` 的最大边基准，并与卡包从 `240x272` 放大到 `600x680` 使用相同比例，展开状态最大边约为 `301px`。完整拆包 SHALL 使用制作方 `test.playable`，但当前静态卡包已经是 `600x680`，因此 SHALL 自动读取 Recorded Animation Track 的真实结束帧约 `2.633s`，在该帧按当前静态卡包对齐并开始播放，不得从 `0s` 重复 `240x272 -> 600x680` 放大。WHEN Timeline 内 `Take 001` 到达 `0.800s` 纵向最高点并开始下落，即总时间约 `4.2667s` THEN 系统 SHALL 保存临时碎片散点中心、隐藏临时 Piece 并立即激活已预加载的 GameScene。当前组同数量的真实可交互 Piece SHALL 在同一屏幕位置接管，且与棋盘、托盘和游戏按钮入场同步开始。制作方模型与滑光 SHALL 跨场景继续播放，只有 `PlayableDirector.stopped` 完整结束回调可以执行正常清理；`blur` Track SHALL 不产生任何可见蒙版。不得恢复撕开静态包、创建第二份卡包下落、创建 `CardPackGameEntranceTransition`，也不得增加完整包专属静止等待、手写淡入、预散开、起点覆盖或重复 Piece。彩色进行中包和灰色重玩包 SHALL 保持第 16、18、19 条的可见卡包越过后发牌规则。
+20. WHEN 完整彩色卡包通过点击或滑动开始拆包 THEN 系统 SHALL 读取 SQLite 已拼 Piece 编号，按 GameScene 相同规则从对应 `CardBagNNN.prefab` 选择首个仍有未完成 Piece 的组，并且只创建该组尚未拼上的真实 Piece Sprite；已经拼在棋盘上的 Piece SHALL NOT 重复创建。系统 SHALL 以场景 `PackObject/fx_chai_w_001` 的实际世界位置作为撕口锚点，让碎片使用 `IngameCoverShadow04` 并在卡包后方从撕口向上冒出。碎片 SHALL 沿用首页 `86px * 1.4` 的最大边基准，并与卡包从 `240x272` 放大到 `600x680` 使用相同比例，展开状态最大边约为 `301px`。完整拆包 SHALL 使用制作方 `test.playable`，但当前静态卡包已经是 `600x680`，因此 SHALL 自动读取 Recorded Animation Track 的真实结束帧约 `2.633s`，在该帧按当前静态卡包对齐并开始播放，不得从 `0s` 重复 `240x272 -> 600x680` 放大。WHEN Timeline 内 `Take 001` 到达 `0.800s` 纵向最高点并开始下落，即总时间约 `4.2667s` THEN 系统 SHALL 保存临时碎片散点中心、隐藏临时 Piece 并立即激活已预加载的 GameScene。当前组同数量的真实可交互 Piece SHALL 在同一屏幕位置接管，且与棋盘、托盘和游戏按钮入场同步开始。制作方模型与滑光 SHALL 跨场景继续播放；系统 SHALL 保持全部 Timeline Clip 的制作方起点和时长不变，并使用 `DirectorWrapMode.Hold` 在完整末帧 Evaluate 后 Pause，不得自然结束回到 `0s` 关闭模型 Renderer。自然完成 SHALL 只结束播放状态并保留整套对象，不得清理播放资源或销毁根对象；`PlayableDirector.stopped` 只作异常漏网兜底；`blur` Track SHALL 不产生任何可见蒙版。不得恢复撕开静态包、创建第二份卡包下落、创建 `CardPackGameEntranceTransition`，也不得增加完整包专属静止等待、手写淡入、预散开、起点覆盖或重复 Piece。彩色进行中包和灰色重玩包 SHALL 保持第 16、18、19 条的可见卡包越过后发牌规则。
 
 ### 设计与任务
 
@@ -1005,7 +1005,7 @@
 4. 彩色撕开和灰色撕开的静态卡包退场、假碎片下收、真实 Piece 发牌及现有时长 SHALL NOT 改变。
 5. 跨场景对象 SHALL 在 GameScene 自身 MainCamera 绑定 EffectLayer 后恢复同一个 `PlayableDirector`；不得依赖 MainScene 对象继续存活。
 6. 完整拆包 SHALL 加载制作方 `test.playable`，自动读取 Recorded Track 结束时间并从约 `2.633s` 开始；`Take 001 3.4667~5.3s` 与 `fx_chai_w_001 3.9667~7s` SHALL 保持制作方时序。两个 Animation Track SHALL 绑定当前模型 Animator；`Image` 和滑光 Control Track SHALL 绑定当前静态卡包与 MainScene 现有滑光实例；`blur` SHALL 只绑定无渲染代理，不能显示额外蒙版。
-7. 正常销毁 SHALL 仅从 `PlayableDirector.stopped` 完整结束回调进入；系统 SHALL NOT 使用滑光结束、粒子 `IsAlive`、Animator `normalizedTime` 或固定延时提前隐藏、停止或销毁模型、滑光、blur 或跨场景根对象。异常中断可以强制清理，但 SHALL 先取消完成回调。
+7. Timeline 自然完成 SHALL 使用 `DirectorWrapMode.Hold` 保持完整末帧并保留整套对象，不得正常销毁；系统 SHALL NOT 使用滑光结束、粒子 `IsAlive`、Animator `normalizedTime` 或固定延时提前隐藏、停止或销毁模型、滑光、blur 或跨场景根对象。`PlayableDirector.stopped` 仅作异常漏网兜底；异常中断可以强制清理，但 SHALL 先取消完成回调。
 
 ### 设计与任务
 
@@ -1013,6 +1013,6 @@
 - [x] 2. 遍历全工程开包播放、隐藏、停止和销毁入口，确认运行时完整开包逻辑只在 `MainScene.cs/CardPackOpeningEffect`，并移除手写静态淡出、Animator 播放、滑光启动和 Animator/粒子清理判断。
 - [x] 3. 加载 `test.playable`，绑定两个 Animation Track 及 `Image`、`fx_chai_w_001`、`blur` 三个 Control Track；滑光继续使用现有场景实例，blur 只绑定无渲染代理，不修改美术材质和粒子 Prefab。
 - [x] 4. 将 GameScene 交接点改为 Timeline 内 `Take 001` 起点加 `0.800s`，场景交接前暂停 Director，绑定新场景相机后恢复同一时间。
-- [x] 5. 将 `PlayableDirector.stopped` 完整结束回调设为唯一正常销毁入口；异常清理先取消回调，避免手动 Stop 被误认成自然结束。
+- [x] 5. 本项旧的“完整结束后正常销毁”规则已被 2026-08-28 最新要求替代：Director 现在保持末帧并保留整套对象，`stopped` 仅作异常兜底。
 - [x] 6. Runtime/Editor 编译均为 `0` 警告、`0` 错误，`git diff --check` 通过。
-- [ ] 7. 在 Unity Play Mode 验证从 `2.633s` 开始时静态卡包与模型保持 `600x680` 对齐、没有可见 blur 蒙版，`Take 001` 和滑光跨场景连续播放，并确认只在 `opening timeline completed callback` 日志后释放；同时回归彩色撕开和灰色撕开流程。
+- [ ] 7. 在 Unity Play Mode 验证从 `2.633s` 开始时静态卡包与模型保持 `600x680` 对齐、没有可见 blur 蒙版，`Take 001` 和滑光跨场景连续播放，并确认结束日志保持在 `time=7.000s`、对象不释放且卡包不因回到 `0s` 突然隐藏；同时回归彩色撕开和灰色撕开流程。

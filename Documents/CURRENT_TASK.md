@@ -1,5 +1,16 @@
 # 当前任务
 
+## 2026-08-28 完整彩色卡包拆包动画结束后保留
+
+- 状态：代码修改完成，等待 Unity Play Mode 视觉验收。
+- 用户要求：完整彩色卡包的拆包 Timeline 只播放，播放结束后不清理、不销毁整套特效对象；彩色撕开和灰色撕开流程不变。
+- 根因：`PlayableDirector` 原使用 `DirectorWrapMode.None`；Timeline 到 `7s` 自然停止时自动回到 `0s`，而 Recorded Track 的 `0s` 曲线把卡包两个 Renderer 的 `m_Enabled` 设为 `0`，所以即使移除 `Destroy`，卡包仍会突然不可见。
+- 修改：保持 `test.playable` 中所有 Clip 的起点和时长不变；`PlayableDirector` 改用 `DirectorWrapMode.Hold`，播放监控在末帧到达前把 Director 精确设为 Timeline 总时长、Evaluate 并 Pause，使画面保持最终状态且不回到 `0s`。自然结束只完成临时碎片状态、记录日志并停止播放监控，不调用 `CleanupPlaybackResources()`，也不调用 `Destroy(gameObject)`；`stopped` 回调只作为异常漏网兜底。
+- 保留：准备失败、异常中断或对象被外部销毁时仍可进入原有资源清理逻辑，避免改变异常路径。
+- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
+- 验证：`dotnet build Assembly-CSharp.csproj --no-restore` 与 `dotnet build Assembly-CSharp-Editor.csproj --no-restore` 均为 `0` 警告、`0` 错误，`git diff --check` 通过，`test.playable` 无工作区差异；Unity Play Mode 需确认完整彩包保持原动画节奏，Timeline 结束日志为 `time=7.000s`、`source=held final frame`，不得再出现结束时 `time=0.000s` 或卡包突然隐藏。
+- 下一步：Unity Play Mode 验收本次“只播放、不销毁”行为，不调整尺寸、蒙版、相机、Timeline 起点或动画参数。
+
 ## 2026-08-28 CardBag 新建 Prefab 保存阻断移除
 
 - 状态：保存限制已移除，Runtime/Editor 编译通过，等待 Unity 内重新生成 CardBag006/019/020。
