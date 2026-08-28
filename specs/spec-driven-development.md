@@ -30,16 +30,16 @@
 
 ### 需求
 
-1. WHEN 开包模型动画与滑光主要可见画面结束 THEN 系统 SHALL 立即请求激活预加载的 GameScene，不得继续等待 Timeline 控制轨道的无画面尾段。
-2. WHEN 缩短切换等待 THEN 系统 SHALL 保留 `fx_chai_w_001` 的 `0.5s` 启动延迟、整组原生播放、固定随机种子、场景 Transform、材质和渲染顺序。
-3. IF 模型 Clip 包含主要动作结束后的静止尾段 THEN 系统 SHALL 允许在主要可见动作完成后切换；IF GameScene 尚未预加载完成 THEN 系统 SHALL 沿用异步加载完成后激活的兜底路径。
+1. WHEN `Take 001` 到达 `0.800s` 下落关键帧 THEN 系统 SHALL 立即请求激活预加载的 GameScene，不得等待模型或粒子播放结束。
+2. WHEN GameScene 已交接 THEN 系统 SHALL 继续跨场景保留拆包对象，完整播放模型约 `1.833s` 以及 `fx_chai_w_001` 的 `0.5s` 延迟和约 `3.033s` 正式控制轨道；不得在 `1.6s` 强制清理。
+3. WHEN 模型与光效完整时序均结束 THEN 系统 SHALL 停止并清理跨场景特效；IF GameScene 尚未预加载完成 THEN 系统 SHALL 沿用异步加载完成后激活的兜底路径。
 
 ### 设计与任务
 
 - [x] 核对制作方模型动画长度为约 `1.833s`，Timeline 光效控制轨道为 `0.5s` 延迟后持续约 `3.033s`。
 - [x] 核对光效主要子粒子的启动延迟不超过约 `0.1s`、可见寿命约 `0.1~1.0s`；根 ParticleSystem 为循环模式，因此不使用 `IsAlive()` 作为结束条件。
-- [x] 首次将场景切换等待改为 `max(模型动画长度, 0.5s + 1.2s 主要滑光窗口)`，从原 `3.533s` 缩短到约 `1.833s`。
-- [x] 根据 Play Mode 仍有轻微停顿的反馈，将模型主要可见动作上限设为 `1.6s`，滑光主要窗口设为启动后的 `1.1s`；最终切换点为 `1.6s`，比上一版再缩短约 `0.23s`。
+- [x] GameScene 激活点与特效清理点拆开：激活点提前到模型 `0.800s` 下落关键帧，不再依赖完整特效时长。
+- [x] 取消旧 `1.6s` 强制清理上限；模型完整播放约 `1.833s`，光效按 `0.5s + 3.033s` 播放，整体约 `3.533s` 后清理。
 - [x] 保留粒子资源、Timeline、MainScene 场景实例和播放入口不变。
 - [ ] 在 Play Mode 目视确认切换点没有截断明显光效，并确认 GameScene 入场动画完整播放。
 
@@ -818,7 +818,7 @@
 17. WHEN 选中状态为彩色撕开进行中或灰色撕开已完成重玩 THEN SHALL 跳过拆包特效；灰色重玩仍须先显示 `PanelReplay`。WHEN 玩家确认重玩 THEN `PanelReplay` SHALL 立即隐藏，系统 SHALL 恢复确认前同一份灰色撕开选中视觉，再重置会话并执行统一转场；不得从隐藏的列表槽位重新克隆卡包，卡包颜色、撕开样式、尺寸和位置不得改变。
 18. WHEN GameScene 激活 THEN 棋盘、PieceBoard 与游戏按钮入场 SHALL 和卡包慢速下落并行开始；卡包越过初始碎片区域后 SHALL 加速掉出屏幕。
 19. WHEN 卡包完整下落到初始碎片区域下方 THEN 首页装饰 `ProgressPieces` SHALL 隐藏，GameScene 当前组真实 Piece SHALL 保持叠放直到各自错峰时间到达，再与卡包加速下坠并行直飞托盘终点。
-20. WHEN 完整彩色卡包通过点击或滑动开始拆包 THEN 系统 SHALL 读取 SQLite 已拼 Piece 编号，按 GameScene 相同规则从对应 `CardBagNNN.prefab` 选择首个仍有未完成 Piece 的组，并且只创建该组尚未拼上的真实 Piece Sprite；已经拼在棋盘上的 Piece SHALL NOT 重复创建。系统 SHALL 以场景 `PackObject/fx_chai_w_001` 的实际世界位置作为撕口锚点，让碎片使用 `IngameCoverShadow04` 并在卡包后方从撕口向上冒出。碎片 SHALL 沿用首页 `86px * 1.4` 的最大边基准，并与卡包从 `240x272` 放大到 `600x680` 使用相同比例，展开状态最大边约为 `301px`。WHEN `Take 001` 到达 `0.800s` 纵向最高点并开始下落 THEN 系统 SHALL 保存临时碎片散点中心、隐藏临时 Piece 并立即激活已预加载的 GameScene；当前组同数量的真实可交互 Piece SHALL 在同一屏幕位置接管，且与棋盘、托盘和游戏按钮入场同步开始。制作方 3D 卡包模型与 `fx_chai_w_001` SHALL 跨场景继续完成原动画下落和滑光收尾，到原 `1.600s` 可见窗口后自动清理；不得恢复撕开静态包、创建第二份卡包下落、创建 `CardPackGameEntranceTransition`，也不得增加完整包专属静止等待、淡入、预散开、起点覆盖或重复 Piece。彩色进行中包和灰色重玩包 SHALL 保持第 16、18、19 条的可见卡包越过后发牌规则。
+20. WHEN 完整彩色卡包通过点击或滑动开始拆包 THEN 系统 SHALL 读取 SQLite 已拼 Piece 编号，按 GameScene 相同规则从对应 `CardBagNNN.prefab` 选择首个仍有未完成 Piece 的组，并且只创建该组尚未拼上的真实 Piece Sprite；已经拼在棋盘上的 Piece SHALL NOT 重复创建。系统 SHALL 以场景 `PackObject/fx_chai_w_001` 的实际世界位置作为撕口锚点，让碎片使用 `IngameCoverShadow04` 并在卡包后方从撕口向上冒出。碎片 SHALL 沿用首页 `86px * 1.4` 的最大边基准，并与卡包从 `240x272` 放大到 `600x680` 使用相同比例，展开状态最大边约为 `301px`。WHEN `Take 001` 到达 `0.800s` 纵向最高点并开始下落 THEN 系统 SHALL 保存临时碎片散点中心、隐藏临时 Piece 并立即激活已预加载的 GameScene；当前组同数量的真实可交互 Piece SHALL 在同一屏幕位置接管，且与棋盘、托盘和游戏按钮入场同步开始。制作方 3D 卡包模型与 `fx_chai_w_001` SHALL 跨场景继续完整播放：模型约 `1.833s`，光效按 `0.5s` 延迟加约 `3.033s` 控制轨道运行，整体约 `3.533s` 后才自动清理；不得恢复撕开静态包、创建第二份卡包下落、创建 `CardPackGameEntranceTransition`，也不得增加完整包专属静止等待、淡入、预散开、起点覆盖或重复 Piece。彩色进行中包和灰色重玩包 SHALL 保持第 16、18、19 条的可见卡包越过后发牌规则。
 
 ### 设计与任务
 
@@ -951,11 +951,12 @@
 
 1. WHEN 完整彩色卡包的撕开滑光在模型播放后 `0.5s` 启动 THEN 首个未完成组中尚未拼上的全部交接碎片 SHALL 在同一帧直接显示，不得使用 Alpha 渐显或逐片启动延迟；已经持久化为拼好的 Piece SHALL NOT 再次创建。
 2. WHEN 交接碎片显示 THEN SHALL 立即使用最终显示尺寸，不得再从 `40%` 缓动放大到 `100%`。
-3. 交接碎片 SHALL 使用 `IngameCoverShadow04`，从实际撕口下方、卡包模型后层出发，在 `0.32s` 内 EaseOut 向上短跳；跳跃中心高度 SHALL 约为卡包显示高度 `8%`，不得跳到原 `24%~27.6%` 高位。
+3. 交接碎片 SHALL 使用 `IngameCoverShadow04`，从实际撕口下方、卡包模型后层出发，在 `0.32s` 内 EaseOut 向上短跳；跳跃中心高度 SHALL 约为卡包显示高度 `8%`，不得跳到原 `24%~27.6%` 高位。完整拆包舞台的背景、Piece、卡包正面 Render Queue SHALL 分别为 `1999/2000/2001`；不得仅依赖 Sorting Order 或通用 Shader 深度测试。滑光和星星的透明队列 SHALL NOT 改变。
 4. WHEN 交接碎片短跳 THEN 终点 SHALL 使用与彩色撕开真实 Piece 相同的黄金角散点公式和 `20` 倍半径；MainScene SHALL 保存散点中心，GameScene SHALL 从同一中心按相同公式重建真实可交互 Piece，不得在场景交接时聚拢或跳位。
 5. WHEN 完整彩包进入 GameScene THEN 当前组 Piece SHALL 与彩色撕开共用最终 `TrayScale`、`20` 倍起始散点、`0.027s` 错峰、`0.39s` 单片飞行，以及相同的棋盘、托盘和按钮入场参数。
 6. 完整彩包已经完成模型撕开，SHALL NOT 恢复静态撕开包、创建 `CardPackGameEntranceTransition` 或创建第二份卡包下落；制作方 3D 模型 SHALL 从 `0.800s` 交接点跨场景继续完成自身原始下落。
-7. WHEN 完整彩包、彩色撕开或灰色撕开进入 GameScene 并准备发牌 THEN 当前组真实 Piece SHALL 统一使用 `IngameCoverShadow04` 初始阴影，并保持在仍可见卡包的渲染层下方，直到卡包移过碎片位置后开始飞向托盘。
+7. WHEN 完整彩包、彩色撕开或灰色撕开进入 GameScene 并准备发牌 THEN 当前组真实 Piece SHALL 统一使用 `IngameCoverShadow04` 初始阴影。完整彩包接管 Piece 在撕口初始稳定帧 SHALL 使用 Render Queue `2000`，正式飞向托盘前 SHALL 恢复初始阴影材质原始队列；彩色撕开和灰色撕开的跨场景 UGUI 卡包继续使用既有 Canvas 层级。
+8. WHEN 完整彩包在 `0.800s` 交接到 GameScene THEN 跨场景开包对象 SHALL 在新加载场景自身的 MainCamera 上继续渲染 EffectLayer 31，直至动画自然结束。光效正式控制时段结束后 SHALL 先停止发射并等待现存粒子自然结束，MUST NOT 使用立即清空造成尾帧截断。
 
 ### 设计与任务
 

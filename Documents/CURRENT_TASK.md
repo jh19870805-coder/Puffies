@@ -12,21 +12,31 @@
   4. 用 `CardBag019` 进入 GameScene 验证当前组 Piece 正常显示，并检查最新 `Editor.log` 不再出现 `GameScene: groove image missing sprite`。
   5. 将本节状态更新为“已完成”，写明验证结果；本任务不得重新生成或覆盖 `CardBag019.prefab`，除非校验确实失败且用户另有指令。
 
+## 2026-08-28 拆包动画跨场景续播与碎片后层修复
+
+- 状态：根因修复完成，Runtime/Editor 编译通过，等待 Unity Play Mode 视觉验收。
+- 前一轮按固定总时长延后清理仍未解决实际消失：拆包对象虽然已转为 `DontDestroyOnLoad`，但 GameScene 的新 Main Camera 没有包含专用 EffectLayer 31，因此在 `0.800s` 场景交接时视觉上立即消失。本轮在新场景加载后只查找该场景自身的 MainCamera，将 EffectLayer 临时加入其 Culling Mask；特效自然结束并清理时恢复该相机原始 Mask。
+- 光效在制作方 `0.5s + 3.033s` 控制时段结束后不再立即 `StopEmittingAndClear`。现在先对全部 ParticleSystem 执行 `StopEmitting`，等待现有粒子 `IsAlive` 自然结束后再清理；`10s` 仅作为异常循环粒子的泄漏兜底，不参与正常节奏。
+- 前一轮只给碎片阴影 Shader 增加 `LessEqual` 深度测试没有改变碎片本体的绘制顺序，无法可靠把它压到卡包后面。本轮撤销该通用 Shader 改动；完整彩包拆包阶段明确使用背景 `1999`、临时碎片 `2000`、卡包正面 `2001` 的连续 Render Queue。GameScene 接管碎片只在撕口初始两帧保持 `2000`，正式飞向托盘前恢复 `IngameCoverShadow04` 原始队列，避免被游戏 UI 遮挡。
+- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Assets/Scripts/Controller/GameScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
+- 验证：`dotnet build Assembly-CSharp.csproj --no-restore` 与 `dotnet build Assembly-CSharp-Editor.csproj --no-restore` 均为 `0` 警告、`0` 错误；`git diff --check` 通过。仍需在 Unity Play Mode 确认模型和滑光跨入 GameScene 后不闪断、尾粒子自然消失，以及碎片从撕口出现时始终位于卡包实体后层。
+
 ## 2026-08-27 拆包碎片速度、数量、阴影与层级
 
 - 状态：代码修改完成并通过 Runtime/Editor 编译，等待 Unity Play Mode 视觉验收。
 - 完整彩包拆包时不再固定读取第一组全部 Piece；MainScene 读取 SQLite 已拼编号，按照和 GameScene 相同的规则选择首个仍有未完成 Piece 的组，只创建该组尚未拼上的真实碎片。已经拼在棋盘上的 Piece 不会在拆包阶段重复出现，临时视觉数量与 GameScene 接管后的真实可交互数量一致。
 - 完整彩包碎片从撕口冒出的 EaseOut 时长由 `0.16s` 调整为 `0.32s`，启动点、最终尺寸、散点范围、`0.800s` 场景交接点和后续发牌参数不变。
-- MainScene 临时碎片使用 `IngameCoverShadow04` 的 SpriteRenderer 兼容运行时材质和 FullRect Sprite，并继承卡包 Sorting Layer、排在卡包最低 Sorting Order 下一层，同时保留比卡包更远的世界深度。GameScene 在三种卡包入口发牌前统一重新应用初始碎片阴影，因此完整彩包、彩色撕开和灰色撕开的真实碎片均带阴影。
+- MainScene 临时碎片使用 `IngameCoverShadow04` 的 SpriteRenderer 兼容运行时材质和 FullRect Sprite。该节最初尝试的通用 Shader `LessEqual` 深度方案已被 2026-08-28 的修复废弃并撤销，实际层级改由背景 `1999`、碎片 `2000`、卡包 `2001` 的 Render Queue 保证。GameScene 在三种卡包入口发牌前仍统一应用 `IngameCoverShadow04` 初始阴影。
+- 移除 `ModelVisibleDuration=1.6s` 对制作方动画的强制截断。GameScene 仍在 `Take 001` 的 `0.800s` 下落关键帧交接；跨场景特效继续保留，模型 Clip 完整播放约 `1.833s`，`fx_chai_w_001` 按 `0.5s` 延迟加约 `3.033s` 正式控制轨道完整播放，整体约 `3.533s` 后才停止粒子并清理对象。
 - 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Assets/Scripts/Controller/GameScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
-- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译通过，均为 `0` 警告、`0` 错误；`git diff --check` 通过。仍需在 Play Mode 分别验证三种状态的碎片阴影、卡包遮挡关系，并用存在部分已拼进度的卡包确认拆包阶段不重复创建已拼 Piece。
+- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译通过，均为 `0` 警告、`0` 错误；Unity 已刷新修改后的 Shader，最新 `Editor.log` 未出现 Shader error；`git diff --check` 通过。仍需在 Play Mode 分别验证三种状态的碎片阴影、完整彩包卡包实体/撕口遮挡关系、完整 `3.533s` 特效收尾，并用存在部分已拼进度的卡包确认拆包阶段不重复创建已拼 Piece。
 
 ## 2026-08-27 完整彩包下落与游戏入场同步
 
 - 状态：代码修改完成并通过 Runtime/Editor 编译，等待 Unity Play Mode 视觉验收。
 - 使用 Unity `AnimationUtility` 读取制作方 `CardPackOpeningAnimation.FBX/Take 001` 曲线，确认卡包骨骼在 `0.800s` 到达纵向最高点、下一帧开始下落；原流程等待到 `1.600s` 才激活 GameScene，导致碎片完成 `0.16s` 短跳后存在约 `0.77s` 的额外空档。
 - `CardPackOpeningEffect` 改为自行驱动完整播放；MainScene 在 `0.800s` 真实下落节点保存散点中心并立即激活预加载完成的 GameScene。棋盘、托盘、按钮和真实 Piece 从该节点开始原有并行动画，不修改 `0.39s` 单片发牌、`0.027s` 错峰、Piece 缩放或棋盘/托盘自身时长。
-- 场景交接时隐藏 MainScene 临时 Piece，开包 3D 模型与 `fx_chai_w_001` 转为短期跨场景对象，继续完成制作方原始下落和滑光收尾，到原 `1.600s` 可见窗口结束后自动清理；不恢复静态撕开包，不创建第二份卡包下落视觉。
+- 场景交接时隐藏 MainScene 临时 Piece，开包 3D 模型与 `fx_chai_w_001` 转为短期跨场景对象；最新规则取消旧 `1.600s` 清理上限，模型完整播放约 `1.833s`，光效按制作方控制轨道播放到约 `3.533s` 后自动清理。不恢复静态撕开包，不创建第二份卡包下落视觉。
 - 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
 - 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译通过，均为 `0` 警告、`0` 错误；Unity 批处理资源刷新成功。仍需在 MainScene Play Mode 验收滑光完成、卡包开始下落、棋盘/托盘进场三者的实际同拍效果，并确认场景交接没有重复 Piece、卡包闪断或粒子残留。
 

@@ -124,6 +124,7 @@ public class MainScene : MonoBehaviour
     private const string SelectedPackageImageObjectName = "SelectedCardPackImage";
     private const string OpeningStageBackgroundObjectName = "CardPackOpeningStageBackground";
     private const string OpeningStageBackgroundPath = GameDefine.UiRoot + "/BasicUI/BgGame.png";
+    private const int OpeningStageBackgroundRenderQueue = 1999;
     private const string BagSelectPlayButtonObjectName = "BtnPlay";
     private const string BagSelectBackButtonObjectName = "BtnBack";
     private const string BagSelectCameraButtonObjectName = "BtnCamera";
@@ -1294,7 +1295,7 @@ public class MainScene : MonoBehaviour
             mOpeningStageBackgroundMaterial = new Material(backgroundShader)
             {
                 name = "CardPackOpeningStageBackground (Runtime)",
-                renderQueue = (int)UnityEngine.Rendering.RenderQueue.Geometry
+                renderQueue = OpeningStageBackgroundRenderQueue
             };
             mOpeningStageBackgroundRenderer.sharedMaterial = mOpeningStageBackgroundMaterial;
         }
@@ -4739,11 +4740,11 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
     private const float ReferenceModelScale = 2.63f;
     private const float ReferenceModelLocalZ = 0f;
     private const float ModelWorldDepth = -1f;
-    private const float ModelVisibleDuration = 1.6f;
     // Take 001 reaches its vertical apex at 0.800s and starts dropping next frame.
     private const float GameEntranceHandoffTime = 0.8f;
     private const float LightEffectDelay = 0.5f;
-    private const float LightEffectVisibleDuration = 1.1f;
+    private const float LightEffectVisibleDuration = 3.0333334f;
+    private const float LightEffectTailMaximumDuration = 10f;
     private const float PieceEmergeDelay = LightEffectDelay;
     private const float PieceEmergeDuration = 0.32f;
     private const float PieceMaximumPackHeightRatio =
@@ -4795,6 +4796,7 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
     private bool mIsPlaying;
     private bool mIsPrepared;
     private bool mHasHandedOffToGameScene;
+    private bool mIsWaitingForSceneCamera;
 
     public static void PrepareSceneLightEffect()
     {
@@ -4979,6 +4981,8 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         }
 
         mHasHandedOffToGameScene = true;
+        SceneManager.sceneLoaded += HandleSceneLoaded;
+        mIsWaitingForSceneCamera = true;
         for (var i = 0; i < mEmergedPieceRenderers.Count; i++)
         {
             if (mEmergedPieceRenderers[i] != null)
@@ -5003,14 +5007,53 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         }
     }
 
+    private void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        if (!mHasHandedOffToGameScene || !mIsWaitingForSceneCamera)
+        {
+            return;
+        }
+
+        StartCoroutine(BindToLoadedSceneCamera(scene));
+    }
+
+    private IEnumerator BindToLoadedSceneCamera(Scene loadedScene)
+    {
+        Camera loadedCamera = null;
+        while (loadedCamera == null)
+        {
+            var rootObjects = loadedScene.GetRootGameObjects();
+            for (var i = 0; i < rootObjects.Length && loadedCamera == null; i++)
+            {
+                var cameras = rootObjects[i].GetComponentsInChildren<Camera>(true);
+                for (var cameraIndex = 0; cameraIndex < cameras.Length; cameraIndex++)
+                {
+                    if (cameras[cameraIndex].CompareTag("MainCamera"))
+                    {
+                        loadedCamera = cameras[cameraIndex];
+                        break;
+                    }
+                }
+            }
+
+            if (loadedCamera == null)
+            {
+                yield return null;
+            }
+        }
+
+        BindEffectLayerToCamera(loadedCamera);
+        mIsWaitingForSceneCamera = false;
+    }
+
     private IEnumerator PlayToCompletion()
     {
         var elapsed = Mathf.Max(0f, Time.time - mPlaybackStartTime);
         var lightStarted = false;
-        var playbackDuration = Mathf.Max(
-            Mathf.Min(mAnimationDuration, ModelVisibleDuration),
+        var controlledPlaybackDuration = Mathf.Max(
+            mAnimationDuration,
             LightEffectDelay + LightEffectVisibleDuration);
-        while (elapsed < playbackDuration)
+        while (elapsed < controlledPlaybackDuration)
         {
             elapsed += Time.deltaTime;
             if (!lightStarted && elapsed >= LightEffectDelay)
@@ -5025,6 +5068,15 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         }
 
         CompleteEmergedPieces();
+        StopSceneLightEffectEmission();
+        var tailElapsed = 0f;
+        while (IsSceneLightEffectAlive()
+               && tailElapsed < LightEffectTailMaximumDuration)
+        {
+            tailElapsed += Time.unscaledDeltaTime;
+            yield return null;
+        }
+
         ReleaseSceneLightEffect();
         mIsPlaying = false;
         mPlaybackCoroutine = null;
@@ -5176,6 +5228,9 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
             name = template.name + " (Opening SpriteRenderer Runtime)"
         };
         mPieceShadowMaterial.EnableKeyword(SpriteRendererShadowKeyword);
+        mPieceShadowMaterial.renderQueue = Mathf.Max(
+            1000,
+            mFrontMaterial != null ? mFrontMaterial.renderQueue - 1 : 2000);
     }
 
     private Sprite GetOrCreateFullRectPieceSprite(Sprite source)
@@ -5299,10 +5354,32 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
 
         mWorldRoot = new GameObject("CardPackOpeningEffectWorld");
         mWorldRoot.layer = EffectLayer;
-        mOriginalCameraCullingMask = mMainCamera.cullingMask;
-        mMainCamera.cullingMask |= 1 << EffectLayer;
-        mDidOverrideCameraCullingMask = true;
+        BindEffectLayerToCamera(mMainCamera);
         return true;
+    }
+
+    private void BindEffectLayerToCamera(Camera camera)
+    {
+        if (camera == null || camera == mMainCamera && mDidOverrideCameraCullingMask)
+        {
+            return;
+        }
+
+        RestoreCameraCullingMask();
+        mMainCamera = camera;
+        mOriginalCameraCullingMask = camera.cullingMask;
+        camera.cullingMask |= 1 << EffectLayer;
+        mDidOverrideCameraCullingMask = true;
+    }
+
+    private void RestoreCameraCullingMask()
+    {
+        if (mMainCamera != null && mDidOverrideCameraCullingMask)
+        {
+            mMainCamera.cullingMask = mOriginalCameraCullingMask;
+        }
+
+        mDidOverrideCameraCullingMask = false;
     }
 
     private bool TryFitStageToDisplayedPack(Transform stageRoot, RectTransform displayedPackRect)
@@ -5534,6 +5611,41 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         }
     }
 
+    private void StopSceneLightEffectEmission()
+    {
+        if (mLightEffectObject == null)
+        {
+            return;
+        }
+
+        var particleSystems = mLightEffectObject.GetComponentsInChildren<ParticleSystem>(true);
+        for (var i = 0; i < particleSystems.Length; i++)
+        {
+            particleSystems[i].Stop(
+                false,
+                ParticleSystemStopBehavior.StopEmitting);
+        }
+    }
+
+    private bool IsSceneLightEffectAlive()
+    {
+        if (mLightEffectObject == null)
+        {
+            return false;
+        }
+
+        var particleSystems = mLightEffectObject.GetComponentsInChildren<ParticleSystem>(true);
+        for (var i = 0; i < particleSystems.Length; i++)
+        {
+            if (particleSystems[i].IsAlive(false))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private void ReleaseSceneLightEffect()
     {
         if (mLightEffectObject == null)
@@ -5568,12 +5680,9 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         mIsPrepared = false;
         mHasHandedOffToGameScene = false;
 
-        if (mMainCamera != null && mDidOverrideCameraCullingMask)
-        {
-            mMainCamera.cullingMask = mOriginalCameraCullingMask;
-        }
-
-        mDidOverrideCameraCullingMask = false;
+        SceneManager.sceneLoaded -= HandleSceneLoaded;
+        mIsWaitingForSceneCamera = false;
+        RestoreCameraCullingMask();
 
         ReleaseSceneLightEffect();
 

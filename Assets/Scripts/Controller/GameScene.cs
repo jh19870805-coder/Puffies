@@ -168,6 +168,7 @@ public class GameScene : MonoBehaviour
     private static readonly int ShineColorId = Shader.PropertyToID("_ShineColor");
     private static readonly int SpritePixelsPerUnitId = Shader.PropertyToID("_SpritePixelsPerUnit");
     private static readonly int ShadowColorId = Shader.PropertyToID("_ShadowColor");
+    private const int OpeningPieceRenderQueue = 2000;
     private static readonly Vector2 TutorialStrongPromptAnchor = new Vector2(0.5f, 0.7f);
     private static readonly Vector2 TutorialStrongPromptOffset = new Vector2(-30f, -50f);
     private static readonly Vector2 TutorialHintPromptAnchor = new Vector2(0.73f, 0.76f);
@@ -865,6 +866,7 @@ public class GameScene : MonoBehaviour
         float pieceStagger,
         float pieceStartSpreadMultiplier)
     {
+        SetInitialPieceRenderQueueBehindPack(startVisibleAtOpeningOrigin);
         var camera = Camera.main;
         var boardCenter = _board.GameBoardImage != null && camera != null
             ? GameCommonUtility.RectTransformToCameraWorld(
@@ -941,6 +943,13 @@ public class GameScene : MonoBehaviour
             pieceTargets,
             pieceTargetScales);
 
+        if (startVisibleAtOpeningOrigin)
+        {
+            // The opening pack only needs to occlude the pieces while they are revealed at
+            // the tear. Restore the gameplay queue before the pieces fly over the board UI.
+            SetInitialPieceRenderQueueBehindPack(false);
+        }
+
         Coroutine packExitCoroutine = null;
         if (waitForPackTransition)
         {
@@ -1013,6 +1022,8 @@ public class GameScene : MonoBehaviour
         {
             yield return packExitCoroutine;
         }
+
+        SetInitialPieceRenderQueueBehindPack(false);
     }
 
     private void CacheCurrentGroupPieceDealTargets(
@@ -2184,6 +2195,24 @@ public class GameScene : MonoBehaviour
                     _defaultPieceShadowMaterial,
                     ref _runtimeDefaultPieceShadowMaterial);
         }
+    }
+
+    private void SetInitialPieceRenderQueueBehindPack(bool enabled)
+    {
+        if (!EnsureCardBagShadowMaterials())
+        {
+            return;
+        }
+
+        var material = GetOrCreatePieceRendererShadowMaterial(PieceShadowStyle.Initial);
+        if (material == null)
+        {
+            return;
+        }
+
+        material.renderQueue = enabled
+            ? OpeningPieceRenderQueue
+            : _defaultPieceShadowMaterial.renderQueue;
     }
 
     private static Material GetOrCreatePieceRendererShadowMaterial(
