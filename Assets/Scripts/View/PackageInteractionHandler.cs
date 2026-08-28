@@ -63,6 +63,7 @@ public class PackageInteractionHandler : MonoBehaviour,
     public void OnBeginDrag(PointerEventData eventData)
     {
         mIsDragging = true;
+        mOwner?.HandlePackageListBeginDrag();
         mScrollRect?.OnBeginDrag(eventData);
     }
 
@@ -75,6 +76,7 @@ public class PackageInteractionHandler : MonoBehaviour,
     public void OnEndDrag(PointerEventData eventData)
     {
         mScrollRect?.OnEndDrag(eventData);
+        mOwner?.HandlePackageListEndDrag();
         mPointerDown = false;
         mIsDragging = false;
     }

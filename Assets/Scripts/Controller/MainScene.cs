@@ -7,6 +7,7 @@ using TMPro;
 using UnityEditor;
 #endif
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.Networking;
 using UnityEngine.Playables;
 using UnityEngine.SceneManagement;
@@ -27,6 +28,8 @@ public class MainScene : MonoBehaviour
     internal const float PackageCoverHeight = 272f;
     private const float PackageHorizontalSpacing = 20f;
     private const float PackageVerticalSpacing = 20f;
+    private const float PackageEdgeFadeWidth = PackageSlotWidth * 0.75f;
+    private const float PackagePageSnapDuration = 0.26f;
     private const float DefaultPackagePageWidth = 1625f;
     private const float DefaultPackagePageHeight = 950f;
     private const int PackagesPerPageRowCount = 3;
@@ -163,6 +166,7 @@ public class MainScene : MonoBehaviour
     private RectTransform mPackageContentRoot;
     private RectTransform mPackagePageTemplate;
     private ScrollRect mPackageScrollRect;
+    private Coroutine mPackagePageSnapCoroutine;
     private GameObject mMenuPanelRoot;
     private GameObject mSettingsPanelRoot;
     private GameObject mUsablePanelRoot;
@@ -259,6 +263,7 @@ public class MainScene : MonoBehaviour
         public Image SizeImage;
         public PackCoverVisualSettings VisualSettings;
         public Animator PackAnimator;
+        public CanvasGroup FadeCanvasGroup;
         public GameObject ProgressPiecesRoot;
         public List<InProgressPackagePieceAnimation> ProgressPieceAnimations;
         public RectTransform RectTransform;
@@ -450,6 +455,7 @@ public class MainScene : MonoBehaviour
 
     private void OnDestroy()
     {
+        StopPackagePageSnap();
         StopOpeningHintAnimation();
         if (mSelectedPackageOverlayCanvas != null)
         {
@@ -606,7 +612,25 @@ public class MainScene : MonoBehaviour
     {
         return !mHasSwitchedToGameScene
             && !mIsPlayingAnimation
+            && mPackagePageSnapCoroutine == null
             && mSelectedPackageEntry == null;
+    }
+
+    public void HandlePackageListBeginDrag()
+    {
+        StopPackagePageSnap();
+        mPackageScrollRect?.StopMovement();
+    }
+
+    public void HandlePackageListEndDrag()
+    {
+        if (mPackageScrollRect == null || !isActiveAndEnabled)
+        {
+            return;
+        }
+
+        StopPackagePageSnap();
+        mPackagePageSnapCoroutine = StartCoroutine(SnapPackageListToNearestPage());
     }
 
     public bool TryGetPackageFlyTarget(int bagId, out RectTransform target)
@@ -1655,9 +1679,107 @@ public class MainScene : MonoBehaviour
 
         mPackageScrollRect.horizontal = true;
         mPackageScrollRect.vertical = false;
+        ConfigurePackagePageSnapInput(scrollViewObject);
         mPackagePageTemplate.gameObject.SetActive(true);
         NormalizePagedPackageLayout();
         return true;
+    }
+
+    private void ConfigurePackagePageSnapInput(GameObject scrollViewObject)
+    {
+        if (scrollViewObject == null)
+        {
+            return;
+        }
+
+        var eventTrigger = scrollViewObject.GetComponent<EventTrigger>();
+        if (eventTrigger == null)
+        {
+            eventTrigger = scrollViewObject.AddComponent<EventTrigger>();
+        }
+
+        if (eventTrigger.triggers == null)
+        {
+            eventTrigger.triggers = new List<EventTrigger.Entry>();
+        }
+
+        var beginDragEntry = new EventTrigger.Entry
+        {
+            eventID = EventTriggerType.BeginDrag
+        };
+        beginDragEntry.callback.AddListener(_ => HandlePackageListBeginDrag());
+        eventTrigger.triggers.Add(beginDragEntry);
+
+        var endDragEntry = new EventTrigger.Entry
+        {
+            eventID = EventTriggerType.EndDrag
+        };
+        endDragEntry.callback.AddListener(_ => HandlePackageListEndDrag());
+        eventTrigger.triggers.Add(endDragEntry);
+    }
+
+    private IEnumerator SnapPackageListToNearestPage()
+    {
+        var pageCount = 0;
+        if (mPackageContentRoot != null)
+        {
+            for (var i = 0; i < mPackageContentRoot.childCount; i++)
+            {
+                var page = mPackageContentRoot.GetChild(i);
+                if (page.gameObject.activeSelf
+                    && page.name.StartsWith(PackagePageObjectPrefix))
+                {
+                    pageCount++;
+                }
+            }
+        }
+
+        var maximumPageIndex = Mathf.Max(0, pageCount - 1);
+        var currentPosition = Mathf.Clamp01(mPackageScrollRect.horizontalNormalizedPosition);
+        var pagePosition = currentPosition * maximumPageIndex;
+        var pageIndex = maximumPageIndex > 0
+            ? Mathf.Clamp(Mathf.FloorToInt(pagePosition + 0.5f), 0, maximumPageIndex)
+            : 0;
+        var targetPosition = maximumPageIndex > 0
+            ? pageIndex / (float)maximumPageIndex
+            : 0f;
+
+        mPackageScrollRect.StopMovement();
+        if (Mathf.Abs(currentPosition - targetPosition) <= 0.0001f)
+        {
+            mPackageScrollRect.horizontalNormalizedPosition = targetPosition;
+            mPackagePageSnapCoroutine = null;
+            yield break;
+        }
+
+        var elapsed = 0f;
+        while (elapsed < PackagePageSnapDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            var normalized = Mathf.Clamp01(elapsed / PackagePageSnapDuration);
+            var eased = 1f - Mathf.Pow(1f - normalized, 3f);
+            mPackageScrollRect.StopMovement();
+            mPackageScrollRect.horizontalNormalizedPosition = Mathf.LerpUnclamped(
+                currentPosition,
+                targetPosition,
+                eased);
+            yield return null;
+        }
+
+        mPackageScrollRect.StopMovement();
+        mPackageScrollRect.horizontalNormalizedPosition = targetPosition;
+        mPackagePageSnapCoroutine = null;
+    }
+
+    private void StopPackagePageSnap()
+    {
+        if (mPackagePageSnapCoroutine == null)
+        {
+            return;
+        }
+
+        StopCoroutine(mPackagePageSnapCoroutine);
+        mPackagePageSnapCoroutine = null;
     }
 
     private IEnumerator RefreshPackageList()
@@ -1699,6 +1821,8 @@ public class MainScene : MonoBehaviour
         RefreshPackagePageLayout();
         if (mPackageScrollRect != null)
         {
+            StopPackagePageSnap();
+            mPackageScrollRect.StopMovement();
             mPackageScrollRect.horizontalNormalizedPosition = 0f;
         }
 
@@ -1785,6 +1909,16 @@ public class MainScene : MonoBehaviour
         var sizeImage = FindChild(slotObject.transform, PackSizeObjectName)?.GetComponent<Image>();
         var packNode = FindChild(slotObject.transform, PackNodeObjectName) as RectTransform;
         var packAnimator = packNode != null ? packNode.GetComponent<Animator>() : null;
+        var fadeCanvasGroup = slotObject.GetComponent<CanvasGroup>();
+        if (fadeCanvasGroup == null)
+        {
+            fadeCanvasGroup = slotObject.AddComponent<CanvasGroup>();
+        }
+
+        fadeCanvasGroup.alpha = 1f;
+        fadeCanvasGroup.interactable = true;
+        fadeCanvasGroup.blocksRaycasts = true;
+        fadeCanvasGroup.ignoreParentGroups = false;
         EnsurePackageBackgroundBehindCover(backgroundImage, coverImage);
         PreparePagedPackageItem(
             slotObject,
@@ -1804,6 +1938,7 @@ public class MainScene : MonoBehaviour
             SizeImage = sizeImage,
             VisualSettings = visualSettings,
             PackAnimator = packAnimator,
+            FadeCanvasGroup = fadeCanvasGroup,
             RectTransform = rootRect
         };
         return entry;
@@ -2339,6 +2474,13 @@ public class MainScene : MonoBehaviour
                 && !panelsObscurePackages
                 && entry.Root.activeInHierarchy
                 && IsRectVisibleInViewport(anchor, viewport);
+            if (entry.FadeCanvasGroup != null)
+            {
+                entry.FadeCanvasGroup.alpha = shouldRender
+                    ? CalculatePackageEdgeFadeAlpha(entry.RectTransform, viewport)
+                    : 0f;
+            }
+
             SetPackageCoverVisible(entry, shouldRender);
             SetPackageBackgroundVisible(entry, shouldRender);
             SetPackageSizeImageVisible(entry, shouldRender);
@@ -2372,6 +2514,23 @@ public class MainScene : MonoBehaviour
             && bounds.min.x <= viewportRect.xMax
             && bounds.max.y >= viewportRect.yMin
             && bounds.min.y <= viewportRect.yMax;
+    }
+
+    private static float CalculatePackageEdgeFadeAlpha(
+        RectTransform target,
+        RectTransform viewport)
+    {
+        if (target == null || viewport == null || PackageEdgeFadeWidth <= 0f)
+        {
+            return 1f;
+        }
+
+        var bounds = RectTransformUtility.CalculateRelativeRectTransformBounds(viewport, target);
+        var viewportRect = viewport.rect;
+        var visibleFromLeft = bounds.max.x - viewportRect.xMin;
+        var visibleFromRight = viewportRect.xMax - bounds.min.x;
+        return Mathf.Clamp01(
+            Mathf.Min(visibleFromLeft, visibleFromRight) / PackageEdgeFadeWidth);
     }
 
     private static Rect GetScreenRect(RectTransform rectTransform, Camera camera)

@@ -1,5 +1,15 @@
 # 当前任务
 
+## 2026-08-28 首页卡包列表边缘渐隐与整页吸附
+
+- 状态：代码修改完成，Runtime/Editor 编译通过，等待 Unity Play Mode 视觉与手感验收。
+- 边缘渐变：运行时卡包根节点统一使用 CanvasGroup；卡包在 Viewport 左右边缘进入或离开时，按实际剩余可见宽度在 `180px` 范围内从 `0` 到 `1` 渐变。完全位于 Viewport 内时保持原始 Alpha，封面、撕开背景、尺寸标识、装饰碎片和呼吸动画一起淡入淡出，不叠加白色或灰色蒙版。
+- 整页吸附：卡包列表拖拽松手后立即停止原 ScrollRect 惯性，按 Content 当前活动页数选择最近整数页，并在 `0.26s` 内 EaseOut 滑到完整页面；单页固定在第一页，刷新列表时取消旧吸附并归零。
+- 输入覆盖：从卡包起手继续由 `PackageInteractionHandler` 转发 ScrollRect，同时通知 MainScene；从列表空白区域起手由 ScrollView 运行时 EventTrigger 通知 MainScene。两者共用同一吸附逻辑。吸附期间不接受卡包点击，新拖拽可立即中断吸附。
+- 保留：每页 `18` 个、页面尺寸、卡包顺序、点击选择、状态显隐、呼吸动画和资源均未修改；未新增脚本文件，未修改 MainScene 场景或 PackItem Prefab。
+- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Assets/Scripts/View/PackageInteractionHandler.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
+- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译通过，均为 `0` 警告、`0` 错误。仍需验证卡包起手、空白起手、慢拖、快拖、第一页、末页和边缘渐变观感。
+
 ## 2026-08-28 卡包独立放大页底部按钮滑入
 
 - 状态：代码修改完成，Runtime/Editor 编译通过，等待 Unity Play Mode 视觉验收。

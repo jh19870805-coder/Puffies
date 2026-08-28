@@ -348,6 +348,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 ### 卡包展示与开包表现
 
 - 首页列表的卡包主体使用 `Assets/UI/PackImages/PackIconNNN.png` 静态图；`PackItem.prefab` 不嵌套 3D 卡包特效 Prefab，也不再包含旧 UGUI `PackHighlight` ADD 高光贴片。列表保留封面投影、尺寸图标、`ImgLight` 和美术 Animator。`PackNode.controller` 默认循环播放 `PackAniBreath`；程序不生成或覆盖呼吸曲线，只将完成且无活动会话的灰色卡包速度设为正常速度的 `1/3`，彩色及活动重玩卡包保持正常速度。每个列表项按 PackId 计算稳定的黄金分割归一化起始相位，避免同屏动画同步，并保证刷新与跨设备结果一致。
+  - 卡包列表按每页 `18` 个组织为与 Viewport 等宽的横向 `Page_N`。拖拽松手后停止 ScrollRect 惯性，按当前活动页数选择最近页，并在 `0.26s` 内 EaseOut 吸附到完整页面；卡包和空白区域起手共用该逻辑，吸附期间锁定卡包点击但允许新拖拽接管。每个运行时卡包根节点使用 CanvasGroup 按左右剩余可见宽度做 `180px` 边缘 Alpha 渐变；完全进入 Viewport 后 Alpha 必须恢复为 `1`，不得用白色或灰色覆盖图模拟渐变。
 - MainScene 主 Canvas 使用 `Screen Space - Camera`，`World Camera` 固定为场景 `Main Camera`，Plane Distance 为 `10`；`MainScene.ConfigureMainCanvas` 在运行时复用统一 Canvas 配置再次校正，确保 `PackItem` 封面、尺寸图标、`ImgLight` 和首页主 UI 经过同一摄像机渲染。
 - LoadingScene 启动时并行异步预加载 MainScene 以及当前已解锁卡包的封面/尺寸图；图片使用 `UnityWebRequestTexture` 异步解码并缓存为 Sprite，只有最短 `2.5s`、MainScene 达到 `90%` 待激活点且列表图片预热完成后才显示 `100%` 并开放场景激活。MainScene 列表必须复用该缓存，并按每帧最多 4 个卡包分批创建，不能恢复为首帧逐张 `File.ReadAllBytes + Texture2D.LoadImage` 和集中 Instantiate。
 - Unity 编辑器单独打开 Loading、Main、Game、Rank 或 Achieve 场景后，`CanvasDesignResolutionEditor` 会延迟一帧按根 `Canvas` 的世界边界，将 SceneView 恢复为正交正视并自动取景；这避免 Camera Canvas 与 Overlay Canvas 之间切换时继承歪斜视角，不修改场景 Selection、Canvas 配置或运行时行为。`EffectScene001` 不参与自动取景，以保留制作方的三维编辑视角。
