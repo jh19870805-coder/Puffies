@@ -10,12 +10,15 @@
 
 ## 2026-08-28 完整彩色卡包拆包动画提前移除根因修复
 
-- 状态：代码根因修复完成，Runtime/Editor 编译通过，等待 Unity Play Mode 视觉验收。
-- 根因一：完整拆包对象是否执行 `DontDestroyOnLoad` 被错误绑定到 `piecesReadyToDealImmediately`。当前组无未拼 Piece、散点中心尚未建立或屏幕投影失败时，即使拆包特效已成功启动，也会被当成普通撕开卡包处理并随 MainScene 销毁。
-- 根因二：完整彩包在 `Take 001` 的 `0.800s` 节点开放 GameScene 激活，但 Animator、ParticleSystem 和清理协程继续使用包含场景加载卡顿的 `Time.deltaTime`。本机历史日志显示场景激活阻塞约 `2.387s`，恢复渲染时动画进度会一次跳过剩余时长，表现为拆包动画尚未播完就消失。
-- 修复：完整拆包已启动和碎片是否可立即接管改为两个独立状态；只有前者决定完整拆包跨场景存活，后者只决定 GameScene Piece 起点。真正开放场景激活前暂停 Animator、当前正在播放的粒子和逻辑播放时钟；GameScene 自身 MainCamera 绑定 EffectLayer 后等待一帧再从相同逻辑时间恢复，场景加载耗时不再推进动画或触发清理。拆包模型只在 Animator 当前状态确认为 `Take 001` 且 `normalizedTime >= 1` 后隐藏并销毁；滑光使用独立粒子生命周期，不再参与模型结束判断。
+- 状态：已从根源改为制作方完整 Timeline 驱动，Runtime/Editor 编译与静态检查通过，等待 Unity Play Mode 视觉验收。
+- 最终根因：运行时代码从未播放 `Assets/Resources/Effects/CardFx/Animations/test.playable`，而是手动播放 `Take 001`、按 `0.5s` 启动滑光并用 Animator/ParticleSystem 状态决定清理，因此完全跳过 Timeline 的 `0~2.633s` Recorded 轨道。该轨道包含静态卡包交接、模型整体移动/缩放以及卡包撕开后的下落动作；继续调整滑光时长不可能恢复这些画面。
+- 全工程扫描确认，完整开包的运行时播放、隐藏、停止和销毁入口只在 `Assets/Scripts/Controller/MainScene.cs` 的 `CardPackOpeningEffect`。已删除 5 类错误替代逻辑：手动淡出静态卡包、手动播放 Animator、手动启动滑光、按局部 `0.800s` 计时交接、按 Animator/粒子状态清理。
+- 第一次修复回归：直接从 Timeline `0s` 播放会重复制作方原本用于 `240x272 -> 600x680` 的放大阶段；当前游戏点击拆包时卡包已经在选择页放大到 `600x680`，再次按 `2s` 的小卡包帧对齐会使 `2~2.633s` 又放大约 `2.28` 倍，造成尺寸错误。把制作方 `blur 2~7s` 还原成可见 `blue.mat` UI 也会在当前 `BgGame` 舞台上形成用户不需要的整屏蒙版。
+- 最终修复：仍使用 `test.playable` 和 `PlayableDirector` 驱动拆包、下落、滑光及完成回调，但自动读取 Recorded Animation Track 的 `infiniteClip.length`，从其真实结束帧约 `2.633s` 开始播放。在该“大卡包完成帧”先将模型正面与当前 `600x680` 静态卡包中心和高度对齐，再隐藏静态卡包并继续 `Take 001`。`fx_chai_w_001` 继续绑定 MainScene `PackObject` 下美术调好的现有实例；`blur` Control Track 只绑定无 Renderer 的代理对象，不创建 Canvas、Image 或 `blue.mat`，因此不会显示额外蒙版。
+- Timeline 资源总长仍为 `7s`：`Take 001` 为 `3.4667~5.3s`，滑光为 `3.9667~7s`。实际运行从约 `2.633s` 开始，GameScene 交接点仍按 `Take 001` 起点加真实下落关键帧 `0.800s` 计算为 `4.2667s`；交接前暂停 Director，GameScene 自身 MainCamera 绑定 EffectLayer 后等待一帧恢复。
+- 正常释放的唯一入口是 `PlayableDirector.stopped` 完整结束回调。回调内统一释放模型、滑光、blur、运行时材质、临时 Piece 和跨场景根对象；不再使用滑光结束、粒子 `IsAlive`、Animator `normalizedTime` 或固定延时触发正常销毁。异常中断和对象销毁仍保留防泄漏强制清理，但会先取消完成回调，不能伪装成自然播放结束。
 - 彩色撕开、灰色撕开的静态卡包下落、假碎片和真实 Piece 发牌参数未修改。
-- 验证：改用 Animator 实际完成状态后，`dotnet build Assembly-CSharp.csproj --no-restore` 与 `dotnet build Assembly-CSharp-Editor.csproj --no-restore` 均为 `0` 警告、`0` 错误，`git diff --check` 通过。仍需在 Play Mode 确认模型完整播放后才出现 `model animation completed`，并确认后续滑光独立结束。
+- 验证：回归修复后的 Runtime/Editor 编译均为 `0` 警告、`0` 错误，`git diff --check` 通过。当前 Unity `Library/ScriptAssemblies/Assembly-CSharp.dll` 是 `16:29:31`，本轮源码为 `16:32` 之后，仍需退出当前 Play Mode 并等待 Unity 刷新后视觉验收。刷新后准备日志应显示 `timelineDuration=7.000s, start=2.633s, handoff=4.267s`；画面不得出现 blur 蒙版，静态卡包切换模型前后都应保持 `600x680` 对齐，最后仍只在 `opening timeline completed callback` 后释放。
 
 ## CardBag Prefab 跨设备引用诊断
 

@@ -8,7 +8,9 @@ using UnityEditor;
 #endif
 using UnityEngine;
 using UnityEngine.Networking;
+using UnityEngine.Playables;
 using UnityEngine.SceneManagement;
+using UnityEngine.Timeline;
 using UnityEngine.UI;
 
 public class MainScene : MonoBehaviour
@@ -61,8 +63,6 @@ public class MainScene : MonoBehaviour
     private const float OpeningStageTransitionDuration = 0.28f
                                                          * GameTransitionDurationScale
                                                          * GameDefine.NonDealTransitionDurationMultiplier;
-    private const float OpeningModelHandoffHoldDuration = 0.06f;
-    private const float OpeningModelHandoffFadeDuration = 0.12f;
     private const float TearGestureTravelRatio = 0.06f;
     private const float TearGestureMinTravelPixels = 18f;
     private const float InProgressGameTransitionHoldDuration = 0.17f * GameTransitionDurationScale;
@@ -4255,35 +4255,17 @@ public class MainScene : MonoBehaviour
                 && mCardPackOpeningEffect.Begin(
                     packTexture,
                     mSelectedPackageOverlayRect,
+                    mSelectedPackageVisualContent != null
+                        ? mSelectedPackageVisualContent.gameObject
+                        : mSelectedPackageOverlayImage.gameObject,
                     openingPieceSprites);
         }
 
         SetBagSelectPanelVisible(false);
         if (openingEffectStarted)
         {
-            // Keep the static cover over the prepared animation frame until the model has
-            // reached the render loop. Its opaque hold masks the clip's initial mesh settle.
             yield return new WaitForEndOfFrame();
             mCardPackOpeningEffect.StartPlayback();
-            var handoffHoldElapsed = 0f;
-            while (handoffHoldElapsed < OpeningModelHandoffHoldDuration)
-            {
-                handoffHoldElapsed += Time.unscaledDeltaTime;
-                yield return null;
-            }
-
-            var handoffElapsed = 0f;
-            while (handoffElapsed < OpeningModelHandoffFadeDuration)
-            {
-                handoffElapsed += Time.unscaledDeltaTime;
-                var normalized = Mathf.Clamp01(
-                    handoffElapsed / OpeningModelHandoffFadeDuration);
-                SetSelectedPackageImageAlpha(1f - Mathf.SmoothStep(0f, 1f, normalized));
-                yield return null;
-            }
-
-            SetSelectedPackageImageVisible(false);
-            SetSelectedPackageImageAlpha(1f);
             yield return mCardPackOpeningEffect.WaitForGameEntranceHandoff();
         }
         else
@@ -4742,12 +4724,7 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
     private const float ReferenceModelScale = 2.63f;
     private const float ReferenceModelLocalZ = 0f;
     private const float ModelWorldDepth = -1f;
-    // Take 001 reaches its vertical apex at 0.800s and starts dropping next frame.
-    private const float GameEntranceHandoffTime = 0.8f;
-    private const float LightEffectDelay = 0.5f;
-    private const float LightEffectVisibleDuration = 3.0333334f;
-    private const float LightEffectTailMaximumDuration = 10f;
-    private const float PieceEmergeDelay = LightEffectDelay;
+    private const double ModelAnimationHandoffOffset = 0.8d;
     private const float PieceEmergeDuration = 0.32f;
     private const float PieceMaximumPackHeightRatio =
         MainScene.InProgressPackPieceMaxSize
@@ -4756,11 +4733,13 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
     private const float PieceRisePackHeightRatio = 0.08f;
     private const float PieceDepthBehindPack = 0.05f;
     private const int PieceSortingOrderOffsetBehindPack = -1;
-    private const uint LightEffectRandomSeed = 1u;
-    private const float FallbackAnimationDuration = 1.8333334f;
     private const string ModelPathFormat = "Effects/CardPack/Models/CardPackOpeningModel_{0:D3}";
     private const string AnimatorControllerPath = "Effects/CardPack/Animations/CardPackAnimation";
-    private const string AnimationStateName = "Take 001";
+    private const string OpeningTimelinePath = "Effects/CardFx/Animations/test";
+    private const string ModelAnimationClipName = "Take 001";
+    private const string StaticPackControlClipName = "Image";
+    private const string LightControlClipName = "fx_chai_w_001";
+    private const string BlurControlClipName = "blur";
     private const string FrontMaterialPath = "Effects/CardFx/Materials/test";
     private const string PieceShadowMaterialPath = "IngameCoverShadow04";
     private const string SpriteRendererShadowKeyword = "PACK_SHADOW_SPRITE_RENDERER";
@@ -4769,16 +4748,17 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
     private const string CardRendererNamePrefix = "mesh_skin_cardPack_";
     private const int FrontRendererNumberLength = 3;
     private const int BackRendererNumberLength = 5;
-    private static readonly int AnimationStateId =
-        Animator.StringToHash(AnimationStateName);
     private static readonly int SpritePixelsPerUnitId =
         Shader.PropertyToID("_SpritePixelsPerUnit");
 
     private GameObject mWorldRoot;
     private GameObject mModelObject;
     private GameObject mLightEffectObject;
+    private GameObject mTimelineBlurControlProxy;
     private Camera mMainCamera;
     private Animator mAnimator;
+    private PlayableDirector mDirector;
+    private TimelineAsset mOpeningTimeline;
     private Material mFrontMaterial;
     private Material mPieceShadowMaterial;
     private MaterialPropertyBlock mPieceShadowPropertyBlock;
@@ -4795,13 +4775,15 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
     private int mOriginalCameraCullingMask;
     private bool mDidOverrideCameraCullingMask;
     private Coroutine mPlaybackCoroutine;
-    private float mAnimationDuration;
-    private float mPlaybackElapsed;
+    private double mPlaybackStartTime;
+    private double mGameEntranceHandoffTime;
+    private double mPieceEmergeTime;
     private bool mIsPlaying;
     private bool mIsPrepared;
     private bool mHasHandedOffToGameScene;
     private bool mIsWaitingForSceneCamera;
     private bool mIsPausedForSceneHandoff;
+    private bool mIsStoppingDirectorForCleanup;
 
     public static void PrepareSceneLightEffect()
     {
@@ -4839,6 +4821,7 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
     public bool Begin(
         Texture packTexture,
         RectTransform displayedPackRect,
+        GameObject displayedPackVisual,
         IReadOnlyList<Sprite> firstGroupPieceSprites)
     {
         CleanupPlaybackResources();
@@ -4852,14 +4835,19 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         var modelPrefab = Resources.Load<GameObject>(string.Format(ModelPathFormat, variant));
         var controller = Resources.Load<RuntimeAnimatorController>(AnimatorControllerPath);
         var frontMaterialTemplate = Resources.Load<Material>(FrontMaterialPath);
+        mOpeningTimeline = Resources.Load<TimelineAsset>(OpeningTimelinePath);
         if (modelPrefab == null
             || controller == null
-            || frontMaterialTemplate == null)
+            || frontMaterialTemplate == null
+            || mOpeningTimeline == null
+            || displayedPackVisual == null)
         {
             Debug.LogError(
                 $"CardPackOpeningEffect: required resource is missing. variant={variant}, "
                 + $"model={modelPrefab != null}, controller={controller != null}, "
-                + $"frontMaterial={frontMaterialTemplate != null}");
+                + $"frontMaterial={frontMaterialTemplate != null}, "
+                + $"timeline={mOpeningTimeline != null}, "
+                + $"staticPack={displayedPackVisual != null}");
             return false;
         }
 
@@ -4907,17 +4895,6 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         mAnimator.updateMode = AnimatorUpdateMode.Normal;
         mAnimator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
         mAnimator.Rebind();
-        mAnimator.Play(AnimationStateName, 0, 0f);
-        mAnimator.Update(0f);
-        mAnimator.speed = 0f;
-        mAnimationDuration = ResolveAnimationDuration(controller);
-
-        if (!TryFitStageToDisplayedPack(stageRoot, displayedPackRect))
-        {
-            Debug.LogError("CardPackOpeningEffect: failed to calculate the opening model bounds.");
-            CleanupPlaybackResources();
-            return false;
-        }
 
         mLightEffectObject = FindSceneLightEffect();
         if (mLightEffectObject == null)
@@ -4931,14 +4908,34 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
 
         StopAndClearParticleSystems(mLightEffectObject);
         mLightEffectObject.SetActive(false);
-        PrepareEmergedPieces(firstGroupPieceSprites);
-
+        displayedPackVisual.SetActive(false);
         gameObject.SetActive(true);
+
+        if (!ConfigureOpeningTimeline(displayedPackVisual))
+        {
+            CleanupPlaybackResources();
+            return false;
+        }
+
+        mDirector.time = mPlaybackStartTime;
+        mDirector.Evaluate();
+        if (!TryFitStageToDisplayedPack(stageRoot, displayedPackRect))
+        {
+            Debug.LogError("CardPackOpeningEffect: failed to calculate the opening model bounds.");
+            CleanupPlaybackResources();
+            return false;
+        }
+
+        PrepareEmergedPieces(firstGroupPieceSprites);
+        mDirector.time = mPlaybackStartTime;
+        mDirector.Evaluate();
+
         mIsPrepared = true;
         Debug.Log(
             $"CardPackOpeningEffect: prepared variant {variant:D3} with {packTexture.name}. "
-            + $"duration={mAnimationDuration:F3}s, lightDelay={LightEffectDelay:F3}s, "
-            + "light=scene instance");
+            + $"timelineDuration={mDirector.duration:F3}s, "
+            + $"start={mPlaybackStartTime:F3}s, "
+            + $"handoff={mGameEntranceHandoffTime:F3}s, light=scene instance");
         return true;
     }
 
@@ -4956,22 +4953,26 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
 
     public void StartPlayback()
     {
-        if (!mIsPrepared || mAnimator == null)
+        if (!mIsPrepared || mDirector == null || mOpeningTimeline == null)
         {
             return;
         }
 
         mIsPrepared = false;
-        mAnimator.speed = 1f;
-        mPlaybackElapsed = 0f;
         mIsPlaying = true;
-        mPlaybackCoroutine = StartCoroutine(PlayToCompletion());
+        mDirector.time = mPlaybackStartTime;
+        mDirector.Play();
+        mPlaybackCoroutine = StartCoroutine(MonitorTimelinePlayback());
+        Debug.Log(
+            $"CardPackOpeningEffect: opening timeline started, "
+            + $"duration={mDirector.duration:F3}s.");
     }
 
     public IEnumerator WaitForGameEntranceHandoff()
     {
         while (mIsPlaying
-               && mPlaybackElapsed < GameEntranceHandoffTime)
+               && mDirector != null
+               && mDirector.time < mGameEntranceHandoffTime)
         {
             yield return null;
         }
@@ -5049,81 +5050,183 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
 
         BindEffectLayerToCamera(loadedCamera);
         mIsWaitingForSceneCamera = false;
-        // Scene activation can block the main thread for multiple seconds. Resume on the
-        // following rendered frame so Animator and ParticleSystem do not consume that stall.
+        // Scene activation can block the main thread for multiple seconds. Resume the
+        // authored Timeline on the following rendered frame so it does not consume that stall.
         yield return null;
         ResumeAfterSceneHandoff();
     }
 
-    private IEnumerator PlayToCompletion()
+    private IEnumerator MonitorTimelinePlayback()
     {
-        var lightStarted = false;
-        while (!HasOpeningModelAnimationCompleted())
+        while (mIsPlaying && mDirector != null)
         {
-            if (mIsPausedForSceneHandoff)
+            if (!mIsPausedForSceneHandoff)
             {
-                yield return null;
-                continue;
+                UpdateEmergedPieces(mDirector.time);
             }
-
-            mPlaybackElapsed += Time.deltaTime;
-            if (!lightStarted && mPlaybackElapsed >= LightEffectDelay)
-            {
-                lightStarted = true;
-                StartLightEffect();
-            }
-
-            UpdateEmergedPieces(mPlaybackElapsed);
 
             yield return null;
+        }
+
+        mPlaybackCoroutine = null;
+    }
+
+    private bool ConfigureOpeningTimeline(GameObject displayedPackVisual)
+    {
+        mDirector = GetComponent<PlayableDirector>();
+        if (mDirector == null)
+        {
+            mDirector = gameObject.AddComponent<PlayableDirector>();
+        }
+
+        mDirector.playOnAwake = false;
+        mDirector.extrapolationMode = DirectorWrapMode.None;
+        mDirector.timeUpdateMode = DirectorUpdateMode.GameTime;
+        mDirector.playableAsset = mOpeningTimeline;
+        mDirector.stopped -= HandleOpeningTimelineStopped;
+        mDirector.stopped += HandleOpeningTimelineStopped;
+
+        if (mTimelineBlurControlProxy == null)
+        {
+            mTimelineBlurControlProxy = new GameObject("TimelineBlurControlProxy");
+            mTimelineBlurControlProxy.transform.SetParent(transform, false);
+            mTimelineBlurControlProxy.SetActive(false);
+        }
+
+        var animationTrackCount = 0;
+        var staticPackBound = false;
+        var lightBound = false;
+        var blurBound = false;
+        foreach (var track in mOpeningTimeline.GetRootTracks())
+        {
+            if (track is AnimationTrack)
+            {
+                mDirector.SetGenericBinding(track, mAnimator);
+                animationTrackCount++;
+            }
+
+            foreach (var timelineClip in track.GetClips())
+            {
+                if (!(timelineClip.asset is ControlPlayableAsset controlAsset))
+                {
+                    continue;
+                }
+
+                GameObject target = null;
+                switch (timelineClip.displayName)
+                {
+                    case StaticPackControlClipName:
+                        target = displayedPackVisual;
+                        staticPackBound = true;
+                        break;
+                    case LightControlClipName:
+                        target = mLightEffectObject;
+                        lightBound = true;
+                        break;
+                    case BlurControlClipName:
+                        target = mTimelineBlurControlProxy;
+                        blurBound = true;
+                        break;
+                }
+
+                if (target != null)
+                {
+                    mDirector.SetReferenceValue(
+                        controlAsset.sourceGameObject.exposedName,
+                        target);
+                }
+            }
+        }
+
+        mPlaybackStartTime = ResolveAuthoredPackExpansionEndTime();
+        mPieceEmergeTime = ResolveTimelineClipStart(LightControlClipName);
+        mGameEntranceHandoffTime = ResolveTimelineClipStart(ModelAnimationClipName)
+            + ModelAnimationHandoffOffset;
+        if (animationTrackCount < 2
+            || !staticPackBound
+            || !lightBound
+            || !blurBound
+            || mPlaybackStartTime <= 0d
+            || mPlaybackStartTime >= mPieceEmergeTime
+            || mPieceEmergeTime <= 0d
+            || mGameEntranceHandoffTime <= 0d)
+        {
+            Debug.LogError(
+                "CardPackOpeningEffect: opening timeline bindings are incomplete. "
+                + $"animationTracks={animationTrackCount}, staticPack={staticPackBound}, "
+                + $"light={lightBound}, blur={blurBound}, "
+                + $"start={mPlaybackStartTime:F3}, "
+                + $"pieceTime={mPieceEmergeTime:F3}, "
+                + $"handoff={mGameEntranceHandoffTime:F3}.");
+            return false;
+        }
+
+        return true;
+    }
+
+    private double ResolveAuthoredPackExpansionEndTime()
+    {
+        if (mOpeningTimeline == null)
+        {
+            return 0d;
+        }
+
+        var expansionEndTime = 0d;
+        foreach (var track in mOpeningTimeline.GetRootTracks())
+        {
+            if (track is AnimationTrack animationTrack
+                && animationTrack.infiniteClip != null)
+            {
+                expansionEndTime = Math.Max(
+                    expansionEndTime,
+                    animationTrack.infiniteClip.length);
+            }
+        }
+
+        return expansionEndTime;
+    }
+
+    private double ResolveTimelineClipStart(string displayName)
+    {
+        if (mOpeningTimeline == null)
+        {
+            return 0d;
+        }
+
+        foreach (var track in mOpeningTimeline.GetRootTracks())
+        {
+            foreach (var timelineClip in track.GetClips())
+            {
+                if (timelineClip.displayName == displayName)
+                {
+                    return timelineClip.start;
+                }
+            }
+        }
+
+        return 0d;
+    }
+
+    private void HandleOpeningTimelineStopped(PlayableDirector director)
+    {
+        if (mIsStoppingDirectorForCleanup
+            || director != mDirector
+            || !mIsPlaying)
+        {
+            return;
         }
 
         CompleteEmergedPieces();
+        var completedSceneHandoff = mHasHandedOffToGameScene;
         Debug.Log(
-            $"CardPackOpeningEffect: model animation completed. "
-            + $"state={AnimationStateName}, logicalTime={mPlaybackElapsed:F3}s.");
-        ReleaseOpeningModel();
-
-        var lightControlEndTime = LightEffectDelay + LightEffectVisibleDuration;
-        while (mPlaybackElapsed < lightControlEndTime)
-        {
-            if (mIsPausedForSceneHandoff)
-            {
-                yield return null;
-                continue;
-            }
-
-            mPlaybackElapsed += Time.deltaTime;
-            if (!lightStarted && mPlaybackElapsed >= LightEffectDelay)
-            {
-                lightStarted = true;
-                StartLightEffect();
-            }
-
-            yield return null;
-        }
-
-        StopSceneLightEffectEmission();
-        var tailElapsed = 0f;
-        while (IsSceneLightEffectAlive()
-               && tailElapsed < LightEffectTailMaximumDuration)
-        {
-            tailElapsed += Time.unscaledDeltaTime;
-            yield return null;
-        }
-
-        ReleaseSceneLightEffect();
-        Debug.Log(
-            $"CardPackOpeningEffect: light playback completed. "
-            + $"controlled={lightControlEndTime:F3}s, tail={tailElapsed:F3}s, "
-            + $"sceneHandoff={mHasHandedOffToGameScene}.");
+            "CardPackOpeningEffect: opening timeline completed callback. "
+            + $"time={director.time:F3}s, duration={director.duration:F3}s, "
+            + $"sceneHandoff={completedSceneHandoff}.");
         mIsPlaying = false;
-        mPlaybackCoroutine = null;
-        if (mHasHandedOffToGameScene)
-        {
-            CleanupPlaybackResources();
-            Destroy(gameObject);
-        }
+        CleanupPlaybackResources();
+        Debug.Log(
+            "CardPackOpeningEffect: opening effect released after timeline callback.");
+        Destroy(gameObject);
     }
 
     public bool TryGetEmergedPieceScreenOrigin(out Vector2 normalizedScreenPosition)
@@ -5327,7 +5430,7 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         mPieceShadowPropertyBlock.Clear();
     }
 
-    private void UpdateEmergedPieces(float elapsed)
+    private void UpdateEmergedPieces(double timelineTime)
     {
         if (mHasHandedOffToGameScene)
         {
@@ -5342,7 +5445,7 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
                 continue;
             }
 
-            if (elapsed < PieceEmergeDelay)
+            if (timelineTime < mPieceEmergeTime)
             {
                 renderer.enabled = false;
                 continue;
@@ -5350,7 +5453,7 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
 
             renderer.enabled = true;
             var normalized = Mathf.Clamp01(
-                (elapsed - PieceEmergeDelay) / PieceEmergeDuration);
+                (float)((timelineTime - mPieceEmergeTime) / PieceEmergeDuration));
             var eased = 1f - Mathf.Pow(1f - normalized, 3f);
             renderer.transform.position = Vector3.LerpUnclamped(
                 mEmergedPieceStartPositions[i],
@@ -5585,86 +5688,6 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         return foundFront && foundBack;
     }
 
-    private static float ResolveAnimationDuration(RuntimeAnimatorController controller)
-    {
-        var duration = 0f;
-        var clips = controller.animationClips;
-        for (var i = 0; i < clips.Length; i++)
-        {
-            if (clips[i] != null)
-            {
-                duration = Mathf.Max(duration, clips[i].length);
-            }
-        }
-
-        return duration > 0f ? duration : FallbackAnimationDuration;
-    }
-
-    private void StartLightEffect()
-    {
-        if (mLightEffectObject == null)
-        {
-            return;
-        }
-
-        var rootParticleSystem = mLightEffectObject.GetComponent<ParticleSystem>();
-        if (rootParticleSystem == null)
-        {
-            Debug.LogError("CardPackOpeningEffect: scene light effect root has no ParticleSystem.");
-            return;
-        }
-
-        ApplyTimelineParticleSeeds(mLightEffectObject);
-        mLightEffectObject.SetActive(true);
-        rootParticleSystem.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
-        rootParticleSystem.Play(true);
-    }
-
-    private bool HasOpeningModelAnimationCompleted()
-    {
-        if (mModelObject == null || mAnimator == null)
-        {
-            return true;
-        }
-
-        if (!mAnimator.isActiveAndEnabled || mAnimator.IsInTransition(0))
-        {
-            return false;
-        }
-
-        var state = mAnimator.GetCurrentAnimatorStateInfo(0);
-        return state.shortNameHash == AnimationStateId && state.normalizedTime >= 1f;
-    }
-
-    private void ReleaseOpeningModel()
-    {
-        if (mModelObject == null)
-        {
-            return;
-        }
-
-        mModelObject.SetActive(false);
-        Destroy(mModelObject);
-        mModelObject = null;
-        mAnimator = null;
-    }
-
-    private static void ApplyTimelineParticleSeeds(GameObject effectRoot)
-    {
-        var particleSystems = effectRoot.GetComponentsInChildren<ParticleSystem>(true);
-        for (var i = 0; i < particleSystems.Length; i++)
-        {
-            var particleSystem = particleSystems[i];
-            if (!particleSystem.useAutoRandomSeed)
-            {
-                continue;
-            }
-
-            particleSystem.useAutoRandomSeed = false;
-            particleSystem.randomSeed = LightEffectRandomSeed;
-        }
-    }
-
     private static void StopAndClearParticleSystems(GameObject effectRoot)
     {
         if (effectRoot == null)
@@ -5679,22 +5702,6 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         }
     }
 
-    private void StopSceneLightEffectEmission()
-    {
-        if (mLightEffectObject == null)
-        {
-            return;
-        }
-
-        var particleSystems = mLightEffectObject.GetComponentsInChildren<ParticleSystem>(true);
-        for (var i = 0; i < particleSystems.Length; i++)
-        {
-            particleSystems[i].Stop(
-                false,
-                ParticleSystemStopBehavior.StopEmitting);
-        }
-    }
-
     private void PauseForSceneHandoff()
     {
         if (mIsPausedForSceneHandoff)
@@ -5703,15 +5710,15 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         }
 
         mIsPausedForSceneHandoff = true;
-        if (mAnimator != null)
+        if (mDirector != null
+            && mDirector.state == PlayState.Playing)
         {
-            mAnimator.speed = 0f;
+            mDirector.Pause();
         }
 
-        SetPlayingParticleSystemsPaused(true);
         Debug.Log(
             $"CardPackOpeningEffect: paused for scene handoff at "
-            + $"{mPlaybackElapsed:F3}s.");
+            + $"{(mDirector != null ? mDirector.time : 0d):F3}s.");
     }
 
     private void ResumeAfterSceneHandoff()
@@ -5722,59 +5729,15 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         }
 
         mIsPausedForSceneHandoff = false;
-        if (mAnimator != null)
+        if (mDirector != null
+            && mDirector.state == PlayState.Paused)
         {
-            mAnimator.speed = 1f;
+            mDirector.Resume();
         }
 
-        SetPlayingParticleSystemsPaused(false);
         Debug.Log(
             $"CardPackOpeningEffect: resumed after scene handoff at "
-            + $"{mPlaybackElapsed:F3}s.");
-    }
-
-    private void SetPlayingParticleSystemsPaused(bool paused)
-    {
-        if (mLightEffectObject == null || !mLightEffectObject.activeInHierarchy)
-        {
-            return;
-        }
-
-        var particleSystems = mLightEffectObject.GetComponentsInChildren<ParticleSystem>(true);
-        for (var i = 0; i < particleSystems.Length; i++)
-        {
-            var particleSystem = particleSystems[i];
-            if (paused)
-            {
-                if (particleSystem.isPlaying)
-                {
-                    particleSystem.Pause(false);
-                }
-            }
-            else if (particleSystem.isPaused)
-            {
-                particleSystem.Play(false);
-            }
-        }
-    }
-
-    private bool IsSceneLightEffectAlive()
-    {
-        if (mLightEffectObject == null)
-        {
-            return false;
-        }
-
-        var particleSystems = mLightEffectObject.GetComponentsInChildren<ParticleSystem>(true);
-        for (var i = 0; i < particleSystems.Length; i++)
-        {
-            if (particleSystems[i].IsAlive(false))
-            {
-                return true;
-            }
-        }
-
-        return false;
+            + $"{(mDirector != null ? mDirector.time : 0d):F3}s.");
     }
 
     private void ReleaseSceneLightEffect()
@@ -5807,6 +5770,19 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
             mPlaybackCoroutine = null;
         }
 
+        if (mDirector != null)
+        {
+            mDirector.stopped -= HandleOpeningTimelineStopped;
+            if (mDirector.state != PlayState.Paused)
+            {
+                mIsStoppingDirectorForCleanup = true;
+                mDirector.Stop();
+                mIsStoppingDirectorForCleanup = false;
+            }
+
+            mDirector.playableAsset = null;
+        }
+
         mIsPlaying = false;
         mIsPrepared = false;
         mHasHandedOffToGameScene = false;
@@ -5817,6 +5793,12 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         RestoreCameraCullingMask();
 
         ReleaseSceneLightEffect();
+
+        if (mTimelineBlurControlProxy != null)
+        {
+            Destroy(mTimelineBlurControlProxy);
+            mTimelineBlurControlProxy = null;
+        }
 
         if (mWorldRoot != null)
         {
@@ -5851,8 +5833,12 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         mModelObject = null;
         mMainCamera = null;
         mAnimator = null;
-        mAnimationDuration = 0f;
-        mPlaybackElapsed = 0f;
+        mDirector = null;
+        mOpeningTimeline = null;
+        mPlaybackStartTime = 0d;
+        mGameEntranceHandoffTime = 0d;
+        mPieceEmergeTime = 0d;
+        mIsStoppingDirectorForCleanup = false;
         mEmergedPieceRenderers.Clear();
         mEmergedPieceStartPositions = Array.Empty<Vector3>();
         mEmergedPieceFinalPositions = Array.Empty<Vector3>();
