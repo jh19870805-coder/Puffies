@@ -1,29 +1,28 @@
 # Spec Driven Development
 
-## 2026-08-28 - 首页卡包列表边缘渐隐与整页吸附
+## 2026-08-28 - 首页卡包列表整页吸附
 
 ### 需求
 
-1. WHEN 卡包随横向滚动进入或离开列表 Viewport THEN 左右边缘过渡中的卡包 SHALL 根据实际可见宽度平滑淡入或淡出，列表背景颜色不得被额外白色或灰色蒙版改变。
-2. WHEN 卡包完全位于 Viewport 内 THEN 卡包封面、撕开背景、尺寸标识、装饰碎片和呼吸动画 SHALL 保持原始 Alpha。
-3. WHEN 玩家结束横向拖拽 THEN 列表 SHALL 停止惯性并自动缓动到距离最近的完整页面，不得停留在两页之间。
-4. WHEN 玩家从卡包或列表空白区域开始拖拽 THEN 两条输入路径 SHALL 使用同一分页吸附规则。
-5. IF 列表只有一页 THEN 列表 SHALL 保持第一页位置；IF 分页数量动态变化 THEN 吸附目标 SHALL 使用当前 Content 的实际页数。
-6. WHEN 列表正在自动吸附 THEN 卡包点击 SHALL 暂停，新的拖拽 SHALL 可中断当前吸附并重新控制列表。
+1. WHEN 卡包随横向滚动进入或离开列表 Viewport THEN 卡包 SHALL 保持资源和状态逻辑决定的原始不透明度，系统 SHALL NOT 增加左右边缘渐隐。
+2. WHEN 玩家结束横向拖拽 THEN 列表 SHALL 停止惯性并自动缓动到距离最近的完整页面，不得停留在两页之间。
+3. WHEN 玩家从卡包或列表空白区域开始拖拽 THEN 两条输入路径 SHALL 使用同一分页吸附规则。
+4. IF 列表只有一页 THEN 列表 SHALL 保持第一页位置；IF 分页数量动态变化 THEN 吸附目标 SHALL 使用当前 Content 的实际页数。
+5. WHEN 列表正在自动吸附 THEN 卡包点击 SHALL 暂停，新的拖拽 SHALL 可中断当前吸附并重新控制列表。
 
 ### 设计与任务
 
 - [x] 确认 Content 由与 Viewport 等宽的 `Page_N` 直接子节点组成，每页 `18` 个卡包，页间距为 `0`。
 - [x] 将分页吸附协程并入 `MainScene`，现有 `PackageInteractionHandler` 只转发卡包起手的拖拽阶段，避免新增脚本文件和 MonoBehaviour 序列化风险。
 - [x] 让卡包转发拖拽与 ScrollRect 空白拖拽共同通知分页逻辑；拖拽结束按当前 normalized position 选择最近页。
-- [x] 为每个运行时卡包根节点配置 CanvasGroup，并在既有 LateUpdate 可见性刷新中按左右可见宽度计算 Alpha。
+- [x] 移除运行时卡包根节点的边缘渐隐 CanvasGroup 和可见宽度 Alpha 计算。
 - [x] 保持卡包点击、状态显隐、呼吸动画、分页布局和资源不变。
 - [x] 编译 Runtime/Editor 项目并完成静态检查。
-- [ ] 在 Unity Play Mode 验证左右边缘渐变、慢拖/快拖吸附、卡包起手、空白起手、第一页和末页边界。
+- [ ] 在 Unity Play Mode 验证卡包始终保持原始不透明度，以及慢拖/快拖吸附、卡包起手、空白起手、第一页和末页边界。
 
 ### 验证
 
-- 边缘渐变宽度为卡包槽位宽度的 `75%`，即 `180px`；卡包完全在 Viewport 内时 Alpha 为 `1`，左右可见宽度不足 `180px` 时线性渐变到 `0`。
+- 卡包列表不再创建专用 CanvasGroup，不再根据 Viewport 可见宽度修改 Alpha。
 - 拖拽结束后立即 `StopMovement()`，按 Content 当前活动 `Page_N` 数量把 normalized position 映射到最近整数页，并在 `0.26s` 内 EaseOut 吸附；单页固定为 `0`。
 - 卡包起手由 `PackageInteractionHandler` 转发，空白起手由 ScrollView 运行时 EventTrigger 转发；两者共用 `MainScene` 的同一协程。吸附期间卡包点击被锁定，新拖拽先停止旧协程再交还 ScrollRect。
 - 没有修改 MainScene 场景、PackItem Prefab 或图片资源；Runtime/Editor C# 项目顺序编译通过，均为 `0` 警告、`0` 错误。
@@ -37,14 +36,14 @@
 3. WHEN 卡包从列表位置放大到 `600x680` THEN 按钮滑入 SHALL 同时开始，并以原 `0.3s` 时长放慢 `30%` 后的 `0.39s` 完成；动画结束前保持不可交互。
 4. IF 当前卡包不满足相机按钮显示条件 THEN 动画 SHALL NOT 强制显示 `BtnCamera`；“玩/重玩”文字和已有状态判断保持不变。
 5. WHEN 玩家返回列表或确认进入游戏流程 THEN 当前可见按钮 SHALL 使用与进场相反的位移从场景终点向下滑出屏幕，并在完成前保持不可交互。
-6. WHEN 按钮进场或出场 THEN 系统 SHALL 只修改按钮 Y 坐标，不得修改按钮 Alpha、X 坐标、尺寸、层级或显隐规则。
+6. WHEN 按钮进场或出场 THEN 系统 SHALL 只修改按钮 Y 坐标，不得修改按钮 Alpha、X 坐标、尺寸、层级或显隐规则；按钮在动画期间不可交互时仍 SHALL 从首次露出开始保持完整不透明度。
 7. WHEN 页面关闭、动画中断或下一次重新打开 THEN 按钮 SHALL 恢复场景保存的最终坐标，不得累计偏移。
 
 ### 设计与任务
 
 - [x] 确认 `PanelBagSelect` 下三个按钮均为直接子节点，最终 Y 坐标均为 `-450`，没有可直接移动的公共容器。
 - [x] 初始化时缓存三个按钮的最终 `anchoredPosition`，不修改 MainScene 场景保存值。
-- [x] 将按钮位移时长独立调整为 `0.39s`，保持卡包自身 `0.3s` 放大/缩小节奏不变，且不引入 Alpha 动画。
+- [x] 将按钮位移时长独立调整为 `0.39s`，保持卡包自身 `0.3s` 放大/缩小节奏不变；Disabled 颜色与 Normal 颜色一致，不引入 Alpha 动画或交互状态变淡。
 - [x] 为返回列表和正式进入游戏两条离开放大页路径增加反向向下出场；重玩/拍照临时覆盖不重复执行。
 - [x] 页面隐藏和清理路径统一恢复缓存终点；现有按钮显隐、标签和点击逻辑保持不变。
 - [x] 编译 Runtime/Editor 项目并完成静态检查。
@@ -54,7 +53,7 @@
 
 - `BtnBack`、`BtnPlay`、`BtnCamera` 的 MainScene 场景坐标与层级未修改；运行时只缓存并插值 `anchoredPosition.y`，X 坐标始终使用缓存终点。
 - 屏幕外起点使用 `PanelBagSelect.rect.yMin - 最大按钮半高 - 24px`，保证不同按钮高度下整行都完全位于下边界之外。
-- 按钮进出场仅调用 `SetBagSelectButtonEntranceProgress` 修改缓存坐标的 Y；没有新增或修改 CanvasGroup Alpha。
+- 按钮进出场仅调用 `SetBagSelectButtonEntranceProgress` 修改缓存坐标的 Y；没有新增或修改 CanvasGroup Alpha，动画期间 `Button.interactable=false` 也不会改变显示颜色和透明度。
 - `Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译通过，均为 `0` 警告、`0` 错误；仍需 Unity Play Mode 验收。
 
 ## 2026-08-28 - 开包代码适配制作方原始 Timeline

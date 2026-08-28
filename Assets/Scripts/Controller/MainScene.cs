@@ -29,7 +29,6 @@ public class MainScene : MonoBehaviour
     internal const float PackageCoverHeight = 272f;
     private const float PackageHorizontalSpacing = 20f;
     private const float PackageVerticalSpacing = 20f;
-    private const float PackageEdgeFadeWidth = PackageSlotWidth * 0.75f;
     private const float PackagePageSnapDuration = 0.26f;
     private const float DefaultPackagePageWidth = 1625f;
     private const float DefaultPackagePageHeight = 950f;
@@ -264,7 +263,6 @@ public class MainScene : MonoBehaviour
         public Image SizeImage;
         public PackCoverVisualSettings VisualSettings;
         public Animator PackAnimator;
-        public CanvasGroup FadeCanvasGroup;
         public GameObject ProgressPiecesRoot;
         public List<InProgressPackagePieceAnimation> ProgressPieceAnimations;
         public RectTransform RectTransform;
@@ -1913,16 +1911,6 @@ public class MainScene : MonoBehaviour
         var sizeImage = FindChild(slotObject.transform, PackSizeObjectName)?.GetComponent<Image>();
         var packNode = FindChild(slotObject.transform, PackNodeObjectName) as RectTransform;
         var packAnimator = packNode != null ? packNode.GetComponent<Animator>() : null;
-        var fadeCanvasGroup = slotObject.GetComponent<CanvasGroup>();
-        if (fadeCanvasGroup == null)
-        {
-            fadeCanvasGroup = slotObject.AddComponent<CanvasGroup>();
-        }
-
-        fadeCanvasGroup.alpha = 1f;
-        fadeCanvasGroup.interactable = true;
-        fadeCanvasGroup.blocksRaycasts = true;
-        fadeCanvasGroup.ignoreParentGroups = false;
         EnsurePackageBackgroundBehindCover(backgroundImage, coverImage);
         PreparePagedPackageItem(
             slotObject,
@@ -1942,7 +1930,6 @@ public class MainScene : MonoBehaviour
             SizeImage = sizeImage,
             VisualSettings = visualSettings,
             PackAnimator = packAnimator,
-            FadeCanvasGroup = fadeCanvasGroup,
             RectTransform = rootRect
         };
         return entry;
@@ -2478,13 +2465,6 @@ public class MainScene : MonoBehaviour
                 && !panelsObscurePackages
                 && entry.Root.activeInHierarchy
                 && IsRectVisibleInViewport(anchor, viewport);
-            if (entry.FadeCanvasGroup != null)
-            {
-                entry.FadeCanvasGroup.alpha = shouldRender
-                    ? CalculatePackageEdgeFadeAlpha(entry.RectTransform, viewport)
-                    : 0f;
-            }
-
             SetPackageCoverVisible(entry, shouldRender);
             SetPackageBackgroundVisible(entry, shouldRender);
             SetPackageSizeImageVisible(entry, shouldRender);
@@ -2518,23 +2498,6 @@ public class MainScene : MonoBehaviour
             && bounds.min.x <= viewportRect.xMax
             && bounds.max.y >= viewportRect.yMin
             && bounds.min.y <= viewportRect.yMax;
-    }
-
-    private static float CalculatePackageEdgeFadeAlpha(
-        RectTransform target,
-        RectTransform viewport)
-    {
-        if (target == null || viewport == null || PackageEdgeFadeWidth <= 0f)
-        {
-            return 1f;
-        }
-
-        var bounds = RectTransformUtility.CalculateRelativeRectTransformBounds(viewport, target);
-        var viewportRect = viewport.rect;
-        var visibleFromLeft = bounds.max.x - viewportRect.xMin;
-        var visibleFromRight = viewportRect.xMax - bounds.min.x;
-        return Mathf.Clamp01(
-            Mathf.Min(visibleFromLeft, visibleFromRight) / PackageEdgeFadeWidth);
     }
 
     private static Rect GetScreenRect(RectTransform rectTransform, Camera camera)
@@ -4666,20 +4629,22 @@ public class MainScene : MonoBehaviour
 
     private void SetBagSelectButtonsInteractable(bool interactable)
     {
-        if (mBagSelectPlayButton != null)
+        SetBagSelectButtonInteractable(mBagSelectPlayButton, interactable);
+        SetBagSelectButtonInteractable(mBagSelectBackButton, interactable);
+        SetBagSelectButtonInteractable(mBagSelectCameraButton, interactable);
+    }
+
+    private static void SetBagSelectButtonInteractable(Button button, bool interactable)
+    {
+        if (button == null)
         {
-            mBagSelectPlayButton.interactable = interactable;
+            return;
         }
 
-        if (mBagSelectBackButton != null)
-        {
-            mBagSelectBackButton.interactable = interactable;
-        }
-
-        if (mBagSelectCameraButton != null)
-        {
-            mBagSelectCameraButton.interactable = interactable;
-        }
+        var colors = button.colors;
+        colors.disabledColor = colors.normalColor;
+        button.colors = colors;
+        button.interactable = interactable;
     }
 
     private void RefreshBagSelectPackState(int bagId)

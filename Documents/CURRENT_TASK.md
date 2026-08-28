@@ -1,14 +1,14 @@
 # 当前任务
 
-## 2026-08-28 首页卡包列表边缘渐隐与整页吸附
+## 2026-08-28 首页卡包列表整页吸附与边缘渐隐移除
 
-- 状态：代码修改完成，Runtime/Editor 编译通过，等待 Unity Play Mode 视觉与手感验收。
-- 边缘渐变：运行时卡包根节点统一使用 CanvasGroup；卡包在 Viewport 左右边缘进入或离开时，按实际剩余可见宽度在 `180px` 范围内从 `0` 到 `1` 渐变。完全位于 Viewport 内时保持原始 Alpha，封面、撕开背景、尺寸标识、装饰碎片和呼吸动画一起淡入淡出，不叠加白色或灰色蒙版。
+- 状态：边缘渐隐已按最新要求移除，整页吸附保留，Runtime/Editor 编译通过，等待 Unity Play Mode 视觉与手感验收。
+- 列表显示：不再为运行时卡包根节点创建渐隐 CanvasGroup，也不再按 Viewport 左右剩余可见宽度计算 Alpha。进入或离开 Viewport 的卡包始终使用资源和现有状态逻辑决定的原始不透明度。
 - 整页吸附：卡包列表拖拽松手后立即停止原 ScrollRect 惯性，按 Content 当前活动页数选择最近整数页，并在 `0.26s` 内 EaseOut 滑到完整页面；单页固定在第一页，刷新列表时取消旧吸附并归零。
 - 输入覆盖：从卡包起手继续由 `PackageInteractionHandler` 转发 ScrollRect，同时通知 MainScene；从列表空白区域起手由 ScrollView 运行时 EventTrigger 通知 MainScene。两者共用同一吸附逻辑。吸附期间不接受卡包点击，新拖拽可立即中断吸附。
 - 保留：每页 `18` 个、页面尺寸、卡包顺序、点击选择、状态显隐、呼吸动画和资源均未修改；未新增脚本文件，未修改 MainScene 场景或 PackItem Prefab。
-- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Assets/Scripts/View/PackageInteractionHandler.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
-- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译通过，均为 `0` 警告、`0` 错误。仍需验证卡包起手、空白起手、慢拖、快拖、第一页、末页和边缘渐变观感。
+- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
+- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译通过，均为 `0` 警告、`0` 错误；Unity Play Mode 仍需验证卡包边缘保持原始不透明度，以及卡包起手、空白起手、慢拖、快拖、第一页和末页吸附。
 
 ## 2026-08-28 卡包独立放大页底部按钮进出场
 
@@ -16,9 +16,9 @@
 - 进场：点击首页列表卡包进入独立放大页时，`BtnBack`、`BtnPlay` 和当前状态允许显示的 `BtnCamera` 从 `PanelBagSelect` 下边界之外同步向上滑到场景原坐标；与卡包放大同时开始，按钮时长由原 `0.3s` 放慢 `30%` 为 `0.39s`，卡包自身 `0.3s` 节奏不变。
 - 出场：返回首页列表或确认进入游戏流程时，按钮使用进场的时间反向曲线从原坐标向下滑回同一屏幕外位置。重玩确认和拍照面板只是临时覆盖，不重复触发按钮出场。
 - 布局：三个按钮的场景层级、尺寸、最终 X/Y 坐标均未修改；运行时缓存各自终点，只统一插值 Y，因此横向间距保持不变。屏幕外起点按面板实际下边界、最大按钮半高和 `24px` 余量动态计算。
-- 状态：按钮进出场均不修改 Alpha，不做渐现或渐隐。相机按钮继续只对已完成卡包显示；“玩/重玩”文字和既有状态判断不变。动画结束前按钮不可交互；页面隐藏、失败或下次打开前统一恢复缓存终点，不累计位移。
+- 状态：按钮进出场均不修改 Alpha，不做渐现或渐隐；动画期间虽然不可交互，但 Disabled 颜色强制与 Normal 颜色一致，因此按钮从屏幕外出现时就是完整不透明度，结束时不会发生透明度切换。相机按钮继续只对已完成卡包显示；“玩/重玩”文字和既有状态判断不变。页面隐藏、失败或下次打开前统一恢复缓存终点，不累计位移。
 - 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
-- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译通过，均为 `0` 警告、`0` 错误；仍需分别目视验证三种卡包状态的进场、返回出场和进入游戏出场。
+- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译通过，均为 `0` 警告、`0` 错误；仍需分别目视验证三种卡包状态的进场完整不透明度、返回出场和进入游戏出场。
 
 ## 2026-08-28 开包代码适配制作方原始 Timeline
 
