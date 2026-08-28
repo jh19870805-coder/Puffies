@@ -26,6 +26,8 @@ Shader "Puffies/UI/PackCoverShadow"
         _StencilReadMask ("Stencil Read Mask", Float) = 255
         _ColorMask ("Color Mask", Float) = 15
         [Toggle(UNITY_UI_ALPHACLIP)] _UseUIAlphaClip ("Use Alpha Clip", Float) = 0
+        [HideInInspector] _UIMaskSoftnessX ("Mask Softness X", Float) = 0
+        [HideInInspector] _UIMaskSoftnessY ("Mask Softness Y", Float) = 0
     }
 
     SubShader
@@ -86,6 +88,7 @@ Shader "Puffies/UI/PackCoverShadow"
                 fixed4 color : COLOR;
                 float2 contentUv : TEXCOORD0;
                 float4 localPosition : TEXCOORD1;
+                half4 mask : TEXCOORD2;
                 UNITY_VERTEX_OUTPUT_STEREO
             };
 
@@ -108,6 +111,8 @@ Shader "Puffies/UI/PackCoverShadow"
             float _UseTornMask;
             float _GrayscaleAmount;
             float4 _ClipRect;
+            float _UIMaskSoftnessX;
+            float _UIMaskSoftnessY;
 
             fixed IsInsideSprite(float2 uv)
             {
@@ -166,6 +171,13 @@ Shader "Puffies/UI/PackCoverShadow"
                 output.vertex = UnityObjectToClipPos(output.localPosition);
                 output.contentUv = input.texcoord * expansion - paddingRatio;
                 output.color = input.color * _Color;
+                float4 clampedRect = clamp(_ClipRect, -2e10, 2e10);
+                float2 pixelSize = output.vertex.w;
+                pixelSize /= abs(mul((float2x2)UNITY_MATRIX_P, _ScreenParams.xy));
+                output.mask = half4(
+                    output.localPosition.xy * 2.0 - clampedRect.xy - clampedRect.zw,
+                    0.25 / (0.25 * half2(_UIMaskSoftnessX, _UIMaskSoftnessY)
+                        + abs(pixelSize.xy)));
                 return output;
             }
 
@@ -208,7 +220,9 @@ Shader "Puffies/UI/PackCoverShadow"
                 #endif
 
                 #ifdef UNITY_UI_CLIP_RECT
-                color.a *= UnityGet2DClipping(input.localPosition.xy, _ClipRect);
+                half2 mask = saturate(
+                    (_ClipRect.zw - _ClipRect.xy - abs(input.mask.xy)) * input.mask.zw);
+                color.a *= mask.x * mask.y;
                 #endif
 
                 #ifdef UNITY_UI_ALPHACLIP

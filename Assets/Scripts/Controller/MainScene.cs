@@ -2717,7 +2717,7 @@ public class MainScene : MonoBehaviour
         grid.padding.right = 0;
         grid.padding.top = 0;
         grid.padding.bottom = 0;
-        grid.childAlignment = TextAnchor.UpperLeft;
+        grid.childAlignment = TextAnchor.UpperCenter;
         grid.startCorner = GridLayoutGroup.Corner.UpperLeft;
         grid.startAxis = GridLayoutGroup.Axis.Horizontal;
         grid.cellSize = new Vector2(PackageSlotWidth, PackageSlotHeight);

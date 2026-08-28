@@ -1,5 +1,15 @@
 # 当前任务
 
+## 2026-08-28 PackageScrollView 横向软裁切
+
+- 状态：场景和 Shader 修改完成，Unity 已重新导入且 Runtime/Editor 编译通过，等待 Unity Play Mode 视觉验收。
+- 根因：`PackageScrollView/Viewport` 同时存在旧 `Mask` 和新 `RectMask2D`，旧 Mask 会先执行硬裁切；同时 `PackCoverShadow.shader` 与 `PackSizeState.shader` 只使用 `UnityGet2DClipping` 做硬边裁切，没有读取 RectMask2D 写入的 `_UIMaskSoftnessX/Y`。
+- 修改：保留用户设置的 `RectMask2D Softness=(83,0)` 并移除同节点旧 `Mask`；两个卡包 UI Shader 按 Unity UI 标准算法计算像素级软裁切，使封面、投影、撕口状态和尺寸标签统一响应横向柔边。
+- 布局修正：运行时 `GridLayoutGroup.childAlignment` 从覆盖场景配置的 `UpperLeft` 改为 `UpperCenter`，六列卡包按实际总宽在每页 Viewport 内左右居中；Viewport Image 颜色 Alpha 设为 `0`，消除旧 Mask Graphic 重新显现造成的上下矩形底色，同时保留 `RaycastTarget` 以支持从列表空白区域起手拖拽。
+- 边界：不恢复代码控制的列表渐隐，不创建卡包 CanvasGroup，不修改卡包材质参数、分页吸附、Viewport 尺寸或卡包状态逻辑。普通 UGUI Image 继续使用 Unity 自带 RectMask2D 支持。
+- 修改文件：`Assets/Scenes/MainScene.unity`、`Assets/Resources/PackCoverShadow.shader`、`Assets/Resources/PackSizeState.shader`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
+- 验证：场景 YAML 确认 Viewport 只保留 `RectMask2D Softness=(83,0)`，Viewport Image 为透明且仍接收射线；Unity 自动重新导入场景并启动 Shader 编译器，Editor 日志无 Shader 编译错误；`git diff --check` 通过；`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译均为 `0` 警告、`0` 错误。Unity Play Mode 仍需确认六列左右居中、上下无矩形底色、左右各约 `83px` 范围平滑淡入淡出，且空白区域拖拽分页仍可用。
+
 ## 2026-08-28 首页卡包列表整页吸附与边缘渐隐移除
 
 - 状态：边缘渐隐已按最新要求移除，整页吸附保留，Runtime/Editor 编译通过，等待 Unity Play Mode 视觉与手感验收。

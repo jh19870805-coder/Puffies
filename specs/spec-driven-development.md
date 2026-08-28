@@ -1,5 +1,30 @@
 # Spec Driven Development
 
+## 2026-08-28 - PackageScrollView 横向软裁切
+
+### 需求
+
+1. WHEN 卡包进入或离开横向列表 Viewport THEN 列表 SHALL 在左右边缘约 `83px` 范围内统一软裁切，Y 轴 SHALL 保持硬边界且不产生纵向渐变。
+2. WHEN 卡包位于 Viewport 中央 THEN 封面、投影、撕口、尺寸标签、装饰碎片和普通 Image SHALL 保持各自原始材质效果。
+3. WHEN Viewport 使用 `RectMask2D` THEN 同一节点 SHALL NOT 同时使用旧 `Mask`，避免硬裁切覆盖 Softness。
+4. WHEN 卡包 Image 使用自定义 UGUI Shader THEN Shader SHALL 支持 `_ClipRect`、`_UIMaskSoftnessX` 和 `_UIMaskSoftnessY`，不得把 RectMask2D 降级为硬裁切。
+5. 系统 SHALL NOT 恢复按单个卡包位置计算 Alpha 的运行时代码；柔边只由 Viewport 的 RectMask2D 负责。
+6. WHEN 每页显示六列卡包 THEN 六列 SHALL 按实际总宽在 Viewport 内左右居中，不得由运行时代码覆盖为左对齐。
+7. Viewport 的 Graphic SHALL 完全透明且继续接收射线，页面上下不得显示 Mask Graphic 形成的矩形底色，从列表空白区域起手拖拽仍 SHALL 可用。
+
+### 设计与任务
+
+- [x] 保留 `PackageScrollView/Viewport` 的 `RectMask2D Softness=(83,0)`，移除同节点旧 `Mask`。
+- [x] 为 `PackCoverShadow.shader` 和 `PackSizeState.shader` 增加 Unity UI 标准像素级软裁切计算。
+- [x] 将运行时 Page Grid 对齐方式设为 `UpperCenter`，并把 Viewport Image 设为透明 Raycast Graphic。
+- [x] 保持材质参数、卡包状态、分页布局与整页吸附逻辑不变。
+- [ ] 在 Unity Play Mode 检查六列左右居中、上下无矩形底色、空白拖拽，以及普通彩色整包、彩色撕开和灰色撕开三种状态的左右柔边一致性。
+
+### 验证
+
+- 场景 YAML 中 Viewport 只保留一个 RectMask2D，Softness 为 X `83`、Y `0`。
+- 两个自定义 Shader 的 UI 裁切分支使用 RectMask2D 提供的 Softness，而不是单独的卡包 Alpha 动画。
+
 ## 2026-08-28 - 首页卡包列表整页吸附
 
 ### 需求

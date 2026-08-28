@@ -15,6 +15,8 @@ Shader "Puffies/UI/PackSizeState"
         _StencilReadMask ("Stencil Read Mask", Float) = 255
         _ColorMask ("Color Mask", Float) = 15
         [Toggle(UNITY_UI_ALPHACLIP)] _UseUIAlphaClip ("Use Alpha Clip", Float) = 0
+        [HideInInspector] _UIMaskSoftnessX ("Mask Softness X", Float) = 0
+        [HideInInspector] _UIMaskSoftnessY ("Mask Softness Y", Float) = 0
     }
 
     SubShader
@@ -72,6 +74,7 @@ Shader "Puffies/UI/PackSizeState"
                 fixed4 color : COLOR;
                 float2 texcoord : TEXCOORD0;
                 float4 localPosition : TEXCOORD1;
+                half4 mask : TEXCOORD2;
                 UNITY_VERTEX_OUTPUT_STEREO
             };
 
@@ -83,6 +86,8 @@ Shader "Puffies/UI/PackSizeState"
             float _Brightness;
             float _Contrast;
             float4 _ClipRect;
+            float _UIMaskSoftnessX;
+            float _UIMaskSoftnessY;
 
             v2f vert(appdata_t input)
             {
@@ -93,6 +98,13 @@ Shader "Puffies/UI/PackSizeState"
                 output.vertex = UnityObjectToClipPos(input.vertex);
                 output.texcoord = input.texcoord;
                 output.color = input.color * _Color;
+                float4 clampedRect = clamp(_ClipRect, -2e10, 2e10);
+                float2 pixelSize = output.vertex.w;
+                pixelSize /= abs(mul((float2x2)UNITY_MATRIX_P, _ScreenParams.xy));
+                output.mask = half4(
+                    input.vertex.xy * 2.0 - clampedRect.xy - clampedRect.zw,
+                    0.25 / (0.25 * half2(_UIMaskSoftnessX, _UIMaskSoftnessY)
+                        + abs(pixelSize.xy)));
                 return output;
             }
 
@@ -108,7 +120,9 @@ Shader "Puffies/UI/PackSizeState"
                 color.rgb = saturate(color.rgb * _Brightness);
 
                 #ifdef UNITY_UI_CLIP_RECT
-                color.a *= UnityGet2DClipping(input.localPosition.xy, _ClipRect);
+                half2 mask = saturate(
+                    (_ClipRect.zw - _ClipRect.xy - abs(input.mask.xy)) * input.mask.zw);
+                color.a *= mask.x * mask.y;
                 #endif
 
                 #ifdef UNITY_UI_ALPHACLIP
