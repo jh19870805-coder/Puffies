@@ -1,5 +1,33 @@
 # Spec Driven Development
 
+## 2026-08-28 - 首页卡包排序分层
+
+### 需求
+
+1. WHEN 卡包在当前游戏进程中新发放且仍为 `Unlocked` THEN 该卡包 SHALL 在本进程内持续位于列表最前，重复刷新或重新进入 MainScene SHALL NOT 消费该标记；WHEN 游戏进程重启 THEN 标记 SHALL 被清除且未开始卡包 SHALL 恢复正常解锁顺序。
+2. WHEN 卡包生命周期为 `InProgress` 且第一波尚未完整完成 THEN 卡包 SHALL 视为新卡包并位于第一排序层。
+3. WHEN 卡包生命周期为 `InProgress` 且第一波已经完整完成 THEN 卡包 SHALL 位于其他普通卡包之前，但排在第一层新卡包之后。
+4. WHEN 卡包已解锁但未开始 THEN 卡包 SHALL 按 `UnlockTime` 从早到晚排列。
+5. WHEN 卡包已完成 THEN 卡包 SHALL 按首次 `CompletionTime` 从早到晚排列；重玩不得覆盖首次完成顺序。
+6. WHEN 两个卡包的排序时间相同或无效 THEN 系统 SHALL 使用 PackId 升序产生确定性结果。
+7. WHEN 新发放卡包的真实进度变化 THEN 真实进度 SHALL 覆盖新发放标记：完整完成第一波后进入第二层，整包完成后进入第四层。
+
+### 设计与任务
+
+- [x] 将 `sNewlyUnlockedPackIds` 保持为进程级、非持久化新发包置顶状态，仅由 `SubsystemRegistration` 清空。
+- [x] 在排序前为全部 `InProgress` 卡包预计算第一波是否完整完成。
+- [x] 将比较器分为“新包/第一波未完成、第一波已完成、未开始、已完成”四级。
+- [x] 保持 SQLite 数据结构、生命周期写入、解锁时间、首次完成时间和 Piece 进度存储不变。
+- [ ] 在 Unity Play Mode 构造四类卡包，验证同进程新发包、列表刷新、退出重进和进程重启后的顺序。
+
+### 验证矩阵
+
+- 本次新发放且未开始：同一进程内每次进入列表都位于第一层；重启游戏后按第三层解锁时间排序。
+- 从未完成第一波的 `InProgress` 退出：位于第一层；重启后仍依据进度位于第一层。
+- 完整完成第一波但未完成全包：位于第二层，按解锁时间升序。
+- 未开始普通卡包：位于第三层，按解锁时间升序。
+- 已完成卡包：位于第四层，按首次完成时间升序。
+
 ## 2026-08-28 - 首页 QQ 群入口
 
 ### 需求
@@ -725,7 +753,7 @@
 ### 当前验证
 
 - MainScene 当前场景只存在 `PackageScrollView/Content/Page_1` 分页列表，全工程不存在 `Package001` 场景或 Prefab 对象；已删除旧单卡包列表解析、模板字段、横向手工布局和相关条件分支。
-- 卡包顺序仍由 `CardPackDataUtility.TakeMainSceneOrderedPackIds()` 提供，并按原索引调用 `CreatePagedPackageSlot`，6 x 3 分页与排序逻辑未修改。
+- 卡包顺序由 `CardPackDataUtility.GetMainSceneOrderedPackIds()` 提供，并按返回索引调用 `CreatePagedPackageSlot`，6 x 3 分页结构保持不变。
 - 已确认 `BuildSync` 中列出的 11 个旧资源目录和 4 个旧 StreamingAssets 根目录均不存在；已删除每次编辑器启动重复执行的一次性迁移清理，正式 UI 同步目录、菜单入口和构建前回调保持不变。
 - 全仓库孤立公开类型扫描只剩 `PackCoverShadowEffect`；该类型由 Prefab 通过 Meta GUID 引用，因此保留。私有单次引用候选均为 Unity 初始化特性回调，因此保留。
 - `Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 编译通过，均为 `0` 警告、`0` 错误；`git diff --check` 通过。

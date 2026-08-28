@@ -1,5 +1,17 @@
 # 当前任务
 
+## 2026-08-28 首页卡包排序分层
+
+- 状态：排序代码修改完成，Runtime/Editor 编译通过，等待 Unity Play Mode 数据验收。
+- 现有问题：原比较器把全部 `InProgress` 放在同一级，无法区分“第一波尚未完成的新卡包”和“第一波已经完成的已解锁未完成卡包”。
+- 最新顺序：第一层为本次新发放卡包以及 `InProgress` 且第一波未完整完成的卡包；第二层为第一波已完整完成的 `InProgress`；第三层为 `Unlocked` 未开始卡包；第四层为 `Completed` 卡包。
+- 层内顺序：第一层按解锁时间倒序，使最近获得的新卡包优先；第二、三层按解锁时间正序；第四层按首次完成时间正序；时间相同或无效时用 PackId 保证跨设备确定性。
+- 会话规则：`sNewlyUnlockedPackIds` 只保存在内存中，列表读取和重复进入 MainScene 均不消费；同一游戏进程内仍为 `Unlocked` 的新发放卡包持续置顶，只有进程初始化时清空，因此重启游戏后未开始的新发放卡包才恢复到第三层解锁顺序。真实进度优先于新发放标记：进入 `InProgress` 后，第一波未完成继续视为新卡包，第一波完成立即进入第二层；整包完成立即进入第四层。生命周期为 `Completed` 的重玩卡包不改变首次完成顺序。
+- 性能：排序前只对 `InProgress` 卡包各计算一次第一波完成状态，比较器只查询预计算 HashSet，不在比较过程中重复加载 CardBag Prefab 或读取 SQLite。
+- 边界：不修改 SQLite 表、生命周期枚举、解锁时间、首次完成时间或拼图进度结构，不需要删除本地数据。
+- 修改文件：`Assets/Scripts/Model/CardPackDataUtility.cs`、`Assets/Scripts/Controller/MainScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`Documents/GAME_DESIGN_REQUIREMENTS.md`、`specs/spec-driven-development.md`。
+- 验证：`git diff --check` 通过；旧方法名和旧的“一次性消费”语义扫描无残留；`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 编译均为 `0` 警告、`0` 错误。静态核对确认所有正常发包入口通过 `TryUnlockPack` 记录本进程新包，第一波完成状态通过持久化 Piece 进度逐个核对 `Piece01XX`。Unity Play Mode 仍需准备四类卡包以及同一进程新发包，检查同一进程反复进入首页仍置顶，并确认重启后恢复正常排序。
+
 ## 2026-08-28 首页 QQ 按钮
 
 - 状态：代码修改完成，Runtime/Editor 编译通过，等待 Unity Play Mode 验收。

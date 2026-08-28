@@ -1812,7 +1812,7 @@ public class MainScene : MonoBehaviour
         }
 
         var startedAt = Time.realtimeSinceStartup;
-        var unlockedPackIds = CardPackDataUtility.TakeMainSceneOrderedPackIds();
+        var unlockedPackIds = CardPackDataUtility.GetMainSceneOrderedPackIds();
         ClearPackageSlots();
         yield return null;
 

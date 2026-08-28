@@ -181,7 +181,7 @@ public static class CardPackDataUtility
             (int)CardPackLifecycleState.Completed);
     }
 
-    public static List<int> TakeMainSceneOrderedPackIds()
+    public static List<int> GetMainSceneOrderedPackIds()
     {
         EnsureInitialized();
         EnsureDefaultPackUnlocked();
@@ -189,8 +189,12 @@ public static class CardPackDataUtility
         var records = GetAllPacks();
         records.RemoveAll(record => record.LifecycleState == CardPackLifecycleState.Locked);
         var newlyUnlockedPackIds = new HashSet<int>(sNewlyUnlockedPackIds);
-        records.Sort((left, right) => CompareMainSceneOrder(left, right, newlyUnlockedPackIds));
-        sNewlyUnlockedPackIds.Clear();
+        var firstGroupCompletedPackIds = GetFirstGroupCompletedInProgressPackIds(records);
+        records.Sort((left, right) => CompareMainSceneOrder(
+            left,
+            right,
+            newlyUnlockedPackIds,
+            firstGroupCompletedPackIds));
 
         var packIds = new List<int>(records.Count);
         for (var i = 0; i < records.Count; i++)
@@ -690,29 +694,30 @@ public static class CardPackDataUtility
     private static int CompareMainSceneOrder(
         CardPackRecord left,
         CardPackRecord right,
-        HashSet<int> newlyUnlockedPackIds)
+        HashSet<int> newlyUnlockedPackIds,
+        HashSet<int> firstGroupCompletedPackIds)
     {
-        var leftIsNew = newlyUnlockedPackIds.Contains(left.PackId);
-        var rightIsNew = newlyUnlockedPackIds.Contains(right.PackId);
-        if (leftIsNew != rightIsNew)
+        var leftPriority = GetMainSceneOrderPriority(
+            left,
+            newlyUnlockedPackIds,
+            firstGroupCompletedPackIds);
+        var rightPriority = GetMainSceneOrderPriority(
+            right,
+            newlyUnlockedPackIds,
+            firstGroupCompletedPackIds);
+        var priorityComparison = leftPriority.CompareTo(rightPriority);
+        if (priorityComparison != 0)
         {
-            return leftIsNew ? -1 : 1;
+            return priorityComparison;
         }
 
-        if (leftIsNew)
+        if (leftPriority == 0)
         {
             var newTimeComparison = CompareTimestamp(left.UnlockTime, right.UnlockTime, descending: true);
             if (newTimeComparison != 0)
             {
                 return newTimeComparison;
             }
-        }
-
-        var priorityComparison = GetMainSceneLifecyclePriority(left.LifecycleState)
-            .CompareTo(GetMainSceneLifecyclePriority(right.LifecycleState));
-        if (priorityComparison != 0)
-        {
-            return priorityComparison;
         }
 
         var leftTime = left.LifecycleState == CardPackLifecycleState.Completed
@@ -725,18 +730,38 @@ public static class CardPackDataUtility
         return timeComparison != 0 ? timeComparison : left.PackId.CompareTo(right.PackId);
     }
 
-    private static int GetMainSceneLifecyclePriority(CardPackLifecycleState lifecycleState)
+    private static HashSet<int> GetFirstGroupCompletedInProgressPackIds(
+        IReadOnlyList<CardPackRecord> records)
     {
-        switch (lifecycleState)
+        var completedPackIds = new HashSet<int>();
+        for (var i = 0; i < records.Count; i++)
+        {
+            var record = records[i];
+            if (record.LifecycleState == CardPackLifecycleState.InProgress
+                && HasCompletedFirstPuzzleGroup(record.PackId))
+            {
+                completedPackIds.Add(record.PackId);
+            }
+        }
+
+        return completedPackIds;
+    }
+
+    private static int GetMainSceneOrderPriority(
+        CardPackRecord record,
+        HashSet<int> newlyUnlockedPackIds,
+        HashSet<int> firstGroupCompletedPackIds)
+    {
+        switch (record.LifecycleState)
         {
             case CardPackLifecycleState.InProgress:
-                return 0;
+                return firstGroupCompletedPackIds.Contains(record.PackId) ? 1 : 0;
             case CardPackLifecycleState.Unlocked:
-                return 1;
+                return newlyUnlockedPackIds.Contains(record.PackId) ? 0 : 2;
             case CardPackLifecycleState.Completed:
-                return 2;
-            default:
                 return 3;
+            default:
+                return 4;
         }
     }
 
