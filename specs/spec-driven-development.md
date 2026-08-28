@@ -28,21 +28,24 @@
 - 卡包起手由 `PackageInteractionHandler` 转发，空白起手由 ScrollView 运行时 EventTrigger 转发；两者共用 `MainScene` 的同一协程。吸附期间卡包点击被锁定，新拖拽先停止旧协程再交还 ScrollRect。
 - 没有修改 MainScene 场景、PackItem Prefab 或图片资源；Runtime/Editor C# 项目顺序编译通过，均为 `0` 警告、`0` 错误。
 
-## 2026-08-28 - 卡包独立放大页底部按钮滑入
+## 2026-08-28 - 卡包独立放大页底部按钮进出场
 
 ### 需求
 
 1. WHEN 玩家点击首页列表卡包并进入独立放大页 THEN 页面下方当前可见的操作按钮 SHALL 从屏幕下边界之外向上滑到场景中已有的最终位置。
 2. WHEN 按钮滑入 THEN `BtnBack`、`BtnPlay` 和当前状态允许显示的 `BtnCamera` SHALL 保持原横向间距并作为同一行同步移动。
-3. WHEN 卡包从列表位置放大到 `600x680` THEN 按钮滑入 SHALL 同时进行，并在动画结束前保持不可交互。
+3. WHEN 卡包从列表位置放大到 `600x680` THEN 按钮滑入 SHALL 同时开始，并以原 `0.3s` 时长放慢 `30%` 后的 `0.39s` 完成；动画结束前保持不可交互。
 4. IF 当前卡包不满足相机按钮显示条件 THEN 动画 SHALL NOT 强制显示 `BtnCamera`；“玩/重玩”文字和已有状态判断保持不变。
-5. WHEN 页面关闭、动画中断或下一次重新打开 THEN 按钮 SHALL 恢复场景保存的最终坐标，不得累计偏移。
+5. WHEN 玩家返回列表或确认进入游戏流程 THEN 当前可见按钮 SHALL 使用与进场相反的位移从场景终点向下滑出屏幕，并在完成前保持不可交互。
+6. WHEN 按钮进场或出场 THEN 系统 SHALL 只修改按钮 Y 坐标，不得修改按钮 Alpha、X 坐标、尺寸、层级或显隐规则。
+7. WHEN 页面关闭、动画中断或下一次重新打开 THEN 按钮 SHALL 恢复场景保存的最终坐标，不得累计偏移。
 
 ### 设计与任务
 
 - [x] 确认 `PanelBagSelect` 下三个按钮均为直接子节点，最终 Y 坐标均为 `-450`，没有可直接移动的公共容器。
 - [x] 初始化时缓存三个按钮的最终 `anchoredPosition`，不修改 MainScene 场景保存值。
-- [x] 显示页面前按面板实际下边界计算屏幕外起点，并在卡包 `0.3s` 放大期间同步 EaseOut 滑入。
+- [x] 将按钮位移时长独立调整为 `0.39s`，保持卡包自身 `0.3s` 放大/缩小节奏不变，且不引入 Alpha 动画。
+- [x] 为返回列表和正式进入游戏两条离开放大页路径增加反向向下出场；重玩/拍照临时覆盖不重复执行。
 - [x] 页面隐藏和清理路径统一恢复缓存终点；现有按钮显隐、标签和点击逻辑保持不变。
 - [x] 编译 Runtime/Editor 项目并完成静态检查。
 - [ ] 在 Unity Play Mode 分别验证完整彩包、彩色撕开和灰色撕开三种状态。
@@ -51,7 +54,8 @@
 
 - `BtnBack`、`BtnPlay`、`BtnCamera` 的 MainScene 场景坐标与层级未修改；运行时只缓存并插值 `anchoredPosition.y`，X 坐标始终使用缓存终点。
 - 屏幕外起点使用 `PanelBagSelect.rect.yMin - 最大按钮半高 - 24px`，保证不同按钮高度下整行都完全位于下边界之外。
-- `Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译通过，均为 `0` 警告、`0` 错误。
+- 按钮进出场仅调用 `SetBagSelectButtonEntranceProgress` 修改缓存坐标的 Y；没有新增或修改 CanvasGroup Alpha。
+- `Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译通过，均为 `0` 警告、`0` 错误；仍需 Unity Play Mode 验收。
 
 ## 2026-08-28 - 开包代码适配制作方原始 Timeline
 

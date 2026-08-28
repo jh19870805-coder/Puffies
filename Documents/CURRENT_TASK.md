@@ -10,14 +10,15 @@
 - 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Assets/Scripts/View/PackageInteractionHandler.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
 - 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译通过，均为 `0` 警告、`0` 错误。仍需验证卡包起手、空白起手、慢拖、快拖、第一页、末页和边缘渐变观感。
 
-## 2026-08-28 卡包独立放大页底部按钮滑入
+## 2026-08-28 卡包独立放大页底部按钮进出场
 
 - 状态：代码修改完成，Runtime/Editor 编译通过，等待 Unity Play Mode 视觉验收。
-- 行为：点击首页列表卡包进入独立放大页时，`BtnBack`、`BtnPlay` 和当前状态允许显示的 `BtnCamera` 从 `PanelBagSelect` 下边界之外同步向上滑到场景原坐标；与卡包 `0.3s` 放大同时开始，按钮使用 EaseOut 缓出。
+- 进场：点击首页列表卡包进入独立放大页时，`BtnBack`、`BtnPlay` 和当前状态允许显示的 `BtnCamera` 从 `PanelBagSelect` 下边界之外同步向上滑到场景原坐标；与卡包放大同时开始，按钮时长由原 `0.3s` 放慢 `30%` 为 `0.39s`，卡包自身 `0.3s` 节奏不变。
+- 出场：返回首页列表或确认进入游戏流程时，按钮使用进场的时间反向曲线从原坐标向下滑回同一屏幕外位置。重玩确认和拍照面板只是临时覆盖，不重复触发按钮出场。
 - 布局：三个按钮的场景层级、尺寸、最终 X/Y 坐标均未修改；运行时缓存各自终点，只统一插值 Y，因此横向间距保持不变。屏幕外起点按面板实际下边界、最大按钮半高和 `24px` 余量动态计算。
-- 状态：相机按钮继续只对已完成卡包显示；“玩/重玩”文字和既有状态判断不变。动画结束前按钮不可交互；页面隐藏、失败或下次打开前统一恢复缓存终点，不累计位移。
+- 状态：按钮进出场均不修改 Alpha，不做渐现或渐隐。相机按钮继续只对已完成卡包显示；“玩/重玩”文字和既有状态判断不变。动画结束前按钮不可交互；页面隐藏、失败或下次打开前统一恢复缓存终点，不累计位移。
 - 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
-- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译通过，均为 `0` 警告、`0` 错误；仍需分别目视验证完整彩包、彩色撕开和灰色撕开状态。
+- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译通过，均为 `0` 警告、`0` 错误；仍需分别目视验证三种卡包状态的进场、返回出场和进入游戏出场。
 
 ## 2026-08-28 开包代码适配制作方原始 Timeline
 

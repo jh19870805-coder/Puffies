@@ -19,6 +19,7 @@ public class MainScene : MonoBehaviour
     private const float ReferenceHeight = GameDefine.DesignHeight;
     private const float PixelsPerUnit = GameDefine.PixelsPerUnit;
     private const float PackageOpenScaleDuration = 0.3f;
+    private const float BagSelectButtonSlideDuration = PackageOpenScaleDuration * 1.3f;
     private const float BagSelectButtonEntranceBottomMargin = 24f;
     private const float PackageOpenWidth = 600f;
     private const float PackageOpenHeight = 680f;
@@ -1265,17 +1266,11 @@ public class MainScene : MonoBehaviour
         Vector2 toPosition,
         Vector2 fromSize,
         Vector2 toSize,
-        float duration = PackageOpenScaleDuration,
-        bool animateBagSelectButtons = false)
+        float duration = PackageOpenScaleDuration)
     {
         if (mSelectedPackageOverlayRect == null)
         {
             yield break;
-        }
-
-        if (animateBagSelectButtons)
-        {
-            SetBagSelectButtonEntranceProgress(0f);
         }
 
         var elapsed = 0f;
@@ -1294,21 +1289,30 @@ public class MainScene : MonoBehaviour
                 fromSize,
                 toSize,
                 eased));
-            if (animateBagSelectButtons)
-            {
-                var buttonEased = 1f - Mathf.Pow(1f - normalized, 3f);
-                SetBagSelectButtonEntranceProgress(buttonEased);
-            }
 
             yield return null;
         }
 
         mSelectedPackageOverlayRect.anchoredPosition = toPosition;
         SetSelectedPackageVisualSize(toSize);
-        if (animateBagSelectButtons)
+    }
+
+    private IEnumerator AnimateBagSelectButtons(bool entering)
+    {
+        SetBagSelectButtonEntranceProgress(entering ? 0f : 1f);
+        var elapsed = 0f;
+        while (elapsed < BagSelectButtonSlideDuration)
         {
-            SetBagSelectButtonEntranceProgress(1f);
+            elapsed += Time.unscaledDeltaTime;
+            var normalized = Mathf.Clamp01(elapsed / BagSelectButtonSlideDuration);
+            var progress = entering
+                ? 1f - Mathf.Pow(1f - normalized, 3f)
+                : 1f - Mathf.Pow(normalized, 3f);
+            SetBagSelectButtonEntranceProgress(progress);
+            yield return null;
         }
+
+        SetBagSelectButtonEntranceProgress(entering ? 1f : 0f);
     }
 
     private void CreateOpeningStageBackground()
@@ -3641,13 +3645,14 @@ public class MainScene : MonoBehaviour
         SetBagSelectButtonEntranceProgress(0f);
         SetBagSelectPanelVisible(true);
         SetBagSelectButtonsInteractable(false);
+        var buttonEntranceAnimation = StartCoroutine(AnimateBagSelectButtons(entering: true));
         yield return AnimateSelectedPackageImage(
             mSelectedPackageStartPosition,
             mSelectedPackageDisplayPosition,
             mSelectedPackageStartSize,
             mSelectedPackageDisplaySize,
-            PackageOpenScaleDuration,
-            true);
+            PackageOpenScaleDuration);
+        yield return buttonEntranceAnimation;
         SetBagSelectButtonsInteractable(true);
 
         mIsPlayingAnimation = false;
@@ -4335,13 +4340,6 @@ public class MainScene : MonoBehaviour
 
     private IEnumerator PlayMainToGameBackgroundHandoff()
     {
-        var panelRect = mBagSelectPanelRoot != null
-            ? mBagSelectPanelRoot.transform as RectTransform
-            : null;
-        var panelStart = panelRect != null
-            ? panelRect.anchoredPosition
-            : Vector2.zero;
-
         var gameBackgroundCenter = Vector3.zero;
         if (mOpeningStageBackgroundRoot != null)
         {
@@ -4368,19 +4366,17 @@ public class MainScene : MonoBehaviour
             mBagSelectPanelCanvasGroup.blocksRaycasts = false;
         }
 
+        SetBagSelectButtonEntranceProgress(1f);
         var elapsed = 0f;
         while (elapsed < OpeningStageTransitionDuration)
         {
             elapsed += Time.unscaledDeltaTime;
             var normalized = Mathf.Clamp01(elapsed / OpeningStageTransitionDuration);
             var eased = 1f - Mathf.Pow(1f - normalized, 3f);
-            if (panelRect != null)
-            {
-                panelRect.anchoredPosition = Vector2.LerpUnclamped(
-                    panelStart,
-                    panelStart + Vector2.down * ReferenceHeight,
-                    eased);
-            }
+            var buttonNormalized = Mathf.Clamp01(
+                elapsed / BagSelectButtonSlideDuration);
+            SetBagSelectButtonEntranceProgress(
+                1f - Mathf.Pow(buttonNormalized, 3f));
 
             if (mMainCanvasGroup != null)
             {
@@ -4393,6 +4389,7 @@ public class MainScene : MonoBehaviour
             yield return null;
         }
 
+        SetBagSelectButtonEntranceProgress(0f);
         SetBagSelectBackdropAlpha(0f);
         if (mOpeningStageBackgroundRoot != null)
         {
@@ -4569,16 +4566,18 @@ public class MainScene : MonoBehaviour
     {
         mIsPlayingAnimation = true;
         SetBagSelectButtonsInteractable(false);
-        SetBagSelectPanelVisible(false);
         SetBagSelectBackdropVisible(false);
         ReleaseBagSelectBackdropTexture();
+        var buttonExitAnimation = StartCoroutine(AnimateBagSelectButtons(entering: false));
         yield return AnimateSelectedPackageImage(
             mSelectedPackageDisplayPosition,
             mSelectedPackageStartPosition,
             mSelectedPackageDisplaySize,
             mSelectedPackageStartSize);
+        yield return buttonExitAnimation;
 
         var selectedEntry = mSelectedPackageEntry;
+        SetBagSelectPanelVisible(false);
         SetSelectedPackageImageVisible(false);
         SetPackageVisualsVisible(selectedEntry, true);
         ClearPackageSelection();
