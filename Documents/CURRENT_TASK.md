@@ -5,18 +5,18 @@
 - 状态：代码根因修复完成，Runtime/Editor 编译通过，等待 Unity Play Mode 视觉验收。
 - 根因一：完整拆包对象是否执行 `DontDestroyOnLoad` 被错误绑定到 `piecesReadyToDealImmediately`。当前组无未拼 Piece、散点中心尚未建立或屏幕投影失败时，即使拆包特效已成功启动，也会被当成普通撕开卡包处理并随 MainScene 销毁。
 - 根因二：完整彩包在 `Take 001` 的 `0.800s` 节点开放 GameScene 激活，但 Animator、ParticleSystem 和清理协程继续使用包含场景加载卡顿的 `Time.deltaTime`。本机历史日志显示场景激活阻塞约 `2.387s`，恢复渲染时动画进度会一次跳过剩余时长，表现为拆包动画尚未播完就消失。
-- 修复：完整拆包已启动和碎片是否可立即接管改为两个独立状态；只有前者决定完整拆包跨场景存活，后者只决定 GameScene Piece 起点。真正开放场景激活前暂停 Animator、当前正在播放的粒子和逻辑播放时钟；GameScene 自身 MainCamera 绑定 EffectLayer 后等待一帧再从相同逻辑时间恢复，场景加载耗时不再推进动画或触发清理。
+- 修复：完整拆包已启动和碎片是否可立即接管改为两个独立状态；只有前者决定完整拆包跨场景存活，后者只决定 GameScene Piece 起点。真正开放场景激活前暂停 Animator、当前正在播放的粒子和逻辑播放时钟；GameScene 自身 MainCamera 绑定 EffectLayer 后等待一帧再从相同逻辑时间恢复，场景加载耗时不再推进动画或触发清理。拆包模型只在 Animator 当前状态确认为 `Take 001` 且 `normalizedTime >= 1` 后隐藏并销毁；滑光使用独立粒子生命周期，不再参与模型结束判断。
 - 彩色撕开、灰色撕开的静态卡包下落、假碎片和真实 Piece 发牌参数未修改。
-- 验证：`dotnet build Assembly-CSharp.csproj --no-restore` 与 `dotnet build Assembly-CSharp-Editor.csproj --no-restore` 均为 `0` 警告、`0` 错误；`git diff --check` 通过。当前 Unity 编辑器未自动刷新日志，仍需退出 Play Mode/解除暂停后等待脚本刷新，再用完整彩包确认日志依次出现 `paused`、`resumed`、`playback completed`，并目视确认模型与滑光不跳帧。
+- 验证：改用 Animator 实际完成状态后，`dotnet build Assembly-CSharp.csproj --no-restore` 与 `dotnet build Assembly-CSharp-Editor.csproj --no-restore` 均为 `0` 警告、`0` 错误，`git diff --check` 通过。仍需在 Play Mode 确认模型完整播放后才出现 `model animation completed`，并确认后续滑光独立结束。
 
-## 一次性跨设备任务：CardBag019 资源引用刷新与校验
+## CardBag Prefab 跨设备引用修复
 
-- 状态：已于 2026-08-28 在 `LIN-WORK` 完成根因修复；该一次性任务不得在后续设备重复执行。
-- 根因不是忽略规则：仓库和全局 Git ignore 均未忽略 `.meta`，CardBag019 的 31 个 PNG `.meta` 全部被正常跟踪，也没有 `skip-worktree` 或 `assume-unchanged`。提交 `1a3be43` 单独把 Prefab 中 26 个正确 GUID 改成了未随提交存在的本地 GUID，其中 25 个从未存在于仓库，另一个错误引用 CardBag020 的 `BoardTitle`。
-- 已只恢复 `CardBag019.prefab` 的 26 个 Sprite 引用，没有重新生成 Prefab，也没有改变布局、分组、阴影或描边；全量校验同时修复了 CardBag006 和 CardBag020 各一个历史遗留的 `BoardTitle` 错误引用。
-- 已在现有 `CardBagPrefabGeneratorEditor.cs` 中加入统一引用验证器、保存前阻断、导入后诊断和命令行单包/全包校验。错误 CardBag Prefab 不能再被保存；其他设备拉取或合并后，Unity 导入阶段会直接报告 Missing、跨包引用或源图遗漏。
-- 验证：CardBag019 为 `Expected=31, Missing=0, Foreign=0`；全部 23 个 CardBag Prefab 均为 `Missing=0, Foreign=0`，最终 `prefabs=23, failed=0`。Runtime/Editor 编译均为 `0` 警告、`0` 错误，`git diff --check` 通过。
-- 下一步：在 Unity Play Mode 使用 CardBag019 确认当前组 Piece 视觉显示正常；本次静态引用和编译验证已经完成。
+- 状态：2026-08-28 已完成工作区修复和磁盘级静态校验，等待用户提交并推送。
+- 最终根因复核：`1a3be43` 写入的 26 个 CardBag019 GUID 与仓库 `.meta` 一致，是正确状态；后续 `9720caf` 在 `LIN-WORK` 被 Unity 本地 AssetDatabase 缓存误导，把 CardBag019 的 26 个引用反向恢复为仓库中不存在的 GUID，同时把 CardBag006/020 的 `BoardTitle` 改成跨包或不存在的 GUID。该提交只包含 Prefab，没有对应源 PNG `.meta`，因此其他设备必然丢失引用。此前工作流对两个提交的判断方向错误，现已纠正。
+- 已按仓库当前 `.meta` 恢复 CardBag019 的 26 个 Sprite GUID，以及 CardBag006/020 各一个 `BoardTitle` GUID；没有重新生成 Prefab，也没有改变布局、分组、阴影或描边。
+- 引用验证器除 Unity 对象路径校验外，新增两层真实 GUID 校验：保存前用 `GlobalObjectId` 对比已加载 Sprite GUID 与磁盘 `.meta`；导入后和命令行直接解析 Prefab YAML 的 `m_Sprite` GUID 并与磁盘 `.meta` 对比。Unity 本地缓存即使把路径解析为正确资源，也不能再让错误 GUID 通过。
+- 验证：CardBag019 为 `Expected=31, Missing=0`；全部 23 个 CardBag Prefab 的磁盘 YAML/Meta 扫描为 `Prefabs=23, Failed=0`；Runtime/Editor 编译和 `git diff --check` 通过后才允许提交。
+- 下一步：提交并推送当前 Prefab、验证器和工作流记录；其他设备拉取后让 Unity 正常导入，并确认 Console 不出现 CardBag serialized reference validation 错误。
 
 ## 2026-08-28 拆包动画跨场景续播与碎片后层修复
 

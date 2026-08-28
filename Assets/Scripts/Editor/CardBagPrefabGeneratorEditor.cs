@@ -4085,6 +4085,12 @@ internal static class CardBagPrefabReferenceValidator
     private static readonly Regex PieceFileRegex = new Regex(
         @"^piece_\d{3}\.png$",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex MetaGuidRegex = new Regex(
+        @"^guid:\s*([0-9a-f]{32})\s*$",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Multiline);
+    private static readonly Regex SerializedSpriteGuidRegex = new Regex(
+        @"m_Sprite:\s*\{fileID:\s*-?\d+,\s*guid:\s*([0-9a-f]{32}),\s*type:\s*3\}",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     internal static IReadOnlyList<string> FindAllPrefabPaths()
     {
@@ -4132,7 +4138,12 @@ internal static class CardBagPrefabReferenceValidator
             return false;
         }
 
-        return TryValidateRoot(root, prefabPath, out message);
+        if (!TryValidateRoot(root, prefabPath, out message))
+        {
+            return false;
+        }
+
+        return TryValidateSerializedReferences(prefabPath, out message);
     }
 
     internal static bool TryValidateRoot(
@@ -4288,6 +4299,12 @@ internal static class CardBagPrefabReferenceValidator
             return;
         }
 
+        if (!TryValidateLoadedSpriteGuid(image.sprite, actualPath, out var guidError))
+        {
+            foreignSlots.Add($"{image.gameObject.name}->{guidError}");
+            return;
+        }
+
         referencedSources.Add(actualPath);
     }
 
@@ -4311,7 +4328,44 @@ internal static class CardBagPrefabReferenceValidator
             return;
         }
 
+        if (!TryValidateLoadedSpriteGuid(image.sprite, actualPath, out var guidError))
+        {
+            foreignSlots.Add($"{image.gameObject.name}->{guidError}");
+            return;
+        }
+
         referencedSources.Add(actualPath);
+    }
+
+    private static bool TryValidateLoadedSpriteGuid(
+        Sprite sprite,
+        string assetPath,
+        out string error)
+    {
+        var metaPath = ToAbsolutePath(assetPath + ".meta");
+        if (!File.Exists(metaPath))
+        {
+            error = $"{assetPath} (meta missing)";
+            return false;
+        }
+
+        var guidMatch = MetaGuidRegex.Match(File.ReadAllText(metaPath));
+        if (!guidMatch.Success)
+        {
+            error = $"{assetPath} (meta GUID invalid)";
+            return false;
+        }
+
+        var objectGuid = GlobalObjectId.GetGlobalObjectIdSlow(sprite).assetGUID.ToString();
+        var metaGuid = guidMatch.Groups[1].Value;
+        if (!string.Equals(objectGuid, metaGuid, StringComparison.OrdinalIgnoreCase))
+        {
+            error = $"{assetPath} (loaded GUID={objectGuid}, meta GUID={metaGuid})";
+            return false;
+        }
+
+        error = string.Empty;
+        return true;
     }
 
     private static void AppendDetails(
@@ -4326,6 +4380,88 @@ internal static class CardBagPrefabReferenceValidator
         }
 
         destination.Add($"{label}: {string.Join(", ", entries)}.");
+    }
+
+    private static bool TryValidateSerializedReferences(
+        string prefabPath,
+        out string message)
+    {
+        var bagName = Path.GetFileNameWithoutExtension(prefabPath);
+        var sourceFolder = $"{SourceRoot}/{bagName}";
+        var absoluteSourceFolder = ToAbsolutePath(sourceFolder);
+        var absolutePrefabPath = ToAbsolutePath(prefabPath);
+        if (!Directory.Exists(absoluteSourceFolder) || !File.Exists(absolutePrefabPath))
+        {
+            message = $"CardBag serialized reference validation failed: missing source or prefab for {bagName}.";
+            return false;
+        }
+
+        var expectedSourcePaths = Directory.GetFiles(
+                absoluteSourceFolder,
+                "*.png",
+                SearchOption.TopDirectoryOnly)
+            .Select(ToAssetPath)
+            .Where(path => IsExpectedSourceFile(Path.GetFileName(path)))
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var serializedText = File.ReadAllText(absolutePrefabPath);
+        var serializedSpriteGuids = new HashSet<string>(
+            SerializedSpriteGuidRegex.Matches(serializedText)
+                .Cast<Match>()
+                .Select(match => match.Groups[1].Value),
+            StringComparer.OrdinalIgnoreCase);
+        var missingMetaFiles = new List<string>();
+        var invalidMetaFiles = new List<string>();
+        var missingSerializedReferences = new List<string>();
+        for (var i = 0; i < expectedSourcePaths.Length; i++)
+        {
+            var sourcePath = expectedSourcePaths[i];
+            var metaPath = ToAbsolutePath(sourcePath + ".meta");
+            if (!File.Exists(metaPath))
+            {
+                missingMetaFiles.Add(sourcePath + ".meta");
+                continue;
+            }
+
+            var guidMatch = MetaGuidRegex.Match(File.ReadAllText(metaPath));
+            if (!guidMatch.Success)
+            {
+                invalidMetaFiles.Add(sourcePath + ".meta");
+                continue;
+            }
+
+            if (!serializedSpriteGuids.Contains(guidMatch.Groups[1].Value))
+            {
+                missingSerializedReferences.Add(sourcePath);
+            }
+        }
+
+        if (missingMetaFiles.Count == 0
+            && invalidMetaFiles.Count == 0
+            && missingSerializedReferences.Count == 0)
+        {
+            message = $"CardBag serialized reference validation passed: {bagName}. "
+                      + $"Expected={expectedSourcePaths.Length}, Missing=0.";
+            return true;
+        }
+
+        var details = new List<string>();
+        AppendDetails(details, "Missing meta files", missingMetaFiles);
+        AppendDetails(details, "Invalid meta files", invalidMetaFiles);
+        AppendDetails(details, "Missing serialized references", missingSerializedReferences);
+        message = $"CardBag serialized reference validation failed: {bagName}. "
+                  + $"Expected={expectedSourcePaths.Length}, "
+                  + $"MissingMeta={missingMetaFiles.Count}, InvalidMeta={invalidMetaFiles.Count}, "
+                  + $"MissingSerialized={missingSerializedReferences.Count}. "
+                  + string.Join(" ", details);
+        return false;
+    }
+
+    private static bool IsExpectedSourceFile(string fileName)
+    {
+        return string.Equals(fileName, "GameBoard.png", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(fileName, "BoardTitle.png", StringComparison.OrdinalIgnoreCase)
+               || PieceFileRegex.IsMatch(fileName);
     }
 
     private static string ToAbsolutePath(string assetPath)

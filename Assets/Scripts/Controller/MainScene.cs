@@ -4769,6 +4769,8 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
     private const string CardRendererNamePrefix = "mesh_skin_cardPack_";
     private const int FrontRendererNumberLength = 3;
     private const int BackRendererNumberLength = 5;
+    private static readonly int AnimationStateId =
+        Animator.StringToHash(AnimationStateName);
     private static readonly int SpritePixelsPerUnitId =
         Shader.PropertyToID("_SpritePixelsPerUnit");
 
@@ -5056,10 +5058,7 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
     private IEnumerator PlayToCompletion()
     {
         var lightStarted = false;
-        var controlledPlaybackDuration = Mathf.Max(
-            mAnimationDuration,
-            LightEffectDelay + LightEffectVisibleDuration);
-        while (mPlaybackElapsed < controlledPlaybackDuration)
+        while (!HasOpeningModelAnimationCompleted())
         {
             if (mIsPausedForSceneHandoff)
             {
@@ -5080,6 +5079,30 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         }
 
         CompleteEmergedPieces();
+        Debug.Log(
+            $"CardPackOpeningEffect: model animation completed. "
+            + $"state={AnimationStateName}, logicalTime={mPlaybackElapsed:F3}s.");
+        ReleaseOpeningModel();
+
+        var lightControlEndTime = LightEffectDelay + LightEffectVisibleDuration;
+        while (mPlaybackElapsed < lightControlEndTime)
+        {
+            if (mIsPausedForSceneHandoff)
+            {
+                yield return null;
+                continue;
+            }
+
+            mPlaybackElapsed += Time.deltaTime;
+            if (!lightStarted && mPlaybackElapsed >= LightEffectDelay)
+            {
+                lightStarted = true;
+                StartLightEffect();
+            }
+
+            yield return null;
+        }
+
         StopSceneLightEffectEmission();
         var tailElapsed = 0f;
         while (IsSceneLightEffectAlive()
@@ -5091,8 +5114,8 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
 
         ReleaseSceneLightEffect();
         Debug.Log(
-            $"CardPackOpeningEffect: playback completed. "
-            + $"controlled={controlledPlaybackDuration:F3}s, tail={tailElapsed:F3}s, "
+            $"CardPackOpeningEffect: light playback completed. "
+            + $"controlled={lightControlEndTime:F3}s, tail={tailElapsed:F3}s, "
             + $"sceneHandoff={mHasHandedOffToGameScene}.");
         mIsPlaying = false;
         mPlaybackCoroutine = null;
@@ -5595,6 +5618,35 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         mLightEffectObject.SetActive(true);
         rootParticleSystem.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
         rootParticleSystem.Play(true);
+    }
+
+    private bool HasOpeningModelAnimationCompleted()
+    {
+        if (mModelObject == null || mAnimator == null)
+        {
+            return true;
+        }
+
+        if (!mAnimator.isActiveAndEnabled || mAnimator.IsInTransition(0))
+        {
+            return false;
+        }
+
+        var state = mAnimator.GetCurrentAnimatorStateInfo(0);
+        return state.shortNameHash == AnimationStateId && state.normalizedTime >= 1f;
+    }
+
+    private void ReleaseOpeningModel()
+    {
+        if (mModelObject == null)
+        {
+            return;
+        }
+
+        mModelObject.SetActive(false);
+        Destroy(mModelObject);
+        mModelObject = null;
+        mAnimator = null;
     }
 
     private static void ApplyTimelineParticleSeeds(GameObject effectRoot)
