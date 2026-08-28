@@ -968,3 +968,27 @@
 - [x] 6. 使用 Unity `AnimationUtility` 确认 `Take 001` 在 `0.800s` 到达纵向最高点；完整彩包改在该节点激活 GameScene，并让 3D 模型和滑光跨场景继续收尾。
 - [x] 7. MainScene 按持久化进度选择首个未完成组且排除已拼 Piece；临时 Piece 和三种入口的 GameScene 真实 Piece 统一使用初始阴影，并明确保持在卡包下层。
 - [ ] 8. Runtime/Editor 编译与差异检查已通过；仍需 Play Mode 验收完整动画衔接、三种入口阴影、卡包遮挡关系、临时/真实 Piece 数量一致和跨场景特效清理。
+## 2026-08-28 - CardBag Sprite 引用跨设备完整性
+
+### 需求
+
+1. WHEN CardBag Prefab 被保存 THEN 系统 SHALL 校验 `GameBoard`、可选 `BoardTitle` 和全部 `PieceGGII` 的 Sprite 均来自同 PackId 的 `Assets/UI/CardBags/CardBagNNN`，不得保存 Missing 或跨卡包引用。
+2. WHEN `CardBagNNN` 源目录存在 PNG BUT Prefab 未引用该源图 THEN 校验 SHALL 失败；Piece 槽数量与源 Piece 数量 SHALL 一致。
+3. WHEN 其他设备拉取或合并 CardBag Prefab THEN Unity 导入后 SHALL 自动输出引用完整性错误，不能把 GUID 损坏误判为本地缓存问题。
+4. 命令行校验 SHALL 支持校验单个 `-cardBagId` 或全部 CardBag，并以非零退出码阻止自动流程继续。
+5. CardBag019 当前修复 SHALL 只恢复错误 Sprite 引用，不得重新生成 Prefab，不得改变布局、分组、阴影或描边数据。
+
+### 根因与设计
+
+- 仓库 `.gitignore`、本机全局 ignore 和 Git index 均未忽略 CardBag019 `.meta`；全部 `.meta` 正常被跟踪，也没有 `skip-worktree` 或 `assume-unchanged`。
+- `1a3be43^` 的 CardBag019 Prefab 与当前 31 个源 PNG `.meta` 为 `31/31` 匹配；`1a3be43` 单独替换了其中 26 个 GUID。25 个新 GUID 在仓库中从未存在，另一个错误指向 CardBag020 的 `BoardTitle`。根因是另一设备保存并提交 Prefab 时，没有同时提交 Unity 当时使用的本地 `.meta` 状态；工程又没有保存前引用校验。
+- 在现有 `CardBagPrefabGeneratorEditor.cs` 内增加统一引用验证器、保存守卫和导入后诊断，保持 Editor 目录扁平，不新增菜单。
+- 验证器按 Prefab 文件名解析 PackId，检查源目录、槽位 Sprite 路径、源图覆盖和 Piece 数量；保存守卫只阻止错误 CardBag Prefab，不影响其他资源保存。
+
+### 任务
+
+- [x] 1. 定向恢复 CardBag019 的 26 个错误 Sprite GUID。
+- [x] 2. 实现 CardBag Prefab 引用验证器与保存前阻断。
+- [x] 3. 实现导入后诊断和命令行单包/全包校验。
+- [x] 4. 使用 Unity 强制导入并验证 CardBag019 为 `Missing=0`、`Foreign=0`。
+- [x] 5. 扫描全部 23 个 CardBag Prefab，修复 CardBag006/020 的历史 BoardTitle 引用并确认 `failed=0`；Runtime/Editor 编译与差异检查通过。

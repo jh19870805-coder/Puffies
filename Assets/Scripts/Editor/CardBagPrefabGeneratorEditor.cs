@@ -113,6 +113,58 @@ public static class CardBagPrefabGeneratorEditor
         Generate(packId, false, false);
     }
 
+    public static void ValidateCardBagReferencesFromCommandLine()
+    {
+        var arguments = Environment.GetCommandLineArgs();
+        var optionIndex = Array.IndexOf(arguments, "-cardBagId");
+        IReadOnlyList<string> prefabPaths;
+        if (optionIndex >= 0)
+        {
+            if (optionIndex + 1 >= arguments.Length
+                || !int.TryParse(
+                    arguments[optionIndex + 1],
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out var packId)
+                || packId <= 0)
+            {
+                throw new ArgumentException(
+                    "CardBag reference validator: pass a positive pack ID with -cardBagId <number>.");
+            }
+
+            prefabPaths = new[] { $"{PrefabRoot}/CardBag{packId:D3}.prefab" };
+        }
+        else
+        {
+            prefabPaths = CardBagPrefabReferenceValidator.FindAllPrefabPaths();
+        }
+
+        var failures = new List<string>();
+        for (var i = 0; i < prefabPaths.Count; i++)
+        {
+            if (CardBagPrefabReferenceValidator.TryValidateAsset(
+                    prefabPaths[i],
+                    out var message))
+            {
+                Debug.Log(message);
+            }
+            else
+            {
+                failures.Add(message);
+                Debug.LogError(message);
+            }
+        }
+
+        if (failures.Count > 0)
+        {
+            throw new InvalidOperationException(
+                $"CardBag reference validation failed for {failures.Count} prefab(s). "
+                + "See the preceding Console errors.");
+        }
+
+        Debug.Log($"CardBag reference validation completed. prefabs={prefabPaths.Count}, failed=0.");
+    }
+
     internal static List<SourcePackInfo> ScanSourcePacks()
     {
         AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
@@ -1031,6 +1083,14 @@ public static class CardBagPrefabGeneratorEditor
                 update.Rect.sizeDelta = update.Size;
                 EditorUtility.SetDirty(update.Rect);
                 changedCount++;
+            }
+
+            if (!CardBagPrefabReferenceValidator.TryValidateRoot(
+                    root,
+                    prefabPath,
+                    out var referenceValidationMessage))
+            {
+                throw new InvalidOperationException(referenceValidationMessage);
             }
 
             if (changedCount > 0)
@@ -2584,6 +2644,14 @@ public static class CardBagPrefabGeneratorEditor
                 throw new InvalidOperationException(shadowSetupError);
             }
 
+            if (!CardBagPrefabReferenceValidator.TryValidateRoot(
+                    root.gameObject,
+                    prefabPath,
+                    out var referenceValidationMessage))
+            {
+                throw new InvalidOperationException(referenceValidationMessage);
+            }
+
             Directory.CreateDirectory(ToAbsolutePath(PrefabRoot));
             PrefabUtility.SaveAsPrefabAsset(root.gameObject, prefabPath, out var success);
             if (!success)
@@ -3428,6 +3496,16 @@ public static class CardBagHierarchyEditor
                     continue;
                 }
 
+                if (!CardBagPrefabReferenceValidator.TryValidateRoot(
+                        prefabRoot,
+                        prefabPath,
+                        out error))
+                {
+                    failedPrefabs++;
+                    Debug.LogError(error);
+                    continue;
+                }
+
                 PrefabUtility.SaveAsPrefabAsset(prefabRoot, prefabPath, out var success);
                 if (!success)
                 {
@@ -3934,6 +4012,16 @@ public static class CardBagShadowMaterialEditor
                     continue;
                 }
 
+                if (!CardBagPrefabReferenceValidator.TryValidateRoot(
+                        prefabRoot,
+                        prefabPath,
+                        out error))
+                {
+                    failedPrefabs++;
+                    Debug.LogError(error);
+                    continue;
+                }
+
                 PrefabUtility.SaveAsPrefabAsset(prefabRoot, prefabPath, out var success);
                 if (!success)
                 {
@@ -3981,6 +4069,374 @@ public static class CardBagShadowMaterialEditor
 
         error = "CardBag shadow setup: one or more IngameCoverShadow01-04 materials are missing.";
         return false;
+    }
+}
+
+internal static class CardBagPrefabReferenceValidator
+{
+    private const string SourceRoot = "Assets/UI/CardBags";
+    private const string PrefabRoot = "Assets/Resources/CardBagPrefabs";
+    private static readonly Regex PrefabNameRegex = new Regex(
+        @"^CardBag(\d{3})\.prefab$",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex SourcePathRegex = new Regex(
+        @"^Assets/UI/CardBags/(CardBag\d{3})/",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex PieceFileRegex = new Regex(
+        @"^piece_\d{3}\.png$",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    internal static IReadOnlyList<string> FindAllPrefabPaths()
+    {
+        return AssetDatabase.FindAssets("t:Prefab CardBag", new[] { PrefabRoot })
+            .Select(AssetDatabase.GUIDToAssetPath)
+            .Where(IsCardBagPrefabPath)
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    internal static bool IsCardBagPrefabPath(string path)
+    {
+        return !string.IsNullOrEmpty(path)
+               && path.StartsWith(PrefabRoot + "/", StringComparison.OrdinalIgnoreCase)
+               && PrefabNameRegex.IsMatch(Path.GetFileName(path));
+    }
+
+    internal static bool TryResolvePrefabPathFromSourceAsset(
+        string sourceAssetPath,
+        out string prefabPath)
+    {
+        prefabPath = string.Empty;
+        if (string.IsNullOrEmpty(sourceAssetPath))
+        {
+            return false;
+        }
+
+        var normalizedPath = sourceAssetPath.Replace('\\', '/');
+        var match = SourcePathRegex.Match(normalizedPath);
+        if (!match.Success)
+        {
+            return false;
+        }
+
+        prefabPath = $"{PrefabRoot}/{match.Groups[1].Value}.prefab";
+        return true;
+    }
+
+    internal static bool TryValidateAsset(string prefabPath, out string message)
+    {
+        var root = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+        if (root == null)
+        {
+            message = $"CardBag reference validation failed: prefab not found at {prefabPath}.";
+            return false;
+        }
+
+        return TryValidateRoot(root, prefabPath, out message);
+    }
+
+    internal static bool TryValidateRoot(
+        GameObject root,
+        string prefabPath,
+        out string message)
+    {
+        var prefabMatch = PrefabNameRegex.Match(Path.GetFileName(prefabPath));
+        if (root == null || !prefabMatch.Success)
+        {
+            message = $"CardBag reference validation failed: invalid prefab root or path {prefabPath}.";
+            return false;
+        }
+
+        var bagName = Path.GetFileNameWithoutExtension(prefabPath);
+        var sourceFolder = $"{SourceRoot}/{bagName}";
+        var absoluteSourceFolder = ToAbsolutePath(sourceFolder);
+        if (!Directory.Exists(absoluteSourceFolder))
+        {
+            message = $"CardBag reference validation failed: source folder missing at {sourceFolder}.";
+            return false;
+        }
+
+        var gameBoardPath = $"{sourceFolder}/GameBoard.png";
+        var boardTitlePath = $"{sourceFolder}/BoardTitle.png";
+        var hasBoardTitleSource = File.Exists(ToAbsolutePath(boardTitlePath));
+        var piecePaths = Directory.GetFiles(
+                absoluteSourceFolder,
+                "*.png",
+                SearchOption.TopDirectoryOnly)
+            .Select(ToAssetPath)
+            .Where(path => PieceFileRegex.IsMatch(Path.GetFileName(path)))
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var expectedSources = new HashSet<string>(
+            piecePaths,
+            StringComparer.OrdinalIgnoreCase)
+        {
+            gameBoardPath
+        };
+        if (hasBoardTitleSource)
+        {
+            expectedSources.Add(boardTitlePath);
+        }
+
+        var images = root.GetComponentsInChildren<Image>(true);
+        var gameBoards = images
+            .Where(image => image.gameObject.name == GameDefine.GameBoardObjectName)
+            .ToArray();
+        var boardTitles = images
+            .Where(image => image.gameObject.name == "BoardTitle")
+            .ToArray();
+        var pieces = images
+            .Where(image => GameDefine.TryParsePieceObjectName(image.gameObject.name, out _))
+            .ToArray();
+        var referencedSources = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var missingSlots = new List<string>();
+        var foreignSlots = new List<string>();
+        var structuralErrors = new List<string>();
+
+        if (gameBoards.Length != 1)
+        {
+            structuralErrors.Add($"GameBoard slots={gameBoards.Length}, expected=1");
+        }
+        else
+        {
+            ValidateExactSlot(
+                gameBoards[0],
+                gameBoardPath,
+                referencedSources,
+                missingSlots,
+                foreignSlots);
+        }
+
+        var expectedBoardTitleCount = hasBoardTitleSource ? 1 : 0;
+        if (boardTitles.Length != expectedBoardTitleCount)
+        {
+            structuralErrors.Add(
+                $"BoardTitle slots={boardTitles.Length}, expected={expectedBoardTitleCount}");
+        }
+        else if (hasBoardTitleSource)
+        {
+            ValidateExactSlot(
+                boardTitles[0],
+                boardTitlePath,
+                referencedSources,
+                missingSlots,
+                foreignSlots);
+        }
+
+        if (pieces.Length != piecePaths.Length)
+        {
+            structuralErrors.Add($"Piece slots={pieces.Length}, sources={piecePaths.Length}");
+        }
+
+        var expectedPieceSources = new HashSet<string>(
+            piecePaths,
+            StringComparer.OrdinalIgnoreCase);
+        for (var i = 0; i < pieces.Length; i++)
+        {
+            ValidatePieceSlot(
+                pieces[i],
+                expectedPieceSources,
+                referencedSources,
+                missingSlots,
+                foreignSlots);
+        }
+
+        var unreferencedSources = expectedSources
+            .Except(referencedSources)
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var isValid = structuralErrors.Count == 0
+                      && missingSlots.Count == 0
+                      && foreignSlots.Count == 0
+                      && unreferencedSources.Length == 0;
+        if (isValid)
+        {
+            message = $"CardBag reference validation passed: {bagName}. "
+                      + $"Expected={expectedSources.Count}, Missing=0, Foreign=0.";
+            return true;
+        }
+
+        var details = new List<string>();
+        AppendDetails(details, "Structure", structuralErrors);
+        AppendDetails(details, "Missing slots", missingSlots);
+        AppendDetails(details, "Foreign slots", foreignSlots);
+        AppendDetails(details, "Unreferenced sources", unreferencedSources);
+        message = $"CardBag reference validation failed: {bagName}. "
+                  + $"Expected={expectedSources.Count}, MissingSlots={missingSlots.Count}, "
+                  + $"ForeignSlots={foreignSlots.Count}, Unreferenced={unreferencedSources.Length}. "
+                  + string.Join(" ", details);
+        return false;
+    }
+
+    private static void ValidateExactSlot(
+        Image image,
+        string expectedPath,
+        HashSet<string> referencedSources,
+        List<string> missingSlots,
+        List<string> foreignSlots)
+    {
+        if (image.sprite == null)
+        {
+            missingSlots.Add(image.gameObject.name);
+            return;
+        }
+
+        var actualPath = AssetDatabase.GetAssetPath(image.sprite);
+        if (!string.Equals(actualPath, expectedPath, StringComparison.OrdinalIgnoreCase))
+        {
+            foreignSlots.Add($"{image.gameObject.name}->{actualPath}");
+            return;
+        }
+
+        referencedSources.Add(actualPath);
+    }
+
+    private static void ValidatePieceSlot(
+        Image image,
+        HashSet<string> expectedPieceSources,
+        HashSet<string> referencedSources,
+        List<string> missingSlots,
+        List<string> foreignSlots)
+    {
+        if (image.sprite == null)
+        {
+            missingSlots.Add(image.gameObject.name);
+            return;
+        }
+
+        var actualPath = AssetDatabase.GetAssetPath(image.sprite);
+        if (!expectedPieceSources.Contains(actualPath))
+        {
+            foreignSlots.Add($"{image.gameObject.name}->{actualPath}");
+            return;
+        }
+
+        referencedSources.Add(actualPath);
+    }
+
+    private static void AppendDetails(
+        List<string> destination,
+        string label,
+        IEnumerable<string> values)
+    {
+        var entries = values.Take(8).ToArray();
+        if (entries.Length == 0)
+        {
+            return;
+        }
+
+        destination.Add($"{label}: {string.Join(", ", entries)}.");
+    }
+
+    private static string ToAbsolutePath(string assetPath)
+    {
+        var projectRoot = Directory.GetParent(Application.dataPath)?.FullName
+                          ?? Directory.GetCurrentDirectory();
+        return Path.GetFullPath(Path.Combine(projectRoot, assetPath));
+    }
+
+    private static string ToAssetPath(string absolutePath)
+    {
+        var projectRoot = Directory.GetParent(Application.dataPath)?.FullName
+                          ?? Directory.GetCurrentDirectory();
+        var relativePath = absolutePath.Substring(projectRoot.Length)
+            .TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        return relativePath.Replace('\\', '/');
+    }
+}
+
+internal sealed class CardBagPrefabReferenceSaveGuard : AssetModificationProcessor
+{
+    private static string[] OnWillSaveAssets(string[] paths)
+    {
+        var blockedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var prefabStage = UnityEditor.SceneManagement.PrefabStageUtility.GetCurrentPrefabStage();
+        for (var i = 0; i < paths.Length; i++)
+        {
+            var path = paths[i].Replace('\\', '/');
+            if (!CardBagPrefabReferenceValidator.IsCardBagPrefabPath(path))
+            {
+                continue;
+            }
+
+            var root = prefabStage != null
+                       && string.Equals(
+                           prefabStage.assetPath,
+                           path,
+                           StringComparison.OrdinalIgnoreCase)
+                ? prefabStage.prefabContentsRoot
+                : AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            if (!CardBagPrefabReferenceValidator.TryValidateRoot(root, path, out var message))
+            {
+                blockedPaths.Add(path);
+                Debug.LogError(
+                    message
+                    + " Save was blocked. Restore the matching source PNG/.meta references before saving.");
+            }
+        }
+
+        return blockedPaths.Count == 0
+            ? paths
+            : paths.Where(path => !blockedPaths.Contains(path.Replace('\\', '/'))).ToArray();
+    }
+}
+
+internal sealed class CardBagPrefabReferenceImportMonitor : AssetPostprocessor
+{
+    private static readonly HashSet<string> PendingPrefabPaths = new HashSet<string>(
+        StringComparer.OrdinalIgnoreCase);
+    private static bool sValidationScheduled;
+
+    private static void OnPostprocessAllAssets(
+        string[] importedAssets,
+        string[] deletedAssets,
+        string[] movedAssets,
+        string[] movedFromAssetPaths)
+    {
+        QueueAffectedPrefabs(importedAssets);
+        QueueAffectedPrefabs(movedAssets);
+        if (PendingPrefabPaths.Count == 0 || sValidationScheduled)
+        {
+            return;
+        }
+
+        sValidationScheduled = true;
+        EditorApplication.delayCall += ValidatePendingPrefabs;
+    }
+
+    private static void QueueAffectedPrefabs(IEnumerable<string> assetPaths)
+    {
+        foreach (var assetPath in assetPaths)
+        {
+            var normalizedPath = assetPath.Replace('\\', '/');
+            if (CardBagPrefabReferenceValidator.IsCardBagPrefabPath(normalizedPath))
+            {
+                PendingPrefabPaths.Add(normalizedPath);
+            }
+            else if (CardBagPrefabReferenceValidator.TryResolvePrefabPathFromSourceAsset(
+                         normalizedPath,
+                         out var prefabPath))
+            {
+                PendingPrefabPaths.Add(prefabPath);
+            }
+        }
+    }
+
+    private static void ValidatePendingPrefabs()
+    {
+        sValidationScheduled = false;
+        var prefabPaths = PendingPrefabPaths.ToArray();
+        PendingPrefabPaths.Clear();
+        for (var i = 0; i < prefabPaths.Length; i++)
+        {
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(prefabPaths[i]) != null
+                && !CardBagPrefabReferenceValidator.TryValidateAsset(
+                    prefabPaths[i],
+                    out var message))
+            {
+                Debug.LogError(message);
+            }
+        }
     }
 }
 #endif

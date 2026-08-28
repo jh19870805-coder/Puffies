@@ -2,15 +2,12 @@
 
 ## 一次性跨设备任务：CardBag019 资源引用刷新与校验
 
-- 状态：待在其他设备首次执行。
-- 触发条件：在另一台设备打开本仓库后，用户首次要求“同步工作进度”。触发后应先完成本任务，再继续汇报或处理其他开发事项。
-- 执行次数：仅一次。完成后把本节状态改为“已完成”，记录执行设备、日期和结果；后续设备或后续同步不得重复执行。
-- 执行步骤：
-  1. 确认当前分支已包含修复提交 `1a3be43` 或其后继提交，并确认 `CardBag019.prefab`、`Assets/UI/CardBags/CardBag019` 下 29 张 Piece、`GameBoard.png`、`BoardTitle.png` 及各自 `.meta` 均被 Git 跟踪。
-  2. 在 Unity 中对 `Assets/UI/CardBags/CardBag019` 和 `Assets/Resources/CardBagPrefabs/CardBag019.prefab` 执行一次强制重新导入；如果 Unity 跨 Git 拉取持续保持打开，应先关闭并重新打开编辑器，禁止通过删除整个 `Library` 处理。
-  3. 校验 Prefab 的 31 个源 Sprite 引用与上述目录 31 个 PNG `.meta` GUID 完全一致，预期结果为 `Missing=0`、`Foreign=0`。
-  4. 用 `CardBag019` 进入 GameScene 验证当前组 Piece 正常显示，并检查最新 `Editor.log` 不再出现 `GameScene: groove image missing sprite`。
-  5. 将本节状态更新为“已完成”，写明验证结果；本任务不得重新生成或覆盖 `CardBag019.prefab`，除非校验确实失败且用户另有指令。
+- 状态：已于 2026-08-28 在 `LIN-WORK` 完成根因修复；该一次性任务不得在后续设备重复执行。
+- 根因不是忽略规则：仓库和全局 Git ignore 均未忽略 `.meta`，CardBag019 的 31 个 PNG `.meta` 全部被正常跟踪，也没有 `skip-worktree` 或 `assume-unchanged`。提交 `1a3be43` 单独把 Prefab 中 26 个正确 GUID 改成了未随提交存在的本地 GUID，其中 25 个从未存在于仓库，另一个错误引用 CardBag020 的 `BoardTitle`。
+- 已只恢复 `CardBag019.prefab` 的 26 个 Sprite 引用，没有重新生成 Prefab，也没有改变布局、分组、阴影或描边；全量校验同时修复了 CardBag006 和 CardBag020 各一个历史遗留的 `BoardTitle` 错误引用。
+- 已在现有 `CardBagPrefabGeneratorEditor.cs` 中加入统一引用验证器、保存前阻断、导入后诊断和命令行单包/全包校验。错误 CardBag Prefab 不能再被保存；其他设备拉取或合并后，Unity 导入阶段会直接报告 Missing、跨包引用或源图遗漏。
+- 验证：CardBag019 为 `Expected=31, Missing=0, Foreign=0`；全部 23 个 CardBag Prefab 均为 `Missing=0, Foreign=0`，最终 `prefabs=23, failed=0`。Runtime/Editor 编译均为 `0` 警告、`0` 错误，`git diff --check` 通过。
+- 下一步：在 Unity Play Mode 使用 CardBag019 确认当前组 Piece 视觉显示正常；本次静态引用和编译验证已经完成。
 
 ## 2026-08-28 拆包动画跨场景续播与碎片后层修复
 

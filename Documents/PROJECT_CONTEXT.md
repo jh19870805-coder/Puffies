@@ -311,6 +311,9 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 #### 无 JSON Prefab 批量生成
 
 - 菜单 **Puffies -> Generate CardBag Prefabs** 打开批量窗口，扫描 `UI/CardBags/` 下严格匹配 `CardBagNNN` 的一级目录。
+- CardBag 源 PNG 与对应 `.meta` 必须作为一个整体提交和同步，Prefab 内的 Sprite 引用以 `.meta` GUID 为准。Git 不会通过贴图文件名自动修复另一台设备产生的本地 GUID；禁止只提交重新保存的 `CardBagNNN.prefab` 而遗漏同批资源 `.meta` 变化。
+- CardBag Prefab 保存前会统一校验 `GameBoard`、可选 `BoardTitle` 和全部 `PieceGGII`：Sprite 必须来自同 PackId 的 `Assets/UI/CardBags/CardBagNNN`，Piece 槽数必须等于源 Piece 数，且所有标准源图都必须被引用。Missing、跨包引用或未引用源图会阻止该 CardBag Prefab 保存，不影响其他资源保存。
+- Git 拉取、合并或资源导入影响 CardBag Prefab/源目录后，导入监视器会再次校验并在 Console 报告引用损坏。命令行可用 `-executeMethod CardBagPrefabGeneratorEditor.ValidateCardBagReferencesFromCommandLine -cardBagId 19` 校验单包；省略 `-cardBagId` 时校验全部 CardBag，失败时以非零退出码结束。
 - 每个卡包硬性需要 `CardBagNNN/GameBoard.png`、`Previews/CardBagNNN.png` 和至少一张合法 Piece PNG；缺失项会显示在列表中并禁止选择。
 - 旧 `background_base.png` 仅用于兼容迁移：当 `GameBoard.png` 不存在时，扫描器通过 `AssetDatabase.MoveAsset` 自动改名并保留 Meta/GUID；两者同时存在时不覆盖目标文件。
 - `BoardTitle.png` 是标准资源但采用软校验。缺失时列表显示警告，仍允许生成不含 `BoardTitle` 节点的 Prefab。
