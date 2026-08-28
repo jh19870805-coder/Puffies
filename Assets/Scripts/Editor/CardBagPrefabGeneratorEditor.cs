@@ -1085,14 +1085,6 @@ public static class CardBagPrefabGeneratorEditor
                 changedCount++;
             }
 
-            if (!CardBagPrefabReferenceValidator.TryValidateRoot(
-                    root,
-                    prefabPath,
-                    out var referenceValidationMessage))
-            {
-                throw new InvalidOperationException(referenceValidationMessage);
-            }
-
             if (changedCount > 0)
             {
                 PrefabUtility.SaveAsPrefabAsset(root, prefabPath, out var success);
@@ -2644,14 +2636,6 @@ public static class CardBagPrefabGeneratorEditor
                 throw new InvalidOperationException(shadowSetupError);
             }
 
-            if (!CardBagPrefabReferenceValidator.TryValidateRoot(
-                    root.gameObject,
-                    prefabPath,
-                    out var referenceValidationMessage))
-            {
-                throw new InvalidOperationException(referenceValidationMessage);
-            }
-
             Directory.CreateDirectory(ToAbsolutePath(PrefabRoot));
             PrefabUtility.SaveAsPrefabAsset(root.gameObject, prefabPath, out var success);
             if (!success)
@@ -3496,16 +3480,6 @@ public static class CardBagHierarchyEditor
                     continue;
                 }
 
-                if (!CardBagPrefabReferenceValidator.TryValidateRoot(
-                        prefabRoot,
-                        prefabPath,
-                        out error))
-                {
-                    failedPrefabs++;
-                    Debug.LogError(error);
-                    continue;
-                }
-
                 PrefabUtility.SaveAsPrefabAsset(prefabRoot, prefabPath, out var success);
                 if (!success)
                 {
@@ -4012,16 +3986,6 @@ public static class CardBagShadowMaterialEditor
                     continue;
                 }
 
-                if (!CardBagPrefabReferenceValidator.TryValidateRoot(
-                        prefabRoot,
-                        prefabPath,
-                        out error))
-                {
-                    failedPrefabs++;
-                    Debug.LogError(error);
-                    continue;
-                }
-
                 PrefabUtility.SaveAsPrefabAsset(prefabRoot, prefabPath, out var success);
                 if (!success)
                 {
@@ -4478,42 +4442,6 @@ internal static class CardBagPrefabReferenceValidator
         var relativePath = absolutePath.Substring(projectRoot.Length)
             .TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         return relativePath.Replace('\\', '/');
-    }
-}
-
-internal sealed class CardBagPrefabReferenceSaveGuard : AssetModificationProcessor
-{
-    private static string[] OnWillSaveAssets(string[] paths)
-    {
-        var blockedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var prefabStage = UnityEditor.SceneManagement.PrefabStageUtility.GetCurrentPrefabStage();
-        for (var i = 0; i < paths.Length; i++)
-        {
-            var path = paths[i].Replace('\\', '/');
-            if (!CardBagPrefabReferenceValidator.IsCardBagPrefabPath(path))
-            {
-                continue;
-            }
-
-            var root = prefabStage != null
-                       && string.Equals(
-                           prefabStage.assetPath,
-                           path,
-                           StringComparison.OrdinalIgnoreCase)
-                ? prefabStage.prefabContentsRoot
-                : AssetDatabase.LoadAssetAtPath<GameObject>(path);
-            if (!CardBagPrefabReferenceValidator.TryValidateRoot(root, path, out var message))
-            {
-                blockedPaths.Add(path);
-                Debug.LogError(
-                    message
-                    + " Save was blocked. Restore the matching source PNG/.meta references before saving.");
-            }
-        }
-
-        return blockedPaths.Count == 0
-            ? paths
-            : paths.Where(path => !blockedPaths.Contains(path.Replace('\\', '/'))).ToArray();
     }
 }
 

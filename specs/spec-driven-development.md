@@ -972,18 +972,18 @@
 
 ### 需求
 
-1. WHEN CardBag Prefab 被保存 THEN 系统 SHALL 校验 `GameBoard`、可选 `BoardTitle` 和全部 `PieceGGII` 的 Sprite 均来自同 PackId 的 `Assets/UI/CardBags/CardBagNNN`，不得保存 Missing 或跨卡包引用。
-2. WHEN `CardBagNNN` 源目录存在 PNG BUT Prefab 未引用该源图 THEN 校验 SHALL 失败；Piece 槽数量与源 Piece 数量 SHALL 一致。
-3. WHEN 其他设备拉取或合并 CardBag Prefab THEN Unity 导入后 SHALL 自动输出引用完整性错误，不能把 GUID 损坏误判为本地缓存问题。
-4. 命令行校验 SHALL 支持校验单个 `-cardBagId` 或全部 CardBag，并以非零退出码阻止自动流程继续。
-5. CardBag019 当前修复 SHALL 只恢复错误 Sprite 引用，不得重新生成 Prefab，不得改变布局、分组、阴影或描边数据。
+1. WHEN CardBag 生成器创建或覆盖 Prefab THEN 保存流程 SHALL 只受生成器原有的源资源、定位、层级和阴影校验约束，不得被额外 Sprite 引用保存守卫拦截。
+2. WHEN 目标 `CardBagNNN.prefab` 尚不存在 THEN `OnWillSaveAssets` 或引用诊断 MUST NOT 尝试加载旧 Prefab 并过滤目标路径；删除后重建 SHALL 正常保存。
+3. WHEN 其他设备拉取或合并 CardBag Prefab THEN Unity 导入后 MAY 输出引用完整性诊断，但诊断 SHALL NOT 阻止生成、位置更新、层级更新、阴影更新或普通保存。
+4. 命令行校验 SHALL 支持校验单个 `-cardBagId` 或全部 CardBag；它只服务显式诊断，不参与菜单工具保存流程。
+5. CardBag Prefab 与同批源 PNG `.meta` SHALL 一起提交；Git 完整性不得通过 Unity 保存回调强制实现。
 
 ### 根因与设计
 
 - 仓库 `.gitignore`、本机全局 ignore 和 Git index 均未忽略 CardBag019 `.meta`；全部 `.meta` 正常被跟踪，也没有 `skip-worktree` 或 `assume-unchanged`。
 - `1a3be43` 的 CardBag019 Prefab 与仓库当前 31 个源 PNG `.meta` 为 `31/31` 匹配；后续 `9720caf` 被 Unity 本地 AssetDatabase 缓存误导，将其中 26 个正确 GUID 反向替换为仓库不存在的 GUID，并同时写错 CardBag006/020 的 `BoardTitle`。该提交没有对应源 PNG `.meta`，是跨设备引用丢失的直接原因。
-- 在现有 `CardBagPrefabGeneratorEditor.cs` 内增加统一引用验证器、保存守卫和导入后诊断，保持 Editor 目录扁平，不新增菜单。
-- 验证器按 Prefab 文件名解析 PackId，检查源目录、槽位 Sprite 路径、源图覆盖和 Piece 数量；保存前额外用 `GlobalObjectId` 对比已加载对象 GUID 与磁盘 `.meta`，导入后和命令行直接解析磁盘 Prefab YAML GUID。保存守卫只阻止错误 CardBag Prefab，不影响其他资源保存。
+- 引用验证器按 Prefab 文件名解析 PackId，检查源目录、槽位 Sprite 路径、源图覆盖和 Piece 数量，并可在导入后或命令行直接解析磁盘 Prefab YAML GUID；它不再拥有保存阻断能力。
+- 旧 `CardBagPrefabReferenceSaveGuard` 会在新 Prefab 尚未写入 AssetDatabase 时得到空根节点并过滤保存路径，导致任意删除后重建失败，因此整类 `OnWillSaveAssets` 阻断已移除。
 
 ### 任务
 
@@ -992,6 +992,8 @@
 - [x] 3. 实现导入后诊断和命令行单包/全包校验。
 - [x] 4. 使用磁盘 Prefab YAML 与源 `.meta` 直接对照，验证 CardBag019 为 `Expected=31, Missing=0`。
 - [x] 5. 扫描全部 23 个 CardBag Prefab，修复 CardBag006/020 的 BoardTitle 引用并确认 `Failed=0`；Runtime/Editor 编译与差异检查通过。
+- [x] 6. 移除生成器及相关批处理工具中的额外引用阻断，并删除全局 CardBag 保存守卫；保留只读导入/命令行诊断。
+- [ ] 7. 在 Unity 中重新生成 CardBag006/019/020，确认新 Prefab 保存成功并与新 `.meta` 一起纳入版本控制。
 
 ## 2026-08-28 - 完整彩色卡包拆包动画跨场景续播
 

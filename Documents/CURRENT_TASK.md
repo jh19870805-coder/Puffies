@@ -1,5 +1,13 @@
 # 当前任务
 
+## 2026-08-28 CardBag 新建 Prefab 保存阻断移除
+
+- 状态：保存限制已移除，Runtime/Editor 编译通过，等待 Unity 内重新生成 CardBag006/019/020。
+- 根因：删除旧 Prefab 后，生成器创建的新 Prefab 尚未写入 AssetDatabase；`CardBagPrefabReferenceSaveGuard.OnWillSaveAssets` 却先按目标路径加载现有 Prefab，得到 `null` 后把保存路径从回调结果中移除。Unity 日志明确记录 `Prefab not saved due to OnWillSaveAssets callback`，因此生成器最后统一报 `failed to save`，与图片识别和布局生成无关。
+- 修改：移除生成、位置更新、层级更新、阴影更新中的额外引用阻断，并删除全局 `OnWillSaveAssets` 保存守卫。生成器原有的源资源完整性、定位置信度、层级和阴影校验保持不变；导入后和命令行引用检查仅作诊断，不再阻止创建或保存。
+- CardBag006/019/020 源 PNG 的 `.meta` 已由 Unity 重新生成并处于未跟踪状态；重新生成 Prefab 后应将这些 `.meta` 与对应 Prefab 一起提交，不能只提交 Prefab。
+- 验证：日志中的三次失败均由旧保存回调阻断；移除后 Runtime/Editor 编译均为 `0` 警告、`0` 错误。仍需 Unity 完成脚本刷新后重新执行 **Generate CardBag Prefabs**，确认三包保存成功。
+
 ## 2026-08-28 完整彩色卡包拆包动画提前移除根因修复
 
 - 状态：代码根因修复完成，Runtime/Editor 编译通过，等待 Unity Play Mode 视觉验收。
@@ -9,14 +17,14 @@
 - 彩色撕开、灰色撕开的静态卡包下落、假碎片和真实 Piece 发牌参数未修改。
 - 验证：改用 Animator 实际完成状态后，`dotnet build Assembly-CSharp.csproj --no-restore` 与 `dotnet build Assembly-CSharp-Editor.csproj --no-restore` 均为 `0` 警告、`0` 错误，`git diff --check` 通过。仍需在 Play Mode 确认模型完整播放后才出现 `model animation completed`，并确认后续滑光独立结束。
 
-## CardBag Prefab 跨设备引用修复
+## CardBag Prefab 跨设备引用诊断
 
 - 状态：2026-08-28 已完成工作区修复和磁盘级静态校验，等待用户提交并推送。
 - 最终根因复核：`1a3be43` 写入的 26 个 CardBag019 GUID 与仓库 `.meta` 一致，是正确状态；后续 `9720caf` 在 `LIN-WORK` 被 Unity 本地 AssetDatabase 缓存误导，把 CardBag019 的 26 个引用反向恢复为仓库中不存在的 GUID，同时把 CardBag006/020 的 `BoardTitle` 改成跨包或不存在的 GUID。该提交只包含 Prefab，没有对应源 PNG `.meta`，因此其他设备必然丢失引用。此前工作流对两个提交的判断方向错误，现已纠正。
 - 已按仓库当前 `.meta` 恢复 CardBag019 的 26 个 Sprite GUID，以及 CardBag006/020 各一个 `BoardTitle` GUID；没有重新生成 Prefab，也没有改变布局、分组、阴影或描边。
-- 引用验证器除 Unity 对象路径校验外，新增两层真实 GUID 校验：保存前用 `GlobalObjectId` 对比已加载 Sprite GUID 与磁盘 `.meta`；导入后和命令行直接解析 Prefab YAML 的 `m_Sprite` GUID 并与磁盘 `.meta` 对比。Unity 本地缓存即使把路径解析为正确资源，也不能再让错误 GUID 通过。
+- 引用验证器保留导入后和命令行的磁盘 Prefab YAML/`.meta` 对照诊断，但不再注册保存守卫，也不参与生成器、位置更新、层级更新或阴影更新的保存流程。
 - 验证：CardBag019 为 `Expected=31, Missing=0`；全部 23 个 CardBag Prefab 的磁盘 YAML/Meta 扫描为 `Prefabs=23, Failed=0`；Runtime/Editor 编译和 `git diff --check` 通过后才允许提交。
-- 下一步：提交并推送当前 Prefab、验证器和工作流记录；其他设备拉取后让 Unity 正常导入，并确认 Console 不出现 CardBag serialized reference validation 错误。
+- 下一步：重新生成 CardBag006/019/020，检查 Prefab 内容后将新 Prefab 与 Unity 重新生成的源 PNG `.meta` 一起提交。
 
 ## 2026-08-28 拆包动画跨场景续播与碎片后层修复
 
