@@ -981,14 +981,14 @@
 ### 根因与设计
 
 - 仓库 `.gitignore`、本机全局 ignore 和 Git index 均未忽略 CardBag019 `.meta`；全部 `.meta` 正常被跟踪，也没有 `skip-worktree` 或 `assume-unchanged`。
-- `1a3be43^` 的 CardBag019 Prefab 与当前 31 个源 PNG `.meta` 为 `31/31` 匹配；`1a3be43` 单独替换了其中 26 个 GUID。25 个新 GUID 在仓库中从未存在，另一个错误指向 CardBag020 的 `BoardTitle`。根因是另一设备保存并提交 Prefab 时，没有同时提交 Unity 当时使用的本地 `.meta` 状态；工程又没有保存前引用校验。
+- `1a3be43` 的 CardBag019 Prefab 与仓库当前 31 个源 PNG `.meta` 为 `31/31` 匹配；后续 `9720caf` 被 Unity 本地 AssetDatabase 缓存误导，将其中 26 个正确 GUID 反向替换为仓库不存在的 GUID，并同时写错 CardBag006/020 的 `BoardTitle`。该提交没有对应源 PNG `.meta`，是跨设备引用丢失的直接原因。
 - 在现有 `CardBagPrefabGeneratorEditor.cs` 内增加统一引用验证器、保存守卫和导入后诊断，保持 Editor 目录扁平，不新增菜单。
-- 验证器按 Prefab 文件名解析 PackId，检查源目录、槽位 Sprite 路径、源图覆盖和 Piece 数量；保存守卫只阻止错误 CardBag Prefab，不影响其他资源保存。
+- 验证器按 Prefab 文件名解析 PackId，检查源目录、槽位 Sprite 路径、源图覆盖和 Piece 数量；保存前额外用 `GlobalObjectId` 对比已加载对象 GUID 与磁盘 `.meta`，导入后和命令行直接解析磁盘 Prefab YAML GUID。保存守卫只阻止错误 CardBag Prefab，不影响其他资源保存。
 
 ### 任务
 
 - [x] 1. 定向恢复 CardBag019 的 26 个错误 Sprite GUID。
 - [x] 2. 实现 CardBag Prefab 引用验证器与保存前阻断。
 - [x] 3. 实现导入后诊断和命令行单包/全包校验。
-- [x] 4. 使用 Unity 强制导入并验证 CardBag019 为 `Missing=0`、`Foreign=0`。
-- [x] 5. 扫描全部 23 个 CardBag Prefab，修复 CardBag006/020 的历史 BoardTitle 引用并确认 `failed=0`；Runtime/Editor 编译与差异检查通过。
+- [x] 4. 使用磁盘 Prefab YAML 与源 `.meta` 直接对照，验证 CardBag019 为 `Expected=31, Missing=0`。
+- [x] 5. 扫描全部 23 个 CardBag Prefab，修复 CardBag006/020 的 BoardTitle 引用并确认 `Failed=0`；Runtime/Editor 编译与差异检查通过。
