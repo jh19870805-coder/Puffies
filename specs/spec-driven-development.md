@@ -1,5 +1,36 @@
 # Spec Driven Development
 
+## 2026-08-28 - 开包代码适配制作方原始 Timeline
+
+### 需求
+
+1. WHEN 完整彩色卡包开始拆包 THEN 系统 SHALL 直接播放重新导入的制作方原始 `test.playable`，不得修改该 Timeline、FBX、Prefab、材质或粒子参数。
+2. WHEN 绑定原始 Timeline THEN 系统 SHALL 将 `Activation Track` 绑定当前卡包模型、唯一的 `Animation Track` 绑定当前 Animator，并将 `fx_chai_w_001` Control Track 绑定 MainScene `PackObject` 下的制作方实例。
+3. WHEN 原始 Timeline 不包含 `Image`、`blur` 或 Recorded 前置放大轨 THEN 系统 SHALL 从 `0s` 正常播放，不得因缺少后期改造轨道而判定准备失败。
+4. WHEN `Take 001` 播放到制作方下落关键帧 `0.800s` THEN 系统 SHALL 继续执行既有 GameScene 交接；Timeline SHALL 跨场景继续播放到自身完整结束时间。
+5. WHEN Timeline 自然结束 THEN 系统 SHALL 继续保持末帧，不得由滑光结束、粒子状态或固定延时提前隐藏、清理或销毁开包对象。
+6. IF 制作方原始开包模型只包含正面 Renderer THEN 系统 SHALL 正常替换动态封面并继续播放；IF 模型额外包含背面 Renderer THEN 系统 SHALL 沿用现有规则禁用该背面，避免第二层卡包。
+
+### 设计与任务
+
+- [x] 对比制作方原包、`EffectScene001` 绑定和仓库旧 Timeline，确认原版仅含 Activation、单一 Animation 和滑光 Control 三条根轨道。
+- [x] 移除运行时代码对 `Image`、`blur`、第二条 Animation Track 和 Recorded 前置放大轨的硬依赖。
+- [x] 按 `EffectScene001` 的制作方绑定方式绑定模型激活轨、模型 Animator 和场景滑光实例。
+- [x] 保留现有模型尺寸适配、动态封面替换、`0.800s` 场景交接和末帧 Hold 行为。
+- [x] 兼容 `Model_002~006` 只有正面 Renderer、`Model_001` 同时包含正反面 Renderer 的原始 FBX 差异。
+- [x] 编译 Runtime/Editor C# 项目并完成静态资源绑定检查。
+- [ ] 在 Unity Play Mode 目视验证完整彩包的撕开、下落、滑光、跨场景续播和末帧保留。
+
+### 验证基线
+
+- 制作方原始 `test.playable` 共 `377` 行：`Take 001` 为 `0~1.8333s`，`fx_chai_w_001` 为 `0.5333~5.5333s`，Activation 为 `0~5s`。
+- `EffectScene001` 将 Activation Track 绑定模型 GameObject、Animation Track 绑定模型 Animator，并将滑光 Control Track 的 Exposed Reference 绑定制作方光效对象。
+- 仓库旧版本为后期改造的 `1018` 行 Timeline，包含额外 Recorded、`Image` 和 `blur`；这些轨道不再作为运行时代码的必要条件。
+- `Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译通过，均为 `0` 警告、`0` 错误。
+- 原包 `test.playable` SHA-256 复核保持一致；本次没有修改 Timeline、FBX、Prefab、材质或粒子资源。
+- 首次 Play Mode 日志显示 `expected card renderers were not found in CardPackOpeningModel_002/003`；二进制 FBX 名称核对确认 002~006 只有三位编号正面节点，旧代码因强制要求五位编号背面节点而在 Timeline 启动前清理。
+- Renderer 校验已改为正面必须存在、背面可选；背面存在时仍禁用。修改后 Runtime/Editor C# 项目再次顺序编译通过，均为 `0` 警告、`0` 错误。
+
 ## 2026-08-26 - Loading 与撕开卡包入场卡顿优化
 
 ### 需求

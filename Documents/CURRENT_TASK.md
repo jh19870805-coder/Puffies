@@ -1,5 +1,24 @@
 # 当前任务
 
+## 2026-08-28 开包代码适配制作方原始 Timeline
+
+- 状态：运行时代码修改完成，Runtime/Editor 编译通过，等待 Unity 刷新与 Play Mode 视觉验收。
+- 根因：重新导入的原始 `test.playable` 只有 Activation、单一 Animation 和 `fx_chai_w_001` Control 三条根轨；旧代码硬性要求后期改造版的第二条 Animation、Recorded、`Image` 和 `blur`，因此会在绑定检查阶段直接停止开包。
+- 修改：`CardPackOpeningEffect` 按制作方 `EffectScene001` 原始绑定方式，将 Activation Track 绑定当前模型 GameObject、唯一 Animation Track 绑定模型 Animator、滑光 Control Track 绑定 MainScene `PackObject/fx_chai_w_001`；播放从原版 `0s` 开始。
+- 保留：原始 Timeline、FBX、Prefab、材质和粒子参数均未修改；动态封面替换、模型与 `600x680` 静态卡包对齐、`0.800s` GameScene 交接、跨场景续播和末帧 Hold 行为保持不变。
+- 原版时序：`Take 001=0~1.8333s`，`fx_chai_w_001=0.5333~5.5333s`，Activation=`0~5s`，Timeline 总长约 `5.533s`。
+- 首次 Play Mode 实际日志确认动画仍不可见的直接原因发生在 Timeline 之前：随机到 `CardPackOpeningModel_002/003` 时，旧代码因没有找到五位编号背面 Renderer 而报 `expected card renderers were not found` 并立即清理。原始 FBX 中仅 `Model_001` 同时包含正面和背面，`Model_002~006` 只有正面；现已改为正面必须存在、背面可选且存在时仍禁用。
+- 验证：Renderer 修复后 `Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 再次顺序编译通过，均为 `0` 警告、`0` 错误；原包 Timeline 哈希保持一致。仍需回到 Unity 触发脚本刷新后，从完整彩包验证撕开、下落、滑光、`0.800s` 跨场景交接和末帧保留。
+
+## 2026-08-28 制作方两个特效包原样重新导入
+
+- 状态：两个 `.unitypackage` 已按包内原始路径、GUID 和内容完整覆盖到工程，等待 Unity AssetDatabase 刷新及 Play Mode 视觉验收。
+- 来源：`特效资源/effect文件夹.unitypackage`、`特效资源/场景卡包和特效展示.unitypackage`；同目录 MKV 未处理。
+- 导入范围：第一个包 `441` 个资源条目，第二个包 `184` 个资源条目；两包有 `152` 个重叠路径，重叠资源的 GUID、资源内容和 `.meta` 完全一致。
+- 实际操作：原样复制 `587` 个资源文件和 `625` 个 `.meta`；只创建或覆盖包内路径，不删除包外资源，不重命名，不调整尺寸、位置、材质、粒子、相机、Animator 或 Timeline 参数。
+- 校验：重新逐项计算 SHA-256；两个包的全部资源和 `.meta` 与工程对应文件一致，差异数均为 `0`。导入前工作区干净；导入后 Git 差异均来自原包恢复及本任务记录。
+- 注意：Unity 当前保持打开，`Library/ArtifactDB` 与 `SourceAssetDB` 尚未刷新到本次导入时间。回到 Unity 后先等待资源导入结束并检查 Console，再分别预览制作方特效场景和完整彩包拆包流程；验收前不得再用代码或 Prefab 覆盖制作方参数。
+
 ## 2026-08-28 完整彩色卡包拆包动画结束后保留
 
 - 状态：代码修改完成，等待 Unity Play Mode 视觉验收。

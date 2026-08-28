@@ -42,7 +42,7 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _MaskTex:
-        m_Texture: {fileID: 2800000, guid: 11ec6517f005bed41b66352046273b17, type: 3}
+        m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _NoiseMask:
@@ -97,7 +97,7 @@ Material:
     - _MainTexSecUVSpeed: 0
     - _MainTexUVScale: 1
     - _Mask: 0
-    - _MaskExp: 0.98
+    - _MaskExp: 1
     - _MaskTexSecUVSpeed: 0
     - _Mode: 2
     - _Negate: 0
