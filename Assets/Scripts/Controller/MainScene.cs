@@ -18,6 +18,7 @@ public class MainScene : MonoBehaviour
     private const float ReferenceHeight = GameDefine.DesignHeight;
     private const float PixelsPerUnit = GameDefine.PixelsPerUnit;
     private const float PackageOpenScaleDuration = 0.3f;
+    private const float BagSelectButtonEntranceBottomMargin = 24f;
     private const float PackageOpenWidth = 600f;
     private const float PackageOpenHeight = 680f;
     private const float PackageSlotWidth = 240f;
@@ -208,6 +209,8 @@ public class MainScene : MonoBehaviour
     private GameObject mBagSelectCameraButtonRoot;
     private Button mBagSelectCameraButton;
     private TMP_Text mBagSelectPlayLabel;
+    private RectTransform[] mBagSelectButtonRects = Array.Empty<RectTransform>();
+    private Vector2[] mBagSelectButtonPositions = Array.Empty<Vector2>();
     private GameObject mReplayPanelRoot;
     private Button mReplayConfirmButton;
     private Button mReplayReturnButton;
@@ -742,6 +745,7 @@ public class MainScene : MonoBehaviour
                 $"MainScene: bag selection back button not found. Expected {BagSelectBackButtonObjectName}.");
         }
 
+        CacheBagSelectButtonPositions();
         SetBagSelectPanelVisible(false);
     }
 
@@ -1237,11 +1241,17 @@ public class MainScene : MonoBehaviour
         Vector2 toPosition,
         Vector2 fromSize,
         Vector2 toSize,
-        float duration = PackageOpenScaleDuration)
+        float duration = PackageOpenScaleDuration,
+        bool animateBagSelectButtons = false)
     {
         if (mSelectedPackageOverlayRect == null)
         {
             yield break;
+        }
+
+        if (animateBagSelectButtons)
+        {
+            SetBagSelectButtonEntranceProgress(0f);
         }
 
         var elapsed = 0f;
@@ -1260,11 +1270,21 @@ public class MainScene : MonoBehaviour
                 fromSize,
                 toSize,
                 eased));
+            if (animateBagSelectButtons)
+            {
+                var buttonEased = 1f - Mathf.Pow(1f - normalized, 3f);
+                SetBagSelectButtonEntranceProgress(buttonEased);
+            }
+
             yield return null;
         }
 
         mSelectedPackageOverlayRect.anchoredPosition = toPosition;
         SetSelectedPackageVisualSize(toSize);
+        if (animateBagSelectButtons)
+        {
+            SetBagSelectButtonEntranceProgress(1f);
+        }
     }
 
     private void CreateOpeningStageBackground()
@@ -3459,13 +3479,16 @@ public class MainScene : MonoBehaviour
         SyncSelectedPackageAnimator(entry);
         RefreshBagSelectPackState(bagId);
         SetBagSelectBackdropVisible(true);
+        SetBagSelectButtonEntranceProgress(0f);
         SetBagSelectPanelVisible(true);
         SetBagSelectButtonsInteractable(false);
         yield return AnimateSelectedPackageImage(
             mSelectedPackageStartPosition,
             mSelectedPackageDisplayPosition,
             mSelectedPackageStartSize,
-            mSelectedPackageDisplaySize);
+            mSelectedPackageDisplaySize,
+            PackageOpenScaleDuration,
+            true);
         SetBagSelectButtonsInteractable(true);
 
         mIsPlayingAnimation = false;
@@ -4404,6 +4427,85 @@ public class MainScene : MonoBehaviour
         mPlayAnimationCoroutine = null;
     }
 
+    private void CacheBagSelectButtonPositions()
+    {
+        var buttonRects = new List<RectTransform>(3);
+        if (mBagSelectBackButton != null
+            && mBagSelectBackButton.transform is RectTransform backRect)
+        {
+            buttonRects.Add(backRect);
+        }
+
+        if (mBagSelectPlayButton != null
+            && mBagSelectPlayButton.transform is RectTransform playRect)
+        {
+            buttonRects.Add(playRect);
+        }
+
+        if (mBagSelectCameraButtonRoot != null
+            && mBagSelectCameraButtonRoot.transform is RectTransform cameraRect)
+        {
+            buttonRects.Add(cameraRect);
+        }
+
+        mBagSelectButtonRects = buttonRects.ToArray();
+        mBagSelectButtonPositions = new Vector2[mBagSelectButtonRects.Length];
+        for (var i = 0; i < mBagSelectButtonRects.Length; i++)
+        {
+            mBagSelectButtonPositions[i] = mBagSelectButtonRects[i].anchoredPosition;
+        }
+    }
+
+    private void SetBagSelectButtonEntranceProgress(float progress)
+    {
+        progress = Mathf.Clamp01(progress);
+        var offscreenY = ResolveBagSelectButtonOffscreenY();
+        for (var i = 0; i < mBagSelectButtonRects.Length; i++)
+        {
+            SetBagSelectButtonEntrancePosition(
+                mBagSelectButtonRects[i],
+                mBagSelectButtonPositions[i],
+                offscreenY,
+                progress);
+        }
+    }
+
+    private float ResolveBagSelectButtonOffscreenY()
+    {
+        var panelRect = mBagSelectPanelRoot != null
+            ? mBagSelectPanelRoot.transform as RectTransform
+            : null;
+        var maximumButtonHeight = 0f;
+        for (var i = 0; i < mBagSelectButtonRects.Length; i++)
+        {
+            maximumButtonHeight = Mathf.Max(
+                maximumButtonHeight,
+                mBagSelectButtonRects[i].rect.height);
+        }
+
+        var panelBottom = panelRect != null
+            ? panelRect.rect.yMin
+            : -GameDefine.DesignHeight * 0.5f;
+        return panelBottom
+               - maximumButtonHeight * 0.5f
+               - BagSelectButtonEntranceBottomMargin;
+    }
+
+    private static void SetBagSelectButtonEntrancePosition(
+        RectTransform buttonRect,
+        Vector2 finalPosition,
+        float offscreenY,
+        float progress)
+    {
+        if (buttonRect == null)
+        {
+            return;
+        }
+
+        finalPosition.y = Mathf.LerpUnclamped(offscreenY, finalPosition.y, progress);
+        buttonRect.anchoredPosition = finalPosition;
+    }
+
     private void SetBagSelectButtonsInteractable(bool interactable)
     {
         if (mBagSelectPlayButton != null)
@@ -4442,6 +4544,11 @@ public class MainScene : MonoBehaviour
 
     private void SetBagSelectPanelVisible(bool visible)
     {
+        if (!visible)
+        {
+            SetBagSelectButtonEntranceProgress(1f);
+        }
+
         if (visible && mBagSelectPanelCanvasGroup != null)
         {
             mBagSelectPanelCanvasGroup.alpha = 1f;

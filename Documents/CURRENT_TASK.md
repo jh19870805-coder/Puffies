@@ -1,5 +1,14 @@
 # 当前任务
 
+## 2026-08-28 卡包独立放大页底部按钮滑入
+
+- 状态：代码修改完成，Runtime/Editor 编译通过，等待 Unity Play Mode 视觉验收。
+- 行为：点击首页列表卡包进入独立放大页时，`BtnBack`、`BtnPlay` 和当前状态允许显示的 `BtnCamera` 从 `PanelBagSelect` 下边界之外同步向上滑到场景原坐标；与卡包 `0.3s` 放大同时开始，按钮使用 EaseOut 缓出。
+- 布局：三个按钮的场景层级、尺寸、最终 X/Y 坐标均未修改；运行时缓存各自终点，只统一插值 Y，因此横向间距保持不变。屏幕外起点按面板实际下边界、最大按钮半高和 `24px` 余量动态计算。
+- 状态：相机按钮继续只对已完成卡包显示；“玩/重玩”文字和既有状态判断不变。动画结束前按钮不可交互；页面隐藏、失败或下次打开前统一恢复缓存终点，不累计位移。
+- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
+- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译通过，均为 `0` 警告、`0` 错误；仍需分别目视验证完整彩包、彩色撕开和灰色撕开状态。
+
 ## 2026-08-28 开包代码适配制作方原始 Timeline
 
 - 状态：运行时代码修改完成，Runtime/Editor 编译通过，等待 Unity 刷新与 Play Mode 视觉验收。
