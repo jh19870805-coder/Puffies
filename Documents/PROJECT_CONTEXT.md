@@ -29,7 +29,7 @@ Unity **2022.3** / Built-in Render Pipeline 项目，使用 Linear 色彩空间�
 | 场景 | 需求 |
 |------|------|
 | LoadingScene | 初始化 JSON、SQLite、任务数据和卡包数据；加载结束后进入 MainScene |
-| MainScene | 根据 `CardPacks.csv` 与 SQLite 状态刷新卡包列表；每页固定 6 列 x 3 行显示 18 个卡包。列表和选择页都使用绑定 `Main Camera` 的 `Screen Space - Camera` Canvas。列表显示分为完整彩色、第一组完成后的彩色撕开加本关碎片、无活动会话的灰色撕开完成态；选择页复制当前完整 `PackNode` 并从列表位置放大到 `600 x 680`。只有完整彩色卡包进入 `BgGame` 开包舞台并播放 `CardPackOpeningModel_001-006` 与 `fx_chai_w_001`；彩色撕开点击“玩”直接继续游戏，灰色撕开确认重玩后清空进度并直接进入游戏。保留拍照、重玩确认、Rank、Achieve 和 Menu 入口。 |
+| MainScene | 根据 `CardPacks.csv` 与 SQLite 状态刷新卡包列表；每页固定 6 列 x 3 行显示 18 个卡包。列表和选择页都使用绑定 `Main Camera` 的 `Screen Space - Camera` Canvas。列表显示分为完整彩色、第一组完成后的彩色撕开加本关碎片、无活动会话的灰色撕开完成态；选择页复制当前完整 `PackNode` 并从列表位置放大到 `600 x 680`。只有完整彩色卡包进入 `BgGame` 开包舞台并播放 `CardPackOpeningModel_001-006` 与 `fx_chai_w_001`；彩色撕开点击“玩”直接继续游戏，灰色撕开确认重玩后清空进度并直接进入游戏。保留拍照、重玩确认、Rank、Achieve、Menu、Steam 愿望单、Discord 和 QQ 群入口。 |
 | GameScene | 根据选中 PackId 加载 `CardBagNNN` Prefab，并读取 `CardPacks.csv/BoardScale` 缩放棋盘；按照 `PieceGGII` 四位数字命名组织拼图分组；从正常开包流程进入时播放棋盘、托盘和当前组 Piece 入场；每次正确放置 Piece 后立即持久化，重新进入时恢复已放置 Piece 并从首个未完成分组继续；全部完成后显示 RewardPanel；Editor 和 Development Build 在 `BtnTips` 左侧提供“一键完成”测试按钮 |
 | RankScene | 仅占位；首个 Demo 不包含排行榜后端功能。当前模拟列表前三名的 `RankBg` 分别使用原生 `1646 x 148` 的 `RankCellBg_1.png`、`RankCellBg_2.png`、`RankCellBg_3.png`，第四名以后使用 `1636 x 136` 的 `RankCellBg.png`；`RankItem` 根高度为 `148`，列表纵向间距为 `5`，条目中心步距为 `153` |
 | AchieveScene | 当前显示 20 条模拟成就，前 5 条已达成、后 15 条未达成；接入 Steam 后替换数据源。成就网格固定为 6 列，单元尺寸 `240 x 332`，横纵间距均为 `40` |
@@ -120,6 +120,9 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
   -> MainScene
       -> BtnRank     -> RankScene     -> BtnReturn -> Main
       -> BtnAchieve  -> AchieveScene  -> CloseBtn  -> Main
+      -> BtnWishList -> Steam 商店愿望单页面
+      -> BtnDiscord  -> Discord 邀请链接
+      -> BtnQQ       -> QQ 群 `1079431440`
       -> BtnMenu     -> PanelMenu     -> BtnClose / BtnReturn -> 关闭菜单
                     -> BtnSet        -> PanelSet -> BtnClose / BtnReturn -> 关闭设置
                     -> BtnUsable     -> PanelUsable -> BtnClose / BtnReturn -> 关闭辅助选项
@@ -144,6 +147,9 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 | 对象名称 | 用途 |
 |---------|------|
 | `BtnRank` / `BtnAchieve` | Main -> Rank / Achieve |
+| `BtnWishList` | 使用系统浏览器打开 `https://store.steampowered.com/app/4906510/?utm_source=InGame` |
+| `BtnDiscord` | 使用系统浏览器打开 `https://discord.gg/sfmNFEF5ec` |
+| `BtnQQ` | 使用系统浏览器打开配置的 QQ 群链接，目标群号 `1079431440` |
 | `BtnMenu` | MainScene 打开 `PanelMenu` |
 | `PanelMenu` | MainScene 菜单弹窗，启动时隐藏 |
 | `PanelMenu/BtnClose` | 关闭 MainScene 菜单 |

@@ -1,5 +1,48 @@
 # Spec Driven Development
 
+## 2026-08-28 - 首页 QQ 群入口
+
+### 需求
+
+1. WHEN 玩家点击 MainScene 的 `BtnQQ` THEN 系统 SHALL 打开用户提供的 `qm.qq.com` 群链接，并完整保留 `_wv`、`k`、`authKey`、`noverify` 和 `group_code=1079431440` 查询参数。
+2. 系统 SHALL 复用现有按钮的布局、图片和交互状态，不得创建第二个 QQ 按钮或修改其他首页导航。
+3. 愿望单、Discord 和 QQ 外链 SHALL 使用同一查找与唯一监听绑定规则，同时保持各自 URL 和回调独立。
+
+### 设计与任务
+
+- [x] 在 MainScene 初始化阶段查找 `BtnQQ` 并绑定唯一运行时监听。
+- [x] 使用 Unity `Application.OpenURL` 原样打开固定 HTTP 地址，不解码 `%2B` 或重组查询字符串。
+- [x] 将三个首页外链入口的重复 Button 查找和监听代码收敛到 `ConfigureExternalLinkButton`。
+- [ ] 在 Unity Play Mode 点击按钮，确认 QQ 能识别目标群号 `1079431440`。
+
+## 2026-08-28 - 首页 Discord 入口
+
+### 需求
+
+1. WHEN 玩家点击 MainScene 的 `BtnDiscord` THEN 系统 SHALL 打开 `https://discord.gg/sfmNFEF5ec`。
+2. 系统 SHALL 复用现有按钮的布局、图片和交互状态，不得创建第二个 Discord 按钮或修改其他首页导航。
+3. 绑定 SHALL 可重复初始化且不得在一次点击中重复打开多个页面。
+
+### 设计与任务
+
+- [x] 在 MainScene 初始化阶段查找 `BtnDiscord` 并绑定唯一运行时监听。
+- [x] 使用 Unity `Application.OpenURL` 打开固定 HTTPS 地址，不新增第三方 SDK 依赖。
+- [ ] 在 Unity Play Mode 点击按钮，确认 Discord 邀请链接完整打开。
+
+## 2026-08-28 - 首页愿望单入口
+
+### 需求
+
+1. WHEN 玩家点击 MainScene 的 `BtnWishList` THEN 系统 SHALL 打开 `https://store.steampowered.com/app/4906510/?utm_source=InGame`。
+2. 系统 SHALL 复用现有按钮的布局、图片和交互状态，不得创建第二个愿望单按钮或修改其他首页导航。
+3. 绑定 SHALL 可重复初始化且不得在一次点击中重复打开多个页面。
+
+### 设计与任务
+
+- [x] 在 MainScene 初始化阶段查找 `BtnWishList` 并绑定唯一运行时监听。
+- [x] 使用 Unity `Application.OpenURL` 打开固定 HTTPS 地址，不新增 Steamworks SDK 依赖。
+- [ ] 在 Unity Play Mode 点击按钮，确认目标 URL 和 `utm_source=InGame` 参数完整。
+
 ## 2026-08-28 - PackageScrollView 横向软裁切
 
 ### 需求

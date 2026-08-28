@@ -99,6 +99,17 @@ public class MainScene : MonoBehaviour
     private const string PackTornMaskFilePrefix = "PackMask";
     private const string PackNameTextObjectName = "NameText";
     private const string MenuButtonObjectName = "BtnMenu";
+    private const string WishListButtonObjectName = "BtnWishList";
+    private const string WishListUrl =
+        "https://store.steampowered.com/app/4906510/?utm_source=InGame";
+    private const string DiscordButtonObjectName = "BtnDiscord";
+    private const string DiscordUrl = "https://discord.gg/sfmNFEF5ec";
+    private const string QqButtonObjectName = "BtnQQ";
+    private const string QqGroupUrl =
+        "http://qm.qq.com/cgi-bin/qm/qr?_wv=1027"
+        + "&k=Ke5OfLu0c2EBkNiyKug4DBbHYMlTTkWW"
+        + "&authKey=CXj1XfLtp7Xv4hRHsSAyuXMEHCGPz45KKD4vM%2B7nyRyudAOG45KVzBN%2BS4SJjOZw"
+        + "&noverify=0&group_code=1079431440";
     private const string MenuPanelObjectName = "PanelMenu";
     private const string MenuCloseButtonObjectName = "BtnClose";
     private const string SettingsPanelObjectName = "PanelSet";
@@ -554,6 +565,9 @@ public class MainScene : MonoBehaviour
 
         ConfigureRankButton();
         ConfigureAchieveButton();
+        ConfigureWishListButton();
+        ConfigureDiscordButton();
+        ConfigureQqButton();
         ConfigureBagSelectPanel();
         ConfigureReplayPanel();
         ConfigurePhotoPanel();
@@ -2824,6 +2838,60 @@ public class MainScene : MonoBehaviour
         }
 
         GameManager.EnterAchieveScene();
+    }
+
+    private void ConfigureWishListButton()
+    {
+        ConfigureExternalLinkButton(
+            WishListButtonObjectName,
+            OnWishListButtonClicked,
+            "wish list");
+    }
+
+    private static void OnWishListButtonClicked()
+    {
+        Application.OpenURL(WishListUrl);
+    }
+
+    private void ConfigureDiscordButton()
+    {
+        ConfigureExternalLinkButton(
+            DiscordButtonObjectName,
+            OnDiscordButtonClicked,
+            "Discord");
+    }
+
+    private static void OnDiscordButtonClicked()
+    {
+        Application.OpenURL(DiscordUrl);
+    }
+
+    private void ConfigureQqButton()
+    {
+        ConfigureExternalLinkButton(QqButtonObjectName, OnQqButtonClicked, "QQ");
+    }
+
+    private static void OnQqButtonClicked()
+    {
+        Application.OpenURL(QqGroupUrl);
+    }
+
+    private static void ConfigureExternalLinkButton(
+        string objectName,
+        UnityEngine.Events.UnityAction onClick,
+        string displayName)
+    {
+        var buttonObject = GameCommonUtility.FindSceneObject(objectName);
+        var button = buttonObject != null ? buttonObject.GetComponent<Button>() : null;
+        if (button == null)
+        {
+            Debug.LogWarning(
+                $"MainScene: {displayName} button not found. Expected {objectName}.");
+            return;
+        }
+
+        button.onClick.RemoveListener(onClick);
+        button.onClick.AddListener(onClick);
     }
 
     private void ConfigureMenuPanel()

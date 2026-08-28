@@ -1,5 +1,30 @@
 # 当前任务
 
+## 2026-08-28 首页 QQ 按钮
+
+- 状态：代码修改完成，Runtime/Editor 编译通过，等待 Unity Play Mode 验收。
+- 行为：MainScene 初始化时查找现有 `BtnQQ` 并绑定点击事件；点击后使用 `Application.OpenURL` 打开用户提供的 QQ 群链接，目标群号为 `1079431440`。
+- 整理：愿望单、Discord 和 QQ 三个外链按钮统一使用 `ConfigureExternalLinkButton` 查找 Button、输出缺失警告并先移除同一监听再绑定，三个入口仍保留各自独立的 URL 常量和点击回调。
+- 边界：复用场景中现有 Button、位置和美术资源，不修改其他首页入口，不解码或重写 URL 中的 `%2B`、`authKey` 等查询参数。
+- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
+- 验证：完整 URL 静态核对通过，`%2B` 与全部查询参数保持原样；`git diff --check` 通过；`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译均为 `0` 警告、`0` 错误。Unity Play Mode 仍需点击 `BtnQQ`，确认系统打开指定 QQ 群链接并能识别群号 `1079431440`。
+
+## 2026-08-28 首页 Discord 按钮
+
+- 状态：代码修改完成，Runtime/Editor 编译通过，等待 Unity Play Mode 验收。
+- 行为：MainScene 初始化时查找现有 `BtnDiscord` 并绑定点击事件；点击后使用 `Application.OpenURL` 打开 `https://discord.gg/sfmNFEF5ec`。
+- 边界：复用场景中现有 Button、位置和美术资源，不修改其他首页入口；重复初始化时先移除同一运行时监听，避免重复打开。
+- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
+- 验证：`git diff --check` 通过；`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译均为 `0` 警告、`0` 错误。Unity Play Mode 仍需点击 `BtnDiscord`，确认系统打开指定 Discord 邀请链接。
+
+## 2026-08-28 首页愿望单按钮
+
+- 状态：代码修改完成，Runtime/Editor 编译通过，等待 Unity Play Mode 验收。
+- 行为：MainScene 初始化时查找现有 `BtnWishList` 并绑定点击事件；点击后使用 `Application.OpenURL` 打开 `https://store.steampowered.com/app/4906510/?utm_source=InGame`。
+- 边界：复用场景中现有 Button、位置和美术资源，不添加 Steamworks SDK 依赖，不修改其他首页按钮或导航逻辑；重复初始化时先移除同一运行时监听，避免重复打开。
+- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
+- 验证：`git diff --check` 通过；`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译均为 `0` 警告、`0` 错误。Unity Play Mode 仍需点击 `BtnWishList`，确认系统打开目标 Steam 商店 URL 且保留 `utm_source=InGame`。
+
 ## 2026-08-28 PackageScrollView 横向软裁切
 
 - 状态：场景和 Shader 修改完成，Unity 已重新导入且 Runtime/Editor 编译通过，等待 Unity Play Mode 视觉验收。
