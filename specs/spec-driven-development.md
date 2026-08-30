@@ -10,6 +10,7 @@
 4. WHEN 当前系列 Vol 大于等于 2 THEN `PackVol` SHALL 使用 `PackVolN.png`；WHEN 对应资源不存在 THEN `PackVol` SHALL 隐藏。
 5. WHEN 前层或后层卡包处于完整、进行中撕开或完成撕开状态 THEN 每张封面 SHALL 独立应用所属卡包的现有状态材质和撕口蒙版。
 6. WHEN 用户点击系列组合槽 THEN 系统 SHALL 打开 `PanelBagVol`，按系列链顺序展示全部已解锁 Vol，并默认居中最高已解锁 Vol。
+   - 进场 SHALL 先只放大主卡包，底部操作按钮在放大后半段上滑；主卡包到位并短暂停顿后，相邻 Vol 才从主卡包背后展开，分页圆点随侧卡展开延迟出现。
 7. WHEN 用户横向拖动轮播或点击左右按钮 THEN 系统 SHALL 使用编辑器 `PackLeft/PackCenter/PackRight` 的位置和缩放进行连续插值，并在松手后吸附到最近 Vol。
 8. WHEN 某个 Vol 居中 THEN 系统 SHALL 更新分页圆点、`玩/重玩` 与相机按钮，并保证轮播中的卡包 Z 轴旋转为 `0`。
 9. WHEN 用户确认居中 Vol THEN 系统 SHALL 按该卡包自身状态复用现有完整开包、继续游戏或重玩确认流程；非系列卡包仍使用 `PanelBagSelect`。

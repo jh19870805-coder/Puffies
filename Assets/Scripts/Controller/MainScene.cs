@@ -162,6 +162,12 @@ public class MainScene : MonoBehaviour
     private const float BagVolumeSnapDuration = 0.25f;
     private const float BagVolumeSwipeThreshold = 60f;
     private const float BagVolumeVisibleRange = 1.65f;
+    private const float BagVolumeOpenScaleDuration = 0.4f;
+    private const float BagVolumeActionButtonDelay = 0.25f;
+    private const float BagVolumeActionButtonDuration = 0.18f;
+    private const float BagVolumeSideRevealDelay = 0.15f;
+    private const float BagVolumeSideRevealDuration = 0.2f;
+    private const float BagVolumeDotRevealStart = 0.35f;
     private const string ReplayPanelObjectName = "PanelReplay";
     private const string ReplayConfirmButtonObjectName = "BtnReplay";
     private const string ReplayReturnButtonObjectName = "BtnReturn";
@@ -261,6 +267,9 @@ public class MainScene : MonoBehaviour
     private Button mBagVolumeNextButton;
     private TMP_Text mBagVolumePlayLabel;
     private SeriesPackageCarouselInput mBagVolumeCarouselInput;
+    private CanvasGroup mBagVolumeIndicatorsCanvasGroup;
+    private RectTransform[] mBagVolumeActionButtonRects = Array.Empty<RectTransform>();
+    private Vector2[] mBagVolumeActionButtonPositions = Array.Empty<Vector2>();
     private readonly List<SeriesCarouselCard> mBagVolumeCards = new List<SeriesCarouselCard>();
     private readonly List<GameObject> mBagVolumeDots = new List<GameObject>();
     private PackageEntry mBagVolumeSourceEntry;
@@ -974,6 +983,20 @@ public class MainScene : MonoBehaviour
         mBagVolumePlayLabel = mBagVolumePlayButton != null
             ? mBagVolumePlayButton.GetComponentInChildren<TMP_Text>(true)
             : null;
+        CacheBagVolumeActionButtonPositions();
+        if (mBagVolumeIndicatorsRoot != null)
+        {
+            mBagVolumeIndicatorsCanvasGroup =
+                mBagVolumeIndicatorsRoot.GetComponent<CanvasGroup>();
+            if (mBagVolumeIndicatorsCanvasGroup == null)
+            {
+                mBagVolumeIndicatorsCanvasGroup =
+                    mBagVolumeIndicatorsRoot.gameObject.AddComponent<CanvasGroup>();
+            }
+
+            mBagVolumeIndicatorsCanvasGroup.interactable = false;
+            mBagVolumeIndicatorsCanvasGroup.blocksRaycasts = false;
+        }
 
         mBagVolumeCarouselInput = mBagVolumePanelRoot.GetComponent<SeriesPackageCarouselInput>();
         if (mBagVolumeCarouselInput == null)
@@ -1008,6 +1031,77 @@ public class MainScene : MonoBehaviour
         button.onClick.RemoveListener(action);
         button.onClick.AddListener(action);
         return button;
+    }
+
+    private void CacheBagVolumeActionButtonPositions()
+    {
+        var buttonRects = new List<RectTransform>(3);
+        AddButtonRect(mBagVolumeBackButton, buttonRects);
+        AddButtonRect(mBagVolumePlayButton, buttonRects);
+        AddButtonRect(mBagVolumeCameraButton, buttonRects);
+        mBagVolumeActionButtonRects = buttonRects.ToArray();
+        mBagVolumeActionButtonPositions = new Vector2[mBagVolumeActionButtonRects.Length];
+        for (var i = 0; i < mBagVolumeActionButtonRects.Length; i++)
+        {
+            mBagVolumeActionButtonPositions[i] =
+                mBagVolumeActionButtonRects[i].anchoredPosition;
+        }
+    }
+
+    private static void AddButtonRect(Button button, ICollection<RectTransform> results)
+    {
+        if (button != null && button.transform is RectTransform rectTransform)
+        {
+            results.Add(rectTransform);
+        }
+    }
+
+    private void SetBagVolumeActionButtonEntranceProgress(float progress)
+    {
+        progress = Mathf.Clamp01(progress);
+        var panelRect = mBagVolumePanelRoot != null
+            ? mBagVolumePanelRoot.transform as RectTransform
+            : null;
+        var panelBottom = panelRect != null
+            ? panelRect.rect.yMin
+            : -GameDefine.DesignHeight * 0.5f;
+        for (var i = 0; i < mBagVolumeActionButtonRects.Length; i++)
+        {
+            var rectTransform = mBagVolumeActionButtonRects[i];
+            if (rectTransform == null)
+            {
+                continue;
+            }
+
+            var offscreenY = panelBottom
+                             - rectTransform.rect.height * 0.5f
+                             - BagSelectButtonEntranceBottomMargin;
+            SetBagSelectButtonEntrancePosition(
+                rectTransform,
+                mBagVolumeActionButtonPositions[i],
+                offscreenY,
+                progress);
+        }
+    }
+
+    private IEnumerator AnimateBagVolumeActionButtons()
+    {
+        if (BagVolumeActionButtonDelay > 0f)
+        {
+            yield return new WaitForSecondsRealtime(BagVolumeActionButtonDelay);
+        }
+
+        var elapsed = 0f;
+        while (elapsed < BagVolumeActionButtonDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            var normalized = Mathf.Clamp01(elapsed / BagVolumeActionButtonDuration);
+            var eased = 1f - Mathf.Pow(1f - normalized, 3f);
+            SetBagVolumeActionButtonEntranceProgress(eased);
+            yield return null;
+        }
+
+        SetBagVolumeActionButtonEntranceProgress(1f);
     }
 
     private void ConfigureReplayPanel()
@@ -4345,23 +4439,36 @@ public class MainScene : MonoBehaviour
             yield break;
         }
 
-        selectedCard.RectTransform.gameObject.SetActive(false);
+        for (var i = 0; i < mBagVolumeCards.Count; i++)
+        {
+            mBagVolumeCards[i].RectTransform.gameObject.SetActive(false);
+        }
+
         mSelectedPackageOverlayRect.anchoredPosition = mSelectedPackageStartPosition;
         SetSelectedPackageVisualSize(mSelectedPackageStartSize);
         SetSelectedPackageImageVisible(true);
         SetBagSelectBackdropVisible(true);
+        SetBagVolumeActionButtonEntranceProgress(0f);
+        SetBagVolumeNavigationVisible(false);
         SetPanelVisible(mBagVolumePanelRoot, true);
         SetBagVolumeControlsInteractable(false);
+        StartCoroutine(AnimateBagVolumeActionButtons());
         yield return AnimateSelectedPackageImage(
             mSelectedPackageStartPosition,
             mSelectedPackageDisplayPosition,
             mSelectedPackageStartSize,
             mSelectedPackageDisplaySize,
-            PackageOpenScaleDuration);
+            BagVolumeOpenScaleDuration);
+
+        if (BagVolumeSideRevealDelay > 0f)
+        {
+            yield return new WaitForSecondsRealtime(BagVolumeSideRevealDelay);
+        }
 
         SetSelectedPackageImageVisible(false);
         ClearSelectedPackageVisual();
-        RefreshBagVolumeLayout();
+        yield return AnimateBagVolumeSideCards();
+        SetBagVolumeNavigationVisible(true);
         SetBagVolumeControlsInteractable(true);
         mIsPlayingAnimation = false;
         mPlayAnimationCoroutine = null;
@@ -4584,6 +4691,105 @@ public class MainScene : MonoBehaviour
         }
 
         mBagVolumeCards[nearestCardIndex].RectTransform.SetAsLastSibling();
+    }
+
+    private IEnumerator AnimateBagVolumeSideCards()
+    {
+        if (mBagVolumeCards.Count == 0
+            || mBagVolumeCenterTemplate == null
+            || mBagVolumeLeftTemplate == null
+            || mBagVolumeRightTemplate == null)
+        {
+            yield break;
+        }
+
+        var centerPosition = mBagVolumeCenterTemplate.anchoredPosition;
+        var leftSpacing = centerPosition.x - mBagVolumeLeftTemplate.anchoredPosition.x;
+        var rightSpacing = mBagVolumeRightTemplate.anchoredPosition.x - centerPosition.x;
+        var centerScale = mBagVolumeCenterTemplate.localScale.x;
+        var leftScale = Mathf.Abs(mBagVolumeLeftTemplate.localScale.x);
+        var rightScale = Mathf.Abs(mBagVolumeRightTemplate.localScale.x);
+        if (mBagVolumeIndicatorsRoot != null)
+        {
+            mBagVolumeIndicatorsRoot.gameObject.SetActive(true);
+        }
+
+        if (mBagVolumeIndicatorsCanvasGroup != null)
+        {
+            mBagVolumeIndicatorsCanvasGroup.alpha = 0f;
+        }
+
+        var elapsed = 0f;
+        while (elapsed < BagVolumeSideRevealDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            var normalized = Mathf.Clamp01(elapsed / BagVolumeSideRevealDuration);
+            var eased = Mathf.SmoothStep(0f, 1f, normalized);
+            for (var i = 0; i < mBagVolumeCards.Count; i++)
+            {
+                var card = mBagVolumeCards[i];
+                var relativePosition = i - mBagVolumePosition;
+                var distance = Mathf.Abs(relativePosition);
+                var shouldShow = distance <= BagVolumeVisibleRange;
+                card.RectTransform.gameObject.SetActive(shouldShow);
+                if (!shouldShow)
+                {
+                    continue;
+                }
+
+                var spacing = relativePosition < 0f ? leftSpacing : rightSpacing;
+                var sideScale = relativePosition < 0f ? leftScale : rightScale;
+                var finalScale = Mathf.Lerp(
+                    centerScale,
+                    sideScale,
+                    Mathf.Clamp01(distance));
+                card.RectTransform.anchoredPosition = new Vector2(
+                    centerPosition.x + relativePosition * spacing * eased,
+                    centerPosition.y);
+                card.RectTransform.localScale = Vector3.one * Mathf.Lerp(
+                    centerScale,
+                    finalScale,
+                    eased);
+                card.RectTransform.localEulerAngles = Vector3.zero;
+            }
+
+            mBagVolumeCards[mBagVolumeSelectedIndex].RectTransform.SetAsLastSibling();
+            if (mBagVolumeIndicatorsCanvasGroup != null)
+            {
+                mBagVolumeIndicatorsCanvasGroup.alpha = Mathf.SmoothStep(
+                    0f,
+                    1f,
+                    Mathf.InverseLerp(BagVolumeDotRevealStart, 1f, normalized));
+            }
+
+            yield return null;
+        }
+
+        RefreshBagVolumeLayout();
+        if (mBagVolumeIndicatorsCanvasGroup != null)
+        {
+            mBagVolumeIndicatorsCanvasGroup.alpha = 1f;
+        }
+    }
+
+    private void SetBagVolumeNavigationVisible(bool visible)
+    {
+        if (mBagVolumeIndicatorsRoot != null)
+        {
+            mBagVolumeIndicatorsRoot.gameObject.SetActive(visible);
+        }
+
+        if (mBagVolumePreviousButton != null)
+        {
+            mBagVolumePreviousButton.gameObject.SetActive(
+                visible && mBagVolumeSelectedIndex > 0);
+        }
+
+        if (mBagVolumeNextButton != null)
+        {
+            mBagVolumeNextButton.gameObject.SetActive(
+                visible && mBagVolumeSelectedIndex < mBagVolumeCards.Count - 1);
+        }
     }
 
     private void RefreshBagVolumeSelectionState()
