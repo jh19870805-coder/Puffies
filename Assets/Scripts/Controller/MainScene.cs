@@ -611,6 +611,51 @@ public class MainScene : MonoBehaviour
     private void LateUpdate()
     {
         UpdatePackageDisplays();
+        KeepBagVolumeCardsUpright();
+    }
+
+    private void KeepBagVolumeCardsUpright()
+    {
+        if (!mIsBagVolumeSelectionActive)
+        {
+            return;
+        }
+
+        for (var i = 0; i < mBagVolumeCards.Count; i++)
+        {
+            var card = mBagVolumeCards[i];
+            if (card?.RectTransform == null)
+            {
+                continue;
+            }
+
+            SetLocalZRotationToZero(card.RectTransform);
+            var packNode = FindChild(card.RectTransform, PackNodeObjectName) as RectTransform;
+            SetLocalZRotationToZero(packNode);
+            SetLocalZRotationToZero(
+                FindChild(card.RectTransform, PackCoverObjectName) as RectTransform);
+        }
+
+        SetLocalZRotationToZero(mSelectedPackageVisualContent);
+        SetLocalZRotationToZero(
+            FindChild(mSelectedPackageVisualContent, PackCoverObjectName) as RectTransform);
+    }
+
+    private static void SetLocalZRotationToZero(RectTransform target)
+    {
+        if (target == null)
+        {
+            return;
+        }
+
+        var eulerAngles = target.localEulerAngles;
+        if (Mathf.Approximately(eulerAngles.z, 0f))
+        {
+            return;
+        }
+
+        eulerAngles.z = 0f;
+        target.localEulerAngles = eulerAngles;
     }
 
     private void Update()
@@ -4583,11 +4628,6 @@ public class MainScene : MonoBehaviour
         if (rootImage != null)
         {
             rootImage.raycastTarget = false;
-        }
-
-        if (entry.PackAnimator != null)
-        {
-            entry.PackAnimator.enabled = false;
         }
 
         if (packNode != null)
