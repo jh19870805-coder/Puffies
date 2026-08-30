@@ -99,3 +99,55 @@ public class PackageInteractionHandler : MonoBehaviour,
         mOwner.HandlePackageGesture(mBagId, mImage);
     }
 }
+
+public sealed class SeriesPackageCarouselInput : MonoBehaviour,
+    IBeginDragHandler,
+    IDragHandler,
+    IEndDragHandler
+{
+    private MainScene mOwner;
+    private bool mIsDragging;
+
+    public void Initialize(MainScene owner)
+    {
+        mOwner = owner;
+    }
+
+    public void OnBeginDrag(PointerEventData eventData)
+    {
+        if (IsPointerOverButton(eventData))
+        {
+            return;
+        }
+
+        mIsDragging = true;
+        mOwner?.HandleBagVolumeBeginDrag(eventData.position);
+    }
+
+    public void OnDrag(PointerEventData eventData)
+    {
+        if (!mIsDragging)
+        {
+            return;
+        }
+
+        mOwner?.HandleBagVolumeDrag(eventData.position);
+    }
+
+    public void OnEndDrag(PointerEventData eventData)
+    {
+        if (!mIsDragging)
+        {
+            return;
+        }
+
+        mIsDragging = false;
+        mOwner?.HandleBagVolumeEndDrag(eventData.position);
+    }
+
+    private static bool IsPointerOverButton(PointerEventData eventData)
+    {
+        var target = eventData?.pointerCurrentRaycast.gameObject;
+        return target != null && target.GetComponentInParent<Button>() != null;
+    }
+}

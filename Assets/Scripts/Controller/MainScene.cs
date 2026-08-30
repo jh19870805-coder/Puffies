@@ -148,6 +148,20 @@ public class MainScene : MonoBehaviour
     private const string BagSelectPlayButtonObjectName = "BtnPlay";
     private const string BagSelectBackButtonObjectName = "BtnBack";
     private const string BagSelectCameraButtonObjectName = "BtnCamera";
+    private const string BagVolumePanelObjectName = "PanelBagVol";
+    private const string BagVolumeCarouselObjectName = "PackCarousel";
+    private const string BagVolumeLeftTemplateObjectName = "PackLeft";
+    private const string BagVolumeCenterTemplateObjectName = "PackCenter";
+    private const string BagVolumeRightTemplateObjectName = "PackRight";
+    private const string BagVolumePreviousButtonObjectName = "BtnPrevious";
+    private const string BagVolumeNextButtonObjectName = "BtnNext";
+    private const string BagVolumeIndicatorsObjectName = "PageIndicators";
+    private const string BagVolumeDotTemplateObjectName = "DotTemplate";
+    private const string BagVolumeDotNormalObjectName = "DotNormal";
+    private const string BagVolumeDotSelectedObjectName = "DotSelected";
+    private const float BagVolumeSnapDuration = 0.25f;
+    private const float BagVolumeSwipeThreshold = 60f;
+    private const float BagVolumeVisibleRange = 1.65f;
     private const string ReplayPanelObjectName = "PanelReplay";
     private const string ReplayConfirmButtonObjectName = "BtnReplay";
     private const string ReplayReturnButtonObjectName = "BtnReturn";
@@ -190,6 +204,7 @@ public class MainScene : MonoBehaviour
     private GameObject mUsablePanelRoot;
     private GameObject mSavePanelRoot;
     private GameObject mBagSelectPanelRoot;
+    private GameObject mBagVolumePanelRoot;
     private Canvas mBagSelectOverlayCanvas;
     private Canvas mSelectedPackageOverlayCanvas;
     private CanvasGroup mSelectedPackageOverlayCanvasGroup;
@@ -233,6 +248,29 @@ public class MainScene : MonoBehaviour
     private TMP_Text mBagSelectPlayLabel;
     private RectTransform[] mBagSelectButtonRects = Array.Empty<RectTransform>();
     private Vector2[] mBagSelectButtonPositions = Array.Empty<Vector2>();
+    private RectTransform mBagVolumeCarouselRect;
+    private RectTransform mBagVolumeLeftTemplate;
+    private RectTransform mBagVolumeCenterTemplate;
+    private RectTransform mBagVolumeRightTemplate;
+    private RectTransform mBagVolumeIndicatorsRoot;
+    private GameObject mBagVolumeDotTemplate;
+    private Button mBagVolumePlayButton;
+    private Button mBagVolumeBackButton;
+    private Button mBagVolumeCameraButton;
+    private Button mBagVolumePreviousButton;
+    private Button mBagVolumeNextButton;
+    private TMP_Text mBagVolumePlayLabel;
+    private SeriesPackageCarouselInput mBagVolumeCarouselInput;
+    private readonly List<SeriesCarouselCard> mBagVolumeCards = new List<SeriesCarouselCard>();
+    private readonly List<GameObject> mBagVolumeDots = new List<GameObject>();
+    private PackageEntry mBagVolumeSourceEntry;
+    private Coroutine mBagVolumeSnapCoroutine;
+    private bool mIsBagVolumeSelectionActive;
+    private bool mIsBagVolumeDragging;
+    private int mBagVolumeSelectedIndex;
+    private float mBagVolumePosition;
+    private float mBagVolumeDragStartPosition;
+    private float mBagVolumeDragStartLocalX;
     private GameObject mReplayPanelRoot;
     private Button mReplayConfirmButton;
     private Button mReplayReturnButton;
@@ -292,6 +330,9 @@ public class MainScene : MonoBehaviour
         public bool ShowVolume;
         public bool ShowTornBackground;
         public PackageDisplayState DisplayState;
+        public int SeriesRootPackId;
+        public bool IsSeries;
+        public List<int> SeriesPackIds;
     }
 
     private sealed class PackageListDisplay
@@ -300,6 +341,16 @@ public class MainScene : MonoBehaviour
         public int PrimaryPackId;
         public int SecondaryPackId;
         public int VolumeNumber = 1;
+        public bool IsSeries;
+        public List<int> SeriesPackIds;
+    }
+
+    private sealed class SeriesCarouselCard
+    {
+        public int BagId;
+        public int VolumeNumber;
+        public PackageEntry Entry;
+        public RectTransform RectTransform;
     }
 
     private sealed class InProgressPackagePieceAnimation
@@ -613,6 +664,7 @@ public class MainScene : MonoBehaviour
         ConfigureDiscordButton();
         ConfigureQqButton();
         ConfigureBagSelectPanel();
+        ConfigureBagVolumePanel();
         ConfigureReplayPanel();
         ConfigurePhotoPanel();
         ConfigureMenuPanel();
@@ -740,7 +792,9 @@ public class MainScene : MonoBehaviour
             };
         }
 
-        mPlayAnimationCoroutine = StartCoroutine(ShowPackageSelection(resolvedBagId, entry));
+        mPlayAnimationCoroutine = entry.IsSeries
+            ? StartCoroutine(ShowBagVolumeSelection(entry))
+            : StartCoroutine(ShowPackageSelection(resolvedBagId, entry));
     }
 
     private void ConfigureBagSelectPanel()
@@ -828,6 +882,132 @@ public class MainScene : MonoBehaviour
 
         CacheBagSelectButtonPositions();
         SetBagSelectPanelVisible(false);
+    }
+
+    private void ConfigureBagVolumePanel()
+    {
+        mBagVolumePanelRoot = GameCommonUtility.FindSceneObject(BagVolumePanelObjectName);
+        if (mBagVolumePanelRoot == null)
+        {
+            Debug.LogWarning(
+                $"MainScene: series bag panel not found. Expected {BagVolumePanelObjectName}.");
+            return;
+        }
+
+        if (mBagSelectOverlayCanvas == null)
+        {
+            Debug.LogWarning("MainScene: series bag panel requires the bag selection overlay canvas.");
+            return;
+        }
+
+        var panelRect = mBagVolumePanelRoot.GetComponent<RectTransform>();
+        panelRect.SetParent(mBagSelectOverlayCanvas.transform, false);
+        panelRect.anchorMin = new Vector2(0.5f, 0.5f);
+        panelRect.anchorMax = new Vector2(0.5f, 0.5f);
+        panelRect.pivot = new Vector2(0.5f, 0.5f);
+        panelRect.anchoredPosition = Vector2.zero;
+        panelRect.localScale = Vector3.one;
+        panelRect.localEulerAngles = Vector3.zero;
+        mBagVolumePanelRoot.transform.SetAsLastSibling();
+
+        mBagVolumeCarouselRect = FindChild(
+            mBagVolumePanelRoot.transform,
+            BagVolumeCarouselObjectName) as RectTransform;
+        mBagVolumeLeftTemplate = FindChild(
+            mBagVolumePanelRoot.transform,
+            BagVolumeLeftTemplateObjectName) as RectTransform;
+        mBagVolumeCenterTemplate = FindChild(
+            mBagVolumePanelRoot.transform,
+            BagVolumeCenterTemplateObjectName) as RectTransform;
+        mBagVolumeRightTemplate = FindChild(
+            mBagVolumePanelRoot.transform,
+            BagVolumeRightTemplateObjectName) as RectTransform;
+        mBagVolumeIndicatorsRoot = FindChild(
+            mBagVolumePanelRoot.transform,
+            BagVolumeIndicatorsObjectName) as RectTransform;
+        var dotTemplateTransform = mBagVolumeIndicatorsRoot != null
+            ? FindChild(mBagVolumeIndicatorsRoot, BagVolumeDotTemplateObjectName)
+            : null;
+        mBagVolumeDotTemplate = dotTemplateTransform != null
+            ? dotTemplateTransform.gameObject
+            : null;
+
+        if (mBagVolumeCarouselRect == null
+            || mBagVolumeLeftTemplate == null
+            || mBagVolumeCenterTemplate == null
+            || mBagVolumeRightTemplate == null)
+        {
+            Debug.LogWarning(
+                "MainScene: PanelBagVol requires PackCarousel with PackLeft, PackCenter and PackRight.");
+        }
+        else
+        {
+            mBagVolumeLeftTemplate.gameObject.SetActive(false);
+            mBagVolumeCenterTemplate.gameObject.SetActive(false);
+            mBagVolumeRightTemplate.gameObject.SetActive(false);
+        }
+
+        if (mBagVolumeDotTemplate != null)
+        {
+            mBagVolumeDotTemplate.SetActive(false);
+        }
+        else
+        {
+            Debug.LogWarning("MainScene: PanelBagVol page indicator template was not found.");
+        }
+
+        mBagVolumePlayButton = ConfigureBagVolumeButton(
+            BagSelectPlayButtonObjectName,
+            OnBagVolumePlayClicked);
+        mBagVolumeBackButton = ConfigureBagVolumeButton(
+            BagSelectBackButtonObjectName,
+            OnBagVolumeBackClicked);
+        mBagVolumeCameraButton = ConfigureBagVolumeButton(
+            BagSelectCameraButtonObjectName,
+            OnBagVolumeCameraClicked);
+        mBagVolumePreviousButton = ConfigureBagVolumeButton(
+            BagVolumePreviousButtonObjectName,
+            OnBagVolumePreviousClicked);
+        mBagVolumeNextButton = ConfigureBagVolumeButton(
+            BagVolumeNextButtonObjectName,
+            OnBagVolumeNextClicked);
+        mBagVolumePlayLabel = mBagVolumePlayButton != null
+            ? mBagVolumePlayButton.GetComponentInChildren<TMP_Text>(true)
+            : null;
+
+        mBagVolumeCarouselInput = mBagVolumePanelRoot.GetComponent<SeriesPackageCarouselInput>();
+        if (mBagVolumeCarouselInput == null)
+        {
+            mBagVolumeCarouselInput =
+                mBagVolumePanelRoot.AddComponent<SeriesPackageCarouselInput>();
+        }
+
+        mBagVolumeCarouselInput.Initialize(this);
+        SetPanelVisible(mBagVolumePanelRoot, false);
+    }
+
+    private Button ConfigureBagVolumeButton(
+        string objectName,
+        UnityEngine.Events.UnityAction action)
+    {
+        var buttonTransform = FindChild(mBagVolumePanelRoot.transform, objectName);
+        if (buttonTransform == null)
+        {
+            Debug.LogWarning(
+                $"MainScene: PanelBagVol button not found. Expected {objectName}.");
+            return null;
+        }
+
+        var button = buttonTransform.GetComponent<Button>();
+        if (button == null)
+        {
+            button = buttonTransform.gameObject.AddComponent<Button>();
+            button.targetGraphic = buttonTransform.GetComponent<Graphic>();
+        }
+
+        button.onClick.RemoveListener(action);
+        button.onClick.AddListener(action);
+        return button;
     }
 
     private void ConfigureReplayPanel()
@@ -1467,6 +1647,139 @@ public class MainScene : MonoBehaviour
         rectTransform.localScale = Vector3.one;
     }
 
+    private void OnBagVolumePreviousClicked()
+    {
+        if (!CanDragBagVolume())
+        {
+            return;
+        }
+
+        StartBagVolumeSnap(mBagVolumeSelectedIndex - 1);
+    }
+
+    private void OnBagVolumeNextClicked()
+    {
+        if (!CanDragBagVolume())
+        {
+            return;
+        }
+
+        StartBagVolumeSnap(mBagVolumeSelectedIndex + 1);
+    }
+
+    private void OnBagVolumePlayClicked()
+    {
+        if (!mIsBagVolumeSelectionActive
+            || mIsPlayingAnimation
+            || mIsBagVolumeDragging
+            || mBagVolumeSnapCoroutine != null
+            || !PrepareBagVolumeSelectedOverlay())
+        {
+            return;
+        }
+
+        OnBagSelectPlayClicked();
+    }
+
+    private void OnBagVolumeCameraClicked()
+    {
+        if (!mIsBagVolumeSelectionActive
+            || mIsBagVolumeDragging
+            || mBagVolumeSnapCoroutine != null)
+        {
+            return;
+        }
+
+        OnBagSelectCameraClicked();
+    }
+
+    private void OnBagVolumeBackClicked()
+    {
+        if (!mIsBagVolumeSelectionActive
+            || mIsPlayingAnimation
+            || mIsReplayConfirmationVisible)
+        {
+            return;
+        }
+
+        mPlayAnimationCoroutine = StartCoroutine(HideBagVolumeSelection());
+    }
+
+    private bool PrepareBagVolumeSelectedOverlay()
+    {
+        if (mBagVolumeSelectedIndex < 0
+            || mBagVolumeSelectedIndex >= mBagVolumeCards.Count)
+        {
+            return false;
+        }
+
+        var selectedCard = mBagVolumeCards[mBagVolumeSelectedIndex];
+        mSelectedPackageEntry = selectedCard.Entry;
+        mSelectedBagId = selectedCard.BagId;
+        if (!TryGetSelectedOverlayRect(
+                selectedCard.RectTransform,
+                out mSelectedPackageDisplayPosition,
+                out mSelectedPackageDisplaySize))
+        {
+            mSelectedPackageDisplayPosition = Vector2.zero;
+            mSelectedPackageDisplaySize = new Vector2(
+                PackageOpenWidth * 0.85f,
+                PackageOpenHeight * 0.85f);
+        }
+
+        if (!CreateSelectedPackageVisual(selectedCard.Entry))
+        {
+            Debug.LogWarning(
+                $"MainScene: selected series package could not be transferred. packId={selectedCard.BagId}");
+            return false;
+        }
+
+        mSelectedPackageOverlayRect.anchoredPosition = mSelectedPackageDisplayPosition;
+        SetSelectedPackageVisualSize(mSelectedPackageDisplaySize);
+        SetSelectedPackageImageVisible(true);
+        SetPanelVisible(mBagVolumePanelRoot, false);
+        return true;
+    }
+
+    private IEnumerator HideBagVolumeSelection()
+    {
+        mIsPlayingAnimation = true;
+        SetBagVolumeControlsInteractable(false);
+        StopBagVolumeSnap();
+        mIsBagVolumeDragging = false;
+        if (!PrepareBagVolumeSelectedOverlay())
+        {
+            var sourceEntry = mBagVolumeSourceEntry;
+            SetPanelVisible(mBagVolumePanelRoot, false);
+            SetBagSelectBackdropVisible(false);
+            ReleaseBagSelectBackdropTexture();
+            ClearBagVolumeSelection();
+            SetPackageVisualsVisible(sourceEntry, true);
+            ClearPackageSelection();
+            mIsPlayingAnimation = false;
+            mPlayAnimationCoroutine = null;
+            yield break;
+        }
+
+        SetBagSelectBackdropVisible(false);
+        ReleaseBagSelectBackdropTexture();
+        yield return AnimateSelectedPackageImage(
+            mSelectedPackageDisplayPosition,
+            mSelectedPackageStartPosition,
+            mSelectedPackageDisplaySize,
+            mSelectedPackageStartSize,
+            PackageOpenScaleDuration);
+
+        var source = mBagVolumeSourceEntry;
+        SetSelectedPackageImageVisible(false);
+        ClearSelectedPackageVisual();
+        ClearBagVolumeSelection();
+        SetPackageVisualsVisible(source, true);
+        ClearPackageSelection();
+        mIsPlayingAnimation = false;
+        mPlayAnimationCoroutine = null;
+    }
+
     private void OnBagSelectPlayClicked()
     {
         if (mIsPlayingAnimation
@@ -1568,7 +1881,17 @@ public class MainScene : MonoBehaviour
 
         SetPanelVisible(mReplayPanelRoot, false);
         mIsReplayConfirmationVisible = false;
-        SetSelectedPackageImageVisible(true);
+        if (mIsBagVolumeSelectionActive)
+        {
+            SetSelectedPackageImageVisible(false);
+            ClearSelectedPackageVisual();
+            SetPanelVisible(mBagVolumePanelRoot, true);
+        }
+        else
+        {
+            SetSelectedPackageImageVisible(true);
+        }
+
         SetUnselectedPackageVisualsVisible(true);
         SetBagSelectButtonsInteractable(true);
     }
@@ -1687,7 +2010,7 @@ public class MainScene : MonoBehaviour
         }
 
         SetPanelVisible(mPhotoPanelRoot, false);
-        SetSelectedPackageImageVisible(true);
+        SetSelectedPackageImageVisible(!mIsBagVolumeSelectionActive);
         SetBagSelectButtonsInteractable(true);
     }
 
@@ -1947,12 +2270,14 @@ public class MainScene : MonoBehaviour
             var primaryPackId = 0;
             var secondaryPackId = 0;
             var volumeNumber = 0;
+            var seriesPackIds = new List<int>();
             var currentPackId = seriesRootPackId;
             while (currentPackId > 0)
             {
                 volumeNumber++;
                 if (unlockedPackIds.Contains(currentPackId))
                 {
+                    seriesPackIds.Add(currentPackId);
                     secondaryPackId = primaryPackId;
                     primaryPackId = currentPackId;
                 }
@@ -1982,7 +2307,9 @@ public class MainScene : MonoBehaviour
                 SeriesRootPackId = seriesRootPackId,
                 PrimaryPackId = primaryPackId,
                 SecondaryPackId = secondaryPackId,
-                VolumeNumber = volumeNumber
+                VolumeNumber = volumeNumber,
+                IsSeries = successorByPackId.ContainsKey(seriesRootPackId),
+                SeriesPackIds = seriesPackIds
             });
         }
 
@@ -1998,7 +2325,8 @@ public class MainScene : MonoBehaviour
             displays.Add(new PackageListDisplay
             {
                 SeriesRootPackId = packIds[i],
-                PrimaryPackId = packIds[i]
+                PrimaryPackId = packIds[i],
+                SeriesPackIds = new List<int> { packIds[i] }
             });
         }
     }
@@ -2139,7 +2467,12 @@ public class MainScene : MonoBehaviour
             VolumeImage = volumeImage,
             VisualSettings = visualSettings,
             PackAnimator = packAnimator,
-            RectTransform = rootRect
+            RectTransform = rootRect,
+            SeriesRootPackId = display.SeriesRootPackId,
+            IsSeries = display.IsSeries,
+            SeriesPackIds = display.SeriesPackIds != null
+                ? new List<int>(display.SeriesPackIds)
+                : new List<int> { packId }
         };
         return entry;
     }
@@ -2631,6 +2964,13 @@ public class MainScene : MonoBehaviour
         {
             UpdateInProgressPackagePieceAnimations(
                 pair.Value?.ProgressPieceAnimations,
+                cycleRadians);
+        }
+
+        for (var i = 0; i < mBagVolumeCards.Count; i++)
+        {
+            UpdateInProgressPackagePieceAnimations(
+                mBagVolumeCards[i]?.Entry?.ProgressPieceAnimations,
                 cycleRadians);
         }
 
@@ -3928,6 +4268,552 @@ public class MainScene : MonoBehaviour
                 SetPackageVisualsVisible(entry, visible);
             }
         }
+
+        if (mIsBagVolumeSelectionActive && mBagVolumeSourceEntry != null)
+        {
+            SetPackageVisualsVisible(mBagVolumeSourceEntry, false);
+        }
+    }
+
+    private IEnumerator ShowBagVolumeSelection(PackageEntry sourceEntry)
+    {
+        if (sourceEntry == null
+            || sourceEntry.SeriesPackIds == null
+            || sourceEntry.SeriesPackIds.Count == 0
+            || mBagVolumePanelRoot == null
+            || mBagVolumeCarouselRect == null)
+        {
+            var fallbackBagId = sourceEntry != null ? sourceEntry.BagId : MainPackageBagId;
+            yield return ShowPackageSelection(fallbackBagId, sourceEntry);
+            yield break;
+        }
+
+        mIsPlayingAnimation = true;
+        mIsBagVolumeSelectionActive = true;
+        mBagVolumeSourceEntry = sourceEntry;
+        BuildBagVolumeCards(sourceEntry.SeriesPackIds);
+        if (mBagVolumeCards.Count == 0)
+        {
+            ClearBagVolumeSelection();
+            yield return ShowPackageSelection(sourceEntry.BagId, sourceEntry);
+            yield break;
+        }
+
+        mBagVolumeSelectedIndex = mBagVolumeCards.Count - 1;
+        mBagVolumePosition = mBagVolumeSelectedIndex;
+        RefreshBagVolumeLayout();
+        RefreshBagVolumeSelectionState();
+
+        var selectedCard = mBagVolumeCards[mBagVolumeSelectedIndex];
+        var anchor = sourceEntry.Image != null
+            ? sourceEntry.Image.rectTransform
+            : sourceEntry.RectTransform;
+        Canvas.ForceUpdateCanvases();
+        if (!TryGetSelectedOverlayRect(
+                anchor,
+                out mSelectedPackageStartPosition,
+                out mSelectedPackageStartSize))
+        {
+            mSelectedPackageStartPosition = Vector2.zero;
+            mSelectedPackageStartSize = new Vector2(PackageCoverWidth, PackageCoverHeight);
+        }
+
+        if (!TryGetSelectedOverlayRect(
+                mBagVolumeCenterTemplate,
+                out mSelectedPackageDisplayPosition,
+                out mSelectedPackageDisplaySize))
+        {
+            mSelectedPackageDisplayPosition = Vector2.zero;
+            mSelectedPackageDisplaySize = new Vector2(
+                PackageOpenWidth * 0.85f,
+                PackageOpenHeight * 0.85f);
+        }
+
+        var didCreateSelectedVisual = CreateSelectedPackageVisual(selectedCard.Entry);
+        SetPackageVisualsVisible(sourceEntry, false);
+        yield return CaptureBagSelectBackdrop();
+        if (!didCreateSelectedVisual)
+        {
+            Debug.LogWarning(
+                $"MainScene: series package selection visual is unavailable. packId={selectedCard.BagId}");
+            SetPackageVisualsVisible(sourceEntry, true);
+            ClearBagVolumeSelection();
+            SetBagSelectBackdropVisible(false);
+            ReleaseBagSelectBackdropTexture();
+            mIsPlayingAnimation = false;
+            mPlayAnimationCoroutine = null;
+            yield break;
+        }
+
+        selectedCard.RectTransform.gameObject.SetActive(false);
+        mSelectedPackageOverlayRect.anchoredPosition = mSelectedPackageStartPosition;
+        SetSelectedPackageVisualSize(mSelectedPackageStartSize);
+        SetSelectedPackageImageVisible(true);
+        SetBagSelectBackdropVisible(true);
+        SetPanelVisible(mBagVolumePanelRoot, true);
+        SetBagVolumeControlsInteractable(false);
+        yield return AnimateSelectedPackageImage(
+            mSelectedPackageStartPosition,
+            mSelectedPackageDisplayPosition,
+            mSelectedPackageStartSize,
+            mSelectedPackageDisplaySize,
+            PackageOpenScaleDuration);
+
+        SetSelectedPackageImageVisible(false);
+        ClearSelectedPackageVisual();
+        RefreshBagVolumeLayout();
+        SetBagVolumeControlsInteractable(true);
+        mIsPlayingAnimation = false;
+        mPlayAnimationCoroutine = null;
+    }
+
+    private void BuildBagVolumeCards(IReadOnlyList<int> packIds)
+    {
+        ClearBagVolumeCards();
+        for (var i = 0; i < packIds.Count; i++)
+        {
+            var card = CreateBagVolumeCard(packIds[i], i + 1);
+            if (card != null)
+            {
+                mBagVolumeCards.Add(card);
+            }
+        }
+
+        BuildBagVolumeDots();
+    }
+
+    private SeriesCarouselCard CreateBagVolumeCard(int packId, int volumeNumber)
+    {
+        if (mPackageItemTemplate == null || mBagVolumeCarouselRect == null)
+        {
+            return null;
+        }
+
+        var itemObject = Instantiate(mPackageItemTemplate, mBagVolumeCarouselRect, false);
+        itemObject.name = $"SeriesPack_{packId:D3}";
+        itemObject.SetActive(true);
+        SetLayerRecursively(itemObject.transform, mBagVolumePanelRoot.layer);
+
+        var rootRect = itemObject.GetComponent<RectTransform>();
+        rootRect.anchorMin = new Vector2(0.5f, 0.5f);
+        rootRect.anchorMax = new Vector2(0.5f, 0.5f);
+        rootRect.pivot = new Vector2(0.5f, 0.5f);
+        rootRect.anchoredPosition = Vector2.zero;
+        rootRect.sizeDelta = new Vector2(PackageOpenWidth, PackageOpenHeight);
+        rootRect.localScale = Vector3.one;
+        rootRect.localEulerAngles = Vector3.zero;
+
+        var layout = itemObject.GetComponent<LayoutElement>();
+        if (layout != null)
+        {
+            layout.ignoreLayout = true;
+        }
+
+        var rootImage = itemObject.GetComponent<Image>();
+        if (rootImage != null)
+        {
+            rootImage.color = new Color(
+                rootImage.color.r,
+                rootImage.color.g,
+                rootImage.color.b,
+                0f);
+            rootImage.raycastTarget = false;
+        }
+
+        var visualSettings = itemObject.GetComponent<PackCoverVisualSettings>();
+        var coverImage = visualSettings != null && visualSettings.PackCover != null
+            ? visualSettings.PackCover
+            : FindChild(itemObject.transform, PackCoverObjectName)?.GetComponent<Image>();
+        if (coverImage == null)
+        {
+            itemObject.SetActive(false);
+            Destroy(itemObject);
+            return null;
+        }
+
+        var packNode = FindChild(itemObject.transform, PackNodeObjectName) as RectTransform;
+        var entry = new PackageEntry
+        {
+            BagId = packId,
+            Root = itemObject,
+            Image = coverImage,
+            SecondaryImage = FindChild(
+                itemObject.transform,
+                SecondaryPackCoverObjectName)?.GetComponent<Image>(),
+            BackgroundImage = FindChild(
+                itemObject.transform,
+                PackBackgroundObjectName)?.GetComponent<Image>(),
+            SizeImage = FindChild(
+                itemObject.transform,
+                PackSizeObjectName)?.GetComponent<Image>(),
+            VolumeImage = FindChild(
+                itemObject.transform,
+                PackVolumeObjectName)?.GetComponent<Image>(),
+            VisualSettings = visualSettings,
+            PackAnimator = packNode != null ? packNode.GetComponent<Animator>() : null,
+            RectTransform = rootRect,
+            SeriesRootPackId = mBagVolumeSourceEntry != null
+                ? mBagVolumeSourceEntry.SeriesRootPackId
+                : packId,
+            SeriesPackIds = new List<int> { packId }
+        };
+        ApplyPackageSlotVisual(
+            entry,
+            new PackageListDisplay
+            {
+                SeriesRootPackId = entry.SeriesRootPackId,
+                PrimaryPackId = packId,
+                VolumeNumber = volumeNumber,
+                SeriesPackIds = entry.SeriesPackIds
+            });
+
+        var interaction = itemObject.GetComponent<PackageInteractionHandler>();
+        if (interaction != null)
+        {
+            interaction.enabled = false;
+        }
+
+        if (rootImage != null)
+        {
+            rootImage.raycastTarget = false;
+        }
+
+        if (entry.PackAnimator != null)
+        {
+            entry.PackAnimator.enabled = false;
+        }
+
+        if (packNode != null)
+        {
+            packNode.anchorMin = new Vector2(0.5f, 0.5f);
+            packNode.anchorMax = new Vector2(0.5f, 0.5f);
+            packNode.pivot = new Vector2(0.5f, 0.5f);
+            packNode.anchoredPosition = Vector2.zero;
+            packNode.localScale = Vector3.one;
+            packNode.localEulerAngles = Vector3.zero;
+        }
+
+        coverImage.rectTransform.localEulerAngles = Vector3.zero;
+        return new SeriesCarouselCard
+        {
+            BagId = packId,
+            VolumeNumber = volumeNumber,
+            Entry = entry,
+            RectTransform = rootRect
+        };
+    }
+
+    private void BuildBagVolumeDots()
+    {
+        ClearBagVolumeDots();
+        if (mBagVolumeDotTemplate == null || mBagVolumeIndicatorsRoot == null)
+        {
+            return;
+        }
+
+        for (var i = 0; i < mBagVolumeCards.Count; i++)
+        {
+            var dot = Instantiate(
+                mBagVolumeDotTemplate,
+                mBagVolumeIndicatorsRoot,
+                false);
+            dot.name = $"Dot_{i + 1}";
+            dot.SetActive(true);
+            var image = dot.GetComponent<Image>();
+            if (image != null)
+            {
+                image.raycastTarget = false;
+            }
+
+            mBagVolumeDots.Add(dot);
+        }
+    }
+
+    private void RefreshBagVolumeLayout()
+    {
+        if (mBagVolumeCards.Count == 0
+            || mBagVolumeCenterTemplate == null
+            || mBagVolumeLeftTemplate == null
+            || mBagVolumeRightTemplate == null)
+        {
+            return;
+        }
+
+        var centerPosition = mBagVolumeCenterTemplate.anchoredPosition;
+        var leftSpacing = centerPosition.x - mBagVolumeLeftTemplate.anchoredPosition.x;
+        var rightSpacing = mBagVolumeRightTemplate.anchoredPosition.x - centerPosition.x;
+        var centerScale = mBagVolumeCenterTemplate.localScale.x;
+        var leftScale = Mathf.Abs(mBagVolumeLeftTemplate.localScale.x);
+        var rightScale = Mathf.Abs(mBagVolumeRightTemplate.localScale.x);
+        var nearestCardIndex = 0;
+        var nearestDistance = float.PositiveInfinity;
+        for (var i = 0; i < mBagVolumeCards.Count; i++)
+        {
+            var card = mBagVolumeCards[i];
+            var relativePosition = i - mBagVolumePosition;
+            var distance = Mathf.Abs(relativePosition);
+            var shouldShow = distance <= BagVolumeVisibleRange;
+            card.RectTransform.gameObject.SetActive(shouldShow);
+            if (!shouldShow)
+            {
+                continue;
+            }
+
+            var spacing = relativePosition < 0f ? leftSpacing : rightSpacing;
+            var sideScale = relativePosition < 0f ? leftScale : rightScale;
+            card.RectTransform.anchoredPosition = new Vector2(
+                centerPosition.x + relativePosition * spacing,
+                centerPosition.y);
+            var scale = Mathf.Lerp(
+                centerScale,
+                sideScale,
+                Mathf.Clamp01(distance));
+            card.RectTransform.localScale = Vector3.one * scale;
+            card.RectTransform.localEulerAngles = Vector3.zero;
+            var packNode = FindChild(card.RectTransform, PackNodeObjectName) as RectTransform;
+            if (packNode != null)
+            {
+                packNode.localEulerAngles = Vector3.zero;
+            }
+
+            if (distance < nearestDistance)
+            {
+                nearestDistance = distance;
+                nearestCardIndex = i;
+            }
+        }
+
+        mBagVolumeCards[nearestCardIndex].RectTransform.SetAsLastSibling();
+    }
+
+    private void RefreshBagVolumeSelectionState()
+    {
+        if (mBagVolumeCards.Count == 0)
+        {
+            return;
+        }
+
+        mBagVolumeSelectedIndex = Mathf.Clamp(
+            mBagVolumeSelectedIndex,
+            0,
+            mBagVolumeCards.Count - 1);
+        var selectedCard = mBagVolumeCards[mBagVolumeSelectedIndex];
+        mSelectedPackageEntry = selectedCard.Entry;
+        mSelectedBagId = selectedCard.BagId;
+
+        var shouldConfirmReplay = selectedCard.Entry.DisplayState
+                                  == PackageDisplayState.TornCompleted;
+        if (mBagVolumePlayLabel != null)
+        {
+            mBagVolumePlayLabel.text = shouldConfirmReplay
+                ? BagSelectReplayActionText
+                : BagSelectNewPackActionText;
+        }
+
+        if (mBagVolumeCameraButton != null)
+        {
+            mBagVolumeCameraButton.gameObject.SetActive(
+                CardPackDataUtility.IsPackCompleted(selectedCard.BagId));
+        }
+
+        if (mBagVolumePreviousButton != null)
+        {
+            mBagVolumePreviousButton.gameObject.SetActive(mBagVolumeSelectedIndex > 0);
+        }
+
+        if (mBagVolumeNextButton != null)
+        {
+            mBagVolumeNextButton.gameObject.SetActive(
+                mBagVolumeSelectedIndex < mBagVolumeCards.Count - 1);
+        }
+
+        for (var i = 0; i < mBagVolumeDots.Count; i++)
+        {
+            var dot = mBagVolumeDots[i];
+            var normal = FindChild(dot.transform, BagVolumeDotNormalObjectName);
+            var selected = FindChild(dot.transform, BagVolumeDotSelectedObjectName);
+            if (normal != null)
+            {
+                normal.gameObject.SetActive(i != mBagVolumeSelectedIndex);
+            }
+
+            if (selected != null)
+            {
+                selected.gameObject.SetActive(i == mBagVolumeSelectedIndex);
+            }
+        }
+    }
+
+    public void HandleBagVolumeBeginDrag(Vector2 screenPosition)
+    {
+        if (!CanDragBagVolume() || !TryGetBagVolumeLocalX(screenPosition, out var localX))
+        {
+            return;
+        }
+
+        StopBagVolumeSnap();
+        mIsBagVolumeDragging = true;
+        mBagVolumeDragStartLocalX = localX;
+        mBagVolumeDragStartPosition = mBagVolumePosition;
+    }
+
+    public void HandleBagVolumeDrag(Vector2 screenPosition)
+    {
+        if (!mIsBagVolumeDragging
+            || !TryGetBagVolumeLocalX(screenPosition, out var localX))
+        {
+            return;
+        }
+
+        var spacing = GetBagVolumeCardSpacing();
+        var localDelta = localX - mBagVolumeDragStartLocalX;
+        mBagVolumePosition = Mathf.Clamp(
+            mBagVolumeDragStartPosition - localDelta / spacing,
+            -0.15f,
+            mBagVolumeCards.Count - 1f + 0.15f);
+        RefreshBagVolumeLayout();
+    }
+
+    public void HandleBagVolumeEndDrag(Vector2 screenPosition)
+    {
+        if (!mIsBagVolumeDragging)
+        {
+            return;
+        }
+
+        mIsBagVolumeDragging = false;
+        var targetIndex = Mathf.Clamp(
+            Mathf.RoundToInt(mBagVolumePosition),
+            0,
+            mBagVolumeCards.Count - 1);
+        if (TryGetBagVolumeLocalX(screenPosition, out var localX))
+        {
+            var dragDistance = localX - mBagVolumeDragStartLocalX;
+            if (Mathf.Abs(dragDistance) >= BagVolumeSwipeThreshold)
+            {
+                var startIndex = Mathf.RoundToInt(mBagVolumeDragStartPosition);
+                targetIndex = Mathf.Clamp(
+                    startIndex + (dragDistance < 0f ? 1 : -1),
+                    0,
+                    mBagVolumeCards.Count - 1);
+            }
+        }
+
+        StartBagVolumeSnap(targetIndex);
+    }
+
+    private bool CanDragBagVolume()
+    {
+        return mIsBagVolumeSelectionActive
+               && !mIsPlayingAnimation
+               && !mIsReplayConfirmationVisible
+               && mBagVolumeCards.Count > 1;
+    }
+
+    private bool TryGetBagVolumeLocalX(Vector2 screenPosition, out float localX)
+    {
+        localX = 0f;
+        if (mBagVolumeCarouselRect == null)
+        {
+            return false;
+        }
+
+        var camera = ResolveCanvasCamera(mBagVolumeCarouselRect);
+        if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                mBagVolumeCarouselRect,
+                screenPosition,
+                camera,
+                out var localPoint))
+        {
+            return false;
+        }
+
+        localX = localPoint.x;
+        return true;
+    }
+
+    private float GetBagVolumeCardSpacing()
+    {
+        if (mBagVolumeCenterTemplate == null || mBagVolumeRightTemplate == null)
+        {
+            return 250f;
+        }
+
+        return Mathf.Max(
+            1f,
+            mBagVolumeRightTemplate.anchoredPosition.x
+            - mBagVolumeCenterTemplate.anchoredPosition.x);
+    }
+
+    private void StartBagVolumeSnap(int targetIndex)
+    {
+        StopBagVolumeSnap();
+        mBagVolumeSnapCoroutine = StartCoroutine(SnapBagVolumeToIndex(targetIndex));
+    }
+
+    private IEnumerator SnapBagVolumeToIndex(int targetIndex)
+    {
+        targetIndex = Mathf.Clamp(targetIndex, 0, mBagVolumeCards.Count - 1);
+        var startPosition = mBagVolumePosition;
+        var elapsed = 0f;
+        while (elapsed < BagVolumeSnapDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            var normalized = Mathf.Clamp01(elapsed / BagVolumeSnapDuration);
+            var eased = 1f - Mathf.Pow(1f - normalized, 3f);
+            mBagVolumePosition = Mathf.LerpUnclamped(startPosition, targetIndex, eased);
+            RefreshBagVolumeLayout();
+            yield return null;
+        }
+
+        mBagVolumePosition = targetIndex;
+        mBagVolumeSelectedIndex = targetIndex;
+        RefreshBagVolumeLayout();
+        RefreshBagVolumeSelectionState();
+        SetBagVolumeControlsInteractable(true);
+        mBagVolumeSnapCoroutine = null;
+    }
+
+    private void StopBagVolumeSnap()
+    {
+        if (mBagVolumeSnapCoroutine == null)
+        {
+            return;
+        }
+
+        StopCoroutine(mBagVolumeSnapCoroutine);
+        mBagVolumeSnapCoroutine = null;
+    }
+
+    private void ClearBagVolumeCards()
+    {
+        StopBagVolumeSnap();
+        for (var i = 0; i < mBagVolumeCards.Count; i++)
+        {
+            var root = mBagVolumeCards[i]?.Entry?.Root;
+            if (root != null)
+            {
+                root.SetActive(false);
+                Destroy(root);
+            }
+        }
+
+        mBagVolumeCards.Clear();
+        ClearBagVolumeDots();
+    }
+
+    private void ClearBagVolumeDots()
+    {
+        for (var i = 0; i < mBagVolumeDots.Count; i++)
+        {
+            if (mBagVolumeDots[i] != null)
+            {
+                mBagVolumeDots[i].SetActive(false);
+                Destroy(mBagVolumeDots[i]);
+            }
+        }
+
+        mBagVolumeDots.Clear();
     }
 
     private IEnumerator ShowPackageSelection(int bagId, PackageEntry entry)
@@ -5008,6 +5894,27 @@ public class MainScene : MonoBehaviour
         SetBagSelectButtonInteractable(mBagSelectPlayButton, interactable);
         SetBagSelectButtonInteractable(mBagSelectBackButton, interactable);
         SetBagSelectButtonInteractable(mBagSelectCameraButton, interactable);
+        if (mIsBagVolumeSelectionActive)
+        {
+            SetBagVolumeControlsInteractable(interactable);
+        }
+    }
+
+    private void SetBagVolumeControlsInteractable(bool interactable)
+    {
+        SetBagSelectButtonInteractable(mBagVolumePlayButton, interactable);
+        SetBagSelectButtonInteractable(mBagVolumeBackButton, interactable);
+        SetBagSelectButtonInteractable(mBagVolumeCameraButton, interactable);
+        SetBagSelectButtonInteractable(
+            mBagVolumePreviousButton,
+            interactable && mBagVolumeSelectedIndex > 0);
+        SetBagSelectButtonInteractable(
+            mBagVolumeNextButton,
+            interactable && mBagVolumeSelectedIndex < mBagVolumeCards.Count - 1);
+        if (mBagVolumeCarouselInput != null)
+        {
+            mBagVolumeCarouselInput.enabled = interactable;
+        }
     }
 
     private static void SetBagSelectButtonInteractable(Button button, bool interactable)
@@ -5232,6 +6139,19 @@ public class MainScene : MonoBehaviour
         mSelectedPackageDisplayPosition = default;
         mSelectedPackageDisplaySize = default;
         mSelectedPackageStageSize = default;
+    }
+
+    private void ClearBagVolumeSelection()
+    {
+        SetPanelVisible(mBagVolumePanelRoot, false);
+        ClearBagVolumeCards();
+        mIsBagVolumeSelectionActive = false;
+        mIsBagVolumeDragging = false;
+        mBagVolumeSourceEntry = null;
+        mBagVolumeSelectedIndex = 0;
+        mBagVolumePosition = 0f;
+        mBagVolumeDragStartPosition = 0f;
+        mBagVolumeDragStartLocalX = 0f;
     }
 
     private void StartOpeningHintAnimation()

@@ -1,16 +1,18 @@
 # 当前任务
 
-## 2026-08-30 首页系列卡包叠加展示
+## 2026-08-30 首页系列卡包叠加与 Vol 轮播
 
 - 状态：代码修改完成，Runtime/Editor 编译通过，等待 Unity Play Mode 视觉验收。
 - 行为：根据 `CardPacks.csv` 的 `Series` 链把已解锁的同系列卡包合并为一个列表槽位；当前最高已解锁 Vol 使用前层 `PackCover`，上一已解锁 Vol 使用后层 `PackCover2`，因此系列不会重复占用首页网格位置。
 - Vol 标识：Vol1 不显示 `PackVol`；从 Vol2 开始加载 `Assets/UI/PackImages/PackVolN.png`。当前资源支持 `PackVol2.png` 至 `PackVol6.png`，资源缺失时隐藏标识，不显示 Prefab 默认占位图。
 - 后层卡包：Vol2 及以上显示 `PackCover2`，使用上一 Vol 自己的 `PackIconNNN.png`，并按系列根 PackId 稳定选择 Z 轴 `+10°` 或 `-10°`。前后卡包分别根据自身进度执行完整彩色、彩色撕开或灰色撕开材质与蒙版逻辑。
 - 现场修正：首轮 Play Mode 已确认 `22` 个已解锁卡包折叠为 `20` 个系列槽。末页左侧看似残留两个空格的最终根因是 `GridLayoutGroup` 使用 `UpperCenter`，两个末页卡包会在六列区域内居中；现改为按完整六列总宽计算固定左右边距，再使用 `UpperLeft` 从统一的第一列起点排列，满页仍相对 Viewport 居中。旧卡包和旧分页仍在 `Destroy` 前立即停用，避免延迟销毁参与布局。后层卡包与前层保持同中心，等比放大至 `1.1` 倍并旋转 `10°`，使真实封面从前卡四周稳定露出；纹理明确加载上一 Vol 的真实 PackId，例如 `15 -> 2`、`18 -> 3`。后层处于撕开状态时也启用公共 `PackBg`。
-- 交互：组合槽当前绑定最高已解锁 Vol；列表排序位置取该系列任一成员在现有排序中的最前位置。滚动裁切、面板遮挡、选中放大和列表显隐同步包含 `PackCover2` 与 `PackVol`。系列内 Vol 选择后续由用户新搭建的 `PanelBagVol` 页面承接。
-- 边界：沿用用户在 `Assets/Prefabs/PackItem.prefab` 中新增的 `PackCover2` 和 `PackVol`，未修改 Prefab 的位置、尺寸、层级或美术参数；未修改 `Series` 配置、发包规则、数据库或进度结构，无需删除本地数据。
-- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
-- 验证：现场日志确认首次实现为 `unlocked=22, slots=20`，系列折叠数量正确；固定六列左起点和后层同中心旋转修正后，`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 再次编译均为 `0` 警告、`0` 错误，代码与文档定向 `git diff --check` 通过。全工作区检查仍报告用户新增 `PackItem.prefab` 四处 Unity 空字段尾随空格，不影响序列化或运行。Unity Play Mode 需重新进入 MainScene，确认末页从与首页相同的第一列开始排列，并检查 Vol2 后层真实卡包纹理的两个边角。
+- 交互：点击系列组合槽后打开编辑器现有 `PanelBagVol`，只生成该系列已解锁成员，初始居中最高已解锁 Vol。横向拖动时卡包同步移动，进入中心的卡包按 `PackCenter` 放大、离开中心的卡包按 `PackLeft/PackRight` 缩小；松手后以 `0.25s` EaseOut 吸附到最近 Vol，左右按钮使用同一吸附动画，分页圆点、`玩/重玩`、相机按钮随居中卡包刷新。所有轮播卡包本体与封面 Z 轴固定为 `0`，不继承首页叠放角度。
+- 流程衔接：居中 Vol 的完整彩包、彩色撕开包和灰色完成包分别继续复用现有开包、直接继续和重玩确认流程；拍照使用居中 PackId。重玩取消返回 `PanelBagVol`，返回按钮把当前居中卡包缩回原系列列表槽。非系列卡包仍使用 `PanelBagSelect`。
+- UI 边界：直接读取用户在 `MainScene` 中搭建的 `PackCarousel/PackLeft/PackCenter/PackRight`、五个按钮和 `PageIndicators/DotTemplate`；代码不覆盖编辑器卡位、按钮和圆点的美术参数，只把三张占位卡隐藏并按其位置与缩放生成真实卡包。
+- 数据边界：未修改 `Series` 配置、发包规则、数据库或进度结构，无需删除本地数据。
+- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Assets/Scripts/View/PackageInteractionHandler.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
+- 验证：现场日志确认首次实现为 `unlocked=22, slots=20`，系列折叠数量正确；本轮 `Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 顺序编译均为 `0` 警告、`0` 错误，`git diff --check` 通过。Unity Play Mode 仍需验证系列初次进入动画、拖动/按钮切换、边界吸附、分页圆点、三种卡包状态的玩/重玩衔接、拍照、返回，以及普通卡包仍进入 `PanelBagSelect`。
 
 ## 2026-08-28 首页卡包排序分层
 
