@@ -1,5 +1,23 @@
 # Spec Driven Development
 
+## 2026-08-30 - 首页系列卡包叠加展示
+
+### 需求
+
+1. WHEN 多个已解锁卡包属于同一 `Series` 链 THEN MainScene SHALL 只创建一个列表槽位。
+2. WHEN 系列只解锁 Vol1 THEN 系统 SHALL 只显示 `PackCover`，并隐藏 `PackCover2` 与 `PackVol`。
+3. WHEN 系列已解锁 Vol2 或以上 THEN 系统 SHALL 使用当前最高已解锁 Vol 作为前层 `PackCover`，上一已解锁 Vol 作为后层 `PackCover2`，并将后层封面稳定旋转 `+10°` 或 `-10°`。
+4. WHEN 当前系列 Vol 大于等于 2 THEN `PackVol` SHALL 使用 `PackVolN.png`；WHEN 对应资源不存在 THEN `PackVol` SHALL 隐藏。
+5. WHEN 前层或后层卡包处于完整、进行中撕开或完成撕开状态 THEN 每张封面 SHALL 独立应用所属卡包的现有状态材质和撕口蒙版。
+6. WHEN 用户点击系列组合槽 THEN 当前版本 SHALL 选择最高已解锁 Vol；系列内选择 SHALL 由后续 `PanelBagVol` 功能实现。
+
+### 验证
+
+- [x] Runtime 与 Editor 程序集编译为 `0` 警告、`0` 错误。
+- [x] 静态核对 `PackCover2`、`PackVol` 已接入滚动裁切、面板遮挡、原列表隐藏和选中放大复制流程。
+- [x] 现场日志确认 `22` 个已解锁卡包折叠为 `20` 个槽；旧节点在延迟销毁前立即停用，避免分页布局保留系列成员空格。
+- [ ] Unity Play Mode 验证 Vol1、Vol2+、进行中、已完成及多个系列并存的视觉和交互。
+
 ## 2026-08-28 - 首页卡包排序分层
 
 ### 需求
