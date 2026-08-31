@@ -8,7 +8,7 @@
 - 尺寸与层级：前后实例都由 `PreparePagedPackageItem` 使用同一套列表标准尺寸；根节点 `localScale` 固定为 `Vector3.one`。后层与前层中心对齐，作为列表槽根节点下的完整子实例置于前层视觉之前，只额外设置稳定的 `+7°/-7°` 旋转。已删除旧的底边 Pivot、Shader `_PaddingY` 补偿和后层专用缩放逻辑。
 - 共享呼吸动画：系列槽创建唯一的 `SeriesAnimationRoot`，把前后两个完整卡包视觉共同放在该节点下；两个卡包自身的 Animator 会关闭并恢复静态局部姿态，只由父节点 Animator 播放一次 `PackAniBreath`。因此卡包状态仍独立，但呼吸时保持相对位置和角度，作为一个列表槽整体运动。
 - 运行时修复：`SetPackageSizeImageVisible`、`SetPackageVolumeImageVisible` 和 `SetPackageProgressPiecesVisible` 原先在 `entry == null` 时仍递归调用自身，造成 `StackOverflowException`；现已增加明确终止条件。背景显隐递归也统一为先判断 Entry，再按可用组件处理。
-- Vol 选中进场：保留主卡包现有 `0.4s` 弹起放大动画。列表后层对应的真实 Vol 卡在主卡放大期间保持中心对齐，并在动画前 `35%` 时间内同时完成 Z 轴旋转归零和左侧卡位最终缩放；主卡完全展开且经过现有 `0.15s` 停顿后，后层卡才保持尺寸不变、只沿 X 轴从主卡背后滑向左卡位。后层卡在整个准备阶段始终位于主卡下方，不提前横向展开，也不在滑出阶段继续缩放。
+- Vol 选中进场：保留主卡包现有 `0.4s` 弹起放大动画。点击瞬间将列表后层对应的真实 Vol 卡隐藏，并直接设置为 Z 轴 `0°`、左侧卡位最终缩放和主卡最终中心位置；主卡展开期间后层卡不播放、也不显示任何旋转、缩放或移动。主卡完全展开且经过现有 `0.15s` 停顿后，后层卡才从主卡背后显示，并保持尺寸不变，只沿 X 轴滑向左卡位。
 - 兼容：Prefab 中旧 `PackCover2` 节点运行时强制禁用，仅保留资源兼容，不再参与系列叠加。列表显隐、进行中碎片浮动和选择页切换会递归处理后层完整实例。
 - 数据边界：未修改 `Series` 配置、发包规则、数据库或进度结构，无需删除本地数据。
 - 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
