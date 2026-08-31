@@ -5,10 +5,10 @@
 ### 需求
 
 1. WHEN 多个已解锁卡包属于同一 `Series` 链 THEN MainScene SHALL 只创建一个列表槽位。
-2. WHEN 系列只解锁 Vol1 THEN 系统 SHALL 只显示 `PackCover`，并隐藏 `PackCover2` 与 `PackVol`。
-3. WHEN 系列已解锁 Vol2 或以上 THEN 系统 SHALL 使用当前最高已解锁 Vol 作为前层 `PackCover`，上一已解锁 Vol 作为后层 `PackCover2`；后层 SHALL 复制前层的 Rect 尺寸、缩放和宽高适配方式，先与前层底边对齐，再按现有卡包材质的 `_PaddingY` 计算真实可见底边并以其作为旋转轴，稳定旋转 `+10°` 或 `-10°`，且不得额外放大或偏移。
+2. WHEN 系列只解锁 Vol1 THEN 系统 SHALL 只显示一个完整 `PackItem`，并隐藏 `PackVol`。
+3. WHEN 系列已解锁 Vol2 或以上 THEN 系统 SHALL 分别实例化当前最高已解锁 Vol 和上一已解锁 Vol 的完整 `PackItem`；两者 SHALL 使用各自在普通列表中的标准尺寸，根节点不得额外缩放。后层只允许改变相对位置、Z 轴 `+10°/-10°` 旋转和层级，旋转后 SHALL 自然露出上下左右各角，不得读取 Shader 留白修改 Pivot 或做尺寸补偿。
 4. WHEN 当前系列 Vol 大于等于 2 THEN `PackVol` SHALL 使用 `PackVolN.png`；WHEN 对应资源不存在 THEN `PackVol` SHALL 隐藏。
-5. WHEN 前层或后层卡包处于完整、进行中撕开或完成撕开状态 THEN 每张封面 SHALL 独立应用所属卡包的现有状态材质和撕口蒙版。
+5. WHEN 前层或后层卡包处于完整、进行中撕开或完成撕开状态 THEN 每个完整 `PackItem` SHALL 独立应用所属卡包的封面、背景、标签、进度碎片、状态材质和撕口蒙版。
 6. WHEN 用户点击系列组合槽 THEN 系统 SHALL 打开 `PanelBagVol`，按系列链顺序展示全部已解锁 Vol，并默认居中最高已解锁 Vol。
    - 进场 SHALL 先只放大主卡包，底部操作按钮在放大后半段上滑；主卡包到位并短暂停顿后，相邻 Vol 才从主卡包背后展开，分页圆点随侧卡展开延迟出现。
 7. WHEN 用户横向拖动轮播或点击左右按钮 THEN 系统 SHALL 使用编辑器 `PackLeft/PackCenter/PackRight` 的位置和缩放进行连续插值，并在松手后吸附到最近 Vol。
@@ -18,7 +18,7 @@
 ### 验证
 
 - [x] Runtime 与 Editor 程序集编译为 `0` 警告、`0` 错误。
-- [x] 静态核对 `PackCover2`、`PackVol` 已接入滚动裁切、面板遮挡、原列表隐藏和选中放大复制流程。
+- [x] 静态核对后层完整 `PackItem` 与 `PackVol` 已接入滚动裁切、面板遮挡、原列表隐藏和进行中碎片动画；旧 `PackCover2` 运行时禁用。
 - [x] 现场日志确认 `22` 个已解锁卡包折叠为 `20` 个槽；旧节点在延迟销毁前立即停用，避免分页布局保留系列成员空格。
 - [ ] Unity Play Mode 验证 Vol1、Vol2+、进行中、已完成及多个系列并存的视觉和交互。
 

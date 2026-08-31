@@ -190,7 +190,6 @@ public class MainScene : MonoBehaviour
     private static bool sHookedSceneLoaded;
     private static readonly int TornMaskTextureId = Shader.PropertyToID("_TornMaskTex");
     private static readonly int UseTornMaskId = Shader.PropertyToID("_UseTornMask");
-    private static readonly int CoverPaddingYId = Shader.PropertyToID("_PaddingY");
 
     [SerializeField] private GameObject mPackageItemPrefab;
 
@@ -324,7 +323,7 @@ public class MainScene : MonoBehaviour
         public int BagId;
         public GameObject Root;
         public Image Image;
-        public Image SecondaryImage;
+        public PackageEntry SecondaryEntry;
         public Image BackgroundImage;
         public Image SizeImage;
         public Image VolumeImage;
@@ -334,8 +333,6 @@ public class MainScene : MonoBehaviour
         public List<InProgressPackagePieceAnimation> ProgressPieceAnimations;
         public RectTransform RectTransform;
         public bool SuppressDisplay;
-        public bool ShowSecondaryCover;
-        public bool ShowSecondaryTornBackground;
         public bool ShowVolume;
         public bool ShowTornBackground;
         public PackageDisplayState DisplayState;
@@ -2577,9 +2574,6 @@ public class MainScene : MonoBehaviour
         var coverImage = visualSettings != null && visualSettings.PackCover != null
             ? visualSettings.PackCover
             : FindChild(slotObject.transform, PackCoverObjectName)?.GetComponent<Image>() ?? rootImage;
-        var secondaryImage = FindChild(
-            slotObject.transform,
-            SecondaryPackCoverObjectName)?.GetComponent<Image>();
         var backgroundImage = FindChild(slotObject.transform, PackBackgroundObjectName)?.GetComponent<Image>();
         var sizeImage = FindChild(slotObject.transform, PackSizeObjectName)?.GetComponent<Image>();
         var volumeImage = FindChild(slotObject.transform, PackVolumeObjectName)?.GetComponent<Image>();
@@ -2600,7 +2594,6 @@ public class MainScene : MonoBehaviour
             BagId = packId,
             Root = slotObject,
             Image = coverImage,
-            SecondaryImage = secondaryImage,
             BackgroundImage = backgroundImage,
             SizeImage = sizeImage,
             VolumeImage = volumeImage,
@@ -2647,6 +2640,23 @@ public class MainScene : MonoBehaviour
             return;
         }
 
+        ApplyPackageVisualState(entry, packId, display.VolumeNumber, true);
+        entry.SecondaryEntry = CreateSeriesBackPackage(entry, display);
+        EnsurePackageInteractionHandler(entry.Root, entry.Image, packId);
+    }
+
+    private void ApplyPackageVisualState(
+        PackageEntry entry,
+        int packId,
+        int volumeNumber,
+        bool honorPendingReward)
+    {
+        if (entry?.Image == null || entry.Root == null)
+        {
+            return;
+        }
+
+        entry.BagId = packId;
         entry.Image.enabled = true;
         entry.Image.raycastTarget = false;
         var packSprite = GetOrLoadPackageCoverSprite(packId);
@@ -2665,14 +2675,14 @@ public class MainScene : MonoBehaviour
             entry.VisualSettings,
             showTornState,
             showCompletedState);
-        ApplyPackageSeriesVisual(entry, display);
-        entry.ShowTornBackground = showTornState || entry.ShowSecondaryTornBackground;
+        entry.ShowTornBackground = showTornState;
         SetPackageBackgroundVisible(entry, true);
         ApplyPackageSizeVisual(entry.SizeImage, packId);
+        ApplyPackageVolumeVisual(entry, volumeNumber);
         ApplyPackageLabelMaterials(entry, showCompletedState);
         ApplyPackageBreathingAnimation(entry, showCompletedState);
         ApplyInProgressPackagePieces(entry, packId, hasCompletedFirstGroup);
-        if (CardPackRewardFlyTransition.IsPackPending(packId))
+        if (honorPendingReward && CardPackRewardFlyTransition.IsPackPending(packId))
         {
             SetPackageVisualsVisible(entry, false);
         }
@@ -2684,8 +2694,6 @@ public class MainScene : MonoBehaviour
             nameText.text = $"Pack {packId:D3}";
             nameText.gameObject.SetActive(false);
         }
-
-        EnsurePackageInteractionHandler(entry.Root, entry.Image, packId);
     }
 
     private static PackageDisplayState ResolvePackageDisplayState(
@@ -2705,55 +2713,96 @@ public class MainScene : MonoBehaviour
                 : PackageDisplayState.IntactColor;
     }
 
-    private void ApplyPackageSeriesVisual(
-        PackageEntry entry,
+    private PackageEntry CreateSeriesBackPackage(
+        PackageEntry frontEntry,
         PackageListDisplay display)
     {
-        entry.ShowSecondaryCover = display.SecondaryPackId > 0
-                                   && entry.SecondaryImage != null;
-        entry.ShowSecondaryTornBackground = false;
-        if (entry.SecondaryImage != null)
+        if (display.SecondaryPackId <= 0
+            || frontEntry?.Root == null
+            || mPackageItemTemplate == null)
         {
-            entry.SecondaryImage.raycastTarget = false;
-            entry.SecondaryImage.preserveAspect = entry.Image.preserveAspect;
-            if (entry.ShowSecondaryCover)
-            {
-                var secondarySprite = GetOrLoadPackageCoverSprite(display.SecondaryPackId);
-                entry.ShowSecondaryCover = secondarySprite != null;
-                if (entry.ShowSecondaryCover)
-                {
-                    entry.SecondaryImage.sprite = secondarySprite;
-                    var secondaryState = ResolvePackageDisplayState(
-                        display.SecondaryPackId,
-                        out _);
-                    var secondaryCompleted = secondaryState == PackageDisplayState.TornCompleted;
-                    entry.ShowSecondaryTornBackground =
-                        secondaryState != PackageDisplayState.IntactColor;
-                    ApplyPackageTornMask(
-                        entry.SecondaryImage,
-                        entry.VisualSettings,
-                        secondaryState != PackageDisplayState.IntactColor,
-                        secondaryCompleted);
-                    var rotationSign = (display.SeriesRootPackId & 1) == 0 ? 1f : -1f;
-                    var primaryRect = entry.Image.rectTransform;
-                    var secondaryRect = entry.SecondaryImage.rectTransform;
-                    secondaryRect.sizeDelta = primaryRect.sizeDelta;
-                    secondaryRect.pivot = new Vector2(
-                        primaryRect.pivot.x,
-                        ResolvePackageCoverVisualBottomPivot(entry.SecondaryImage));
-                    secondaryRect.localScale = primaryRect.localScale;
-                    AlignPackageCoverBottom(primaryRect, secondaryRect);
-                    secondaryRect.localEulerAngles = new Vector3(
-                        0f,
-                        0f,
-                        SecondaryPackCoverRotation * rotationSign);
-                }
-            }
-
-            entry.SecondaryImage.gameObject.SetActive(entry.ShowSecondaryCover);
+            return null;
         }
 
-        entry.ShowVolume = display.VolumeNumber >= 2 && entry.VolumeImage != null;
+        var itemObject = Instantiate(mPackageItemTemplate, frontEntry.Root.transform, false);
+        itemObject.name = $"SeriesBackPack_{display.SecondaryPackId:D3}";
+        itemObject.SetActive(true);
+
+        var rootRect = itemObject.GetComponent<RectTransform>();
+        var rootImage = itemObject.GetComponent<Image>();
+        if (rootImage == null)
+        {
+            rootImage = itemObject.AddComponent<Image>();
+        }
+
+        var visualSettings = itemObject.GetComponent<PackCoverVisualSettings>();
+        var coverImage = visualSettings != null && visualSettings.PackCover != null
+            ? visualSettings.PackCover
+            : FindChild(itemObject.transform, PackCoverObjectName)?.GetComponent<Image>() ?? rootImage;
+        var backgroundImage = FindChild(itemObject.transform, PackBackgroundObjectName)?.GetComponent<Image>();
+        var sizeImage = FindChild(itemObject.transform, PackSizeObjectName)?.GetComponent<Image>();
+        var volumeImage = FindChild(itemObject.transform, PackVolumeObjectName)?.GetComponent<Image>();
+        var packNode = FindChild(itemObject.transform, PackNodeObjectName) as RectTransform;
+        EnsurePackageBackgroundBehindCover(backgroundImage, coverImage);
+        PreparePagedPackageItem(
+            itemObject,
+            rootRect,
+            rootImage,
+            coverImage,
+            backgroundImage,
+            packNode);
+
+        rootRect.anchorMin = new Vector2(0.5f, 0.5f);
+        rootRect.anchorMax = new Vector2(0.5f, 0.5f);
+        rootRect.pivot = new Vector2(0.5f, 0.5f);
+        rootRect.anchoredPosition = Vector2.zero;
+        rootRect.sizeDelta = new Vector2(PackageSlotWidth, PackageSlotHeight);
+        rootRect.localScale = Vector3.one;
+        var rotationSign = (display.SeriesRootPackId & 1) == 0 ? 1f : -1f;
+        rootRect.localEulerAngles = new Vector3(
+            0f,
+            0f,
+            SecondaryPackCoverRotation * rotationSign);
+        rootRect.SetSiblingIndex(0);
+
+        var layout = itemObject.GetComponent<LayoutElement>();
+        if (layout != null)
+        {
+            layout.ignoreLayout = true;
+        }
+
+        rootImage.raycastTarget = false;
+        var interaction = itemObject.GetComponent<PackageInteractionHandler>();
+        if (interaction != null)
+        {
+            interaction.enabled = false;
+        }
+
+        var backEntry = new PackageEntry
+        {
+            BagId = display.SecondaryPackId,
+            Root = itemObject,
+            Image = coverImage,
+            BackgroundImage = backgroundImage,
+            SizeImage = sizeImage,
+            VolumeImage = volumeImage,
+            VisualSettings = visualSettings,
+            PackAnimator = packNode != null ? packNode.GetComponent<Animator>() : null,
+            RectTransform = rootRect,
+            SeriesRootPackId = display.SeriesRootPackId,
+            SeriesPackIds = new List<int> { display.SecondaryPackId }
+        };
+        ApplyPackageVisualState(
+            backEntry,
+            display.SecondaryPackId,
+            Mathf.Max(1, display.VolumeNumber - 1),
+            false);
+        return backEntry;
+    }
+
+    private void ApplyPackageVolumeVisual(PackageEntry entry, int volumeNumber)
+    {
+        entry.ShowVolume = volumeNumber >= 2 && entry.VolumeImage != null;
         if (entry.VolumeImage == null)
         {
             return;
@@ -2761,7 +2810,7 @@ public class MainScene : MonoBehaviour
 
         entry.VolumeImage.raycastTarget = false;
         var volumeSprite = entry.ShowVolume
-            ? GetOrLoadPackageVolumeSprite(display.VolumeNumber)
+            ? GetOrLoadPackageVolumeSprite(volumeNumber)
             : null;
         entry.ShowVolume = volumeSprite != null;
         if (volumeSprite != null)
@@ -2771,48 +2820,6 @@ public class MainScene : MonoBehaviour
 
         entry.VolumeImage.gameObject.SetActive(entry.ShowVolume);
         entry.VolumeImage.enabled = entry.ShowVolume;
-    }
-
-    private static float ResolvePackageCoverVisualBottomPivot(Image coverImage)
-    {
-        var material = coverImage != null ? coverImage.material : null;
-        var texture = coverImage?.sprite != null ? coverImage.sprite.texture : null;
-        if (material == null
-            || texture == null
-            || texture.height <= 0
-            || !material.HasProperty(CoverPaddingYId))
-        {
-            return 0f;
-        }
-
-        var paddingRatio = Mathf.Max(0f, material.GetFloat(CoverPaddingYId)) / texture.height;
-        return Mathf.Clamp01(paddingRatio / (1f + paddingRatio * 2f));
-    }
-
-    private static void AlignPackageCoverBottom(
-        RectTransform primaryRect,
-        RectTransform secondaryRect)
-    {
-        if (primaryRect == null || secondaryRect == null)
-        {
-            return;
-        }
-
-        var primaryScale = primaryRect.localScale;
-        var secondaryScale = secondaryRect.localScale;
-        var primaryCenterX = primaryRect.anchoredPosition.x
-            + primaryRect.rect.width * (0.5f - primaryRect.pivot.x) * Mathf.Abs(primaryScale.x);
-        var primaryBottom = primaryRect.anchoredPosition.y
-            - primaryRect.rect.height * primaryRect.pivot.y * Mathf.Abs(primaryScale.y);
-        secondaryRect.anchoredPosition = new Vector2(
-            primaryCenterX
-                - secondaryRect.rect.width
-                * (0.5f - secondaryRect.pivot.x)
-                * Mathf.Abs(secondaryScale.x),
-            primaryBottom
-                + secondaryRect.rect.height
-                * secondaryRect.pivot.y
-                * Mathf.Abs(secondaryScale.y));
     }
 
     private void ApplyPackageTornMask(
@@ -3148,9 +3155,7 @@ public class MainScene : MonoBehaviour
             * (Mathf.PI * 2f / InProgressPackPieceFloatDuration);
         foreach (var pair in mPackageSlotsById)
         {
-            UpdateInProgressPackagePieceAnimations(
-                pair.Value?.ProgressPieceAnimations,
-                cycleRadians);
+            UpdatePackageEntryPieceAnimations(pair.Value, cycleRadians);
         }
 
         for (var i = 0; i < mBagVolumeCards.Count; i++)
@@ -3166,6 +3171,21 @@ public class MainScene : MonoBehaviour
                 mSelectedPackageProgressPieceAnimations,
                 cycleRadians);
         }
+    }
+
+    private static void UpdatePackageEntryPieceAnimations(
+        PackageEntry entry,
+        float cycleRadians)
+    {
+        if (entry == null)
+        {
+            return;
+        }
+
+        UpdateInProgressPackagePieceAnimations(
+            entry.ProgressPieceAnimations,
+            cycleRadians);
+        UpdatePackageEntryPieceAnimations(entry.SecondaryEntry, cycleRadians);
     }
 
     private static void UpdateInProgressPackagePieceAnimations(
@@ -3353,10 +3373,7 @@ public class MainScene : MonoBehaviour
             entry.Image.enabled = visible;
         }
 
-        if (entry.SecondaryImage != null)
-        {
-            entry.SecondaryImage.enabled = visible && entry.ShowSecondaryCover;
-        }
+        SetPackageCoverVisible(entry.SecondaryEntry, visible);
     }
 
     private static void SetPackageBackgroundVisible(PackageEntry entry, bool visible)
@@ -3373,6 +3390,7 @@ public class MainScene : MonoBehaviour
         }
 
         entry.BackgroundImage.enabled = visible && entry.ShowTornBackground;
+        SetPackageBackgroundVisible(entry.SecondaryEntry, visible);
     }
 
     private static void SetPackageSizeImageVisible(PackageEntry entry, bool visible)
@@ -3381,6 +3399,8 @@ public class MainScene : MonoBehaviour
         {
             entry.SizeImage.enabled = visible && entry.SizeImage.sprite != null;
         }
+
+        SetPackageSizeImageVisible(entry?.SecondaryEntry, visible);
     }
 
     private static void SetPackageVolumeImageVisible(PackageEntry entry, bool visible)
@@ -3389,6 +3409,8 @@ public class MainScene : MonoBehaviour
         {
             entry.VolumeImage.enabled = visible && entry.ShowVolume;
         }
+
+        SetPackageVolumeImageVisible(entry?.SecondaryEntry, visible);
     }
 
     private static void SetPackageProgressPiecesVisible(PackageEntry entry, bool visible)
@@ -3397,6 +3419,8 @@ public class MainScene : MonoBehaviour
         {
             entry.ProgressPiecesRoot.SetActive(visible);
         }
+
+        SetPackageProgressPiecesVisible(entry?.SecondaryEntry, visible);
     }
 
     private void ApplyPackageSizeVisual(Image sizeImage, int packId)
@@ -4324,13 +4348,14 @@ public class MainScene : MonoBehaviour
         }
 
 
-        var secondaryCoverImage = FindChild(
+        var legacySecondaryCoverImage = FindChild(
             itemObject.transform,
             SecondaryPackCoverObjectName)?.GetComponent<Image>();
-        if (secondaryCoverImage != null)
+        if (legacySecondaryCoverImage != null)
         {
-            secondaryCoverImage.raycastTarget = false;
-            secondaryCoverImage.preserveAspect = true;
+            legacySecondaryCoverImage.raycastTarget = false;
+            legacySecondaryCoverImage.enabled = false;
+            legacySecondaryCoverImage.gameObject.SetActive(false);
         }
 
         var volumeImage = FindChild(
@@ -4645,9 +4670,6 @@ public class MainScene : MonoBehaviour
             BagId = packId,
             Root = itemObject,
             Image = coverImage,
-            SecondaryImage = FindChild(
-                itemObject.transform,
-                SecondaryPackCoverObjectName)?.GetComponent<Image>(),
             BackgroundImage = FindChild(
                 itemObject.transform,
                 PackBackgroundObjectName)?.GetComponent<Image>(),

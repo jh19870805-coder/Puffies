@@ -1,8 +1,19 @@
 # 当前任务
 
+## 2026-08-31 首页系列卡包独立叠加修复
+
+- 状态：代码修改完成，Runtime/Editor 编译通过，等待 Unity Play Mode 视觉验收。
+- 用户规则：系列槽中的前后卡包都是完整、独立的卡包状态；两者均使用各自在普通列表中的标准尺寸，不得额外缩放。后层只允许改变位置、Z 轴旋转和层级，旋转后应自然露出上下左右各角。
+- 实现：废弃把后层压缩成 `PackCover2` 单张附属图片的旧路径。Vol2 及以上会从同一个 `PackItem.prefab` 再实例化上一已解锁 Vol，并与前层统一调用 `ApplyPackageVisualState`；因此后层会独立加载自己的封面、`PackBg`、撕口蒙版、完成态材质、`PackSize`、`PackVol` 和进行中碎片。
+- 尺寸与层级：前后实例都由 `PreparePagedPackageItem` 使用同一套列表标准尺寸；根节点 `localScale` 固定为 `Vector3.one`。后层与前层中心对齐，作为列表槽根节点下的完整子实例置于前层视觉之前，只额外设置稳定的 `+10°/-10°` 旋转。已删除旧的底边 Pivot、Shader `_PaddingY` 补偿和后层专用缩放逻辑。
+- 兼容：Prefab 中旧 `PackCover2` 节点运行时强制禁用，仅保留资源兼容，不再参与系列叠加。列表显隐、进行中碎片浮动和选择页切换会递归处理后层完整实例。
+- 数据边界：未修改 `Series` 配置、发包规则、数据库或进度结构，无需删除本地数据。
+- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
+- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 均为 `0` 警告、`0` 错误；旧的 `SecondaryImage`、Pivot 和 `_PaddingY` 补偿调用扫描无残留。仍需在 MainScene Play Mode 检查 `15 -> 2`、`18 -> 3` 两个系列槽，确认前后同尺寸、后层四向露角和三种状态均正确。
+
 ## 2026-08-30 首页系列卡包叠加与 Vol 轮播
 
-- 状态：代码修改完成，Runtime/Editor 编译与 Unity Play Mode 视觉验证通过。
+- 状态：历史实现；列表后层展示已由 2026-08-31 的完整 `PackItem` 双实例方案替代。
 - 行为：根据 `CardPacks.csv` 的 `Series` 链把已解锁的同系列卡包合并为一个列表槽位；当前最高已解锁 Vol 使用前层 `PackCover`，上一已解锁 Vol 使用后层 `PackCover2`，因此系列不会重复占用首页网格位置。
 - Vol 标识：Vol1 不显示 `PackVol`；从 Vol2 开始加载 `Assets/UI/PackImages/PackVolN.png`。当前资源支持 `PackVol2.png` 至 `PackVol6.png`，资源缺失时隐藏标识，不显示 Prefab 默认占位图。`PackVol` 与 `PackSize` 共用同一套普通/完成态材质切换，卡包完成后两者同步置灰。
 - 后层卡包：Vol2 及以上显示 `PackCover2`，使用上一 Vol 自己的 `PackIconNNN.png`。后层复制前层封面的 Rect 尺寸、缩放、`preserveAspect`，保证实际显示尺寸完全一致；先与前层底边对齐，再读取现有 `PackCoverShadow` 材质的 `_PaddingY`，以真实可见卡包底边作为旋转轴，按系列根 PackId 稳定旋转 Z 轴 `+10°` 或 `-10°`，避免 Shader 透明留白使后层被前层完整遮住。前后卡包分别根据自身进度执行完整彩色、彩色撕开或灰色撕开材质与蒙版逻辑，不额外放大后层。
