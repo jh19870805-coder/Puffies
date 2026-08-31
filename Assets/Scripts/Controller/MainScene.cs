@@ -167,6 +167,7 @@ public class MainScene : MonoBehaviour
     private const float BagVolumeActionButtonDuration = 0.18f;
     private const float BagVolumeSideRevealDelay = 0.15f;
     private const float BagVolumeSideRevealDuration = 0.2f;
+    private const float BagVolumeBackRotationDurationRatio = 0.35f;
     private const float BagVolumeDotRevealStart = 0.35f;
     private const string ReplayPanelObjectName = "PanelReplay";
     private const string ReplayConfirmButtonObjectName = "BtnReplay";
@@ -4624,6 +4625,14 @@ public class MainScene : MonoBehaviour
         RefreshBagVolumeSelectionState();
 
         var selectedCard = mBagVolumeCards[mBagVolumeSelectedIndex];
+        var entranceBackCard = mBagVolumeSelectedIndex > 0
+            ? mBagVolumeCards[mBagVolumeSelectedIndex - 1]
+            : null;
+        var entranceBackRotation = sourceEntry.SecondaryEntry?.RectTransform != null
+            ? Mathf.DeltaAngle(
+                0f,
+                sourceEntry.SecondaryEntry.RectTransform.localEulerAngles.z)
+            : 0f;
         var anchor = sourceEntry.Image != null
             ? sourceEntry.Image.rectTransform
             : sourceEntry.RectTransform;
@@ -4678,6 +4687,14 @@ public class MainScene : MonoBehaviour
         SetPanelVisible(mBagVolumePanelRoot, true);
         SetBagVolumeControlsInteractable(false);
         StartCoroutine(AnimateBagVolumeActionButtons());
+        if (entranceBackCard != null)
+        {
+            PrepareBagVolumeEntranceBackCard(
+                entranceBackCard,
+                entranceBackRotation);
+            StartCoroutine(AnimateBagVolumeEntranceBackCard(entranceBackCard));
+        }
+
         yield return AnimateSelectedPackageImage(
             mSelectedPackageStartPosition,
             mSelectedPackageDisplayPosition,
@@ -4690,6 +4707,7 @@ public class MainScene : MonoBehaviour
             yield return new WaitForSecondsRealtime(BagVolumeSideRevealDelay);
         }
 
+        RestoreBagVolumeEntranceBackCard(entranceBackCard);
         SetSelectedPackageImageVisible(false);
         ClearSelectedPackageVisual();
         yield return AnimateBagVolumeSideCards();
@@ -4908,6 +4926,110 @@ public class MainScene : MonoBehaviour
         }
 
         mBagVolumeCards[nearestCardIndex].RectTransform.SetAsLastSibling();
+    }
+
+    private void PrepareBagVolumeEntranceBackCard(
+        SeriesCarouselCard card,
+        float initialRotation)
+    {
+        var overlayRoot = mSelectedPackageOverlayCanvas != null
+            ? mSelectedPackageOverlayCanvas.transform as RectTransform
+            : null;
+        if (card?.RectTransform == null
+            || overlayRoot == null
+            || mSelectedPackageOverlayRect == null)
+        {
+            return;
+        }
+
+        var cardRect = card.RectTransform;
+        cardRect.SetParent(overlayRoot, false);
+        cardRect.anchorMin = new Vector2(0.5f, 0.5f);
+        cardRect.anchorMax = new Vector2(0.5f, 0.5f);
+        cardRect.pivot = new Vector2(0.5f, 0.5f);
+        cardRect.sizeDelta = new Vector2(PackageOpenWidth, PackageOpenHeight);
+        cardRect.anchoredPosition = mSelectedPackageStartPosition;
+        cardRect.localScale = Vector3.one * ResolveBagVolumeOverlayScale(
+            mSelectedPackageStartSize);
+        cardRect.localEulerAngles = new Vector3(0f, 0f, initialRotation);
+        cardRect.gameObject.SetActive(true);
+        cardRect.SetSiblingIndex(mSelectedPackageOverlayRect.GetSiblingIndex());
+    }
+
+    private IEnumerator AnimateBagVolumeEntranceBackCard(SeriesCarouselCard card)
+    {
+        if (card?.RectTransform == null)
+        {
+            yield break;
+        }
+
+        var cardRect = card.RectTransform;
+        var fromPosition = mSelectedPackageStartPosition;
+        var toPosition = mSelectedPackageDisplayPosition;
+        var fromScale = ResolveBagVolumeOverlayScale(mSelectedPackageStartSize);
+        var toScale = ResolveBagVolumeOverlayScale(mSelectedPackageDisplaySize);
+        var fromRotation = Mathf.DeltaAngle(0f, cardRect.localEulerAngles.z);
+        var elapsed = 0f;
+        while (elapsed < BagVolumeOpenScaleDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            var normalized = Mathf.Clamp01(elapsed / BagVolumeOpenScaleDuration);
+            var eased = Mathf.SmoothStep(0f, 1f, normalized);
+            var rotationProgress = Mathf.Clamp01(
+                normalized / BagVolumeBackRotationDurationRatio);
+            cardRect.anchoredPosition = Vector2.LerpUnclamped(
+                fromPosition,
+                toPosition,
+                eased);
+            cardRect.localScale = Vector3.one * Mathf.LerpUnclamped(
+                fromScale,
+                toScale,
+                eased);
+            cardRect.localEulerAngles = new Vector3(
+                0f,
+                0f,
+                Mathf.LerpAngle(
+                    fromRotation,
+                    0f,
+                    Mathf.SmoothStep(0f, 1f, rotationProgress)));
+            yield return null;
+        }
+
+        cardRect.anchoredPosition = toPosition;
+        cardRect.localScale = Vector3.one * toScale;
+        cardRect.localEulerAngles = Vector3.zero;
+    }
+
+    private void RestoreBagVolumeEntranceBackCard(SeriesCarouselCard card)
+    {
+        if (card?.RectTransform == null || mBagVolumeCarouselRect == null)
+        {
+            return;
+        }
+
+        var centerPosition = mBagVolumeCenterTemplate != null
+            ? mBagVolumeCenterTemplate.anchoredPosition
+            : Vector2.zero;
+        var centerScale = mBagVolumeCenterTemplate != null
+            ? Mathf.Abs(mBagVolumeCenterTemplate.localScale.x)
+            : 1f;
+        var cardRect = card.RectTransform;
+        cardRect.SetParent(mBagVolumeCarouselRect, false);
+        cardRect.anchorMin = new Vector2(0.5f, 0.5f);
+        cardRect.anchorMax = new Vector2(0.5f, 0.5f);
+        cardRect.pivot = new Vector2(0.5f, 0.5f);
+        cardRect.sizeDelta = new Vector2(PackageOpenWidth, PackageOpenHeight);
+        cardRect.anchoredPosition = centerPosition;
+        cardRect.localScale = Vector3.one * centerScale;
+        cardRect.localEulerAngles = Vector3.zero;
+        cardRect.SetAsFirstSibling();
+    }
+
+    private static float ResolveBagVolumeOverlayScale(Vector2 displaySize)
+    {
+        return Mathf.Min(
+            displaySize.x / PackageOpenWidth,
+            displaySize.y / PackageOpenHeight);
     }
 
     private IEnumerator AnimateBagVolumeSideCards()
