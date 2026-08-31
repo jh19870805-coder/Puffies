@@ -9,11 +9,11 @@
 - 共享呼吸动画：系列槽创建唯一的 `SeriesAnimationRoot`，把前后两个完整卡包视觉共同放在该节点下；两个卡包自身的 Animator 会关闭并恢复静态局部姿态，只由父节点 Animator 播放一次 `PackAniBreath`。因此卡包状态仍独立，但呼吸时保持相对位置和角度，作为一个列表槽整体运动。
 - 运行时修复：`SetPackageSizeImageVisible`、`SetPackageVolumeImageVisible` 和 `SetPackageProgressPiecesVisible` 原先在 `entry == null` 时仍递归调用自身，造成 `StackOverflowException`；现已增加明确终止条件。背景显隐递归也统一为先判断 Entry，再按可用组件处理。
 - Vol 选中进场：保留主卡包现有 `0.4s` 弹起放大动画。点击瞬间将列表后层对应的真实 Vol 卡隐藏，并直接设置为 Z 轴 `0°`、左侧卡位最终缩放和主卡最终中心位置；主卡展开期间后层卡不播放、也不显示任何旋转、缩放或移动。主卡完全展开且经过现有 `0.15s` 停顿后，后层卡才从主卡背后显示，并保持尺寸不变，只沿 X 轴滑向左卡位。
-- 首次点击修复：`PanelBagVol` 在编辑器启动时原本立即隐藏，第一次点击前没有完成 Canvas/Layout 首帧计算，导致首次读取 `PackCenter` 世界矩形可能使用旧数据。初始化阶段现会临时激活面板、强制重建 Panel 与 `PackCarousel` 布局并在同一帧恢复隐藏；每次动态创建 Vol 卡后也会重复该不可见预布局，再读取动画起终点。该过程不产生可见闪烁，也不改变第二次及后续动画节奏。
+- 首次展开和关闭修复：实际用于复制卡包并执行起终点插值的是运行时独立创建的 `SelectedCardPackCanvas`，不是 `PanelBagVol`。旧逻辑在创建后立即禁用整个 Canvas，第一次读取起终点时 `CanvasScaler` 尚未在激活状态下建立最终坐标系；首次显示又会触发缩放系数更新，因而出现“屏幕中心偏小后突然放大”，首次关闭也会先缩到屏幕中心。现在保持该 Canvas 根节点持续激活并完成一次强制刷新，只切换子节点 `SelectedCardPackImage` 的显隐；展开、关闭以及后续点击始终共用同一坐标系。`PanelBagVol/PackCarousel` 的不可见预布局仍保留，用于保证编辑器卡位矩形有效。
 - 兼容：Prefab 中旧 `PackCover2` 节点运行时强制禁用，仅保留资源兼容，不再参与系列叠加。列表显隐、进行中碎片浮动和选择页切换会递归处理后层完整实例。
 - 数据边界：未修改 `Series` 配置、发包规则、数据库或进度结构，无需删除本地数据。
 - 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
-- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 均为 `0` 警告、`0` 错误；旧的 `SecondaryImage`、Pivot 和 `_PaddingY` 补偿调用扫描无残留，三个递归显隐入口均已具备空节点终止条件。仍需在 MainScene Play Mode 检查 `15 -> 2`、`18 -> 3` 两个系列槽，确认前后同尺寸、后层四向露角、整体同步呼吸、选中后“归正重合再左滑”的节奏和三种状态均正确，并确认选择/返回不再出现栈溢出。
+- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 均为 `0` 警告、`0` 错误；旧的 `SecondaryImage`、Pivot 和 `_PaddingY` 补偿调用扫描无残留，三个递归显隐入口均已具备空节点终止条件。静态调用扫描确认选中层显隐不再禁用 `SelectedCardPackCanvas` 根节点。仍需重启 Unity 后在 MainScene Play Mode 首次点击并首次关闭 `15 -> 2` 或 `18 -> 3` 系列槽，确认不再出现中心偏小、突然放大或关闭回位错误；同时检查前后同尺寸、后层四向露角、整体同步呼吸和“归正重合再左滑”的节奏。
 
 ## 2026-08-30 首页系列卡包叠加与 Vol 轮播
 

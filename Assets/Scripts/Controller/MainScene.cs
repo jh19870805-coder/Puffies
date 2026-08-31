@@ -1409,9 +1409,9 @@ public class MainScene : MonoBehaviour
 
     private void SetSelectedPackageImageVisible(bool visible)
     {
-        if (mSelectedPackageOverlayCanvas != null)
+        if (mSelectedPackageOverlayRect != null)
         {
-            mSelectedPackageOverlayCanvas.gameObject.SetActive(visible);
+            mSelectedPackageOverlayRect.gameObject.SetActive(visible);
         }
     }
 
@@ -1473,7 +1473,9 @@ public class MainScene : MonoBehaviour
         mSelectedPackageOverlayCanvasGroup.alpha = 1f;
         mSelectedPackageOverlayCanvasGroup.interactable = false;
         mSelectedPackageOverlayCanvasGroup.blocksRaycasts = false;
-        canvasObject.SetActive(false);
+        imageObject.SetActive(false);
+        Canvas.ForceUpdateCanvases();
+        (canvasObject.transform as RectTransform)?.ForceUpdateRectTransforms();
     }
 
     private bool CreateSelectedPackageVisual(PackageEntry entry)
