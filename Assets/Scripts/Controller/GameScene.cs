@@ -146,7 +146,9 @@ public class GameScene : MonoBehaviour
     private const string StickerOutlineLayerObjectName = "StickerOutlines";
     private const string PlacedPiecesRootObjectName = "PlacedPieces";
     private const string TaskItemObjectName = "TaskItem";
-    private const string TaskScoreTitlePath = "TaskBg2/TaskTitle2";
+    private const string TaskBagCountTitlePath = "TaskBg2/TaskTitle2";
+    private const string TaskBonusTitlePath = "TaskBg2/TaskTitle21";
+    private const string TaskBonusScorePath = "TaskBg2/TaskTitle22";
     private const string TaskScorePath = "TaskBg2/TaskScore";
     private const string TaskBagCountPath = "TaskBg2/TaskBagNum";
     private const string TaskRewardImgBagPath = "ImgBagBg/ImgBag";
@@ -316,7 +318,9 @@ public class GameScene : MonoBehaviour
     private bool _didSavePackCompletion;
     private GameObject _rewardPanelRoot;
     private Transform _rewardTaskItem;
-    private TMP_Text _settlementScoreTitleText;
+    private TMP_Text _settlementBagCountTitleText;
+    private TMP_Text _settlementBonusTitleText;
+    private TMP_Text _settlementBonusScoreText;
     private TMP_Text _settlementScoreText;
     private TMP_Text _settlementBagCountText;
     private Image _taskRewardImage;
@@ -7280,7 +7284,9 @@ public class GameScene : MonoBehaviour
     private void CacheRewardPanelReferences()
     {
         _rewardTaskItem = null;
-        _settlementScoreTitleText = null;
+        _settlementBagCountTitleText = null;
+        _settlementBonusTitleText = null;
+        _settlementBonusScoreText = null;
         _settlementScoreText = null;
         _settlementBagCountText = null;
         _taskRewardImage = null;
@@ -7290,7 +7296,9 @@ public class GameScene : MonoBehaviour
         }
 
         _rewardTaskItem = _rewardPanelRoot.transform.Find(TaskItemObjectName);
-        _settlementScoreTitleText = _rewardPanelRoot.transform.Find(TaskScoreTitlePath)?.GetComponent<TMP_Text>();
+        _settlementBagCountTitleText = _rewardPanelRoot.transform.Find(TaskBagCountTitlePath)?.GetComponent<TMP_Text>();
+        _settlementBonusTitleText = _rewardPanelRoot.transform.Find(TaskBonusTitlePath)?.GetComponent<TMP_Text>();
+        _settlementBonusScoreText = _rewardPanelRoot.transform.Find(TaskBonusScorePath)?.GetComponent<TMP_Text>();
         _settlementScoreText = _rewardPanelRoot.transform.Find(TaskScorePath)?.GetComponent<TMP_Text>();
         _settlementBagCountText = _rewardPanelRoot.transform.Find(TaskBagCountPath)?.GetComponent<TMP_Text>();
         _taskRewardImage = _rewardPanelRoot.transform.Find(TaskRewardImgBagPath)?.GetComponent<Image>();
@@ -7309,18 +7317,30 @@ public class GameScene : MonoBehaviour
             GameFontUtility.ApplyDefaultFont(_settlementScoreText);
         }
 
-        if (_settlementScoreTitleText != null)
+        if (_settlementBagCountTitleText == null)
         {
-            GameFontUtility.ApplyDefaultFont(_settlementScoreTitleText);
-            var titleFontSize = _settlementScoreTitleText.fontSize;
-            _settlementScoreTitleText.enableWordWrapping = false;
-            _settlementScoreTitleText.enableAutoSizing = true;
-            _settlementScoreTitleText.fontSizeMax = titleFontSize;
-            _settlementScoreTitleText.fontSizeMin = Mathf.Min(
-                _settlementScoreTitleText.fontSizeMin,
-                titleFontSize);
-            SetSettlementScoreTitle(string.Empty);
+            Debug.LogWarning($"GameScene: settlement bag count title not found. Expected {TaskBagCountTitlePath}.");
         }
+
+        if (_settlementBonusTitleText == null)
+        {
+            Debug.LogWarning($"GameScene: settlement bonus title not found. Expected {TaskBonusTitlePath}.");
+        }
+        else
+        {
+            ConfigureSettlementSingleLineText(_settlementBonusTitleText);
+        }
+
+        if (_settlementBonusScoreText == null)
+        {
+            Debug.LogWarning($"GameScene: settlement bonus score not found. Expected {TaskBonusScorePath}.");
+        }
+        else
+        {
+            ConfigureSettlementSingleLineText(_settlementBonusScoreText);
+        }
+
+        HideSettlementTitles();
 
         if (_settlementBagCountText == null)
         {
@@ -9307,7 +9327,7 @@ public class GameScene : MonoBehaviour
     {
         SetSettlementTaskProgress(taskItem, task, progressBeforeSettlement);
         SetSettlementScore(0);
-        SetSettlementScoreTitle(string.Empty);
+        HideSettlementTitles();
         yield return AnimateSettlementScoreRange(
             taskItem,
             task,
@@ -9332,7 +9352,8 @@ public class GameScene : MonoBehaviour
                 currentScore,
                 targetScore,
                 syncTaskWithScore,
-                $"未使用提示 +{targetScore - currentScore}分");
+                "未使用提示",
+                targetScore - currentScore);
             currentScore = targetScore;
         }
 
@@ -9349,7 +9370,8 @@ public class GameScene : MonoBehaviour
                 currentScore,
                 targetScore,
                 syncTaskWithScore,
-                $"关闭关卡描边 +{targetScore - currentScore}分");
+                "关闭关卡描边",
+                targetScore - currentScore);
             currentScore = targetScore;
         }
 
@@ -9366,7 +9388,8 @@ public class GameScene : MonoBehaviour
                 currentScore,
                 targetScore,
                 syncTaskWithScore,
-                $"关闭贴纸描边 +{targetScore - currentScore}分");
+                "关闭贴纸描边",
+                targetScore - currentScore);
             currentScore = targetScore;
         }
 
@@ -9383,7 +9406,8 @@ public class GameScene : MonoBehaviour
                 currentScore,
                 targetScore,
                 syncTaskWithScore,
-                $"快速完成 +{targetScore - currentScore}分");
+                "快速完成",
+                targetScore - currentScore);
             currentScore = targetScore;
         }
 
@@ -9400,7 +9424,7 @@ public class GameScene : MonoBehaviour
         }
 
         SetSettlementScore(scoreResult.FinalScore);
-        SetSettlementScoreTitle("卡包数");
+        ShowSettlementBagCountTitle();
         if (!syncTaskWithScore && progressAfterSettlement != progressBeforeSettlement)
         {
             yield return AnimateSettlementTaskProgressRange(
@@ -9422,9 +9446,10 @@ public class GameScene : MonoBehaviour
         int fromScore,
         int toScore,
         bool syncTaskWithScore,
-        string title)
+        string title,
+        int bonusScore)
     {
-        SetSettlementScoreTitle(title);
+        ShowSettlementBonus(title, bonusScore);
         yield return new WaitForSecondsRealtime(SettlementStagePauseDuration);
         yield return AnimateSettlementScoreRange(
             taskItem,
@@ -9525,12 +9550,67 @@ public class GameScene : MonoBehaviour
         }
     }
 
-    private void SetSettlementScoreTitle(string title)
+    private void HideSettlementTitles()
     {
-        if (_settlementScoreTitleText != null)
+        if (_settlementBagCountTitleText != null)
         {
-            _settlementScoreTitleText.text = title;
+            _settlementBagCountTitleText.gameObject.SetActive(false);
         }
+
+        HideSettlementBonusTexts();
+    }
+
+    private void ShowSettlementBonus(string title, int bonusScore)
+    {
+        if (_settlementBagCountTitleText != null)
+        {
+            _settlementBagCountTitleText.gameObject.SetActive(false);
+        }
+
+        if (_settlementBonusTitleText != null)
+        {
+            _settlementBonusTitleText.text = title;
+            _settlementBonusTitleText.gameObject.SetActive(true);
+        }
+
+        if (_settlementBonusScoreText != null)
+        {
+            _settlementBonusScoreText.text = $"+{Mathf.Max(0, bonusScore)}分";
+            _settlementBonusScoreText.gameObject.SetActive(true);
+        }
+    }
+
+    private void ShowSettlementBagCountTitle()
+    {
+        HideSettlementBonusTexts();
+        if (_settlementBagCountTitleText != null)
+        {
+            _settlementBagCountTitleText.gameObject.SetActive(true);
+        }
+    }
+
+    private void HideSettlementBonusTexts()
+    {
+        if (_settlementBonusTitleText != null)
+        {
+            _settlementBonusTitleText.text = string.Empty;
+            _settlementBonusTitleText.gameObject.SetActive(false);
+        }
+
+        if (_settlementBonusScoreText != null)
+        {
+            _settlementBonusScoreText.text = string.Empty;
+            _settlementBonusScoreText.gameObject.SetActive(false);
+        }
+    }
+
+    private static void ConfigureSettlementSingleLineText(TMP_Text text)
+    {
+        var configuredFontSize = text.fontSize;
+        text.enableWordWrapping = false;
+        text.enableAutoSizing = true;
+        text.fontSizeMax = configuredFontSize;
+        text.fontSizeMin = Mathf.Min(text.fontSizeMin, configuredFontSize);
     }
 
     private void SetSettlementScore(int score)

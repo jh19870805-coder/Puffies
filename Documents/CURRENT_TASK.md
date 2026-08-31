@@ -1,5 +1,14 @@
 # 当前任务
 
+## 2026-08-31 结算加成文本拆分
+
+- 状态：代码与需求记录已修改，Runtime/Editor 编译通过，等待 Unity Play Mode 验收。
+- UI 职责：`TaskTitle2` 固定显示编辑器中的“卡包数”并在结算初始化时隐藏；`TaskTitle21` 逐条显示加成名称；`TaskTitle22` 同时显示该条加成的实际 `+N分`。
+- 显隐流程：基础分滚动期间三个标题全部隐藏；每条加成阶段只显示 `TaskTitle21/22`；所有加成结束后清空并隐藏 `TaskTitle21/22`，再显示 `TaskTitle2`。无加成时在基础分滚动结束后直接显示 `TaskTitle2`。
+- 编辑器边界：代码只绑定、填写内容和控制显隐；保留用户在 `GameScene.unity` 中设置的字体、材质、颜色、对齐、位置和尺寸。加成名称与分数沿用单行自动缩小规则。
+- 修改文件：`Assets/Scripts/Controller/GameScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`Documents/GAME_DESIGN_REQUIREMENTS.md`。`Assets/Scenes/GameScene.unity` 及 `Assets/UI/TempImages` 当前改动来自用户，本次没有覆盖。
+- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 均为 `0` 警告、`0` 错误；本次代码和文档差异通过 `git diff --check`。全工作区检查仅报告用户新增 `GameScene.unity` 节点中 Unity 空字段的尾随空格，本次没有重写场景。Unity 中仍需分别验证“至少一条加成”和“无加成”两种结算。
+
 ## 2026-08-31 首页卡包排序调整
 
 - 状态：代码修改完成，Runtime/Editor 编译通过，等待 Unity Play Mode 数据验收。
