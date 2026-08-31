@@ -2669,7 +2669,7 @@ public class MainScene : MonoBehaviour
         entry.ShowTornBackground = showTornState || entry.ShowSecondaryTornBackground;
         SetPackageBackgroundVisible(entry, true);
         ApplyPackageSizeVisual(entry.SizeImage, packId);
-        ApplyPackageSizeMaterial(entry, showCompletedState);
+        ApplyPackageLabelMaterials(entry, showCompletedState);
         ApplyPackageBreathingAnimation(entry, showCompletedState);
         ApplyInProgressPackagePieces(entry, packId, hasCompletedFirstGroup);
         if (CardPackRewardFlyTransition.IsPackPending(packId))
@@ -3382,14 +3382,23 @@ public class MainScene : MonoBehaviour
         sizeImage.gameObject.SetActive(true);
     }
 
-    private static void ApplyPackageSizeMaterial(PackageEntry entry, bool isCompleted)
+    private static void ApplyPackageLabelMaterials(PackageEntry entry, bool isCompleted)
     {
-        if (entry?.SizeImage == null || entry.VisualSettings == null)
+        if (entry?.VisualSettings == null)
         {
             return;
         }
 
-        entry.SizeImage.material = entry.VisualSettings.GetSizeMaterial(isCompleted);
+        var material = entry.VisualSettings.GetSizeMaterial(isCompleted);
+        if (entry.SizeImage != null)
+        {
+            entry.SizeImage.material = material;
+        }
+
+        if (entry.VolumeImage != null)
+        {
+            entry.VolumeImage.material = material;
+        }
     }
 
     private void RefreshPackagePageLayout()
