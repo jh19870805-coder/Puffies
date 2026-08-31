@@ -1,5 +1,14 @@
 # 当前任务
 
+## 2026-08-31 首页卡包排序调整
+
+- 状态：代码修改完成，Runtime/Editor 编译通过，等待 Unity Play Mode 数据验收。
+- 最新顺序：第一层是当前游戏进程新获得的卡包；新包从 `Unlocked` 进入 `InProgress` 但第一波未完成时继续保留原置顶位置。第二层是非本次新获得、但第一波已经完整完成且整包未完成的 `InProgress` 卡包。第三层合并普通 `Unlocked` 与第一波未完成的旧 `InProgress`，统一按原 `UnlockTime` 正序，因此打开旧卡包但未打完第一波不会改变位置。第四层是 `Completed`，按首次 `CompletionTime` 倒序，最新完成排在完成区最前、越早完成越靠后。
+- 系列规则：排序仍先对真实 PackId 执行，再折叠系列槽。新解锁 A02 时，A02 的本次新获得优先级先出现，随后折叠成 A01+A02，所以整个堆叠槽位跟随 A02 到列表最前。已完成 A01 重玩时生命周期和首次完成时间均不修改，单包或系列槽位置保持不变。
+- 数据边界：继续复用进程内 `sNewlyUnlockedPackIds`、SQLite `UnlockTime`、首次 `CompletionTime` 和第一波 Piece 进度；没有修改表结构，无需删除本地数据。
+- 修改文件：`Assets/Scripts/Model/CardPackDataUtility.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`Documents/GAME_DESIGN_REQUIREMENTS.md`、`specs/spec-driven-development.md`。
+- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 均为 `0` 警告、`0` 错误，`git diff --check` 通过。仍需在 MainScene Play Mode 依次验证：新获得未开始、新获得第一波未完成、旧包第一波未完成、旧包第一波完成、连续完成两个卡包、A01 完成后新解锁 A02、已完成旧包重玩。
+
 ## 2026-08-31 首页系列卡包独立叠加修复
 
 - 状态：代码修改完成，Runtime/Editor 编译通过，等待 Unity Play Mode 视觉验收。

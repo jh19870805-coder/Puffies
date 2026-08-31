@@ -720,13 +720,13 @@ public static class CardPackDataUtility
             }
         }
 
-        var leftTime = left.LifecycleState == CardPackLifecycleState.Completed
-            ? left.CompletionTime
-            : left.UnlockTime;
-        var rightTime = right.LifecycleState == CardPackLifecycleState.Completed
-            ? right.CompletionTime
-            : right.UnlockTime;
-        var timeComparison = CompareTimestamp(leftTime, rightTime, descending: false);
+        var compareCompletionTime = leftPriority == 3;
+        var leftTime = compareCompletionTime ? left.CompletionTime : left.UnlockTime;
+        var rightTime = compareCompletionTime ? right.CompletionTime : right.UnlockTime;
+        var timeComparison = CompareTimestamp(
+            leftTime,
+            rightTime,
+            descending: compareCompletionTime);
         return timeComparison != 0 ? timeComparison : left.PackId.CompareTo(right.PackId);
     }
 
@@ -755,7 +755,12 @@ public static class CardPackDataUtility
         switch (record.LifecycleState)
         {
             case CardPackLifecycleState.InProgress:
-                return firstGroupCompletedPackIds.Contains(record.PackId) ? 1 : 0;
+                if (newlyUnlockedPackIds.Contains(record.PackId))
+                {
+                    return 0;
+                }
+
+                return firstGroupCompletedPackIds.Contains(record.PackId) ? 1 : 2;
             case CardPackLifecycleState.Unlocked:
                 return newlyUnlockedPackIds.Contains(record.PackId) ? 0 : 2;
             case CardPackLifecycleState.Completed:
