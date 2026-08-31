@@ -1,5 +1,17 @@
 # 当前任务
 
+## 2026-08-31 拆包动画跨场景显隐、尺寸与 Vol 标签
+
+- 状态：运行时代码已修改，Runtime/Editor 编译通过，等待 Unity Play Mode 视觉验收。
+- 展示规则：完整彩包开始播放拆包 Timeline 时，左下显示当前卡包真实 `PackSize`；Vol2 及以上在右下显示真实 `PackVol`，Vol1 不额外显示 Vol 标签。
+- 布局来源：直接读取展开态 `PackNode/PackSize` 和 `PackNode/PackVol` 的 Sprite、颜色、屏幕相对中心和尺寸，位置继续由 `PackItem.prefab` 的美术配置决定，不写死第二套标签坐标。
+- 动画跟随：两个标签转换为 EffectLayer 世界空间 SpriteRenderer，分别锚定到卡包模型对应位置最近的下半部骨骼，在 `LateUpdate` 跟随制作方动画位移和旋转；模型 Activation 隐藏时同步隐藏。
+- 跨场景姿态：Timeline 在约 `0.8s` 暂停时记录卡包正面渲染器的真实 Viewport 中心和高度；GameScene 完成棋盘相机适配后，恢复播放前重新适配整个模型 Stage，并用同一倍率同步 `PackSize/PackVol`，避免交接瞬间缩小或上移。独立的 `fx_chai_w_001` 不继承该适配。
+- 跨场景显隐：GameScene 根 Canvas 运行时是 `Screen Space - Camera`，原卡包运行时材质队列 `2001` 会先于玩法 UI 绘制并被遮挡。只在进入 GameScene 后把当前运行时卡包材质切到透明队列 `3000`，保留原 Renderer 排序以及光效自身排序；没有修改制作方材质资产。
+- 资源边界：没有修改 `PackItem.prefab`、`CardPackOpeningModel_001-006`、`test.playable`、模型材质或 `fx_chai_w_001` 粒子配置。
+- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`。
+- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 均为 `0` 警告、`0` 错误，`git diff --check` 通过。Editor.log 已确认 Timeline 在场景交接前后保持约 `0.8s` 并完整播放到 `5.533s`，不是提前销毁。Unity 中仍需分别验证普通 Vol1 完整彩包和 Vol2+ 系列完整彩包，重点检查交接瞬间卡包不消失、标签不缩小上移、滑光遮挡关系和动画结束显隐。
+
 ## 2026-08-31 结算加成文本拆分
 
 - 状态：代码与需求记录已修改，Runtime/Editor 编译通过，等待 Unity Play Mode 验收。

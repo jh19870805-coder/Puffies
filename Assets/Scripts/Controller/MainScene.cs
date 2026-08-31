@@ -6225,6 +6225,12 @@ public class MainScene : MonoBehaviour
             && mSelectedPackageOverlayImage.sprite != null
             ? mSelectedPackageOverlayImage.sprite.texture
             : null;
+        var openingSizeLabel = mSelectedPackageVisualContent != null
+            ? FindChild(mSelectedPackageVisualContent, PackSizeObjectName)?.GetComponent<Image>()
+            : null;
+        var openingVolumeLabel = mSelectedPackageVisualContent != null
+            ? FindChild(mSelectedPackageVisualContent, PackVolumeObjectName)?.GetComponent<Image>()
+            : null;
         if (packTexture != null
             && mSelectedPackageOverlayRect != null
             && mBagSelectOverlayCanvas != null)
@@ -6242,7 +6248,9 @@ public class MainScene : MonoBehaviour
                     mSelectedPackageVisualContent != null
                         ? mSelectedPackageVisualContent.gameObject
                         : mSelectedPackageOverlayImage.gameObject,
-                    openingPieceSprites);
+                    openingPieceSprites,
+                    openingSizeLabel,
+                    openingVolumeLabel);
         }
 
         SetBagSelectPanelVisible(false);
@@ -6840,6 +6848,9 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
     private const float PieceRisePackHeightRatio = 0.08f;
     private const float PieceDepthBehindPack = 0.05f;
     private const int PieceSortingOrderOffsetBehindPack = -1;
+    private const float LabelDepthPackHeightRatio = 0.004f;
+    private const int LabelSortingOrderOffsetAbovePack = 1;
+    private const int GameplayFrontMaterialRenderQueue = 3000;
     private const string ModelPathFormat = "Effects/CardPack/Models/CardPackOpeningModel_{0:D3}";
     private const string AnimatorControllerPath = "Effects/CardPack/Animations/CardPackAnimation";
     private const string OpeningTimelinePath = "Effects/CardFx/Animations/test";
@@ -6857,6 +6868,7 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         Shader.PropertyToID("_SpritePixelsPerUnit");
 
     private GameObject mWorldRoot;
+    private Transform mStageRoot;
     private GameObject mModelObject;
     private GameObject mLightEffectObject;
     private Camera mMainCamera;
@@ -6871,6 +6883,8 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
     private readonly HashSet<Sprite> mRuntimeFullRectPieceSprites = new HashSet<Sprite>();
     private readonly List<SpriteRenderer> mEmergedPieceRenderers =
         new List<SpriteRenderer>();
+    private readonly List<OpeningLabelRuntime> mOpeningLabels =
+        new List<OpeningLabelRuntime>();
     private Vector3[] mEmergedPieceStartPositions = Array.Empty<Vector3>();
     private Vector3[] mEmergedPieceFinalPositions = Array.Empty<Vector3>();
     private Vector3 mEmergedPieceScatterCenter;
@@ -6888,6 +6902,27 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
     private bool mIsWaitingForSceneCamera;
     private bool mIsPausedForSceneHandoff;
     private bool mIsStoppingDirectorForCleanup;
+    private Vector2 mHandoffViewportCenter;
+    private float mHandoffViewportHeight;
+    private bool mHasHandoffScreenPose;
+
+    private sealed class OpeningLabelLayout
+    {
+        public Sprite Sprite;
+        public Color Color;
+        public Vector2 NormalizedCenter;
+        public Vector2 NormalizedSize;
+        public bool PreserveAspect;
+    }
+
+    private sealed class OpeningLabelRuntime
+    {
+        public SpriteRenderer Renderer;
+        public Transform Anchor;
+        public Vector3 AnchorLocalPosition;
+        public Quaternion AnchorLocalRotation;
+        public Vector3 Scale;
+    }
 
     public static void PrepareSceneLightEffect()
     {
@@ -6926,7 +6961,9 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         Texture packTexture,
         RectTransform displayedPackRect,
         GameObject displayedPackVisual,
-        IReadOnlyList<Sprite> firstGroupPieceSprites)
+        IReadOnlyList<Sprite> firstGroupPieceSprites,
+        Image sizeLabelImage,
+        Image volumeLabelImage)
     {
         CleanupPlaybackResources();
         if (packTexture == null || displayedPackRect == null)
@@ -6967,6 +7004,7 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         stageRoot.localRotation = Quaternion.identity;
         stageRoot.localScale = Vector3.one;
         stageRoot.gameObject.layer = EffectLayer;
+        mStageRoot = stageRoot;
 
         mModelObject = Instantiate(modelPrefab, stageRoot, false);
         mModelObject.name = modelPrefab.name;
@@ -7010,6 +7048,12 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
             return false;
         }
 
+        var sizeLabelLayout = CaptureOpeningLabelLayout(
+            displayedPackRect,
+            sizeLabelImage);
+        var volumeLabelLayout = CaptureOpeningLabelLayout(
+            displayedPackRect,
+            volumeLabelImage);
         StopAndClearParticleSystems(mLightEffectObject);
         mLightEffectObject.SetActive(false);
         displayedPackVisual.SetActive(false);
@@ -7030,9 +7074,11 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
             return false;
         }
 
+        PrepareOpeningLabels(sizeLabelLayout, volumeLabelLayout);
         PrepareEmergedPieces(firstGroupPieceSprites);
         mDirector.time = mPlaybackStartTime;
         mDirector.Evaluate();
+        UpdateOpeningLabels();
 
         mIsPrepared = true;
         Debug.Log(
@@ -7082,6 +7128,14 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         }
     }
 
+    private void LateUpdate()
+    {
+        if (mIsPrepared || mIsPlaying)
+        {
+            UpdateOpeningLabels();
+        }
+    }
+
     public void PrepareForSceneHandoff()
     {
         if (!mIsPlaying || mHasHandedOffToGameScene)
@@ -7093,6 +7147,7 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         SceneManager.sceneLoaded += HandleSceneLoaded;
         mIsWaitingForSceneCamera = true;
         PauseForSceneHandoff();
+        CaptureSceneHandoffScreenPose();
         for (var i = 0; i < mEmergedPieceRenderers.Count; i++)
         {
             if (mEmergedPieceRenderers[i] != null)
@@ -7152,11 +7207,13 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
             }
         }
 
+        // GameScene configures and fits this camera in Start. Keep the effect culled for
+        // that first frame, then restore the exact handoff screen pose before rendering it.
+        yield return null;
+        RetargetStageToSceneCamera(loadedCamera);
+        PrepareModelForGameplayCanvas();
         BindEffectLayerToCamera(loadedCamera);
         mIsWaitingForSceneCamera = false;
-        // Scene activation can block the main thread for multiple seconds. Resume the
-        // authored Timeline on the following rendered frame so it does not consume that stall.
-        yield return null;
         ResumeAfterSceneHandoff();
     }
 
@@ -7324,6 +7381,8 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
             director.Evaluate();
         }
 
+        UpdateOpeningLabels();
+
         mIsPlaying = false;
         if (director.state == PlayState.Playing)
         {
@@ -7359,6 +7418,276 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
             Mathf.Clamp01(screenCenter.x / Screen.width),
             Mathf.Clamp01(screenCenter.y / Screen.height));
         return true;
+    }
+
+    private OpeningLabelLayout CaptureOpeningLabelLayout(
+        RectTransform displayedPackRect,
+        Image sourceImage)
+    {
+        if (displayedPackRect == null
+            || sourceImage == null
+            || sourceImage.sprite == null
+            || !sourceImage.enabled
+            || !sourceImage.gameObject.activeInHierarchy)
+        {
+            return null;
+        }
+
+        var canvas = displayedPackRect.GetComponentInParent<Canvas>();
+        var eventCamera = canvas != null && canvas.renderMode == RenderMode.ScreenSpaceOverlay
+            ? null
+            : canvas != null ? canvas.worldCamera : mMainCamera;
+        if (!TryGetScreenRect(displayedPackRect, eventCamera, out var packMin, out var packMax)
+            || !TryGetScreenRect(sourceImage.rectTransform, eventCamera, out var labelMin, out var labelMax))
+        {
+            return null;
+        }
+
+        var packSize = packMax - packMin;
+        var labelCenter = (labelMin + labelMax) * 0.5f;
+        var labelSize = labelMax - labelMin;
+        if (packSize.x <= 0.001f
+            || packSize.y <= 0.001f
+            || labelSize.x <= 0.001f
+            || labelSize.y <= 0.001f)
+        {
+            return null;
+        }
+
+        if (sourceImage.preserveAspect)
+        {
+            var spriteRect = sourceImage.sprite.rect;
+            if (spriteRect.width > 0f && spriteRect.height > 0f)
+            {
+                var spriteAspect = spriteRect.width / spriteRect.height;
+                if (labelSize.x / labelSize.y > spriteAspect)
+                {
+                    labelSize.x = labelSize.y * spriteAspect;
+                }
+                else
+                {
+                    labelSize.y = labelSize.x / spriteAspect;
+                }
+            }
+        }
+
+        return new OpeningLabelLayout
+        {
+            Sprite = sourceImage.sprite,
+            Color = sourceImage.color,
+            NormalizedCenter = new Vector2(
+                (labelCenter.x - packMin.x) / packSize.x,
+                (labelCenter.y - packMin.y) / packSize.y),
+            NormalizedSize = new Vector2(
+                labelSize.x / packSize.x,
+                labelSize.y / packSize.y),
+            PreserveAspect = sourceImage.preserveAspect
+        };
+    }
+
+    private static bool TryGetScreenRect(
+        RectTransform rectTransform,
+        Camera eventCamera,
+        out Vector2 min,
+        out Vector2 max)
+    {
+        min = new Vector2(float.PositiveInfinity, float.PositiveInfinity);
+        max = new Vector2(float.NegativeInfinity, float.NegativeInfinity);
+        if (rectTransform == null)
+        {
+            return false;
+        }
+
+        var corners = new Vector3[4];
+        rectTransform.GetWorldCorners(corners);
+        for (var i = 0; i < corners.Length; i++)
+        {
+            var screenPoint = RectTransformUtility.WorldToScreenPoint(
+                eventCamera,
+                corners[i]);
+            min = Vector2.Min(min, screenPoint);
+            max = Vector2.Max(max, screenPoint);
+        }
+
+        return min.x <= max.x && min.y <= max.y;
+    }
+
+    private void PrepareOpeningLabels(params OpeningLabelLayout[] layouts)
+    {
+        mOpeningLabels.Clear();
+        if (layouts == null || layouts.Length == 0 || mWorldRoot == null)
+        {
+            return;
+        }
+
+        var frontRenderers = GetFrontCardRenderers(mModelObject);
+        if (!TryGetRendererBounds(frontRenderers, out var packBounds))
+        {
+            return;
+        }
+
+        var sortingLayerId = frontRenderers[0].sortingLayerID;
+        var sortingOrder = frontRenderers[0].sortingOrder;
+        for (var i = 1; i < frontRenderers.Length; i++)
+        {
+            sortingOrder = Mathf.Max(sortingOrder, frontRenderers[i].sortingOrder);
+        }
+
+        sortingOrder += LabelSortingOrderOffsetAbovePack;
+        for (var i = 0; i < layouts.Length; i++)
+        {
+            TryCreateOpeningLabel(
+                layouts[i],
+                i,
+                frontRenderers,
+                packBounds,
+                sortingLayerId,
+                sortingOrder);
+        }
+    }
+
+    private void TryCreateOpeningLabel(
+        OpeningLabelLayout layout,
+        int index,
+        Renderer[] frontRenderers,
+        Bounds packBounds,
+        int sortingLayerId,
+        int sortingOrder)
+    {
+        if (layout?.Sprite == null)
+        {
+            return;
+        }
+
+        var surfacePosition = new Vector3(
+            Mathf.LerpUnclamped(packBounds.min.x, packBounds.max.x, layout.NormalizedCenter.x),
+            Mathf.LerpUnclamped(packBounds.min.y, packBounds.max.y, layout.NormalizedCenter.y),
+            packBounds.center.z);
+        var anchor = FindNearestOpeningLabelAnchor(
+            frontRenderers,
+            surfacePosition) ?? mModelObject.transform;
+        var labelPosition = surfacePosition;
+        if (mMainCamera != null)
+        {
+            var towardCamera = mMainCamera.transform.position - surfacePosition;
+            if (towardCamera.sqrMagnitude > 0.000001f)
+            {
+                labelPosition += towardCamera.normalized
+                                 * packBounds.size.y
+                                 * LabelDepthPackHeightRatio;
+            }
+        }
+
+        var spriteBounds = layout.Sprite.bounds.size;
+        if (spriteBounds.x <= 0.0001f || spriteBounds.y <= 0.0001f)
+        {
+            return;
+        }
+
+        var targetWidth = packBounds.size.x * layout.NormalizedSize.x;
+        var targetHeight = packBounds.size.y * layout.NormalizedSize.y;
+        var scaleX = targetWidth / spriteBounds.x;
+        var scaleY = targetHeight / spriteBounds.y;
+        if (scaleX <= 0.0001f || scaleY <= 0.0001f)
+        {
+            return;
+        }
+
+        var scale = layout.PreserveAspect
+            ? Vector3.one * Mathf.Min(scaleX, scaleY)
+            : new Vector3(scaleX, scaleY, 1f);
+
+        var labelObject = new GameObject($"OpeningPackLabel{index + 1}");
+        labelObject.layer = EffectLayer;
+        labelObject.transform.SetParent(mWorldRoot.transform, false);
+        var renderer = labelObject.AddComponent<SpriteRenderer>();
+        renderer.sprite = layout.Sprite;
+        renderer.color = layout.Color;
+        renderer.sortingLayerID = sortingLayerId;
+        renderer.sortingOrder = sortingOrder;
+
+        var initialRotation = mMainCamera != null
+            ? mMainCamera.transform.rotation
+            : Quaternion.identity;
+        var runtime = new OpeningLabelRuntime
+        {
+            Renderer = renderer,
+            Anchor = anchor,
+            AnchorLocalPosition = anchor.InverseTransformPoint(labelPosition),
+            AnchorLocalRotation = Quaternion.Inverse(anchor.rotation) * initialRotation,
+            Scale = scale
+        };
+        mOpeningLabels.Add(runtime);
+        ApplyOpeningLabelTransform(runtime);
+    }
+
+    private static Transform FindNearestOpeningLabelAnchor(
+        Renderer[] frontRenderers,
+        Vector3 targetPosition)
+    {
+        Transform nearest = null;
+        var nearestDistance = float.PositiveInfinity;
+        for (var rendererIndex = 0; rendererIndex < frontRenderers.Length; rendererIndex++)
+        {
+            if (!(frontRenderers[rendererIndex] is SkinnedMeshRenderer skinnedRenderer))
+            {
+                continue;
+            }
+
+            var bones = skinnedRenderer.bones;
+            for (var boneIndex = 0; boneIndex < bones.Length; boneIndex++)
+            {
+                var bone = bones[boneIndex];
+                if (bone == null)
+                {
+                    continue;
+                }
+
+                var delta = bone.position - targetPosition;
+                var distance = delta.x * delta.x
+                               + delta.y * delta.y
+                               + delta.z * delta.z * 0.1f;
+                if (distance < nearestDistance)
+                {
+                    nearest = bone;
+                    nearestDistance = distance;
+                }
+            }
+        }
+
+        return nearest;
+    }
+
+    private void UpdateOpeningLabels()
+    {
+        var visible = mModelObject != null && mModelObject.activeInHierarchy;
+        for (var i = 0; i < mOpeningLabels.Count; i++)
+        {
+            var label = mOpeningLabels[i];
+            if (label?.Renderer == null)
+            {
+                continue;
+            }
+
+            label.Renderer.enabled = visible;
+            if (visible)
+            {
+                ApplyOpeningLabelTransform(label);
+            }
+        }
+    }
+
+    private static void ApplyOpeningLabelTransform(OpeningLabelRuntime label)
+    {
+        if (label?.Renderer == null || label.Anchor == null)
+        {
+            return;
+        }
+
+        var labelTransform = label.Renderer.transform;
+        labelTransform.position = label.Anchor.TransformPoint(label.AnchorLocalPosition);
+        labelTransform.rotation = label.Anchor.rotation * label.AnchorLocalRotation;
+        labelTransform.localScale = label.Scale;
     }
 
     private void PrepareEmergedPieces(IReadOnlyList<Sprite> pieceSprites)
@@ -7717,6 +8046,155 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         return true;
     }
 
+    private void CaptureSceneHandoffScreenPose()
+    {
+        mHasHandoffScreenPose = false;
+        var renderers = GetFrontCardRenderers(mModelObject);
+        if (!TryGetRendererViewportRect(
+                mMainCamera,
+                renderers,
+                out mHandoffViewportCenter,
+                out mHandoffViewportHeight))
+        {
+            Debug.LogWarning(
+                "CardPackOpeningEffect: could not capture the model screen pose for scene handoff.");
+            return;
+        }
+
+        mHasHandoffScreenPose = true;
+        Debug.Log(
+            $"CardPackOpeningEffect: captured handoff pose. "
+            + $"center={mHandoffViewportCenter}, height={mHandoffViewportHeight:F4}, "
+            + $"cameraSize={(mMainCamera != null ? mMainCamera.orthographicSize : 0f):F4}.");
+    }
+
+    private void RetargetStageToSceneCamera(Camera camera)
+    {
+        if (!mHasHandoffScreenPose || camera == null || mStageRoot == null)
+        {
+            return;
+        }
+
+        var renderers = GetFrontCardRenderers(mModelObject);
+        if (!TryGetRendererViewportRect(
+                camera,
+                renderers,
+                out var currentViewportCenter,
+                out var currentViewportHeight)
+            || currentViewportHeight <= 0.0001f)
+        {
+            Debug.LogWarning(
+                "CardPackOpeningEffect: could not read the model pose from the loaded scene camera.");
+            return;
+        }
+
+        var scaleFactor = mHandoffViewportHeight / currentViewportHeight;
+        if (!float.IsFinite(scaleFactor) || scaleFactor <= 0.0001f)
+        {
+            return;
+        }
+
+        mStageRoot.localScale *= scaleFactor;
+        for (var i = 0; i < mOpeningLabels.Count; i++)
+        {
+            var label = mOpeningLabels[i];
+            if (label != null)
+            {
+                label.Scale *= scaleFactor;
+            }
+        }
+
+        if (TryGetRendererBounds(renderers, out var scaledBounds))
+        {
+            var currentCenter = camera.WorldToViewportPoint(scaledBounds.center);
+            var targetCenter = camera.ViewportToWorldPoint(new Vector3(
+                mHandoffViewportCenter.x,
+                mHandoffViewportCenter.y,
+                currentCenter.z));
+            mStageRoot.position += new Vector3(
+                targetCenter.x - scaledBounds.center.x,
+                targetCenter.y - scaledBounds.center.y,
+                0f);
+        }
+
+        UpdateOpeningLabels();
+        TryGetRendererViewportRect(
+            camera,
+            renderers,
+            out var finalViewportCenter,
+            out var finalViewportHeight);
+        Debug.Log(
+            $"CardPackOpeningEffect: restored handoff pose for loaded camera. "
+            + $"beforeCenter={currentViewportCenter}, beforeHeight={currentViewportHeight:F4}, "
+            + $"scaleFactor={scaleFactor:F4}, finalCenter={finalViewportCenter}, "
+            + $"finalHeight={finalViewportHeight:F4}, cameraSize={camera.orthographicSize:F4}.");
+    }
+
+    private void PrepareModelForGameplayCanvas()
+    {
+        if (mFrontMaterial == null
+            || mFrontMaterial.renderQueue == GameplayFrontMaterialRenderQueue)
+        {
+            return;
+        }
+
+        var previousQueue = mFrontMaterial.renderQueue;
+        mFrontMaterial.renderQueue = GameplayFrontMaterialRenderQueue;
+        Debug.Log(
+            $"CardPackOpeningEffect: moved runtime pack material from queue "
+            + $"{previousQueue} to {mFrontMaterial.renderQueue} for the gameplay Canvas.");
+    }
+
+    private static bool TryGetRendererViewportRect(
+        Camera camera,
+        Renderer[] renderers,
+        out Vector2 center,
+        out float height)
+    {
+        center = default;
+        height = 0f;
+        if (camera == null || !TryGetRendererBounds(renderers, out var bounds))
+        {
+            return false;
+        }
+
+        var min = new Vector2(float.PositiveInfinity, float.PositiveInfinity);
+        var max = new Vector2(float.NegativeInfinity, float.NegativeInfinity);
+        for (var x = -1; x <= 1; x += 2)
+        {
+            for (var y = -1; y <= 1; y += 2)
+            {
+                for (var z = -1; z <= 1; z += 2)
+                {
+                    var corner = bounds.center + Vector3.Scale(
+                        bounds.extents,
+                        new Vector3(x, y, z));
+                    var viewportPoint = camera.WorldToViewportPoint(corner);
+                    if (viewportPoint.z <= 0f)
+                    {
+                        continue;
+                    }
+
+                    min = Vector2.Min(min, viewportPoint);
+                    max = Vector2.Max(max, viewportPoint);
+                }
+            }
+        }
+
+        if (!float.IsFinite(min.x)
+            || !float.IsFinite(min.y)
+            || !float.IsFinite(max.x)
+            || !float.IsFinite(max.y)
+            || max.y - min.y <= 0.0001f)
+        {
+            return false;
+        }
+
+        center = (min + max) * 0.5f;
+        height = max.y - min.y;
+        return true;
+    }
+
     private static bool TryGetRendererBounds(Renderer[] renderers, out Bounds bounds)
     {
         bounds = default;
@@ -7932,6 +8410,7 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         mPieceShadowPropertyBlock = null;
 
         mModelObject = null;
+        mStageRoot = null;
         mMainCamera = null;
         mAnimator = null;
         mDirector = null;
@@ -7940,6 +8419,10 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         mGameEntranceHandoffTime = 0d;
         mPieceEmergeTime = 0d;
         mIsStoppingDirectorForCleanup = false;
+        mHandoffViewportCenter = Vector2.zero;
+        mHandoffViewportHeight = 0f;
+        mHasHandoffScreenPose = false;
+        mOpeningLabels.Clear();
         mEmergedPieceRenderers.Clear();
         mEmergedPieceStartPositions = Array.Empty<Vector3>();
         mEmergedPieceFinalPositions = Array.Empty<Vector3>();
