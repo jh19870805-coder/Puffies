@@ -9,11 +9,12 @@
 3. WHEN 系列已解锁 Vol2 或以上 THEN 系统 SHALL 分别实例化当前最高已解锁 Vol 和上一已解锁 Vol 的完整 `PackItem`；两者 SHALL 使用各自在普通列表中的标准尺寸，根节点不得额外缩放。后层只允许改变相对位置、Z 轴 `+10°/-10°` 旋转和层级，旋转后 SHALL 自然露出上下左右各角，不得读取 Shader 留白修改 Pivot 或做尺寸补偿。
 4. WHEN 当前系列 Vol 大于等于 2 THEN `PackVol` SHALL 使用 `PackVolN.png`；WHEN 对应资源不存在 THEN `PackVol` SHALL 隐藏。
 5. WHEN 前层或后层卡包处于完整、进行中撕开或完成撕开状态 THEN 每个完整 `PackItem` SHALL 独立应用所属卡包的封面、背景、标签、进度碎片、状态材质和撕口蒙版。
-6. WHEN 用户点击系列组合槽 THEN 系统 SHALL 打开 `PanelBagVol`，按系列链顺序展示全部已解锁 Vol，并默认居中最高已解锁 Vol。
+6. WHEN 系列槽包含前后两个卡包 THEN 两个卡包 SHALL 关闭各自 Animator，并共同挂在唯一动画父节点下播放一次 `PackAniBreath`，使整个槽位同步运动且保持内部相对位置和旋转。
+7. WHEN 用户点击系列组合槽 THEN 系统 SHALL 打开 `PanelBagVol`，按系列链顺序展示全部已解锁 Vol，并默认居中最高已解锁 Vol。
    - 进场 SHALL 先只放大主卡包，底部操作按钮在放大后半段上滑；主卡包到位并短暂停顿后，相邻 Vol 才从主卡包背后展开，分页圆点随侧卡展开延迟出现。
-7. WHEN 用户横向拖动轮播或点击左右按钮 THEN 系统 SHALL 使用编辑器 `PackLeft/PackCenter/PackRight` 的位置和缩放进行连续插值，并在松手后吸附到最近 Vol。
-8. WHEN 某个 Vol 居中 THEN 系统 SHALL 更新分页圆点、`玩/重玩` 与相机按钮，并保证轮播中的卡包 Z 轴旋转为 `0`。
-9. WHEN 用户确认居中 Vol THEN 系统 SHALL 按该卡包自身状态复用现有完整开包、继续游戏或重玩确认流程；非系列卡包仍使用 `PanelBagSelect`。
+8. WHEN 用户横向拖动轮播或点击左右按钮 THEN 系统 SHALL 使用编辑器 `PackLeft/PackCenter/PackRight` 的位置和缩放进行连续插值，并在松手后吸附到最近 Vol。
+9. WHEN 某个 Vol 居中 THEN 系统 SHALL 更新分页圆点、`玩/重玩` 与相机按钮，并保证轮播中的卡包 Z 轴旋转为 `0`。
+10. WHEN 用户确认居中 Vol THEN 系统 SHALL 按该卡包自身状态复用现有完整开包、继续游戏或重玩确认流程；非系列卡包仍使用 `PanelBagSelect`。
 
 ### 验证
 

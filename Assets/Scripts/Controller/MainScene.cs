@@ -90,6 +90,7 @@ public class MainScene : MonoBehaviour
     private const string PackNodeObjectName = "PackNode";
     private const string PackCoverObjectName = "PackCover";
     private const string SecondaryPackCoverObjectName = "PackCover2";
+    private const string SeriesAnimationRootObjectName = "SeriesAnimationRoot";
     private const string PackBackgroundObjectName = "PackBg";
     private const string PackSizeObjectName = "PackSize";
     private const string PackVolumeObjectName = "PackVol";
@@ -2642,6 +2643,7 @@ public class MainScene : MonoBehaviour
 
         ApplyPackageVisualState(entry, packId, display.VolumeNumber, true);
         entry.SecondaryEntry = CreateSeriesBackPackage(entry, display);
+        ConfigureSeriesPackageAnimation(entry);
         EnsurePackageInteractionHandler(entry.Root, entry.Image, packId);
     }
 
@@ -2798,6 +2800,84 @@ public class MainScene : MonoBehaviour
             Mathf.Max(1, display.VolumeNumber - 1),
             false);
         return backEntry;
+    }
+
+    private static void ConfigureSeriesPackageAnimation(PackageEntry frontEntry)
+    {
+        var backEntry = frontEntry?.SecondaryEntry;
+        var frontAnimator = frontEntry?.PackAnimator;
+        if (backEntry?.Root == null || frontAnimator == null)
+        {
+            return;
+        }
+
+        var controller = frontAnimator.runtimeAnimatorController;
+        var frontVisualRoot = frontAnimator.transform.parent as RectTransform;
+        if (controller == null
+            || frontVisualRoot == null
+            || frontVisualRoot.parent != frontEntry.Root.transform)
+        {
+            if (backEntry.PackAnimator != null)
+            {
+                backEntry.PackAnimator.enabled = false;
+            }
+
+            return;
+        }
+
+        var animationRootObject = new GameObject(
+            SeriesAnimationRootObjectName,
+            typeof(RectTransform),
+            typeof(Animator));
+        animationRootObject.layer = frontEntry.Root.layer;
+        var animationRoot = animationRootObject.GetComponent<RectTransform>();
+        animationRoot.SetParent(frontEntry.Root.transform, false);
+        animationRoot.anchorMin = new Vector2(0.5f, 0.5f);
+        animationRoot.anchorMax = new Vector2(0.5f, 0.5f);
+        animationRoot.pivot = new Vector2(0.5f, 0.5f);
+        animationRoot.anchoredPosition = Vector2.zero;
+        animationRoot.sizeDelta = Vector2.zero;
+        animationRoot.localScale = Vector3.one;
+        animationRoot.localRotation = Quaternion.identity;
+
+        backEntry.Root.transform.SetParent(animationRoot, false);
+        backEntry.Root.transform.SetSiblingIndex(0);
+        frontVisualRoot.SetParent(animationRoot, false);
+        frontVisualRoot.SetSiblingIndex(1);
+
+        DisablePackageAnimator(backEntry.PackAnimator);
+        DisablePackageAnimator(frontAnimator);
+
+        var sharedAnimator = animationRootObject.GetComponent<Animator>();
+        sharedAnimator.runtimeAnimatorController = controller;
+        sharedAnimator.applyRootMotion = false;
+        sharedAnimator.updateMode = frontAnimator.updateMode;
+        sharedAnimator.cullingMode = frontAnimator.cullingMode;
+        sharedAnimator.enabled = true;
+        sharedAnimator.Rebind();
+
+        frontEntry.PackAnimator = sharedAnimator;
+        backEntry.PackAnimator = null;
+        ApplyPackageBreathingAnimation(
+            frontEntry,
+            frontEntry.DisplayState == PackageDisplayState.TornCompleted);
+    }
+
+    private static void DisablePackageAnimator(Animator animator)
+    {
+        if (animator == null)
+        {
+            return;
+        }
+
+        animator.enabled = false;
+        if (animator.transform is RectTransform rectTransform)
+        {
+            var localScale = rectTransform.localScale;
+            rectTransform.localPosition = Vector3.zero;
+            rectTransform.localRotation = Quaternion.identity;
+            rectTransform.localScale = localScale;
+        }
     }
 
     private void ApplyPackageVolumeVisual(PackageEntry entry, int volumeNumber)
@@ -3378,49 +3458,68 @@ public class MainScene : MonoBehaviour
 
     private static void SetPackageBackgroundVisible(PackageEntry entry, bool visible)
     {
-        if (entry?.BackgroundImage == null)
+        if (entry == null)
         {
             return;
         }
 
-        var backgroundObject = entry.BackgroundImage.gameObject;
-        if (backgroundObject.activeSelf != entry.ShowTornBackground)
+        if (entry.BackgroundImage != null)
         {
-            backgroundObject.SetActive(entry.ShowTornBackground);
+            var backgroundObject = entry.BackgroundImage.gameObject;
+            if (backgroundObject.activeSelf != entry.ShowTornBackground)
+            {
+                backgroundObject.SetActive(entry.ShowTornBackground);
+            }
+
+            entry.BackgroundImage.enabled = visible && entry.ShowTornBackground;
         }
 
-        entry.BackgroundImage.enabled = visible && entry.ShowTornBackground;
         SetPackageBackgroundVisible(entry.SecondaryEntry, visible);
     }
 
     private static void SetPackageSizeImageVisible(PackageEntry entry, bool visible)
     {
-        if (entry?.SizeImage != null)
+        if (entry == null)
+        {
+            return;
+        }
+
+        if (entry.SizeImage != null)
         {
             entry.SizeImage.enabled = visible && entry.SizeImage.sprite != null;
         }
 
-        SetPackageSizeImageVisible(entry?.SecondaryEntry, visible);
+        SetPackageSizeImageVisible(entry.SecondaryEntry, visible);
     }
 
     private static void SetPackageVolumeImageVisible(PackageEntry entry, bool visible)
     {
-        if (entry?.VolumeImage != null)
+        if (entry == null)
+        {
+            return;
+        }
+
+        if (entry.VolumeImage != null)
         {
             entry.VolumeImage.enabled = visible && entry.ShowVolume;
         }
 
-        SetPackageVolumeImageVisible(entry?.SecondaryEntry, visible);
+        SetPackageVolumeImageVisible(entry.SecondaryEntry, visible);
     }
 
     private static void SetPackageProgressPiecesVisible(PackageEntry entry, bool visible)
     {
-        if (entry?.ProgressPiecesRoot != null)
+        if (entry == null)
+        {
+            return;
+        }
+
+        if (entry.ProgressPiecesRoot != null)
         {
             entry.ProgressPiecesRoot.SetActive(visible);
         }
 
-        SetPackageProgressPiecesVisible(entry?.SecondaryEntry, visible);
+        SetPackageProgressPiecesVisible(entry.SecondaryEntry, visible);
     }
 
     private void ApplyPackageSizeVisual(Image sizeImage, int packId)
