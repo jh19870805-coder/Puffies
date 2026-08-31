@@ -34,6 +34,17 @@ public class GameScene : MonoBehaviour
     private const float SettlementBaseRollDuration = 1f;
     private const float SettlementStagePauseDuration = 0.28f;
     private const float SettlementFinalPauseDuration = 0.24f;
+    private const float SettlementHeaderDropDuration = 0.52f;
+    private const float SettlementOffscreenMargin = 60f;
+    private const float SettlementBagCountIncrementDuration = 0.68f;
+    private const float SettlementBagCountIncrementRise = 64f;
+    private const float SettlementRewardPanelSlideDuration = 0.42f;
+    private const float SettlementRewardPopDuration = 0.36f;
+    private const float SettlementTaskRewardFlyDuration = 0.52f;
+    private const float SettlementTaskRewardFlyArcHeight = 80f;
+    private const float SettlementRewardSlotOffset = 82f;
+    private const float SettlementBoardViewportFill = 0.9f;
+    private const float SettlementBoardFitDuration = 0.46f;
     private const float PieceBgSlideOutPadding = 0.15f;
     private const int PieceBgFillSortingOrder = 499;
     private const int PieceBgSortingOrder = 500;
@@ -98,6 +109,7 @@ public class GameScene : MonoBehaviour
     private const float TutorialArrowScale = 0.7f;
     private const float TutorialPracticePromptGap = 24f;
     private const float TutorialPromptScreenMargin = 24f;
+    private const float TutorialHintPromptButtonClearance = 48f;
     private const string TutorialInvalidLineStartCharacters = "，。！？；：、”’）】》";
     private const string TutorialCollection = "Tutorial";
     private const string PiecePlacementTutorialKey = "CardBag001TutorialCompleted";
@@ -151,7 +163,11 @@ public class GameScene : MonoBehaviour
     private const string TaskBonusScorePath = "TaskBg2/TaskTitle22";
     private const string TaskScorePath = "TaskBg2/TaskScore";
     private const string TaskBagCountPath = "TaskBg2/TaskBagNum";
+    private const string TaskSummaryObjectName = "TaskBg2";
+    private const string TaskRewardBagRootObjectName = "ImgBagBg";
     private const string TaskRewardImgBagPath = "ImgBagBg/ImgBag";
+    private const string TaskRewardSourceIconObjectName = "BagIcon";
+    private const string SettlementCameraButtonObjectName = "BtnCamera";
     private const string HintButtonObjectName = "BtnTips";
     private const string PieceHintOutlineObjectName = "PieceHintOutline";
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
@@ -188,6 +204,12 @@ public class GameScene : MonoBehaviour
         Initial,
         Loose,
         Placed
+    }
+
+    private enum SettlementPackRewardSource
+    {
+        Completion,
+        Task
     }
 
     private sealed class PiecePlacementLightFx
@@ -318,13 +340,42 @@ public class GameScene : MonoBehaviour
     private bool _didSavePackCompletion;
     private GameObject _rewardPanelRoot;
     private Transform _rewardTaskItem;
+    private RectTransform _settlementSummaryRect;
+    private RectTransform _rewardTaskItemRect;
+    private RectTransform _settlementRewardBagRect;
+    private RectTransform _settlementFinishButtonRect;
+    private RectTransform _settlementCameraButtonRect;
     private TMP_Text _settlementBagCountTitleText;
     private TMP_Text _settlementBonusTitleText;
     private TMP_Text _settlementBonusScoreText;
     private TMP_Text _settlementScoreText;
     private TMP_Text _settlementBagCountText;
     private Image _taskRewardImage;
+    private Image _taskRewardSourceImage;
+    private Image _completionRewardDisplayImage;
+    private Image _taskRewardDisplayImage;
+    private readonly List<Image> _runtimeSettlementRewardImages = new List<Image>();
+    private Vector2 _settlementSummaryTargetPosition;
+    private Vector2 _rewardTaskItemTargetPosition;
+    private Vector2 _settlementRewardBagTargetPosition;
+    private Vector2 _taskRewardImageTargetPosition;
+    private Vector2 _settlementFinishButtonTargetPosition;
+    private Vector2 _settlementCameraButtonTargetPosition;
+    private Sprite _taskRewardDefaultSprite;
+    private Color _taskRewardDefaultColor = Color.white;
+    private bool _hasSettlementLayoutTargets;
+    private int _settlementBagCountBeforeCompletion;
+    private int _settlementCompletionRewardPackId;
+    private int _settlementTaskRewardPackId;
+    private bool _isFirstCompletionSettlement;
+    private bool _didEarnTaskPackRewardDuringSettlement;
+    private bool _hasSettlementBoardFitTarget;
+    private Vector2 _settlementBoardFitStartPosition;
+    private Vector2 _settlementBoardFitTargetPosition;
+    private Vector3 _settlementBoardFitStartScale;
+    private Vector3 _settlementBoardFitTargetScale;
     private Button _finishButton;
+    private Button _settlementCameraButton;
     private bool _isSettlementReadyForFinish;
     private bool _isFinishTransitionStarted;
     private bool _isEntranceAnimating;
@@ -445,6 +496,10 @@ public class GameScene : MonoBehaviour
         _isSettlementReadyForFinish = false;
         _isFinishTransitionStarted = false;
         _settlementPackRewardIds.Clear();
+        _settlementBagCountBeforeCompletion = 0;
+        _settlementCompletionRewardPackId = 0;
+        _settlementTaskRewardPackId = 0;
+        _isFirstCompletionSettlement = false;
         InitializeGameplay(selectedBagId);
         GameManager.NotifyGameSceneLoaded();
         InitializeTaskTracking();
@@ -7284,24 +7339,73 @@ public class GameScene : MonoBehaviour
     private void CacheRewardPanelReferences()
     {
         _rewardTaskItem = null;
+        _settlementSummaryRect = null;
+        _rewardTaskItemRect = null;
+        _settlementRewardBagRect = null;
+        _settlementFinishButtonRect = null;
+        _settlementCameraButtonRect = null;
+        _settlementCameraButton = null;
         _settlementBagCountTitleText = null;
         _settlementBonusTitleText = null;
         _settlementBonusScoreText = null;
         _settlementScoreText = null;
         _settlementBagCountText = null;
         _taskRewardImage = null;
+        _taskRewardSourceImage = null;
         if (_rewardPanelRoot == null)
         {
             return;
         }
 
         _rewardTaskItem = _rewardPanelRoot.transform.Find(TaskItemObjectName);
+        _settlementSummaryRect = _rewardPanelRoot.transform.Find(TaskSummaryObjectName) as RectTransform;
+        _rewardTaskItemRect = _rewardTaskItem as RectTransform;
+        _settlementRewardBagRect = _rewardPanelRoot.transform.Find(
+            TaskRewardBagRootObjectName) as RectTransform;
+        _settlementFinishButtonRect = _rewardPanelRoot.transform.Find(
+            GameDefine.FinishButtonObjectName) as RectTransform;
+        _settlementCameraButtonRect = _rewardPanelRoot.transform.Find(
+            SettlementCameraButtonObjectName) as RectTransform;
+        _settlementCameraButton = _settlementCameraButtonRect != null
+            ? _settlementCameraButtonRect.GetComponent<Button>()
+            : null;
         _settlementBagCountTitleText = _rewardPanelRoot.transform.Find(TaskBagCountTitlePath)?.GetComponent<TMP_Text>();
         _settlementBonusTitleText = _rewardPanelRoot.transform.Find(TaskBonusTitlePath)?.GetComponent<TMP_Text>();
         _settlementBonusScoreText = _rewardPanelRoot.transform.Find(TaskBonusScorePath)?.GetComponent<TMP_Text>();
         _settlementScoreText = _rewardPanelRoot.transform.Find(TaskScorePath)?.GetComponent<TMP_Text>();
         _settlementBagCountText = _rewardPanelRoot.transform.Find(TaskBagCountPath)?.GetComponent<TMP_Text>();
         _taskRewardImage = _rewardPanelRoot.transform.Find(TaskRewardImgBagPath)?.GetComponent<Image>();
+        _taskRewardSourceImage = _rewardTaskItem != null
+            ? _rewardTaskItem.GetComponentsInChildren<Image>(true).FirstOrDefault(
+                image => image.name == TaskRewardSourceIconObjectName)
+            : null;
+
+        if (!_hasSettlementLayoutTargets
+            && _settlementSummaryRect != null
+            && _rewardTaskItemRect != null
+            && _settlementRewardBagRect != null
+            && _taskRewardImage != null)
+        {
+            _settlementSummaryTargetPosition = _settlementSummaryRect.anchoredPosition;
+            _rewardTaskItemTargetPosition = _rewardTaskItemRect.anchoredPosition;
+            _settlementRewardBagTargetPosition = _settlementRewardBagRect.anchoredPosition;
+            _taskRewardImageTargetPosition = _taskRewardImage.rectTransform.anchoredPosition;
+            if (_settlementFinishButtonRect != null)
+            {
+                _settlementFinishButtonTargetPosition =
+                    _settlementFinishButtonRect.anchoredPosition;
+            }
+
+            if (_settlementCameraButtonRect != null)
+            {
+                _settlementCameraButtonTargetPosition =
+                    _settlementCameraButtonRect.anchoredPosition;
+            }
+
+            _taskRewardDefaultSprite = _taskRewardImage.sprite;
+            _taskRewardDefaultColor = _taskRewardImage.color;
+            _hasSettlementLayoutTargets = true;
+        }
 
         if (_rewardTaskItem == null)
         {
@@ -7352,6 +7456,542 @@ public class GameScene : MonoBehaviour
         }
     }
 
+    private void PrepareSettlementVisualState()
+    {
+        ClearRuntimeSettlementRewardImages();
+        _completionRewardDisplayImage = null;
+        _taskRewardDisplayImage = null;
+        SetSettlementScore(0);
+        SetSettlementBagCount(_settlementBagCountBeforeCompletion);
+        HideSettlementTitles();
+
+        if (_settlementSummaryRect != null)
+        {
+            _settlementSummaryRect.gameObject.SetActive(true);
+            _settlementSummaryRect.localScale = Vector3.one;
+            _settlementSummaryRect.anchoredPosition = _settlementSummaryTargetPosition;
+        }
+
+        var task = default(TaskInstanceData);
+        var showTask = _isTaskTrackingActive
+                       && GameTaskUtility.TryGetCurrentTask(out task);
+        SetTaskRewardSectionVisible(showTask);
+        if (showTask && _rewardTaskItem != null)
+        {
+            TaskProgressUIUtility.RefreshTask(
+                _rewardTaskItem,
+                task,
+                GameTaskUtility.GetCurrentCompleteValue(),
+                GameTaskUtility.IsCurrentTaskCompleted());
+        }
+
+        if (_rewardTaskItemRect != null)
+        {
+            _rewardTaskItemRect.localScale = Vector3.one;
+            _rewardTaskItemRect.anchoredPosition = _rewardTaskItemTargetPosition;
+        }
+
+        if (_settlementRewardBagRect != null)
+        {
+            _settlementRewardBagRect.anchoredPosition = _settlementRewardBagTargetPosition;
+            _settlementRewardBagRect.localScale = Vector3.one;
+            _settlementRewardBagRect.gameObject.SetActive(false);
+        }
+
+        PrepareSettlementActionButton(
+            _settlementFinishButtonRect,
+            _settlementFinishButtonTargetPosition);
+        PrepareSettlementActionButton(
+            _settlementCameraButtonRect,
+            _settlementCameraButtonTargetPosition);
+        if (_settlementCameraButton != null)
+        {
+            _settlementCameraButton.interactable = false;
+        }
+
+        if (_taskRewardImage != null)
+        {
+            _taskRewardImage.sprite = _taskRewardDefaultSprite;
+            _taskRewardImage.color = _taskRewardDefaultColor;
+            _taskRewardImage.rectTransform.anchoredPosition = _taskRewardImageTargetPosition;
+            _taskRewardImage.rectTransform.localScale = Vector3.one;
+            _taskRewardImage.gameObject.SetActive(false);
+        }
+
+        Canvas.ForceUpdateCanvases();
+        if (_settlementSummaryRect != null)
+        {
+            _settlementSummaryRect.anchoredPosition = CalculateSettlementOffscreenPosition(
+                _settlementSummaryRect,
+                _settlementSummaryTargetPosition,
+                above: true);
+        }
+
+        if (_rewardTaskItemRect != null && _rewardTaskItemRect.gameObject.activeSelf)
+        {
+            _rewardTaskItemRect.anchoredPosition = CalculateSettlementOffscreenPosition(
+                _rewardTaskItemRect,
+                _rewardTaskItemTargetPosition,
+                above: true);
+        }
+    }
+
+    private static void PrepareSettlementActionButton(
+        RectTransform buttonRect,
+        Vector2 targetPosition)
+    {
+        if (buttonRect == null)
+        {
+            return;
+        }
+
+        buttonRect.gameObject.SetActive(true);
+        buttonRect.anchoredPosition = CalculateSettlementOffscreenPosition(
+            buttonRect,
+            targetPosition,
+            above: false);
+    }
+
+    private IEnumerator AnimateSettlementHeaderEntrance()
+    {
+        var summaryStart = _settlementSummaryRect != null
+            ? _settlementSummaryRect.anchoredPosition
+            : Vector2.zero;
+        var taskStart = _rewardTaskItemRect != null
+            ? _rewardTaskItemRect.anchoredPosition
+            : Vector2.zero;
+        var animateTask = _rewardTaskItemRect != null
+                          && _rewardTaskItemRect.gameObject.activeSelf;
+        var elapsed = 0f;
+        while (elapsed < SettlementHeaderDropDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            var normalized = Mathf.Clamp01(elapsed / SettlementHeaderDropDuration);
+            var eased = 1f - Mathf.Pow(1f - normalized, 3f);
+            if (_settlementSummaryRect != null)
+            {
+                _settlementSummaryRect.anchoredPosition = Vector2.LerpUnclamped(
+                    summaryStart,
+                    _settlementSummaryTargetPosition,
+                    eased);
+            }
+
+            if (animateTask)
+            {
+                _rewardTaskItemRect.anchoredPosition = Vector2.LerpUnclamped(
+                    taskStart,
+                    _rewardTaskItemTargetPosition,
+                    eased);
+            }
+
+            yield return null;
+        }
+
+        if (_settlementSummaryRect != null)
+        {
+            _settlementSummaryRect.anchoredPosition = _settlementSummaryTargetPosition;
+        }
+
+        if (animateTask)
+        {
+            _rewardTaskItemRect.anchoredPosition = _rewardTaskItemTargetPosition;
+        }
+    }
+
+    private static Vector2 CalculateSettlementOffscreenPosition(
+        RectTransform rect,
+        Vector2 target,
+        bool above)
+    {
+        var parentRect = rect != null ? rect.parent as RectTransform : null;
+        if (rect == null || parentRect == null)
+        {
+            return target;
+        }
+
+        var anchorY = Mathf.Lerp(
+            parentRect.rect.yMin,
+            parentRect.rect.yMax,
+            rect.anchorMin.y);
+        var scaledHeight = rect.rect.height * Mathf.Abs(rect.localScale.y);
+        var pivotLocalY = above
+            ? parentRect.rect.yMax + scaledHeight * rect.pivot.y + SettlementOffscreenMargin
+            : parentRect.rect.yMin
+              - scaledHeight * (1f - rect.pivot.y)
+              - SettlementOffscreenMargin;
+        return new Vector2(target.x, pivotLocalY - anchorY);
+    }
+
+    private IEnumerator AnimateSettlementBagCountIncrement()
+    {
+        ShowSettlementBagCountTitle();
+        if (_settlementBagCountText == null)
+        {
+            yield break;
+        }
+
+        var finalCount = CardPackDataUtility.GetCompletedPackCount();
+        var incrementObject = Instantiate(
+            _settlementBagCountText.gameObject,
+            _settlementBagCountText.transform.parent,
+            false);
+        incrementObject.name = "TaskBagNumIncrement";
+        incrementObject.transform.SetAsLastSibling();
+        var incrementText = incrementObject.GetComponent<TMP_Text>();
+        var incrementRect = incrementObject.GetComponent<RectTransform>();
+        incrementText.text = "+1";
+        incrementText.fontSize = _settlementBagCountTitleText != null
+            ? _settlementBagCountTitleText.fontSize
+            : _settlementBagCountText.fontSize;
+        incrementText.enableAutoSizing = false;
+        incrementText.raycastTarget = false;
+        incrementText.alpha = 0f;
+        var countRect = _settlementBagCountText.rectTransform;
+        var startPosition = countRect.anchoredPosition + new Vector2(
+            countRect.rect.width * 0.45f,
+            countRect.rect.height * 0.35f);
+        var endPosition = startPosition + Vector2.up * SettlementBagCountIncrementRise;
+        incrementRect.anchoredPosition = startPosition;
+        incrementRect.localScale = Vector3.one * 0.8f;
+
+        var elapsed = 0f;
+        while (elapsed < SettlementBagCountIncrementDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            var normalized = Mathf.Clamp01(elapsed / SettlementBagCountIncrementDuration);
+            var eased = Mathf.SmoothStep(0f, 1f, normalized);
+            incrementRect.anchoredPosition = Vector2.LerpUnclamped(
+                startPosition,
+                endPosition,
+                eased);
+            incrementRect.localScale = Vector3.one * Mathf.Lerp(0.8f, 1f, eased);
+            incrementText.alpha = normalized < 0.2f
+                ? normalized / 0.2f
+                : normalized > 0.65f
+                    ? 1f - (normalized - 0.65f) / 0.35f
+                    : 1f;
+            SetSettlementBagCount(Mathf.RoundToInt(Mathf.Lerp(
+                _settlementBagCountBeforeCompletion,
+                finalCount,
+                eased)));
+            yield return null;
+        }
+
+        SetSettlementBagCount(finalCount);
+        Destroy(incrementObject);
+    }
+
+    private IEnumerator AnimateSettlementPackRewards()
+    {
+        if (_settlementRewardBagRect == null || _taskRewardImage == null)
+        {
+            yield break;
+        }
+
+        PrepareSettlementRewardSlots();
+        _settlementRewardBagRect.gameObject.SetActive(true);
+        _settlementRewardBagRect.anchoredPosition = CalculateSettlementOffscreenPosition(
+            _settlementRewardBagRect,
+            _settlementRewardBagTargetPosition,
+            above: false);
+        var startPosition = _settlementRewardBagRect.anchoredPosition;
+        var elapsed = 0f;
+        while (elapsed < SettlementRewardPanelSlideDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            var normalized = Mathf.Clamp01(elapsed / SettlementRewardPanelSlideDuration);
+            var eased = 1f - Mathf.Pow(1f - normalized, 3f);
+            _settlementRewardBagRect.anchoredPosition = Vector2.LerpUnclamped(
+                startPosition,
+                _settlementRewardBagTargetPosition,
+                eased);
+            yield return null;
+        }
+
+        _settlementRewardBagRect.anchoredPosition = _settlementRewardBagTargetPosition;
+        if (_completionRewardDisplayImage != null)
+        {
+            yield return AnimateSettlementRewardPop(_completionRewardDisplayImage.rectTransform);
+        }
+
+        if (_taskRewardDisplayImage != null)
+        {
+            yield return AnimateTaskRewardIntoSettlementSlot(_taskRewardDisplayImage);
+        }
+    }
+
+    private IEnumerator AnimateSettlementActionButtonsEntrance()
+    {
+        var finishStart = _settlementFinishButtonRect != null
+            ? _settlementFinishButtonRect.anchoredPosition
+            : Vector2.zero;
+        var cameraStart = _settlementCameraButtonRect != null
+            ? _settlementCameraButtonRect.anchoredPosition
+            : Vector2.zero;
+        var elapsed = 0f;
+        while (elapsed < SettlementRewardPanelSlideDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            var normalized = Mathf.Clamp01(
+                elapsed / SettlementRewardPanelSlideDuration);
+            var eased = 1f - Mathf.Pow(1f - normalized, 3f);
+            if (_settlementFinishButtonRect != null)
+            {
+                _settlementFinishButtonRect.anchoredPosition = Vector2.LerpUnclamped(
+                    finishStart,
+                    _settlementFinishButtonTargetPosition,
+                    eased);
+            }
+
+            if (_settlementCameraButtonRect != null)
+            {
+                _settlementCameraButtonRect.anchoredPosition = Vector2.LerpUnclamped(
+                    cameraStart,
+                    _settlementCameraButtonTargetPosition,
+                    eased);
+            }
+
+            yield return null;
+        }
+
+        if (_settlementFinishButtonRect != null)
+        {
+            _settlementFinishButtonRect.anchoredPosition =
+                _settlementFinishButtonTargetPosition;
+        }
+
+        if (_settlementCameraButtonRect != null)
+        {
+            _settlementCameraButtonRect.anchoredPosition =
+                _settlementCameraButtonTargetPosition;
+        }
+
+        if (_settlementCameraButton != null)
+        {
+            _settlementCameraButton.interactable = true;
+        }
+    }
+
+    private void PrepareSettlementRewardSlots()
+    {
+        ClearRuntimeSettlementRewardImages();
+        _completionRewardDisplayImage = null;
+        _taskRewardDisplayImage = null;
+        var showTaskReward = _settlementTaskRewardPackId > 0
+                             || _didEarnTaskPackRewardDuringSettlement;
+        var rewardCount = (_settlementCompletionRewardPackId > 0 ? 1 : 0)
+                          + (showTaskReward ? 1 : 0);
+        if (rewardCount <= 0 || _taskRewardImage == null)
+        {
+            return;
+        }
+
+        var slotIndex = 0;
+        if (_settlementCompletionRewardPackId > 0)
+        {
+            _completionRewardDisplayImage = ConfigureSettlementRewardSlot(
+                _taskRewardImage,
+                "ImgBagCompletionReward",
+                slotIndex++,
+                rewardCount);
+        }
+
+        if (showTaskReward)
+        {
+            var taskImage = slotIndex == 0
+                ? _taskRewardImage
+                : CreateSettlementRewardImage("ImgBagTaskReward");
+            _taskRewardDisplayImage = ConfigureSettlementRewardSlot(
+                taskImage,
+                "ImgBagTaskReward",
+                slotIndex,
+                rewardCount);
+        }
+    }
+
+    private Image ConfigureSettlementRewardSlot(
+        Image image,
+        string objectName,
+        int slotIndex,
+        int slotCount)
+    {
+        if (image == null)
+        {
+            return null;
+        }
+
+        if (image != _taskRewardImage)
+        {
+            image.name = objectName;
+        }
+        image.raycastTarget = false;
+        var rect = image.rectTransform;
+        var offsetX = slotCount > 1
+            ? (slotIndex == 0 ? -SettlementRewardSlotOffset : SettlementRewardSlotOffset)
+            : 0f;
+        rect.anchoredPosition = _taskRewardImageTargetPosition + Vector2.right * offsetX;
+        rect.localRotation = Quaternion.identity;
+        rect.localScale = Vector3.one;
+        image.gameObject.SetActive(false);
+        return image;
+    }
+
+    private Image CreateSettlementRewardImage(string objectName)
+    {
+        var clone = Instantiate(
+            _taskRewardImage.gameObject,
+            _taskRewardImage.transform.parent,
+            false);
+        clone.name = objectName;
+        var image = clone.GetComponent<Image>();
+        _runtimeSettlementRewardImages.Add(image);
+        return image;
+    }
+
+    private IEnumerator AnimateSettlementRewardPop(RectTransform rewardRect)
+    {
+        if (rewardRect == null)
+        {
+            yield break;
+        }
+
+        rewardRect.gameObject.SetActive(true);
+        rewardRect.localScale = Vector3.zero;
+        var elapsed = 0f;
+        while (elapsed < SettlementRewardPopDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            var normalized = Mathf.Clamp01(elapsed / SettlementRewardPopDuration);
+            float scale;
+            if (normalized < 0.62f)
+            {
+                scale = Mathf.LerpUnclamped(
+                    0f,
+                    1.2f,
+                    Mathf.SmoothStep(0f, 1f, normalized / 0.62f));
+            }
+            else
+            {
+                scale = Mathf.LerpUnclamped(
+                    1.2f,
+                    1f,
+                    Mathf.SmoothStep(0f, 1f, (normalized - 0.62f) / 0.38f));
+            }
+
+            rewardRect.localScale = Vector3.one * scale;
+            yield return null;
+        }
+
+        rewardRect.localScale = Vector3.one;
+    }
+
+    private IEnumerator AnimateTaskRewardIntoSettlementSlot(Image targetImage)
+    {
+        if (targetImage == null)
+        {
+            yield break;
+        }
+
+        if (_taskRewardSourceImage == null
+            || !TryGetRelativeRectGeometry(
+                _taskRewardSourceImage.rectTransform,
+                _rewardPanelRoot.transform as RectTransform,
+                out var startPosition,
+                out _)
+            || !TryGetRelativeRectGeometry(
+                targetImage.rectTransform,
+                _rewardPanelRoot.transform as RectTransform,
+                out var endPosition,
+                out var endSize))
+        {
+            yield return AnimateSettlementRewardPop(targetImage.rectTransform);
+            yield break;
+        }
+
+        var flyObject = Instantiate(
+            targetImage.gameObject,
+            _rewardPanelRoot.transform,
+            false);
+        flyObject.name = "TaskRewardFlyIcon";
+        flyObject.SetActive(true);
+        flyObject.transform.SetAsLastSibling();
+        var flyRect = flyObject.GetComponent<RectTransform>();
+        var flyImage = flyObject.GetComponent<Image>();
+        flyRect.anchorMin = new Vector2(0.5f, 0.5f);
+        flyRect.anchorMax = new Vector2(0.5f, 0.5f);
+        flyRect.pivot = new Vector2(0.5f, 0.5f);
+        flyRect.anchoredPosition = startPosition;
+        flyRect.sizeDelta = endSize;
+        flyRect.localRotation = Quaternion.identity;
+        flyRect.localScale = Vector3.one;
+        flyImage.sprite = _taskRewardDefaultSprite;
+        flyImage.color = _taskRewardDefaultColor;
+        flyImage.preserveAspect = targetImage.preserveAspect;
+        flyImage.raycastTarget = false;
+        targetImage.gameObject.SetActive(false);
+
+        var elapsed = 0f;
+        while (elapsed < SettlementTaskRewardFlyDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            var normalized = Mathf.Clamp01(elapsed / SettlementTaskRewardFlyDuration);
+            var eased = Mathf.SmoothStep(0f, 1f, normalized);
+            var position = Vector2.LerpUnclamped(startPosition, endPosition, eased);
+            position.y += Mathf.Sin(normalized * Mathf.PI)
+                          * SettlementTaskRewardFlyArcHeight;
+            flyRect.anchoredPosition = position;
+            flyRect.localRotation = Quaternion.identity;
+            yield return null;
+        }
+
+        targetImage.gameObject.SetActive(true);
+        targetImage.rectTransform.localScale = Vector3.one;
+        targetImage.rectTransform.localRotation = Quaternion.identity;
+        Destroy(flyObject);
+    }
+
+    private static bool TryGetRelativeRectGeometry(
+        RectTransform source,
+        RectTransform targetParent,
+        out Vector2 center,
+        out Vector2 size)
+    {
+        center = Vector2.zero;
+        size = Vector2.zero;
+        if (source == null || targetParent == null)
+        {
+            return false;
+        }
+
+        var corners = new Vector3[4];
+        source.GetWorldCorners(corners);
+        var min = new Vector2(float.PositiveInfinity, float.PositiveInfinity);
+        var max = new Vector2(float.NegativeInfinity, float.NegativeInfinity);
+        for (var i = 0; i < corners.Length; i++)
+        {
+            var local = targetParent.InverseTransformPoint(corners[i]);
+            min = Vector2.Min(min, local);
+            max = Vector2.Max(max, local);
+        }
+
+        center = (min + max) * 0.5f;
+        size = max - min;
+        return size.x > 0.01f && size.y > 0.01f;
+    }
+
+    private void ClearRuntimeSettlementRewardImages()
+    {
+        for (var i = 0; i < _runtimeSettlementRewardImages.Count; i++)
+        {
+            if (_runtimeSettlementRewardImages[i] != null)
+            {
+                Destroy(_runtimeSettlementRewardImages[i].gameObject);
+            }
+        }
+
+        _runtimeSettlementRewardImages.Clear();
+    }
+
     private void ShowRewardPanel()
     {
         if (_isGameFinished)
@@ -7398,7 +8038,14 @@ public class GameScene : MonoBehaviour
         }
 
         PrepareBoardForRewardPanel();
+        _settlementBagCountBeforeCompletion = CardPackDataUtility.GetCompletedPackCount();
+        _settlementCompletionRewardPackId = 0;
+        _settlementTaskRewardPackId = 0;
+        _didEarnTaskPackRewardDuringSettlement = false;
+        _settlementPackRewardIds.Clear();
         _didSavePackCompletion = SaveCardPackAfterPuzzleComplete();
+        _isFirstCompletionSettlement = _didSavePackCompletion
+                                       && !_wasSelectedPackCompletedOnEntry;
         _isSettlementReadyForFinish = false;
         if (_finishButton != null)
         {
@@ -7407,6 +8054,7 @@ public class GameScene : MonoBehaviour
 
         _rewardPanelRoot.SetActive(true);
         _rewardPanelRoot.transform.SetAsLastSibling();
+        PrepareSettlementVisualState();
         StartCoroutine(ProcessTaskSettlement());
         Debug.Log("GameScene: puzzle completed, RewardPanel shown.");
     }
@@ -7415,6 +8063,113 @@ public class GameScene : MonoBehaviour
     {
         RemoveRuntimePuzzlePieces();
         RevealAllGroovesOnBoard();
+        PrepareCompletedBoardForRewardPanelAnimation();
+    }
+
+    private void PrepareCompletedBoardForRewardPanelAnimation()
+    {
+        _hasSettlementBoardFitTarget = false;
+        if (_loadedCardBagRect == null)
+        {
+            return;
+        }
+
+        Canvas.ForceUpdateCanvases();
+        var camera = Camera.main;
+        var visibleRect = Rect.MinMaxRect(0f, 0f, Screen.width, Screen.height);
+        if (_board.BackgroundRect != null)
+        {
+            var backgroundRect = GetRectTransformScreenRect(_board.BackgroundRect, camera);
+            visibleRect = Rect.MinMaxRect(
+                Mathf.Max(visibleRect.xMin, backgroundRect.xMin),
+                Mathf.Max(visibleRect.yMin, backgroundRect.yMin),
+                Mathf.Min(visibleRect.xMax, backgroundRect.xMax),
+                Mathf.Min(visibleRect.yMax, backgroundRect.yMax));
+        }
+
+        var boardRect = GetRectTransformScreenRect(_loadedCardBagRect, camera);
+        if (visibleRect.width <= 0.01f
+            || visibleRect.height <= 0.01f
+            || boardRect.width <= 0.01f
+            || boardRect.height <= 0.01f)
+        {
+            return;
+        }
+
+        var parentRect = _loadedCardBagRect.parent as RectTransform;
+        if (parentRect == null)
+        {
+            return;
+        }
+
+        var canvas = _loadedCardBagRect.GetComponentInParent<Canvas>();
+        var eventCamera = canvas != null && canvas.renderMode == RenderMode.ScreenSpaceOverlay
+            ? null
+            : canvas != null ? canvas.worldCamera ?? camera : camera;
+
+        var fitScale = Mathf.Min(
+            visibleRect.width * SettlementBoardViewportFill / boardRect.width,
+            visibleRect.height * SettlementBoardViewportFill / boardRect.height);
+        fitScale = Mathf.Min(1f, fitScale);
+        var startPosition = _loadedCardBagRect.anchoredPosition;
+        var startScale = _loadedCardBagRect.localScale;
+        var targetScale = startScale * fitScale;
+        _loadedCardBagRect.localScale = targetScale;
+        Canvas.ForceUpdateCanvases();
+        boardRect = GetRectTransformScreenRect(_loadedCardBagRect, camera);
+        if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                parentRect,
+                boardRect.center,
+                eventCamera,
+                out var boardCenter)
+            || !RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                parentRect,
+                visibleRect.center,
+                eventCamera,
+                out var targetCenter))
+        {
+            _loadedCardBagRect.localScale = startScale;
+            Canvas.ForceUpdateCanvases();
+            return;
+        }
+
+        _settlementBoardFitStartPosition = startPosition;
+        _settlementBoardFitTargetPosition = startPosition + targetCenter - boardCenter;
+        _settlementBoardFitStartScale = startScale;
+        _settlementBoardFitTargetScale = targetScale;
+        _loadedCardBagRect.anchoredPosition = startPosition;
+        _loadedCardBagRect.localScale = startScale;
+        _hasSettlementBoardFitTarget = true;
+        Canvas.ForceUpdateCanvases();
+    }
+
+    private IEnumerator AnimateCompletedBoardForRewardPanel()
+    {
+        if (!_hasSettlementBoardFitTarget || _loadedCardBagRect == null)
+        {
+            yield break;
+        }
+
+        var elapsed = 0f;
+        while (elapsed < SettlementBoardFitDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            var normalized = Mathf.Clamp01(elapsed / SettlementBoardFitDuration);
+            var eased = normalized * normalized * (3f - 2f * normalized);
+            _loadedCardBagRect.anchoredPosition = Vector2.LerpUnclamped(
+                _settlementBoardFitStartPosition,
+                _settlementBoardFitTargetPosition,
+                eased);
+            _loadedCardBagRect.localScale = Vector3.LerpUnclamped(
+                _settlementBoardFitStartScale,
+                _settlementBoardFitTargetScale,
+                eased);
+            yield return null;
+        }
+
+        _loadedCardBagRect.anchoredPosition = _settlementBoardFitTargetPosition;
+        _loadedCardBagRect.localScale = _settlementBoardFitTargetScale;
+        _hasSettlementBoardFitTarget = false;
     }
 
     private void FinalizeCompletedGroup(int completedGroupIndex)
@@ -7852,7 +8607,7 @@ public class GameScene : MonoBehaviour
 
         if (stage == TutorialStage.HintIntroduction)
         {
-            CreateTutorialHintArrow(promptRect);
+            CreateTutorialHintArrow(promptRect, parent);
         }
 
         var entranceOffset = stage == TutorialStage.StrongPlacement
@@ -7938,7 +8693,9 @@ public class GameScene : MonoBehaviour
             : new Vector2(540f, 224f);
     }
 
-    private static void CreateTutorialHintArrow(RectTransform parent)
+    private void CreateTutorialHintArrow(
+        RectTransform parent,
+        RectTransform canvasRect)
     {
         var template = GameCommonUtility.FindSceneObject(TutorialTipTemplateObjectName);
         var templateArrowRect = template != null
@@ -7972,6 +8729,17 @@ public class GameScene : MonoBehaviour
         arrowRect.localRotation = templateArrowRect.localRotation;
         arrowRect.localScale = templateArrowRect.localScale;
 
+        if (TryGetTutorialHintButtonCanvasPosition(canvasRect, out var hintButtonPosition))
+        {
+            var targetWorld = canvasRect.TransformPoint(
+                hintButtonPosition - TutorialHintArrowMotion.PulseOffset);
+            var targetLocal = parent.InverseTransformPoint(targetWorld);
+            var arrowTipWorld = arrowRect.TransformPoint(
+                new Vector3(arrowRect.rect.xMax, arrowRect.rect.center.y));
+            var arrowTipLocal = parent.InverseTransformPoint(arrowTipWorld);
+            arrowRect.anchoredPosition += (Vector2)(targetLocal - arrowTipLocal);
+        }
+
         var arrowImage = arrowObject.GetComponent<Image>();
         arrowImage.sprite = templateArrowImage.sprite;
         arrowImage.color = templateArrowImage.color;
@@ -7997,6 +8765,18 @@ public class GameScene : MonoBehaviour
                 promptSize);
         }
 
+        if (stage == TutorialStage.HintIntroduction
+            && TryGetTutorialHintButtonCanvasPosition(parent, out var hintButtonPosition))
+        {
+            return ClampTutorialPromptPosition(
+                parent.rect,
+                hintButtonPosition
+                - GetTutorialHintArrowTipOffset()
+                - TutorialHintArrowMotion.PulseOffset
+                - Vector2.right * TutorialHintPromptButtonClearance,
+                promptSize);
+        }
+
         var normalizedAnchor = stage == TutorialStage.StrongPlacement
             ? TutorialStrongPromptAnchor
             : TutorialHintPromptAnchor;
@@ -8012,6 +8792,40 @@ public class GameScene : MonoBehaviour
             parent.rect,
             position,
             promptSize);
+    }
+
+    private bool TryGetTutorialHintButtonCanvasPosition(
+        RectTransform canvasRect,
+        out Vector2 position)
+    {
+        position = Vector2.zero;
+        var hintRect = _hintButton != null
+            ? _hintButton.transform as RectTransform
+            : null;
+        return hintRect != null
+               && TryGetRectTransformScreenCenter(hintRect, out var screenCenter)
+               && RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                   canvasRect,
+                   screenCenter,
+                   null,
+                   out position);
+    }
+
+    private static Vector2 GetTutorialHintArrowTipOffset()
+    {
+        var template = GameCommonUtility.FindSceneObject(TutorialTipTemplateObjectName);
+        var templateRect = template != null ? template.GetComponent<RectTransform>() : null;
+        var arrowRect = template != null
+            ? template.transform.Find(TutorialHintArrowObjectName) as RectTransform
+            : null;
+        if (templateRect == null || arrowRect == null)
+        {
+            return Vector2.zero;
+        }
+
+        var tipWorld = arrowRect.TransformPoint(
+            new Vector3(arrowRect.rect.xMax, arrowRect.rect.center.y));
+        return templateRect.InverseTransformPoint(tipWorld);
     }
 
     private bool TryGetCurrentTutorialGrooveBounds(
@@ -9120,12 +9934,15 @@ public class GameScene : MonoBehaviour
             $"grantedPackId={grantedPackId}");
         if (granted)
         {
-            QueuePackReward(grantedPackId);
+            QueuePackReward(grantedPackId, SettlementPackRewardSource.Completion);
         }
     }
 
     private IEnumerator ProcessTaskSettlement()
     {
+        var boardFitAnimation = StartCoroutine(AnimateCompletedBoardForRewardPanel());
+        yield return AnimateSettlementHeaderEntrance();
+        yield return boardFitAnimation;
         yield return ProcessTaskSettlementCore();
 
         if (_didSavePackCompletion
@@ -9140,7 +9957,26 @@ public class GameScene : MonoBehaviour
         {
             TryGrantFirstCompletionPackReward();
         }
-        RefreshSettlementBagCount();
+
+        RebuildSettlementPackRewardIds();
+        if (_isFirstCompletionSettlement)
+        {
+            yield return AnimateSettlementBagCountIncrement();
+        }
+        else
+        {
+            RefreshSettlementBagCount();
+        }
+
+        if (_settlementCompletionRewardPackId > 0
+            || _settlementTaskRewardPackId > 0
+            || _didEarnTaskPackRewardDuringSettlement)
+        {
+            yield return AnimateSettlementPackRewards();
+        }
+
+        yield return AnimateSettlementActionButtonsEntrance();
+
         _isSettlementReadyForFinish = true;
         if (_finishButton != null)
         {
@@ -9156,7 +9992,7 @@ public class GameScene : MonoBehaviour
         }
 
         SetSettlementScore(0);
-        RefreshSettlementBagCount();
+        SetSettlementBagCount(_settlementBagCountBeforeCompletion);
 
         var packId = GameManager.GetBagId();
         var scoreContext = new GameScoreContext
@@ -9258,7 +10094,6 @@ public class GameScene : MonoBehaviour
             }
         }
 
-        RefreshSettlementBagCount();
         yield return AnimateTaskSettlementProgress(
             taskItem,
             task,
@@ -9286,6 +10121,7 @@ public class GameScene : MonoBehaviour
             $"templateId={task.TemplateId}, " +
             $"preferredPackId={preferredPackId}, " +
             $"pending={CardPackDistributionUtility.GetPendingTaskRewardCount()}");
+        _didEarnTaskPackRewardDuringSettlement = true;
         return true;
     }
 
@@ -9306,7 +10142,7 @@ public class GameScene : MonoBehaviour
             return;
         }
 
-        QueuePackReward(rewardPackId);
+        QueuePackReward(rewardPackId, SettlementPackRewardSource.Task);
     }
 
     private void SetTaskRewardSectionVisible(bool visible)
@@ -9625,19 +10461,48 @@ public class GameScene : MonoBehaviour
 
     private void RefreshSettlementBagCount()
     {
-        if (_settlementBagCountText == null)
+        SetSettlementBagCount(CardPackDataUtility.GetCompletedPackCount());
+    }
+
+    private void SetSettlementBagCount(int count)
+    {
+        if (_settlementBagCountText != null)
+        {
+            _settlementBagCountText.text = Mathf.Max(0, count).ToString();
+        }
+    }
+
+    private void QueuePackReward(
+        int rewardPackId,
+        SettlementPackRewardSource source)
+    {
+        if (rewardPackId <= 0)
         {
             return;
         }
 
-        _settlementBagCountText.text = CardPackDataUtility.GetCompletedPackCount().ToString();
+        if (source == SettlementPackRewardSource.Completion)
+        {
+            _settlementCompletionRewardPackId = rewardPackId;
+        }
+        else
+        {
+            _settlementTaskRewardPackId = rewardPackId;
+        }
     }
 
-    private void QueuePackReward(int rewardPackId)
+    private void RebuildSettlementPackRewardIds()
     {
-        if (rewardPackId > 0 && !_settlementPackRewardIds.Contains(rewardPackId))
+        _settlementPackRewardIds.Clear();
+        if (_settlementCompletionRewardPackId > 0)
         {
-            _settlementPackRewardIds.Add(rewardPackId);
+            _settlementPackRewardIds.Add(_settlementCompletionRewardPackId);
+        }
+
+        if (_settlementTaskRewardPackId > 0
+            && !_settlementPackRewardIds.Contains(_settlementTaskRewardPackId))
+        {
+            _settlementPackRewardIds.Add(_settlementTaskRewardPackId);
         }
     }
 
@@ -10612,7 +11477,7 @@ internal sealed class TutorialHintArrowMotion : MonoBehaviour
     private const float RevealDelay = 0.34f;
     private const float RevealDuration = 0.22f;
     private const float PulseDuration = 0.72f;
-    private static readonly Vector2 PulseOffset = new Vector2(14f, 8f);
+    internal static readonly Vector2 PulseOffset = new Vector2(14f, 8f);
     private RectTransform _rectTransform;
     private Image _image;
     private Vector2 _basePosition;
