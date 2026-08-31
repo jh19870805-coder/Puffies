@@ -6,7 +6,7 @@
 
 1. WHEN 多个已解锁卡包属于同一 `Series` 链 THEN MainScene SHALL 只创建一个列表槽位。
 2. WHEN 系列只解锁 Vol1 THEN 系统 SHALL 只显示 `PackCover`，并隐藏 `PackCover2` 与 `PackVol`。
-3. WHEN 系列已解锁 Vol2 或以上 THEN 系统 SHALL 使用当前最高已解锁 Vol 作为前层 `PackCover`，上一已解锁 Vol 作为后层 `PackCover2`，并将后层封面稳定旋转 `+10°` 或 `-10°`。
+3. WHEN 系列已解锁 Vol2 或以上 THEN 系统 SHALL 使用当前最高已解锁 Vol 作为前层 `PackCover`，上一已解锁 Vol 作为后层 `PackCover2`；后层 SHALL 复制前层的 Rect 尺寸、缩放和宽高适配方式，先与前层底边对齐，再按现有卡包材质的 `_PaddingY` 计算真实可见底边并以其作为旋转轴，稳定旋转 `+10°` 或 `-10°`，且不得额外放大或偏移。
 4. WHEN 当前系列 Vol 大于等于 2 THEN `PackVol` SHALL 使用 `PackVolN.png`；WHEN 对应资源不存在 THEN `PackVol` SHALL 隐藏。
 5. WHEN 前层或后层卡包处于完整、进行中撕开或完成撕开状态 THEN 每张封面 SHALL 独立应用所属卡包的现有状态材质和撕口蒙版。
 6. WHEN 用户点击系列组合槽 THEN 系统 SHALL 打开 `PanelBagVol`，按系列链顺序展示全部已解锁 Vol，并默认居中最高已解锁 Vol。

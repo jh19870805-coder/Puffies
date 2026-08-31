@@ -95,7 +95,6 @@ public class MainScene : MonoBehaviour
     private const string PackVolumeObjectName = "PackVol";
     private const string PackVolumeFilePrefix = "PackVol";
     private const float SecondaryPackCoverRotation = 10f;
-    private const float SecondaryPackCoverScale = 1.1f;
     private const string PackLightObjectName = "ImgLight";
     private const string OpeningHintAnimationObjectName = "OpeningPackHintAnimation";
     private const string OpeningHintAnimationStateName = "PackAni";
@@ -191,6 +190,7 @@ public class MainScene : MonoBehaviour
     private static bool sHookedSceneLoaded;
     private static readonly int TornMaskTextureId = Shader.PropertyToID("_TornMaskTex");
     private static readonly int UseTornMaskId = Shader.PropertyToID("_UseTornMask");
+    private static readonly int CoverPaddingYId = Shader.PropertyToID("_PaddingY");
 
     [SerializeField] private GameObject mPackageItemPrefab;
 
@@ -2715,7 +2715,7 @@ public class MainScene : MonoBehaviour
         if (entry.SecondaryImage != null)
         {
             entry.SecondaryImage.raycastTarget = false;
-            entry.SecondaryImage.preserveAspect = true;
+            entry.SecondaryImage.preserveAspect = entry.Image.preserveAspect;
             if (entry.ShowSecondaryCover)
             {
                 var secondarySprite = GetOrLoadPackageCoverSprite(display.SecondaryPackId);
@@ -2735,10 +2735,15 @@ public class MainScene : MonoBehaviour
                         secondaryState != PackageDisplayState.IntactColor,
                         secondaryCompleted);
                     var rotationSign = (display.SeriesRootPackId & 1) == 0 ? 1f : -1f;
-                    entry.SecondaryImage.rectTransform.anchoredPosition = Vector2.zero;
-                    entry.SecondaryImage.rectTransform.localScale =
-                        Vector3.one * SecondaryPackCoverScale;
-                    entry.SecondaryImage.rectTransform.localEulerAngles = new Vector3(
+                    var primaryRect = entry.Image.rectTransform;
+                    var secondaryRect = entry.SecondaryImage.rectTransform;
+                    secondaryRect.sizeDelta = primaryRect.sizeDelta;
+                    secondaryRect.pivot = new Vector2(
+                        primaryRect.pivot.x,
+                        ResolvePackageCoverVisualBottomPivot(entry.SecondaryImage));
+                    secondaryRect.localScale = primaryRect.localScale;
+                    AlignPackageCoverBottom(primaryRect, secondaryRect);
+                    secondaryRect.localEulerAngles = new Vector3(
                         0f,
                         0f,
                         SecondaryPackCoverRotation * rotationSign);
@@ -2766,6 +2771,48 @@ public class MainScene : MonoBehaviour
 
         entry.VolumeImage.gameObject.SetActive(entry.ShowVolume);
         entry.VolumeImage.enabled = entry.ShowVolume;
+    }
+
+    private static float ResolvePackageCoverVisualBottomPivot(Image coverImage)
+    {
+        var material = coverImage != null ? coverImage.material : null;
+        var texture = coverImage?.sprite != null ? coverImage.sprite.texture : null;
+        if (material == null
+            || texture == null
+            || texture.height <= 0
+            || !material.HasProperty(CoverPaddingYId))
+        {
+            return 0f;
+        }
+
+        var paddingRatio = Mathf.Max(0f, material.GetFloat(CoverPaddingYId)) / texture.height;
+        return Mathf.Clamp01(paddingRatio / (1f + paddingRatio * 2f));
+    }
+
+    private static void AlignPackageCoverBottom(
+        RectTransform primaryRect,
+        RectTransform secondaryRect)
+    {
+        if (primaryRect == null || secondaryRect == null)
+        {
+            return;
+        }
+
+        var primaryScale = primaryRect.localScale;
+        var secondaryScale = secondaryRect.localScale;
+        var primaryCenterX = primaryRect.anchoredPosition.x
+            + primaryRect.rect.width * (0.5f - primaryRect.pivot.x) * Mathf.Abs(primaryScale.x);
+        var primaryBottom = primaryRect.anchoredPosition.y
+            - primaryRect.rect.height * primaryRect.pivot.y * Mathf.Abs(primaryScale.y);
+        secondaryRect.anchoredPosition = new Vector2(
+            primaryCenterX
+                - secondaryRect.rect.width
+                * (0.5f - secondaryRect.pivot.x)
+                * Mathf.Abs(secondaryScale.x),
+            primaryBottom
+                + secondaryRect.rect.height
+                * secondaryRect.pivot.y
+                * Mathf.Abs(secondaryScale.y));
     }
 
     private void ApplyPackageTornMask(
