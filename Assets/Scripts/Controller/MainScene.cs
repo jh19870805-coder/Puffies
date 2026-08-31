@@ -95,7 +95,7 @@ public class MainScene : MonoBehaviour
     private const string PackSizeObjectName = "PackSize";
     private const string PackVolumeObjectName = "PackVol";
     private const string PackVolumeFilePrefix = "PackVol";
-    private const float SecondaryPackCoverRotation = 10f;
+    private const float SecondaryPackCoverRotation = 7f;
     private const string PackLightObjectName = "ImgLight";
     private const string OpeningHintAnimationObjectName = "OpeningPackHintAnimation";
     private const string OpeningHintAnimationStateName = "PackAni";
@@ -4710,7 +4710,7 @@ public class MainScene : MonoBehaviour
         RestoreBagVolumeEntranceBackCard(entranceBackCard);
         SetSelectedPackageImageVisible(false);
         ClearSelectedPackageVisual();
-        yield return AnimateBagVolumeSideCards();
+        yield return AnimateBagVolumeSideCards(entranceBackCard);
         SetBagVolumeNavigationVisible(true);
         SetBagVolumeControlsInteractable(true);
         mIsPlayingAnimation = false;
@@ -4967,7 +4967,7 @@ public class MainScene : MonoBehaviour
         var fromPosition = mSelectedPackageStartPosition;
         var toPosition = mSelectedPackageDisplayPosition;
         var fromScale = ResolveBagVolumeOverlayScale(mSelectedPackageStartSize);
-        var toScale = ResolveBagVolumeOverlayScale(mSelectedPackageDisplaySize);
+        var toScale = ResolveBagVolumeEntranceBackScale();
         var fromRotation = Mathf.DeltaAngle(0f, cardRect.localEulerAngles.z);
         var elapsed = 0f;
         while (elapsed < BagVolumeOpenScaleDuration)
@@ -4984,7 +4984,7 @@ public class MainScene : MonoBehaviour
             cardRect.localScale = Vector3.one * Mathf.LerpUnclamped(
                 fromScale,
                 toScale,
-                eased);
+                Mathf.SmoothStep(0f, 1f, rotationProgress));
             cardRect.localEulerAngles = new Vector3(
                 0f,
                 0f,
@@ -5010,9 +5010,6 @@ public class MainScene : MonoBehaviour
         var centerPosition = mBagVolumeCenterTemplate != null
             ? mBagVolumeCenterTemplate.anchoredPosition
             : Vector2.zero;
-        var centerScale = mBagVolumeCenterTemplate != null
-            ? Mathf.Abs(mBagVolumeCenterTemplate.localScale.x)
-            : 1f;
         var cardRect = card.RectTransform;
         cardRect.SetParent(mBagVolumeCarouselRect, false);
         cardRect.anchorMin = new Vector2(0.5f, 0.5f);
@@ -5020,7 +5017,7 @@ public class MainScene : MonoBehaviour
         cardRect.pivot = new Vector2(0.5f, 0.5f);
         cardRect.sizeDelta = new Vector2(PackageOpenWidth, PackageOpenHeight);
         cardRect.anchoredPosition = centerPosition;
-        cardRect.localScale = Vector3.one * centerScale;
+        cardRect.localScale = Vector3.one * ResolveBagVolumeEntranceBackScale();
         cardRect.localEulerAngles = Vector3.zero;
         cardRect.SetAsFirstSibling();
     }
@@ -5032,7 +5029,15 @@ public class MainScene : MonoBehaviour
             displaySize.y / PackageOpenHeight);
     }
 
-    private IEnumerator AnimateBagVolumeSideCards()
+    private float ResolveBagVolumeEntranceBackScale()
+    {
+        return mBagVolumeLeftTemplate != null
+            ? Mathf.Abs(mBagVolumeLeftTemplate.localScale.x)
+            : ResolveBagVolumeOverlayScale(mSelectedPackageDisplaySize);
+    }
+
+    private IEnumerator AnimateBagVolumeSideCards(
+        SeriesCarouselCard preScaledBackCard = null)
     {
         if (mBagVolumeCards.Count == 0
             || mBagVolumeCenterTemplate == null
@@ -5082,11 +5087,14 @@ public class MainScene : MonoBehaviour
                     centerScale,
                     sideScale,
                     Mathf.Clamp01(distance));
+                var initialScale = card == preScaledBackCard
+                    ? finalScale
+                    : centerScale;
                 card.RectTransform.anchoredPosition = new Vector2(
                     centerPosition.x + relativePosition * spacing * eased,
                     centerPosition.y);
                 card.RectTransform.localScale = Vector3.one * Mathf.Lerp(
-                    centerScale,
+                    initialScale,
                     finalScale,
                     eased);
                 card.RectTransform.localEulerAngles = Vector3.zero;
