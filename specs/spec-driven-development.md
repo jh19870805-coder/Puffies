@@ -13,6 +13,7 @@
 7. WHEN 用户点击系列组合槽 THEN 系统 SHALL 打开 `PanelBagVol`，按系列链顺序展示全部已解锁 Vol，并默认居中最高已解锁 Vol。
    - 进场 SHALL 保持主卡包现有弹起放大节奏。点击瞬间 SHALL 隐藏列表后层对应的真实 Vol 卡，并直接设置 Z 轴 `0°`、左侧卡位最终缩放和主卡最终中心位置；主卡展开期间不得显示后层卡的旋转、缩放或移动。只有主卡完全展开并完成现有短暂停顿后，后层卡才 SHALL 从主卡背后显示，保持尺寸不变、只沿 X 轴向左卡位滑开；该左滑是后层卡唯一的进场动画。底部操作按钮仍在放大后半段上滑，分页圆点随侧卡展开延迟出现。
    - WHEN 编辑器启动后首次点击系列槽 THEN 系统 SHALL 在读取动画坐标前，以不可见方式激活并强制重建 `PanelBagVol/PackCarousel` 布局；用于展开和关闭插值的 `SelectedCardPackCanvas` SHALL 从创建起持续激活并维持 `CanvasScaler` 坐标系，只允许通过 `SelectedCardPackImage` 子节点控制选中卡包显隐。首次点击、首次关闭与后续操作 SHALL 使用相同的有效坐标和动画节奏。
+   - WHEN 任意状态的系列卡包展开 THEN 左侧 `PackSize` SHALL 按当前 PackId 的真实配置显示；Vol2 及以上 SHALL 在右侧显示对应 `PackVolN`，Vol1 SHALL 不显示 Vol 标签。完整新包不得因复制列表瞬时显隐状态而漏掉标签。
 8. WHEN 用户横向拖动轮播或点击左右按钮 THEN 系统 SHALL 使用编辑器 `PackLeft/PackCenter/PackRight` 的位置和缩放进行连续插值，并在松手后吸附到最近 Vol。
 9. WHEN 某个 Vol 居中 THEN 系统 SHALL 更新分页圆点、`玩/重玩` 与相机按钮，并保证轮播中的卡包 Z 轴旋转为 `0`。
 10. WHEN 用户确认居中 Vol THEN 系统 SHALL 按该卡包自身状态复用现有完整开包、继续游戏或重玩确认流程；非系列卡包仍使用 `PanelBagSelect`。

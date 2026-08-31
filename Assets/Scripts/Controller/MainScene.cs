@@ -335,6 +335,7 @@ public class MainScene : MonoBehaviour
         public RectTransform RectTransform;
         public bool SuppressDisplay;
         public bool ShowVolume;
+        public int VolumeNumber;
         public bool ShowTornBackground;
         public PackageDisplayState DisplayState;
         public int SeriesRootPackId;
@@ -1525,10 +1526,55 @@ public class MainScene : MonoBehaviour
             graphics[i].raycastTarget = false;
         }
 
+        RefreshSelectedPackageLabelVisuals(entry, visualObject.transform);
         BindSelectedPackageProgressPieceAnimations(entry, visualObject.transform);
 
         SetSelectedPackageImageAlpha(1f);
         return true;
+    }
+
+    private void RefreshSelectedPackageLabelVisuals(PackageEntry sourceEntry, Transform visualRoot)
+    {
+        if (sourceEntry == null || visualRoot == null)
+        {
+            return;
+        }
+
+        var sizeImage = FindChild(visualRoot, PackSizeObjectName)?.GetComponent<Image>();
+        if (sizeImage != null)
+        {
+            ApplyPackageSizeVisual(sizeImage, sourceEntry.BagId);
+            if (sourceEntry.SizeImage != null)
+            {
+                sizeImage.material = sourceEntry.SizeImage.material;
+                sizeImage.color = sourceEntry.SizeImage.color;
+            }
+        }
+
+        var volumeImage = FindChild(visualRoot, PackVolumeObjectName)?.GetComponent<Image>();
+        if (volumeImage == null)
+        {
+            return;
+        }
+
+        var volumeSprite = sourceEntry.VolumeNumber >= 2
+            ? GetOrLoadPackageVolumeSprite(sourceEntry.VolumeNumber)
+            : null;
+        var showVolume = volumeSprite != null;
+        if (showVolume)
+        {
+            volumeImage.sprite = volumeSprite;
+        }
+
+        if (sourceEntry.VolumeImage != null)
+        {
+            volumeImage.material = sourceEntry.VolumeImage.material;
+            volumeImage.color = sourceEntry.VolumeImage.color;
+        }
+
+        volumeImage.raycastTarget = false;
+        volumeImage.gameObject.SetActive(showVolume);
+        volumeImage.enabled = showVolume;
     }
 
     private void SyncSelectedPackageAnimator(PackageEntry entry)
@@ -2926,6 +2972,7 @@ public class MainScene : MonoBehaviour
 
     private void ApplyPackageVolumeVisual(PackageEntry entry, int volumeNumber)
     {
+        entry.VolumeNumber = Mathf.Max(1, volumeNumber);
         entry.ShowVolume = volumeNumber >= 2 && entry.VolumeImage != null;
         if (entry.VolumeImage == null)
         {
