@@ -1049,7 +1049,49 @@ public class MainScene : MonoBehaviour
         }
 
         mBagVolumeCarouselInput.Initialize(this);
+        WarmUpBagVolumePanelLayout();
         SetPanelVisible(mBagVolumePanelRoot, false);
+    }
+
+    private void WarmUpBagVolumePanelLayout()
+    {
+        if (mBagVolumePanelRoot == null)
+        {
+            return;
+        }
+
+        var wasActive = mBagVolumePanelRoot.activeSelf;
+        if (!wasActive)
+        {
+            mBagVolumePanelRoot.SetActive(true);
+        }
+
+        Canvas.ForceUpdateCanvases();
+        var panelRect = mBagVolumePanelRoot.transform as RectTransform;
+        if (panelRect != null)
+        {
+            LayoutRebuilder.ForceRebuildLayoutImmediate(panelRect);
+        }
+
+        if (mBagVolumeCarouselRect != null)
+        {
+            LayoutRebuilder.ForceRebuildLayoutImmediate(mBagVolumeCarouselRect);
+        }
+
+        mBagVolumeLeftTemplate?.ForceUpdateRectTransforms();
+        mBagVolumeCenterTemplate?.ForceUpdateRectTransforms();
+        mBagVolumeRightTemplate?.ForceUpdateRectTransforms();
+
+        if (mBagVolumeCards.Count > 0)
+        {
+            RefreshBagVolumeLayout();
+        }
+
+        Canvas.ForceUpdateCanvases();
+        if (!wasActive)
+        {
+            mBagVolumePanelRoot.SetActive(false);
+        }
     }
 
     private Button ConfigureBagVolumeButton(
@@ -4620,7 +4662,7 @@ public class MainScene : MonoBehaviour
 
         mBagVolumeSelectedIndex = mBagVolumeCards.Count - 1;
         mBagVolumePosition = mBagVolumeSelectedIndex;
-        RefreshBagVolumeLayout();
+        WarmUpBagVolumePanelLayout();
         RefreshBagVolumeSelectionState();
 
         var selectedCard = mBagVolumeCards[mBagVolumeSelectedIndex];
