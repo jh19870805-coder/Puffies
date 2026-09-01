@@ -7,8 +7,7 @@ using UnityEngine.UI;
 public sealed class CardPackRewardFlyTransition : MonoBehaviour
 {
     private const string TransitionObjectName = "CardPackRewardFlyTransition";
-    private const float SceneFadeOutDuration = 0.22f;
-    private const float SceneFadeInDuration = 0.3f;
+    private const float SceneCrossFadeDuration = 0.3f;
     private const float TargetMoveDuration = 0.72f;
     private const float TargetMoveStagger = 0.12f;
     private const float RewardRevealEffectPlaceholderDuration = 0.2f;
@@ -22,6 +21,7 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
         public int PackId;
         public RectTransform RectTransform;
         public Image Image;
+        public Image SourceImage;
         public bool HasLanded;
         public bool HasRevealed;
         public float LandedAt;
@@ -31,7 +31,8 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
     private readonly List<FlyIcon> mIcons = new List<FlyIcon>();
     private Canvas mCanvas;
     private RectTransform mCanvasRect;
-    private Image mSceneFadeImage;
+    private RawImage mSceneSnapshotImage;
+    private RenderTexture mSceneSnapshotTexture;
     private MainScene mPreparedMainScene;
 
     public static bool IsActive => sInstance != null;
@@ -101,7 +102,7 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
         scaler.matchWidthOrHeight = 0.5f;
 
         CreateInputBlocker();
-        CreateSceneFade();
+        CreateSceneSnapshotLayer();
         Canvas.ForceUpdateCanvases();
         for (var i = 0; i < mPackIds.Count; i++)
         {
@@ -139,7 +140,8 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
             {
                 PackId = packId,
                 RectTransform = iconRect,
-                Image = iconImage
+                Image = iconImage,
+                SourceImage = sourceImage
             });
         }
 
@@ -166,28 +168,29 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
         blockerImage.raycastTarget = true;
     }
 
-    private void CreateSceneFade()
+    private void CreateSceneSnapshotLayer()
     {
-        var fadeObject = new GameObject(
-            "SceneFade",
+        var snapshotObject = new GameObject(
+            "SceneSnapshot",
             typeof(RectTransform),
             typeof(CanvasRenderer),
-            typeof(Image));
-        var fadeRect = fadeObject.GetComponent<RectTransform>();
-        fadeRect.SetParent(mCanvasRect, false);
-        fadeRect.anchorMin = Vector2.zero;
-        fadeRect.anchorMax = Vector2.one;
-        fadeRect.offsetMin = Vector2.zero;
-        fadeRect.offsetMax = Vector2.zero;
+            typeof(RawImage));
+        var snapshotRect = snapshotObject.GetComponent<RectTransform>();
+        snapshotRect.SetParent(mCanvasRect, false);
+        snapshotRect.anchorMin = Vector2.zero;
+        snapshotRect.anchorMax = Vector2.one;
+        snapshotRect.offsetMin = Vector2.zero;
+        snapshotRect.offsetMax = Vector2.zero;
 
-        mSceneFadeImage = fadeObject.GetComponent<Image>();
-        mSceneFadeImage.color = new Color(0f, 0f, 0f, 0f);
-        mSceneFadeImage.raycastTarget = false;
+        mSceneSnapshotImage = snapshotObject.GetComponent<RawImage>();
+        mSceneSnapshotImage.color = Color.white;
+        mSceneSnapshotImage.raycastTarget = false;
+        mSceneSnapshotImage.enabled = false;
     }
 
     private IEnumerator PlayTransition()
     {
-        yield return AnimateSceneFade(0f, 1f, SceneFadeOutDuration);
+        yield return CaptureSceneSnapshot();
         GameManager.EnterMainScene();
         yield return null;
 
@@ -234,7 +237,7 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
             }
         }
 
-        yield return AnimateSceneFade(1f, 0f, SceneFadeInDuration);
+        yield return AnimateSceneSnapshotFade();
         if (mIcons.Count > 0)
         {
             yield return AnimateRewardIconsIntoTargets(targetPositions, targetSizes);
@@ -245,24 +248,118 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
         Destroy(gameObject);
     }
 
-    private IEnumerator AnimateSceneFade(float from, float to, float duration)
+    private IEnumerator CaptureSceneSnapshot()
     {
-        if (mSceneFadeImage == null)
+        if (mSceneSnapshotImage == null)
+        {
+            yield break;
+        }
+
+        var sourceImageStates = new Dictionary<Image, bool>();
+        for (var i = 0; i < mIcons.Count; i++)
+        {
+            var icon = mIcons[i];
+            if (icon.SourceImage != null && !sourceImageStates.ContainsKey(icon.SourceImage))
+            {
+                sourceImageStates.Add(icon.SourceImage, icon.SourceImage.enabled);
+                icon.SourceImage.enabled = false;
+            }
+
+            if (icon.Image != null)
+            {
+                icon.Image.enabled = false;
+            }
+        }
+
+        yield return new WaitForEndOfFrame();
+
+        try
+        {
+            var width = Mathf.Max(1, Screen.width);
+            var height = Mathf.Max(1, Screen.height);
+            mSceneSnapshotTexture = new RenderTexture(
+                width,
+                height,
+                0,
+                RenderTextureFormat.ARGB32,
+                RenderTextureReadWrite.Default)
+            {
+                name = "SettlementSceneTransitionSnapshot",
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp
+            };
+            mSceneSnapshotTexture.Create();
+            ScreenCapture.CaptureScreenshotIntoRenderTexture(mSceneSnapshotTexture);
+            mSceneSnapshotImage.texture = mSceneSnapshotTexture;
+            mSceneSnapshotImage.color = Color.white;
+            mSceneSnapshotImage.enabled = true;
+        }
+        catch (Exception exception)
+        {
+            Debug.LogWarning(
+                $"CardPackRewardFlyTransition: settlement snapshot capture failed. error={exception.Message}");
+            ReleaseSceneSnapshot();
+        }
+        finally
+        {
+            foreach (var pair in sourceImageStates)
+            {
+                if (pair.Key != null)
+                {
+                    pair.Key.enabled = pair.Value;
+                }
+            }
+
+            for (var i = 0; i < mIcons.Count; i++)
+            {
+                if (mIcons[i].Image != null)
+                {
+                    mIcons[i].Image.enabled = true;
+                }
+            }
+        }
+    }
+
+    private IEnumerator AnimateSceneSnapshotFade()
+    {
+        if (mSceneSnapshotImage == null || !mSceneSnapshotImage.enabled)
         {
             yield break;
         }
 
         var elapsed = 0f;
-        while (elapsed < duration)
+        while (elapsed < SceneCrossFadeDuration)
         {
             elapsed += Time.unscaledDeltaTime;
-            var normalized = Mathf.Clamp01(elapsed / duration);
+            var normalized = Mathf.Clamp01(elapsed / SceneCrossFadeDuration);
             var eased = Mathf.SmoothStep(0f, 1f, normalized);
-            mSceneFadeImage.color = new Color(0f, 0f, 0f, Mathf.Lerp(from, to, eased));
+            mSceneSnapshotImage.color = new Color(1f, 1f, 1f, 1f - eased);
             yield return null;
         }
 
-        mSceneFadeImage.color = new Color(0f, 0f, 0f, to);
+        ReleaseSceneSnapshot();
+    }
+
+    private void ReleaseSceneSnapshot()
+    {
+        if (mSceneSnapshotImage != null)
+        {
+            mSceneSnapshotImage.enabled = false;
+            mSceneSnapshotImage.texture = null;
+        }
+
+        if (mSceneSnapshotTexture == null)
+        {
+            return;
+        }
+
+        if (mSceneSnapshotTexture.IsCreated())
+        {
+            mSceneSnapshotTexture.Release();
+        }
+
+        Destroy(mSceneSnapshotTexture);
+        mSceneSnapshotTexture = null;
     }
 
     private IEnumerator AnimateRewardIconsIntoTargets(
@@ -416,6 +513,7 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
 
     private void OnDestroy()
     {
+        ReleaseSceneSnapshot();
         if (mPreparedMainScene != null)
         {
             mPreparedMainScene.CancelPackageRewardEntrance();

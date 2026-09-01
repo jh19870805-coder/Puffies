@@ -3,13 +3,14 @@
 ## 2026-09-01 结算完成后奖励卡与首页列表入场
 
 - 状态：运行时代码和需求记录已修改，Runtime/Editor 编译通过，等待 Unity Play Mode 视觉验收。
-- 场景切换：点击 `BtnFinish` 后继续使用 GameScene/MainScene 淡入淡出；MainScene 卡包列表完成创建、排序和布局后，先缓存最终槽位，再把全部列表卡包移到屏幕下方外侧，首页淡入时不会先闪现在终点。
+- 完成按钮退场：点击 `BtnFinish` 后先让顶部 `TaskBg2` 与当前 `TaskItem` 反向收回屏幕上方，底部 `ImgBagBg`、`BtnFinish` 与 `BtnCamera` 同时反向收回屏幕下方；顶部沿用入场 `0.52s` 的反向节奏，先向下回摆约 `14px` 再加速上收，底部沿用 `0.42s` 的反向加速曲线。真实奖励图标在退场前临时提升到 `RewardPanel` 顶层并保持原屏幕位置，不随 `ImgBagBg` 下沉，继续作为后续跨场景飞行起点。
+- 场景切换：点击 `BtnFinish` 后截取结算页最后一帧并作为跨场景覆盖图保留；MainScene 卡包列表完成创建、排序和布局后，先缓存最终槽位并把全部列表卡包移到屏幕下方外侧，再用 `0.30s` 将结算覆盖图直接淡出到首页。中间不经过纯黑画面，截图失败时直接切换首页，也不显示黑色兜底层。
 - 奖励卡：只有已经分配真实 PackId 的结算奖励参与飞行。飞行图标分别复制本局首次完成奖励槽和任务奖励槽中默认 `ImgBag` 的 Sprite、颜色、尺寸及实际起点，不提前切换为真实卡包纹理；单张飞行 `0.72s`，多张按 `0.12s` 错峰，一边移动一边缩放到对应列表卡包尺寸。
 - 落位揭晓：奖励卡落位后为后续闪光特效预留 `0.20s`，当前不创建替代特效；预留结束后隐藏飞行图标，并显示该槽真实卡包的完整状态、标签、系列叠加和进行中碎片。
 - 列表入场：全部奖励卡揭晓后，其余卡包才按当前列表顺序从屏幕下方依次上滑；单卡时长 `0.44s`、错峰 `0.055s`。无真实奖励时仍执行场景淡入淡出和整列上滑。动画期间暂停分页布局、拖动和卡包输入，结束或异常取消时恢复位置、布局和交互。
 - 系列卡包：奖励 PackId 若属于系列后层，目标解析到该系列实际占用的列表槽，不额外创建空槽。
 - 修改文件：`Assets/Scripts/Controller/GameScene.cs`、`Assets/Scripts/Controller/MainScene.cs`、`Assets/Scripts/Model/CardPackRewardFlyTransition.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`Documents/GAME_DESIGN_REQUIREMENTS.md`。
-- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 均为 `0` 警告、`0` 错误；`git diff --check` 仅有仓库既有 CRLF 转换提示。Unity 中仍需验证无奖励、单奖励、双奖励、普通卡包奖励、系列卡包奖励，以及动画结束后分页、拖动和点击恢复。
+- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 均为 `0` 警告、`0` 错误；`git diff --check` 仅有仓库既有 CRLF 转换提示。Unity 中仍需验证结算覆盖图方向和清晰度、中间无纯黑帧，以及无奖励、单奖励、双奖励、普通卡包奖励、系列卡包奖励和动画结束后分页、拖动、点击恢复。
 
 ## 2026-09-01 结算动画节奏优化
 

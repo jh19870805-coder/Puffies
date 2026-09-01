@@ -8378,11 +8378,182 @@ public class GameScene : MonoBehaviour
             _finishButton.interactable = false;
         }
 
+        StartCoroutine(PlaySettlementFinishTransition());
+    }
+
+    private IEnumerator PlaySettlementFinishTransition()
+    {
+        DetachSettlementRewardImagesForExit();
+        yield return AnimateSettlementUiExit();
+
         if (!CardPackRewardFlyTransition.TryStart(
                 BuildSettlementRewardTransitionSources(),
                 _settlementPackRewardIds))
         {
             GameManager.EnterMainScene();
+        }
+    }
+
+    private void DetachSettlementRewardImagesForExit()
+    {
+        if (_rewardPanelRoot == null)
+        {
+            return;
+        }
+
+        var detachedImages = new HashSet<Image>();
+        DetachRewardImage(_completionRewardDisplayImage);
+        DetachRewardImage(_taskRewardDisplayImage);
+
+        void DetachRewardImage(Image image)
+        {
+            if (image == null
+                || !image.gameObject.activeInHierarchy
+                || !detachedImages.Add(image))
+            {
+                return;
+            }
+
+            image.rectTransform.SetParent(_rewardPanelRoot.transform, true);
+            image.transform.SetAsLastSibling();
+        }
+    }
+
+    private IEnumerator AnimateSettlementUiExit()
+    {
+        var summaryStart = GetAnchoredPosition(_settlementSummaryRect);
+        var taskStart = GetAnchoredPosition(_rewardTaskItemRect);
+        var rewardBagStart = GetAnchoredPosition(_settlementRewardBagRect);
+        var finishStart = GetAnchoredPosition(_settlementFinishButtonRect);
+        var cameraStart = GetAnchoredPosition(_settlementCameraButtonRect);
+        var summaryEnd = CalculateSettlementOffscreenPosition(
+            _settlementSummaryRect,
+            summaryStart,
+            above: true);
+        var taskEnd = CalculateSettlementOffscreenPosition(
+            _rewardTaskItemRect,
+            taskStart,
+            above: true);
+        var rewardBagEnd = CalculateSettlementOffscreenPosition(
+            _settlementRewardBagRect,
+            rewardBagStart,
+            above: false);
+        var finishEnd = CalculateSettlementOffscreenPosition(
+            _settlementFinishButtonRect,
+            finishStart,
+            above: false);
+        var cameraEnd = CalculateSettlementOffscreenPosition(
+            _settlementCameraButtonRect,
+            cameraStart,
+            above: false);
+        var animateSummary = IsSettlementUiVisible(_settlementSummaryRect);
+        var animateTask = IsSettlementUiVisible(_rewardTaskItemRect);
+        var animateRewardBag = IsSettlementUiVisible(_settlementRewardBagRect);
+        var animateFinish = IsSettlementUiVisible(_settlementFinishButtonRect);
+        var animateCamera = IsSettlementUiVisible(_settlementCameraButtonRect);
+        var duration = Mathf.Max(
+            animateSummary || animateTask ? SettlementHeaderDropDuration : 0f,
+            animateRewardBag || animateFinish || animateCamera
+                ? SettlementRewardPanelSlideDuration
+                : 0f);
+        var elapsed = 0f;
+        while (elapsed < duration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            var headerNormalized = Mathf.Clamp01(elapsed / SettlementHeaderDropDuration);
+            var bottomNormalized = Mathf.Clamp01(elapsed / SettlementRewardPanelSlideDuration);
+            if (animateSummary)
+            {
+                _settlementSummaryRect.anchoredPosition = CalculateSettlementHeaderExitPosition(
+                    summaryStart,
+                    summaryEnd,
+                    headerNormalized);
+            }
+
+            if (animateTask)
+            {
+                _rewardTaskItemRect.anchoredPosition = CalculateSettlementHeaderExitPosition(
+                    taskStart,
+                    taskEnd,
+                    headerNormalized);
+            }
+
+            var bottomProgress = bottomNormalized * bottomNormalized * bottomNormalized;
+            if (animateRewardBag)
+            {
+                _settlementRewardBagRect.anchoredPosition = Vector2.LerpUnclamped(
+                    rewardBagStart,
+                    rewardBagEnd,
+                    bottomProgress);
+            }
+
+            if (animateFinish)
+            {
+                _settlementFinishButtonRect.anchoredPosition = Vector2.LerpUnclamped(
+                    finishStart,
+                    finishEnd,
+                    bottomProgress);
+            }
+
+            if (animateCamera)
+            {
+                _settlementCameraButtonRect.anchoredPosition = Vector2.LerpUnclamped(
+                    cameraStart,
+                    cameraEnd,
+                    bottomProgress);
+            }
+
+            yield return null;
+        }
+
+        SetAnchoredPosition(_settlementSummaryRect, summaryEnd, animateSummary);
+        SetAnchoredPosition(_rewardTaskItemRect, taskEnd, animateTask);
+        SetAnchoredPosition(_settlementRewardBagRect, rewardBagEnd, animateRewardBag);
+        SetAnchoredPosition(_settlementFinishButtonRect, finishEnd, animateFinish);
+        SetAnchoredPosition(_settlementCameraButtonRect, cameraEnd, animateCamera);
+    }
+
+    private static Vector2 CalculateSettlementHeaderExitPosition(
+        Vector2 start,
+        Vector2 end,
+        float normalized)
+    {
+        var anticipationRatio = 1f - SettlementHeaderDropTravelRatio;
+        var anticipation = start + Vector2.down * SettlementHeaderDropOvershoot;
+        if (normalized < anticipationRatio)
+        {
+            var progress = Mathf.Clamp01(normalized / anticipationRatio);
+            return Vector2.LerpUnclamped(
+                start,
+                anticipation,
+                Mathf.SmoothStep(0f, 1f, progress));
+        }
+
+        var exitProgress = Mathf.InverseLerp(anticipationRatio, 1f, normalized);
+        return Vector2.LerpUnclamped(
+            anticipation,
+            end,
+            exitProgress * exitProgress * exitProgress);
+    }
+
+    private static bool IsSettlementUiVisible(RectTransform rect)
+    {
+        return rect != null && rect.gameObject.activeInHierarchy;
+    }
+
+    private static Vector2 GetAnchoredPosition(RectTransform rect)
+    {
+        return rect != null ? rect.anchoredPosition : Vector2.zero;
+    }
+
+    private static void SetAnchoredPosition(
+        RectTransform rect,
+        Vector2 position,
+        bool shouldSet)
+    {
+        if (rect != null && shouldSet)
+        {
+            rect.anchoredPosition = position;
         }
     }
 
