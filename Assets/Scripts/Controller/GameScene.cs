@@ -173,7 +173,11 @@ public class GameScene : MonoBehaviour
     private const string TaskBagCountPath = "TaskBg2/TaskBagNum";
     private const string TaskSummaryObjectName = "TaskBg2";
     private const string TaskRewardBagRootObjectName = "ImgBagBg";
-    private const string TaskRewardImgBagPath = "ImgBagBg/ImgBag";
+    private const string TaskRewardItemCanvasPath = "ImgBagBg/BagRewardItem/Canvas";
+    private const string TaskRewardImgBagPath =
+        "ImgBagBg/BagRewardItem/Canvas/BagCover";
+    private const string TaskRewardRevealEffectPath =
+        "ImgBagBg/BagRewardItem/Canvas/FX_ui_jieSuo_w";
     private const string TaskRewardSourceIconObjectName = "BagIcon";
     private const string SettlementCameraButtonObjectName = "BtnCamera";
     private const string HintButtonObjectName = "BtnTips";
@@ -360,6 +364,7 @@ public class GameScene : MonoBehaviour
     private TMP_Text _settlementBagCountText;
     private Image _taskRewardImage;
     private Image _taskRewardSourceImage;
+    private GameObject _settlementRewardRevealEffect;
     private Image _completionRewardDisplayImage;
     private Image _taskRewardDisplayImage;
     private readonly List<Image> _runtimeSettlementRewardImages = new List<Image>();
@@ -7360,6 +7365,7 @@ public class GameScene : MonoBehaviour
         _settlementBagCountText = null;
         _taskRewardImage = null;
         _taskRewardSourceImage = null;
+        _settlementRewardRevealEffect = null;
         if (_rewardPanelRoot == null)
         {
             return;
@@ -7382,7 +7388,16 @@ public class GameScene : MonoBehaviour
         _settlementBonusScoreText = _rewardPanelRoot.transform.Find(TaskBonusScorePath)?.GetComponent<TMP_Text>();
         _settlementScoreText = _rewardPanelRoot.transform.Find(TaskScorePath)?.GetComponent<TMP_Text>();
         _settlementBagCountText = _rewardPanelRoot.transform.Find(TaskBagCountPath)?.GetComponent<TMP_Text>();
+        var rewardItemCanvas = _rewardPanelRoot.transform.Find(TaskRewardItemCanvasPath);
+        if (rewardItemCanvas != null)
+        {
+            rewardItemCanvas.localScale = Vector3.one;
+        }
+
         _taskRewardImage = _rewardPanelRoot.transform.Find(TaskRewardImgBagPath)?.GetComponent<Image>();
+        _settlementRewardRevealEffect = _rewardPanelRoot.transform.Find(
+            TaskRewardRevealEffectPath)?.gameObject;
+        StopAndHideSettlementRewardRevealEffect();
         _taskRewardSourceImage = _rewardTaskItem != null
             ? _rewardTaskItem.GetComponentsInChildren<Image>(true).FirstOrDefault(
                 image => image.name == TaskRewardSourceIconObjectName)
@@ -7462,6 +7477,19 @@ public class GameScene : MonoBehaviour
         {
             GameFontUtility.ApplyDefaultFont(_settlementBagCountText);
         }
+
+        if (_taskRewardImage == null)
+        {
+            Debug.LogWarning(
+                $"GameScene: settlement reward cover not found. Expected {TaskRewardImgBagPath}.");
+        }
+
+        if (_settlementRewardRevealEffect == null)
+        {
+            Debug.LogWarning(
+                $"GameScene: settlement reward reveal effect not found. "
+                + $"Expected {TaskRewardRevealEffectPath}.");
+        }
     }
 
     private void PrepareSettlementVisualState()
@@ -7469,6 +7497,7 @@ public class GameScene : MonoBehaviour
         ClearRuntimeSettlementRewardImages();
         _completionRewardDisplayImage = null;
         _taskRewardDisplayImage = null;
+        StopAndHideSettlementRewardRevealEffect();
         SetSettlementScore(0);
         SetSettlementBagCount(_settlementBagCountBeforeCompletion);
         HideSettlementTitles();
@@ -8388,7 +8417,8 @@ public class GameScene : MonoBehaviour
 
         if (!CardPackRewardFlyTransition.TryStart(
                 BuildSettlementRewardTransitionSources(),
-                _settlementPackRewardIds))
+                _settlementPackRewardIds,
+                _settlementRewardRevealEffect))
         {
             GameManager.EnterMainScene();
         }
@@ -8584,6 +8614,25 @@ public class GameScene : MonoBehaviour
         }
 
         return sources;
+    }
+
+    private void StopAndHideSettlementRewardRevealEffect()
+    {
+        if (_settlementRewardRevealEffect == null)
+        {
+            return;
+        }
+
+        var particleSystems = _settlementRewardRevealEffect.GetComponentsInChildren<
+            ParticleSystem>(true);
+        for (var i = 0; i < particleSystems.Length; i++)
+        {
+            particleSystems[i].Stop(
+                true,
+                ParticleSystemStopBehavior.StopEmittingAndClear);
+        }
+
+        _settlementRewardRevealEffect.SetActive(false);
     }
 
     private void InitializeScoringSession()

@@ -1030,6 +1030,23 @@ public class MainScene : MonoBehaviour
         SetPackageVisualsVisible(entry, true);
     }
 
+    public bool TryAttachPackageRewardRevealEffect(int bagId, GameObject effectObject)
+    {
+        var entry = FindPackageEntryForPackId(bagId);
+        if (entry?.Image == null || effectObject == null)
+        {
+            return false;
+        }
+
+        var effectTransform = effectObject.transform;
+        var localZ = effectTransform.localPosition.z;
+        effectTransform.SetParent(entry.Image.rectTransform, false);
+        effectTransform.localPosition = new Vector3(0f, 0f, localZ);
+        effectTransform.localRotation = Quaternion.identity;
+        effectTransform.SetAsLastSibling();
+        return true;
+    }
+
     public IEnumerator AnimateRemainingPackageRewardEntrance()
     {
         var animatedStates = new List<PackageRewardEntranceState>();

@@ -1,5 +1,15 @@
 # 当前任务
 
+## 2026-09-01 结算奖励卡落位特效接入
+
+- 状态：运行时代码与规格记录已修改，Runtime/Editor 编译和 Unity 实时导入均无错误，等待 Play Mode 视觉验收。
+- 新节点：结算奖励占位图改为 `ImgBagBg/BagRewardItem/Canvas/BagCover`；`BagRewardItem` 内 `FX_ui_jieSuo_w` 在结算页保持停止和隐藏，不会提前播放。
+- 跨场景播放：点击完成后，`CardPackRewardFlyTransition` 从场景中的 `FX_ui_jieSuo_w` 复制运行时副本；奖励占位卡飞到 MainScene 对应真实卡包槽位时，副本挂到该卡包封面节点，以结算占位卡和首页目标卡的实际显示尺寸比做统一等比缩放，并播放制作方全部子粒子。
+- 揭晓时机：沿用既有落位后 `0.20s` 揭晓点；闪光开始后隐藏飞行占位卡并显示对应真实卡包完整视觉。根粒子为循环粒子，因此不等待自然停止，也不阻塞其余首页卡包入场；跨场景流程结束时清理特效副本。
+- 容错：`BagCover`、特效模板或首页目标槽缺失时输出警告；没有特效时仍按原流程揭晓真实卡包并返回首页。
+- 修改文件：`Assets/Scripts/Controller/GameScene.cs`、`Assets/Scripts/Controller/MainScene.cs`、`Assets/Scripts/Model/CardPackRewardFlyTransition.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`Documents/GAME_DESIGN_REQUIREMENTS.md`、`specs/spec-driven-development.md`。美术新增的 `Assets/Prefabs/BagRewardItem.prefab`、`.meta` 与 `Assets/Scenes/GameScene.unity` 保持用户当前修改，代码未改写其粒子参数。
+- 验证：`Assembly-CSharp.csproj`、`Assembly-CSharp-Editor.csproj` 均为 `0` 警告、`0` 错误；`git diff --check` 仅有既有 LF/CRLF 提示；Unity Editor 日志确认 `BagRewardItem.prefab` 已导入且没有脚本编译错误。仍需在 Play Mode 验收单奖励、双奖励、无奖励，以及特效中心、等比尺寸和渲染层级。
+
 ## 2026-09-01 重玩积分与卡包奖励限制
 
 - 状态：运行时代码与稳定需求已修改，Runtime/Editor 编译通过，等待 Unity Play Mode 数据验收。
@@ -16,7 +26,7 @@
 - 完成按钮退场：点击 `BtnFinish` 后先让顶部 `TaskBg2` 与当前 `TaskItem` 反向收回屏幕上方，底部 `ImgBagBg`、`BtnFinish` 与 `BtnCamera` 同时反向收回屏幕下方；顶部沿用入场 `0.52s` 的反向节奏，先向下回摆约 `14px` 再加速上收，底部沿用 `0.42s` 的反向加速曲线。真实奖励图标在退场前临时提升到 `RewardPanel` 顶层并保持原屏幕位置，不随 `ImgBagBg` 下沉。退场截图保留该奖励卡；首页交叉淡入期间，跨场景飞行副本在原位置从透明同步接管，结束后直接开始飞向列表，全程不得隐藏一帧或重新跳现。
 - 场景切换：点击 `BtnFinish` 后截取结算页最后一帧并作为跨场景覆盖图保留；MainScene 卡包列表完成创建、排序和布局后，先缓存最终槽位并把全部列表卡包移到屏幕下方外侧，再用 `0.30s` 将结算覆盖图直接淡出到首页。中间不经过纯黑画面，截图失败时直接切换首页，也不显示黑色兜底层。
 - 奖励卡：只有已经分配真实 PackId 的结算奖励参与飞行。飞行图标分别复制本局首次完成奖励槽和任务奖励槽中默认 `ImgBag` 的 Sprite、颜色、尺寸及实际起点，不提前切换为真实卡包纹理；单张飞行 `0.72s`，多张按 `0.12s` 错峰，一边移动一边缩放到对应列表卡包尺寸。
-- 落位揭晓：奖励卡落位后为后续闪光特效预留 `0.20s`，当前不创建替代特效；预留结束后隐藏飞行图标，并显示该槽真实卡包的完整状态、标签、系列叠加和进行中碎片。
+- 落位揭晓：奖励卡落位后播放 `BagRewardItem/Canvas/FX_ui_jieSuo_w`，并在 `0.20s` 揭晓点隐藏飞行图标、显示该槽真实卡包的完整状态、标签、系列叠加和进行中碎片。
 - 列表入场：全部奖励卡揭晓后，其余卡包才按当前列表顺序从屏幕下方依次上滑；单卡时长 `0.44s`、错峰 `0.055s`。无真实奖励时仍执行场景淡入淡出和整列上滑。动画期间暂停分页布局、拖动和卡包输入，结束或异常取消时恢复位置、布局和交互。
 - 系列卡包：奖励 PackId 若属于系列后层，目标解析到该系列实际占用的列表槽，不额外创建空槽。
 - 修改文件：`Assets/Scripts/Controller/GameScene.cs`、`Assets/Scripts/Controller/MainScene.cs`、`Assets/Scripts/Model/CardPackRewardFlyTransition.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`Documents/GAME_DESIGN_REQUIREMENTS.md`。

@@ -1242,3 +1242,20 @@
 - [x] 5. 本项旧的“完整结束后正常销毁”规则已被 2026-08-28 最新要求替代：Director 现在保持末帧并保留整套对象，`stopped` 仅作异常兜底。
 - [x] 6. Runtime/Editor 编译均为 `0` 警告、`0` 错误，`git diff --check` 通过。
 - [ ] 7. 在 Unity Play Mode 验证从 `2.633s` 开始时静态卡包与模型保持 `600x680` 对齐、没有可见 blur 蒙版，`Take 001` 和滑光跨场景连续播放，并确认结束日志保持在 `time=7.000s`、对象不释放且卡包不因回到 `0s` 突然隐藏；同时回归彩色撕开和灰色撕开流程。
+
+## 2026-09-01 - 结算奖励卡落位特效
+
+### 需求
+
+1. WHEN 结算页显示获得的奖励卡包 THEN 系统 SHALL 使用 `ImgBagBg/BagRewardItem/Canvas/BagCover` 作为占位卡图，并保持 `FX_ui_jieSuo_w` 停止且不可见。
+2. WHEN 奖励卡跨场景飞到 MainScene 对应卡包槽位 THEN 系统 SHALL 使用 `BagRewardItem` 内制作方配置好的 `FX_ui_jieSuo_w` 运行时副本，在目标卡包中心播放落位特效，不得重新创建或覆盖粒子参数、材质和子层级。
+3. WHEN 落位特效开始播放 THEN 系统 SHALL 按结算占位卡与首页目标卡包的实际显示尺寸等比缩放特效，不得分别拉伸 X/Y。
+4. WHEN 落位特效播放到既有 `0.20s` 揭晓点 THEN 系统 SHALL 隐藏飞行占位卡，并显示对应真实卡包的完整视觉；循环粒子不得阻塞揭晓或首页其余卡包入场。
+5. IF 新奖励节点或特效模板缺失 THEN 系统 SHALL 输出明确警告，并沿用无特效的真实卡包揭晓流程，不得阻断返回首页。
+
+### 设计与任务
+
+- [x] 1. 确认新节点来自 `Assets/Prefabs/BagRewardItem.prefab`，占位图为 `Canvas/BagCover`，落位特效为 `Canvas/FX_ui_jieSuo_w`。
+- [x] 2. 修改 GameScene 的节点缓存、初始粒子状态和跨场景调用参数。
+- [x] 3. 修改 `CardPackRewardFlyTransition`，在奖励落位时将特效副本挂到 MainScene 目标卡包、播放粒子并在 `0.20s` 后揭晓真实卡包。
+- [ ] 4. 完成 Runtime/Editor 编译与差异检查，并在 Unity Play Mode 验证单奖励、双奖励和无奖励流程。

@@ -10,7 +10,7 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
     private const float SceneCrossFadeDuration = 0.3f;
     private const float TargetMoveDuration = 0.72f;
     private const float TargetMoveStagger = 0.12f;
-    private const float RewardRevealEffectPlaceholderDuration = 0.2f;
+    private const float RewardRevealSwitchDelay = 0.2f;
     private const float TargetLookupTimeout = 5f;
     private const float TargetArcHeight = 72f;
     private const int TransitionSortingOrder = 32000;
@@ -22,6 +22,8 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
         public RectTransform RectTransform;
         public Image Image;
         public Color BaseColor;
+        public GameObject RevealEffect;
+        public Vector3 RevealEffectBaseScale;
         public bool HasLanded;
         public bool HasRevealed;
         public float LandedAt;
@@ -44,7 +46,8 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
 
     public static bool TryStart(
         IReadOnlyList<RectTransform> sources,
-        IReadOnlyList<int> packIds)
+        IReadOnlyList<int> packIds,
+        GameObject revealEffectTemplate)
     {
         if (sInstance != null || packIds == null)
         {
@@ -74,7 +77,7 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
 
         var transition = transitionObject.GetComponent<CardPackRewardFlyTransition>();
         sInstance = transition;
-        if (transition.Initialize(uniqueSources, uniquePackIds))
+        if (transition.Initialize(uniqueSources, uniquePackIds, revealEffectTemplate))
         {
             return true;
         }
@@ -86,7 +89,8 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
 
     private bool Initialize(
         IReadOnlyList<RectTransform> sources,
-        IReadOnlyList<int> packIds)
+        IReadOnlyList<int> packIds,
+        GameObject revealEffectTemplate)
     {
         mPackIds.AddRange(packIds);
         mCanvas = GetComponent<Canvas>();
@@ -137,17 +141,36 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
             iconImage.preserveAspect = sourceImage.preserveAspect;
             iconImage.raycastTarget = false;
             iconImage.enabled = false;
+            var revealEffect = CreateRevealEffect(revealEffectTemplate, packId);
             mIcons.Add(new FlyIcon
             {
                 PackId = packId,
                 RectTransform = iconRect,
                 Image = iconImage,
-                BaseColor = sourceImage.color
+                BaseColor = sourceImage.color,
+                RevealEffect = revealEffect,
+                RevealEffectBaseScale = revealEffect != null
+                    ? revealEffect.transform.localScale
+                    : Vector3.one
             });
         }
 
         StartCoroutine(PlayTransition());
         return true;
+    }
+
+    private GameObject CreateRevealEffect(GameObject template, int packId)
+    {
+        if (template == null)
+        {
+            return null;
+        }
+
+        var effect = Instantiate(template, transform, false);
+        effect.name = $"RewardRevealEffect_{packId:D3}";
+        StopAndClearParticleSystems(effect);
+        effect.SetActive(false);
+        return effect;
     }
 
     private void CreateInputBlocker()
@@ -380,7 +403,7 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
 
         var totalDuration = TargetMoveDuration
                             + TargetMoveStagger * Mathf.Max(0, mIcons.Count - 1)
-                            + RewardRevealEffectPlaceholderDuration;
+                            + RewardRevealSwitchDelay;
         var elapsed = 0f;
         while (elapsed < totalDuration)
         {
@@ -404,12 +427,15 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
                 {
                     icon.HasLanded = true;
                     icon.LandedAt = elapsed;
+                    PlayRewardRevealEffect(
+                        icon,
+                        startSizes[i],
+                        targetSizes[i]);
                 }
 
-                // The imported landing flash will play during this reserved interval.
                 if (icon.HasLanded
                     && !icon.HasRevealed
-                    && elapsed - icon.LandedAt >= RewardRevealEffectPlaceholderDuration)
+                    && elapsed - icon.LandedAt >= RewardRevealSwitchDelay)
                 {
                     icon.HasRevealed = true;
                     mPreparedMainScene.RevealPackageRewardTarget(icon.PackId);
@@ -430,6 +456,65 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
                 mPreparedMainScene.RevealPackageRewardTarget(icon.PackId);
                 icon.Image.enabled = false;
             }
+        }
+    }
+
+    private void PlayRewardRevealEffect(
+        FlyIcon icon,
+        Vector2 sourceSize,
+        Vector2 targetSize)
+    {
+        if (icon?.RevealEffect == null || mPreparedMainScene == null)
+        {
+            return;
+        }
+
+        var widthScale = sourceSize.x > 0.01f
+            ? targetSize.x / sourceSize.x
+            : 1f;
+        var heightScale = sourceSize.y > 0.01f
+            ? targetSize.y / sourceSize.y
+            : 1f;
+        var uniformScale = Mathf.Min(widthScale, heightScale);
+        if (!float.IsFinite(uniformScale) || uniformScale <= 0.0001f)
+        {
+            uniformScale = 1f;
+        }
+
+        if (!mPreparedMainScene.TryAttachPackageRewardRevealEffect(
+                icon.PackId,
+                icon.RevealEffect))
+        {
+            Debug.LogWarning(
+                $"CardPackRewardFlyTransition: could not attach reward reveal effect. "
+                + $"packId={icon.PackId}");
+            return;
+        }
+
+        icon.RevealEffect.transform.localScale =
+            icon.RevealEffectBaseScale * uniformScale;
+        StopAndClearParticleSystems(icon.RevealEffect);
+        icon.RevealEffect.SetActive(true);
+        var particleSystems = icon.RevealEffect.GetComponentsInChildren<ParticleSystem>(true);
+        for (var i = 0; i < particleSystems.Length; i++)
+        {
+            particleSystems[i].Play(false);
+        }
+    }
+
+    private static void StopAndClearParticleSystems(GameObject root)
+    {
+        if (root == null)
+        {
+            return;
+        }
+
+        var particleSystems = root.GetComponentsInChildren<ParticleSystem>(true);
+        for (var i = 0; i < particleSystems.Length; i++)
+        {
+            particleSystems[i].Stop(
+                false,
+                ParticleSystemStopBehavior.StopEmittingAndClear);
         }
     }
 
@@ -517,6 +602,16 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
 
     private void OnDestroy()
     {
+        for (var i = 0; i < mIcons.Count; i++)
+        {
+            var revealEffect = mIcons[i].RevealEffect;
+            if (revealEffect != null)
+            {
+                StopAndClearParticleSystems(revealEffect);
+                Destroy(revealEffect);
+            }
+        }
+
         ReleaseSceneSnapshot();
         if (mPreparedMainScene != null)
         {
