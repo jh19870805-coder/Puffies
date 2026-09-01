@@ -1249,9 +1249,10 @@
 
 1. WHEN 结算页显示获得的奖励卡包 THEN 系统 SHALL 使用 `ImgBagBg/BagRewardItem/Canvas/BagCover` 作为占位卡图，并保持 `FX_ui_jieSuo_w` 停止且不可见。
 2. WHEN 奖励卡跨场景飞到 MainScene 对应卡包槽位 THEN 系统 SHALL 使用 `BagRewardItem` 内制作方配置好的 `FX_ui_jieSuo_w` 运行时副本，在目标卡包中心播放落位特效，不得重新创建或覆盖粒子参数、材质和子层级。
-3. WHEN 落位特效开始播放 THEN 系统 SHALL 按结算占位卡与首页目标卡包的实际显示尺寸等比缩放特效，不得分别拉伸 X/Y。
-4. WHEN 落位特效播放到既有 `0.20s` 揭晓点 THEN 系统 SHALL 隐藏飞行占位卡，并显示对应真实卡包的完整视觉；循环粒子不得阻塞揭晓或首页其余卡包入场。
+3. WHEN 落位特效开始播放 THEN 系统 SHALL 按结算占位卡与首页目标卡包的实际显示尺寸等比缩放特效，不得分别拉伸 X/Y；特效 SHALL 保持挂在已经验证可以正常渲染的目标 `PackCover` 下，并用目标 RectTransform 相对根 Canvas 的实际继承缩放反算本地 Scale，抵消 `PackNode=0.4`，不得改挂根 Canvas 导致粒子不可见。
+4. WHEN 落位特效播放到既有 `0.20s` 揭晓点 THEN 系统 SHALL 先显示并刷新对应真实卡包完整视觉，飞行占位卡 SHALL 至少继续覆盖一个渲染帧后再隐藏，两个视觉之间不得出现空帧；循环粒子不得阻塞揭晓或首页其余卡包入场。
 5. IF 新奖励节点或特效模板缺失 THEN 系统 SHALL 输出明确警告，并沿用无特效的真实卡包揭晓流程，不得阻断返回首页。
+6. WHEN 点击完成按钮并把奖励卡从 `BagRewardItem/Canvas` 提升到 `RewardPanel` THEN 系统 SHALL 先读取奖励卡在 `RewardPanel` 坐标系中的实际中心和显示尺寸，再换父级并显式恢复中心、尺寸、单位缩放和零旋转；不得只依赖 `SetParent(worldPositionStays=true)`，也不得把奖励卡带到屏幕中间。
 
 ### 设计与任务
 
@@ -1259,3 +1260,5 @@
 - [x] 2. 修改 GameScene 的节点缓存、初始粒子状态和跨场景调用参数。
 - [x] 3. 修改 `CardPackRewardFlyTransition`，在奖励落位时将特效副本挂到 MainScene 目标卡包、播放粒子并在 `0.20s` 后揭晓真实卡包。
 - [ ] 4. 完成 Runtime/Editor 编译与差异检查，并在 Unity Play Mode 验证单奖励、双奖励和无奖励流程。
+- [x] 5. 修复真实卡包与飞行占位图同帧硬切造成的空帧，并移除特效继承 `PackNode=0.4` 产生的二次缩小。
+- [x] 6. 使用实际 Rect 几何固定结算奖励卡出场位置，并恢复可见的 `PackCover` 特效父级后精确补偿其继承缩放。

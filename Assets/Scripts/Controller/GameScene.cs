@@ -8426,7 +8426,10 @@ public class GameScene : MonoBehaviour
 
     private void DetachSettlementRewardImagesForExit()
     {
-        if (_rewardPanelRoot == null)
+        var rewardPanelRect = _rewardPanelRoot != null
+            ? _rewardPanelRoot.transform as RectTransform
+            : null;
+        if (rewardPanelRect == null)
         {
             return;
         }
@@ -8444,8 +8447,31 @@ public class GameScene : MonoBehaviour
                 return;
             }
 
-            image.rectTransform.SetParent(_rewardPanelRoot.transform, true);
+            var imageRect = image.rectTransform;
+            if (!TryGetRelativeRectGeometry(
+                    imageRect,
+                    rewardPanelRect,
+                    out var center,
+                    out var size))
+            {
+                Debug.LogWarning(
+                    $"GameScene: could not preserve settlement reward geometry. "
+                    + $"object={image.name}");
+                return;
+            }
+
+            imageRect.SetParent(rewardPanelRect, false);
+            imageRect.anchorMin = new Vector2(0.5f, 0.5f);
+            imageRect.anchorMax = new Vector2(0.5f, 0.5f);
+            imageRect.pivot = new Vector2(0.5f, 0.5f);
+            imageRect.anchoredPosition = center;
+            imageRect.sizeDelta = size;
+            imageRect.localScale = Vector3.one;
+            imageRect.localRotation = Quaternion.identity;
             image.transform.SetAsLastSibling();
+            Debug.Log(
+                $"GameScene: settlement reward detached without visual movement. "
+                + $"object={image.name}, center={center}, size={size}");
         }
     }
 

@@ -2,13 +2,13 @@
 
 ## 2026-09-01 结算奖励卡落位特效接入
 
-- 状态：运行时代码与规格记录已修改，Runtime/Editor 编译和 Unity 实时导入均无错误，等待 Play Mode 视觉验收。
+- 状态：运行时代码与规格记录已修改，并完成两轮 Play Mode 反馈修复；Runtime/Editor 编译和 Unity 实时导入均无错误，等待再次视觉验收。
 - 新节点：结算奖励占位图改为 `ImgBagBg/BagRewardItem/Canvas/BagCover`；`BagRewardItem` 内 `FX_ui_jieSuo_w` 在结算页保持停止和隐藏，不会提前播放。
-- 跨场景播放：点击完成后，`CardPackRewardFlyTransition` 从场景中的 `FX_ui_jieSuo_w` 复制运行时副本；奖励占位卡飞到 MainScene 对应真实卡包槽位时，副本挂到该卡包封面节点，以结算占位卡和首页目标卡的实际显示尺寸比做统一等比缩放，并播放制作方全部子粒子。
-- 揭晓时机：沿用既有落位后 `0.20s` 揭晓点；闪光开始后隐藏飞行占位卡并显示对应真实卡包完整视觉。根粒子为循环粒子，因此不等待自然停止，也不阻塞其余首页卡包入场；跨场景流程结束时清理特效副本。
+- 跨场景播放：点击完成后，`CardPackRewardFlyTransition` 从场景中的 `FX_ui_jieSuo_w` 复制运行时副本；奖励占位卡飞到 MainScene 对应真实卡包槽位时，副本继续挂到已经验证可以正常渲染的目标 `PackCover` 下。代码读取 `PackCover` 相对根 Canvas 的实际继承缩放，并以“占位卡/目标卡显示尺寸比 ÷ 继承缩放”计算特效本地 Scale，精确抵消 `PackNode=0.4`，不得再改挂根 Canvas导致粒子不可见。
+- 揭晓时机：沿用既有落位后 `0.20s` 揭晓点；先显示真实卡包并强制刷新 Canvas，飞行占位卡继续覆盖 `0.05s` 后再隐藏，保证至少一个渲染帧重叠，不得先消失再出现。根粒子为循环粒子，因此不等待自然停止，也不阻塞其余首页卡包入场；跨场景流程结束时清理特效副本。
 - 容错：`BagCover`、特效模板或首页目标槽缺失时输出警告；没有特效时仍按原流程揭晓真实卡包并返回首页。
 - 修改文件：`Assets/Scripts/Controller/GameScene.cs`、`Assets/Scripts/Controller/MainScene.cs`、`Assets/Scripts/Model/CardPackRewardFlyTransition.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`Documents/GAME_DESIGN_REQUIREMENTS.md`、`specs/spec-driven-development.md`。美术新增的 `Assets/Prefabs/BagRewardItem.prefab`、`.meta` 与 `Assets/Scenes/GameScene.unity` 保持用户当前修改，代码未改写其粒子参数。
-- 验证：`Assembly-CSharp.csproj`、`Assembly-CSharp-Editor.csproj` 均为 `0` 警告、`0` 错误；`git diff --check` 仅有既有 LF/CRLF 提示；Unity Editor 日志确认 `BagRewardItem.prefab` 已导入且没有脚本编译错误。仍需在 Play Mode 验收单奖励、双奖励、无奖励，以及特效中心、等比尺寸和渲染层级。
+- 验证：首轮 Play Mode 确认存在“落位切换空帧”和“特效尺寸过小”；第二轮确认奖励卡在出场换父节点时被带到中间，且特效改挂根 Canvas 后不可见。代码检查确认出场问题来自 `DetachSettlementRewardImagesForExit()` 仅调用 `SetParent(true)`，现已改为换父前读取奖励图在 `RewardPanel` 下的实际中心与尺寸，换父后显式恢复 Anchor、Pivot、中心、尺寸、单位缩放和零旋转；特效恢复到原本可见的 `PackCover` 层级并反算继承缩放。修复后 `Assembly-CSharp.csproj`、`Assembly-CSharp-Editor.csproj` 均为 `0` 警告、`0` 错误；`git diff --check` 仅有既有 LF/CRLF 提示；Unity Editor 日志没有脚本编译、奖励几何或特效挂载错误。仍需在 Play Mode 再次验收单奖励、双奖励、无奖励，以及出场位置、特效中心、尺寸和渲染层级。
 
 ## 2026-09-01 重玩积分与卡包奖励限制
 

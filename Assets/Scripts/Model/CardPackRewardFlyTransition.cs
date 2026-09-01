@@ -11,6 +11,7 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
     private const float TargetMoveDuration = 0.72f;
     private const float TargetMoveStagger = 0.12f;
     private const float RewardRevealSwitchDelay = 0.2f;
+    private const float RewardVisualOverlapDuration = 0.05f;
     private const float TargetLookupTimeout = 5f;
     private const float TargetArcHeight = 72f;
     private const int TransitionSortingOrder = 32000;
@@ -25,8 +26,10 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
         public GameObject RevealEffect;
         public Vector3 RevealEffectBaseScale;
         public bool HasLanded;
+        public bool HasTargetRevealed;
         public bool HasRevealed;
         public float LandedAt;
+        public float TargetRevealedAt;
     }
 
     private readonly List<int> mPackIds = new List<int>();
@@ -403,7 +406,8 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
 
         var totalDuration = TargetMoveDuration
                             + TargetMoveStagger * Mathf.Max(0, mIcons.Count - 1)
-                            + RewardRevealSwitchDelay;
+                            + RewardRevealSwitchDelay
+                            + RewardVisualOverlapDuration;
         var elapsed = 0f;
         while (elapsed < totalDuration)
         {
@@ -434,12 +438,21 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
                 }
 
                 if (icon.HasLanded
-                    && !icon.HasRevealed
+                    && !icon.HasTargetRevealed
                     && elapsed - icon.LandedAt >= RewardRevealSwitchDelay)
                 {
-                    icon.HasRevealed = true;
                     mPreparedMainScene.RevealPackageRewardTarget(icon.PackId);
+                    Canvas.ForceUpdateCanvases();
+                    icon.HasTargetRevealed = true;
+                    icon.TargetRevealedAt = elapsed;
+                }
+
+                if (icon.HasTargetRevealed
+                    && !icon.HasRevealed
+                    && elapsed - icon.TargetRevealedAt >= RewardVisualOverlapDuration)
+                {
                     icon.Image.enabled = false;
+                    icon.HasRevealed = true;
                 }
             }
 
@@ -451,10 +464,17 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
             var icon = mIcons[i];
             icon.RectTransform.anchoredPosition = targetPositions[i];
             icon.RectTransform.sizeDelta = targetSizes[i];
-            if (!icon.HasRevealed)
+            if (!icon.HasTargetRevealed)
             {
                 mPreparedMainScene.RevealPackageRewardTarget(icon.PackId);
+                Canvas.ForceUpdateCanvases();
+                icon.HasTargetRevealed = true;
+            }
+
+            if (!icon.HasRevealed)
+            {
                 icon.Image.enabled = false;
+                icon.HasRevealed = true;
             }
         }
     }
@@ -483,7 +503,8 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
 
         if (!mPreparedMainScene.TryAttachPackageRewardRevealEffect(
                 icon.PackId,
-                icon.RevealEffect))
+                icon.RevealEffect,
+                out var inheritedUiScale))
         {
             Debug.LogWarning(
                 $"CardPackRewardFlyTransition: could not attach reward reveal effect. "
@@ -492,7 +513,12 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
         }
 
         icon.RevealEffect.transform.localScale =
-            icon.RevealEffectBaseScale * uniformScale;
+            icon.RevealEffectBaseScale * (uniformScale / inheritedUiScale);
+        Debug.Log(
+            $"CardPackRewardFlyTransition: reward reveal effect attached. "
+            + $"packId={icon.PackId}, displayScale={uniformScale:F3}, "
+            + $"inheritedUiScale={inheritedUiScale:F3}, "
+            + $"localScale={icon.RevealEffect.transform.localScale}");
         StopAndClearParticleSystems(icon.RevealEffect);
         icon.RevealEffect.SetActive(true);
         var particleSystems = icon.RevealEffect.GetComponentsInChildren<ParticleSystem>(true);
