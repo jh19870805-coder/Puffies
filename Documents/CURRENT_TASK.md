@@ -1,5 +1,16 @@
 # 当前任务
 
+## 2026-09-01 结算动画节奏优化
+
+- 状态：代码与需求记录已修改，Runtime/Editor 编译通过，等待 Unity Play Mode 视觉验收。
+- 分数节奏：基础分滚动由 `1.0s` 调整为 `1.2s`；每条加成改为“文案提前 `0.16s` + 滚分 `1.08s`”，单条总时长约 `1.24s`；最终分稳定停留由 `0.24s` 调整为 `0.45s`。
+- 任务进度：非积分任务不再在全部加成后额外串行滚动 `0.8s`，而是在最后一次有效滚分进行到 `25%` 后开始同步推进并同时结束；没有加成时并入基础分滚动。积分任务继续沿用分数与任务进度同步规则。
+- 面板入场：`TaskBg2` 和当前 `TaskItem` 仍与棋盘适配并行从顶部进入，总时长仍为 `0.52s`；末段增加约 `14px` 的轻微下沉和回弹，未修改透明度、缩放或编辑器布局。
+- 奖励节奏：`ImgBagBg` 开始上滑 `0.26s` 后即可启动首张奖励卡，双奖励再错峰 `0.14s` 启动任务奖励飞入；任务奖励飞行期间逐帧追踪仍在移动的目标槽，避免提前取坐标产生落点偏差。完成按钮和相机按钮仍等底板及全部奖励卡结束后才同步进入。
+- 返回首页：继续使用项目现有的 GameScene/MainScene 淡入淡出，不增加整页横向退出。奖励卡移动到屏幕中央时增加轻微尺寸回弹，中央停留由 `0.55s` 收紧到 `0.42s`；进入 MainScene 后以 `0.08s` 错峰、单张 `0.64s` 弧线飞入各自列表位置。
+- 修改文件：`Assets/Scripts/Controller/GameScene.cs`、`Assets/Scripts/Model/CardPackRewardFlyTransition.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`Documents/GAME_DESIGN_REQUIREMENTS.md`。
+- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 均为 `0` 警告、`0` 错误；`git diff --check` 仅有仓库既有 CRLF 转换提示。Unity 中仍需验证无加成/四加成、积分/贴纸/完成卡包任务、无奖励/单奖励/双奖励，以及点击完成后的淡入淡出和奖励卡跨场景飞行动画。
+
 ## 2026-08-31 结算面板入场、卡包数与奖励卡包动画
 
 - 状态：运行时代码已修改，Runtime/Editor 编译通过，等待 Unity Play Mode 视觉验收。

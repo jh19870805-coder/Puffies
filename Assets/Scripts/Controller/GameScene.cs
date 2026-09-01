@@ -31,16 +31,21 @@ public class GameScene : MonoBehaviour
     private const float LooseClusterAttachDistanceMax = 0.7f;
     private const float PieceBgSlideDuration = 0.25f;
     private const float TaskProgressRollDuration = 0.8f;
-    private const float SettlementBaseRollDuration = 1f;
-    private const float SettlementStagePauseDuration = 0.28f;
-    private const float SettlementFinalPauseDuration = 0.24f;
+    private const float SettlementBaseRollDuration = 1.2f;
+    private const float SettlementBonusRollDuration = 1.08f;
+    private const float SettlementStagePauseDuration = 0.16f;
+    private const float SettlementFinalPauseDuration = 0.45f;
     private const float SettlementHeaderDropDuration = 0.52f;
+    private const float SettlementHeaderDropOvershoot = 14f;
+    private const float SettlementHeaderDropTravelRatio = 0.78f;
     private const float SettlementOffscreenMargin = 60f;
     private const float SettlementBagCountIncrementDuration = 0.68f;
     private const float SettlementBagCountIncrementRise = 64f;
     private const float SettlementRewardPanelSlideDuration = 0.42f;
     private const float SettlementRewardPopDuration = 0.36f;
     private const float SettlementTaskRewardFlyDuration = 0.52f;
+    private const float SettlementRewardAnimationLead = 0.26f;
+    private const float SettlementRewardAnimationStagger = 0.14f;
     private const float SettlementTaskRewardFlyArcHeight = 80f;
     private const float SettlementRewardSlotOffset = 82f;
     private const float SettlementBoardViewportFill = 0.9f;
@@ -7567,21 +7572,38 @@ public class GameScene : MonoBehaviour
         {
             elapsed += Time.unscaledDeltaTime;
             var normalized = Mathf.Clamp01(elapsed / SettlementHeaderDropDuration);
-            var eased = 1f - Mathf.Pow(1f - normalized, 3f);
+            Vector2 AnimateDrop(Vector2 start, Vector2 target)
+            {
+                var overshoot = target + Vector2.down * SettlementHeaderDropOvershoot;
+                if (normalized < SettlementHeaderDropTravelRatio)
+                {
+                    var travel = Mathf.Clamp01(normalized / SettlementHeaderDropTravelRatio);
+                    var easedTravel = 1f - Mathf.Pow(1f - travel, 3f);
+                    return Vector2.LerpUnclamped(start, overshoot, easedTravel);
+                }
+
+                var settle = Mathf.InverseLerp(
+                    SettlementHeaderDropTravelRatio,
+                    1f,
+                    normalized);
+                return Vector2.LerpUnclamped(
+                    overshoot,
+                    target,
+                    Mathf.SmoothStep(0f, 1f, settle));
+            }
+
             if (_settlementSummaryRect != null)
             {
-                _settlementSummaryRect.anchoredPosition = Vector2.LerpUnclamped(
+                _settlementSummaryRect.anchoredPosition = AnimateDrop(
                     summaryStart,
-                    _settlementSummaryTargetPosition,
-                    eased);
+                    _settlementSummaryTargetPosition);
             }
 
             if (animateTask)
             {
-                _rewardTaskItemRect.anchoredPosition = Vector2.LerpUnclamped(
+                _rewardTaskItemRect.anchoredPosition = AnimateDrop(
                     taskStart,
-                    _rewardTaskItemTargetPosition,
-                    eased);
+                    _rewardTaskItemTargetPosition);
             }
 
             yield return null;
@@ -7694,6 +7716,42 @@ public class GameScene : MonoBehaviour
             _settlementRewardBagRect,
             _settlementRewardBagTargetPosition,
             above: false);
+        var panelComplete = false;
+        StartCoroutine(RunSettlementAnimation(
+            AnimateSettlementRewardPanelEntrance(),
+            () => panelComplete = true));
+
+        yield return new WaitForSecondsRealtime(SettlementRewardAnimationLead);
+
+        var completionRewardComplete = _completionRewardDisplayImage == null;
+        if (_completionRewardDisplayImage != null)
+        {
+            StartCoroutine(RunSettlementAnimation(
+                AnimateSettlementRewardPop(_completionRewardDisplayImage.rectTransform),
+                () => completionRewardComplete = true));
+        }
+
+        var taskRewardComplete = _taskRewardDisplayImage == null;
+        if (_taskRewardDisplayImage != null)
+        {
+            if (_completionRewardDisplayImage != null)
+            {
+                yield return new WaitForSecondsRealtime(SettlementRewardAnimationStagger);
+            }
+
+            StartCoroutine(RunSettlementAnimation(
+                AnimateTaskRewardIntoSettlementSlot(_taskRewardDisplayImage),
+                () => taskRewardComplete = true));
+        }
+
+        while (!panelComplete || !completionRewardComplete || !taskRewardComplete)
+        {
+            yield return null;
+        }
+    }
+
+    private IEnumerator AnimateSettlementRewardPanelEntrance()
+    {
         var startPosition = _settlementRewardBagRect.anchoredPosition;
         var elapsed = 0f;
         while (elapsed < SettlementRewardPanelSlideDuration)
@@ -7709,15 +7767,14 @@ public class GameScene : MonoBehaviour
         }
 
         _settlementRewardBagRect.anchoredPosition = _settlementRewardBagTargetPosition;
-        if (_completionRewardDisplayImage != null)
-        {
-            yield return AnimateSettlementRewardPop(_completionRewardDisplayImage.rectTransform);
-        }
+    }
 
-        if (_taskRewardDisplayImage != null)
-        {
-            yield return AnimateTaskRewardIntoSettlementSlot(_taskRewardDisplayImage);
-        }
+    private static IEnumerator RunSettlementAnimation(
+        IEnumerator animation,
+        Action onComplete)
+    {
+        yield return animation;
+        onComplete?.Invoke();
     }
 
     private IEnumerator AnimateSettlementActionButtonsEntrance()
@@ -7892,15 +7949,16 @@ public class GameScene : MonoBehaviour
             yield break;
         }
 
+        var rewardPanelRect = _rewardPanelRoot.transform as RectTransform;
         if (_taskRewardSourceImage == null
             || !TryGetRelativeRectGeometry(
                 _taskRewardSourceImage.rectTransform,
-                _rewardPanelRoot.transform as RectTransform,
+                rewardPanelRect,
                 out var startPosition,
                 out _)
             || !TryGetRelativeRectGeometry(
                 targetImage.rectTransform,
-                _rewardPanelRoot.transform as RectTransform,
+                rewardPanelRect,
                 out var endPosition,
                 out var endSize))
         {
@@ -7934,12 +7992,23 @@ public class GameScene : MonoBehaviour
         while (elapsed < SettlementTaskRewardFlyDuration)
         {
             elapsed += Time.unscaledDeltaTime;
+            if (TryGetRelativeRectGeometry(
+                    targetImage.rectTransform,
+                    rewardPanelRect,
+                    out var currentEndPosition,
+                    out var currentEndSize))
+            {
+                endPosition = currentEndPosition;
+                endSize = currentEndSize;
+            }
+
             var normalized = Mathf.Clamp01(elapsed / SettlementTaskRewardFlyDuration);
             var eased = Mathf.SmoothStep(0f, 1f, normalized);
             var position = Vector2.LerpUnclamped(startPosition, endPosition, eased);
             position.y += Mathf.Sin(normalized * Mathf.PI)
                           * SettlementTaskRewardFlyArcHeight;
             flyRect.anchoredPosition = position;
+            flyRect.sizeDelta = endSize;
             flyRect.localRotation = Quaternion.identity;
             yield return null;
         }
@@ -10184,6 +10253,19 @@ public class GameScene : MonoBehaviour
         SetSettlementTaskProgress(taskItem, task, progressBeforeSettlement);
         SetSettlementScore(0);
         HideSettlementTitles();
+        var animateIndependentTaskProgress = !syncTaskWithScore
+                                             && taskItem != null
+                                             && task.HasValue
+                                             && progressAfterSettlement != progressBeforeSettlement;
+        var hasNoHintBonus = scoreResult.NoHintBonusPercent > 0;
+        var hasLevelOutlineBonus = scoreResult.LevelOutlineDisabledBonusPercent > 0;
+        var hasStickerOutlineBonus = scoreResult.StickerOutlineDisabledBonusPercent > 0;
+        var hasCompletionTimeBonus = scoreResult.CompletionTimeBonusPercent > 0;
+        var hasAnyBonus = hasNoHintBonus
+                          || hasLevelOutlineBonus
+                          || hasStickerOutlineBonus
+                          || hasCompletionTimeBonus;
+        var didAnimateIndependentTaskProgress = animateIndependentTaskProgress && !hasAnyBonus;
         yield return AnimateSettlementScoreRange(
             taskItem,
             task,
@@ -10191,16 +10273,22 @@ public class GameScene : MonoBehaviour
             0,
             scoreResult.BaseScore,
             SettlementBaseRollDuration,
-            syncTaskWithScore);
+            syncTaskWithScore,
+            didAnimateIndependentTaskProgress,
+            progressAfterSettlement);
 
         var currentScore = scoreResult.BaseScore;
         var cumulativeBonusPercent = 0;
-        if (scoreResult.NoHintBonusPercent > 0)
+        if (hasNoHintBonus)
         {
             cumulativeBonusPercent += scoreResult.NoHintBonusPercent;
             var targetScore = CalculateSettlementStageScore(
                 scoreResult.BaseScore,
                 cumulativeBonusPercent);
+            var animateTaskProgressHere = animateIndependentTaskProgress
+                                          && !hasLevelOutlineBonus
+                                          && !hasStickerOutlineBonus
+                                          && !hasCompletionTimeBonus;
             yield return AnimateSettlementBonusStage(
                 taskItem,
                 task,
@@ -10209,16 +10297,22 @@ public class GameScene : MonoBehaviour
                 targetScore,
                 syncTaskWithScore,
                 "未使用提示",
-                targetScore - currentScore);
+                targetScore - currentScore,
+                animateTaskProgressHere,
+                progressAfterSettlement);
+            didAnimateIndependentTaskProgress |= animateTaskProgressHere;
             currentScore = targetScore;
         }
 
-        if (scoreResult.LevelOutlineDisabledBonusPercent > 0)
+        if (hasLevelOutlineBonus)
         {
             cumulativeBonusPercent += scoreResult.LevelOutlineDisabledBonusPercent;
             var targetScore = CalculateSettlementStageScore(
                 scoreResult.BaseScore,
                 cumulativeBonusPercent);
+            var animateTaskProgressHere = animateIndependentTaskProgress
+                                          && !hasStickerOutlineBonus
+                                          && !hasCompletionTimeBonus;
             yield return AnimateSettlementBonusStage(
                 taskItem,
                 task,
@@ -10227,16 +10321,21 @@ public class GameScene : MonoBehaviour
                 targetScore,
                 syncTaskWithScore,
                 "关闭关卡描边",
-                targetScore - currentScore);
+                targetScore - currentScore,
+                animateTaskProgressHere,
+                progressAfterSettlement);
+            didAnimateIndependentTaskProgress |= animateTaskProgressHere;
             currentScore = targetScore;
         }
 
-        if (scoreResult.StickerOutlineDisabledBonusPercent > 0)
+        if (hasStickerOutlineBonus)
         {
             cumulativeBonusPercent += scoreResult.StickerOutlineDisabledBonusPercent;
             var targetScore = CalculateSettlementStageScore(
                 scoreResult.BaseScore,
                 cumulativeBonusPercent);
+            var animateTaskProgressHere = animateIndependentTaskProgress
+                                          && !hasCompletionTimeBonus;
             yield return AnimateSettlementBonusStage(
                 taskItem,
                 task,
@@ -10245,16 +10344,20 @@ public class GameScene : MonoBehaviour
                 targetScore,
                 syncTaskWithScore,
                 "关闭贴纸描边",
-                targetScore - currentScore);
+                targetScore - currentScore,
+                animateTaskProgressHere,
+                progressAfterSettlement);
+            didAnimateIndependentTaskProgress |= animateTaskProgressHere;
             currentScore = targetScore;
         }
 
-        if (scoreResult.CompletionTimeBonusPercent > 0)
+        if (hasCompletionTimeBonus)
         {
             cumulativeBonusPercent += scoreResult.CompletionTimeBonusPercent;
             var targetScore = CalculateSettlementStageScore(
                 scoreResult.BaseScore,
                 cumulativeBonusPercent);
+            var animateTaskProgressHere = animateIndependentTaskProgress;
             yield return AnimateSettlementBonusStage(
                 taskItem,
                 task,
@@ -10263,12 +10366,17 @@ public class GameScene : MonoBehaviour
                 targetScore,
                 syncTaskWithScore,
                 "快速完成",
-                targetScore - currentScore);
+                targetScore - currentScore,
+                animateTaskProgressHere,
+                progressAfterSettlement);
+            didAnimateIndependentTaskProgress |= animateTaskProgressHere;
             currentScore = targetScore;
         }
 
         if (currentScore != scoreResult.FinalScore)
         {
+            var animateTaskProgressHere = animateIndependentTaskProgress
+                                          && !didAnimateIndependentTaskProgress;
             yield return AnimateSettlementScoreRange(
                 taskItem,
                 task,
@@ -10276,12 +10384,15 @@ public class GameScene : MonoBehaviour
                 currentScore,
                 scoreResult.FinalScore,
                 TaskProgressRollDuration,
-                syncTaskWithScore);
+                syncTaskWithScore,
+                animateTaskProgressHere,
+                progressAfterSettlement);
+            didAnimateIndependentTaskProgress |= animateTaskProgressHere;
         }
 
         SetSettlementScore(scoreResult.FinalScore);
         ShowSettlementBagCountTitle();
-        if (!syncTaskWithScore && progressAfterSettlement != progressBeforeSettlement)
+        if (animateIndependentTaskProgress && !didAnimateIndependentTaskProgress)
         {
             yield return AnimateSettlementTaskProgressRange(
                 taskItem,
@@ -10303,7 +10414,9 @@ public class GameScene : MonoBehaviour
         int toScore,
         bool syncTaskWithScore,
         string title,
-        int bonusScore)
+        int bonusScore,
+        bool animateIndependentTaskProgress,
+        int independentTaskProgressTo)
     {
         ShowSettlementBonus(title, bonusScore);
         yield return new WaitForSecondsRealtime(SettlementStagePauseDuration);
@@ -10313,8 +10426,10 @@ public class GameScene : MonoBehaviour
             progressBeforeSettlement,
             fromScore,
             toScore,
-            TaskProgressRollDuration,
-            syncTaskWithScore);
+            SettlementBonusRollDuration,
+            syncTaskWithScore,
+            animateIndependentTaskProgress,
+            independentTaskProgressTo);
     }
 
     private IEnumerator AnimateSettlementScoreRange(
@@ -10324,7 +10439,9 @@ public class GameScene : MonoBehaviour
         int fromScore,
         int toScore,
         float duration,
-        bool syncTaskWithScore)
+        bool syncTaskWithScore,
+        bool animateIndependentTaskProgress = false,
+        int independentTaskProgressTo = 0)
     {
         if (duration <= 0f)
         {
@@ -10335,6 +10452,13 @@ public class GameScene : MonoBehaviour
                     taskItem,
                     task,
                     progressBeforeSettlement + toScore);
+            }
+            else if (animateIndependentTaskProgress)
+            {
+                SetSettlementTaskProgress(
+                    taskItem,
+                    task,
+                    independentTaskProgressTo);
             }
             yield break;
         }
@@ -10353,6 +10477,24 @@ public class GameScene : MonoBehaviour
             {
                 SetSettlementTaskProgress(taskItem, task, animatedTaskProgress);
             }
+            else if (animateIndependentTaskProgress)
+            {
+                var taskProgressTime = Mathf.InverseLerp(
+                    0.25f,
+                    1f,
+                    normalizedTime);
+                var easedTaskProgressTime = Mathf.SmoothStep(
+                    0f,
+                    1f,
+                    taskProgressTime);
+                SetSettlementTaskProgress(
+                    taskItem,
+                    task,
+                    Mathf.RoundToInt(Mathf.Lerp(
+                        progressBeforeSettlement,
+                        independentTaskProgressTo,
+                        easedTaskProgressTime)));
+            }
             yield return null;
         }
 
@@ -10360,6 +10502,10 @@ public class GameScene : MonoBehaviour
         if (syncTaskWithScore)
         {
             SetSettlementTaskProgress(taskItem, task, progressBeforeSettlement + toScore);
+        }
+        else if (animateIndependentTaskProgress)
+        {
+            SetSettlementTaskProgress(taskItem, task, independentTaskProgressTo);
         }
     }
 

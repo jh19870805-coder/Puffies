@@ -7,9 +7,11 @@ using UnityEngine.UI;
 public sealed class CardPackRewardFlyTransition : MonoBehaviour
 {
     private const string TransitionObjectName = "CardPackRewardFlyTransition";
-    private const float CenterMoveDuration = 0.4f;
-    private const float CenterHoldDuration = 0.55f;
-    private const float TargetMoveDuration = 0.6f;
+    private const float CenterMoveDuration = 0.46f;
+    private const float CenterHoldDuration = 0.42f;
+    private const float TargetMoveDuration = 0.64f;
+    private const float TargetMoveStagger = 0.08f;
+    private const float CenterSizeOvershoot = 0.06f;
     private const float TargetLookupTimeout = 5f;
     private const float CenterSpacing = 32f;
     private const float CenterHorizontalPadding = 80f;
@@ -174,7 +176,13 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
             centerSizes[i] = GetCenterIconSize();
         }
 
-        yield return AnimateIcons(centerPositions, centerSizes, CenterMoveDuration, 0f);
+        yield return AnimateIcons(
+            centerPositions,
+            centerSizes,
+            CenterMoveDuration,
+            0f,
+            0f,
+            CenterSizeOvershoot);
         yield return new WaitForSecondsRealtime(CenterHoldDuration);
 
         GameManager.EnterMainScene();
@@ -214,7 +222,13 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
             }
         }
 
-        yield return AnimateIcons(targetPositions, targetSizes, TargetMoveDuration, TargetArcHeight);
+        yield return AnimateIcons(
+            targetPositions,
+            targetSizes,
+            TargetMoveDuration,
+            TargetArcHeight,
+            TargetMoveStagger,
+            0f);
         RevealTargets(mainScene);
         Destroy(gameObject);
     }
@@ -250,7 +264,9 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
         Vector2[] targetPositions,
         Vector2[] targetSizes,
         float duration,
-        float arcHeight)
+        float arcHeight,
+        float stagger,
+        float sizeOvershoot)
     {
         var startPositions = new Vector2[mIcons.Count];
         var startSizes = new Vector2[mIcons.Count];
@@ -260,22 +276,30 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
             startSizes[i] = mIcons[i].RectTransform.sizeDelta;
         }
 
+        var totalDuration = duration + stagger * Mathf.Max(0, mIcons.Count - 1);
         var elapsed = 0f;
-        while (elapsed < duration)
+        while (elapsed < totalDuration)
         {
             elapsed += Time.unscaledDeltaTime;
-            var normalized = Mathf.Clamp01(elapsed / duration);
-            var eased = Mathf.SmoothStep(0f, 1f, normalized);
-            var arc = Mathf.Sin(normalized * Mathf.PI) * arcHeight;
             for (var i = 0; i < mIcons.Count; i++)
             {
+                var iconElapsed = elapsed - stagger * i;
+                var normalized = Mathf.Clamp01(iconElapsed / duration);
+                var eased = Mathf.SmoothStep(0f, 1f, normalized);
+                var arc = Mathf.Sin(normalized * Mathf.PI) * arcHeight;
                 var position = Vector2.LerpUnclamped(startPositions[i], targetPositions[i], eased);
                 position.y += arc;
                 mIcons[i].RectTransform.anchoredPosition = position;
-                mIcons[i].RectTransform.sizeDelta = Vector2.LerpUnclamped(
+                var size = Vector2.LerpUnclamped(
                     startSizes[i],
                     targetSizes[i],
                     eased);
+                if (sizeOvershoot > 0f)
+                {
+                    size *= 1f + Mathf.Sin(normalized * Mathf.PI) * sizeOvershoot;
+                }
+
+                mIcons[i].RectTransform.sizeDelta = size;
             }
 
             yield return null;
