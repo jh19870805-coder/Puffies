@@ -10239,10 +10239,16 @@ public class GameScene : MonoBehaviour
 
         if (_didSavePackCompletion
             && !_didFailTaskAdvanceDuringSettlement
-            && (!_wasSelectedPackCompletedOnEntry || _didAdvanceTaskDuringSettlement))
+            && !_wasSelectedPackCompletedOnEntry)
         {
             TryGrantPendingTaskPackReward(
                 _didAdvanceTaskDuringSettlement ? "task completion" : "first-completion retry");
+        }
+        else if (_wasSelectedPackCompletedOnEntry)
+        {
+            Debug.Log(
+                "GameScene: pending task pack grant skipped for replay; "
+                + "the guaranteed reward remains pending.");
         }
 
         if (_didSavePackCompletion)
@@ -10292,6 +10298,7 @@ public class GameScene : MonoBehaviour
             WasHintUsed = _wasHintUsed,
             IsLevelOutlineEnabled = _isLevelOutlineEnabled,
             IsStickerOutlineEnabled = _isStickerOutlineEnabled,
+            IsReplay = _wasSelectedPackCompletedOnEntry,
             CompletionTimeSeconds = _completionTimeSeconds
         };
         if (!GameScoreUtility.TryCalculateCardPackScore(packId, scoreContext, out var scoreResult))
@@ -10303,7 +10310,8 @@ public class GameScene : MonoBehaviour
 
         var settlementScore = scoreResult.FinalScore;
         Debug.Log(
-            $"GameScene: score calculated. base={scoreResult.BaseScore}, " +
+            $"GameScene: score calculated. replay={_wasSelectedPackCompletedOnEntry}, " +
+            $"originalBase={scoreResult.OriginalBaseScore}, base={scoreResult.BaseScore}, " +
             $"noHint=+{scoreResult.NoHintBonusPercent}%, " +
             $"levelOutlineOff=+{scoreResult.LevelOutlineDisabledBonusPercent}%, " +
             $"stickerOutlineOff=+{scoreResult.StickerOutlineDisabledBonusPercent}%, " +
@@ -10413,7 +10421,7 @@ public class GameScene : MonoBehaviour
             $"templateId={task.TemplateId}, " +
             $"preferredPackId={preferredPackId}, " +
             $"pending={CardPackDistributionUtility.GetPendingTaskRewardCount()}");
-        _didEarnTaskPackRewardDuringSettlement = true;
+        _didEarnTaskPackRewardDuringSettlement = !_wasSelectedPackCompletedOnEntry;
         return true;
     }
 
@@ -10487,6 +10495,7 @@ public class GameScene : MonoBehaviour
             cumulativeBonusPercent += scoreResult.NoHintBonusPercent;
             var targetScore = CalculateSettlementStageScore(
                 scoreResult.BaseScore,
+                scoreResult.OriginalBaseScore,
                 cumulativeBonusPercent);
             var animateTaskProgressHere = animateIndependentTaskProgress
                                           && !hasLevelOutlineBonus
@@ -10512,6 +10521,7 @@ public class GameScene : MonoBehaviour
             cumulativeBonusPercent += scoreResult.LevelOutlineDisabledBonusPercent;
             var targetScore = CalculateSettlementStageScore(
                 scoreResult.BaseScore,
+                scoreResult.OriginalBaseScore,
                 cumulativeBonusPercent);
             var animateTaskProgressHere = animateIndependentTaskProgress
                                           && !hasStickerOutlineBonus
@@ -10536,6 +10546,7 @@ public class GameScene : MonoBehaviour
             cumulativeBonusPercent += scoreResult.StickerOutlineDisabledBonusPercent;
             var targetScore = CalculateSettlementStageScore(
                 scoreResult.BaseScore,
+                scoreResult.OriginalBaseScore,
                 cumulativeBonusPercent);
             var animateTaskProgressHere = animateIndependentTaskProgress
                                           && !hasCompletionTimeBonus;
@@ -10559,6 +10570,7 @@ public class GameScene : MonoBehaviour
             cumulativeBonusPercent += scoreResult.CompletionTimeBonusPercent;
             var targetScore = CalculateSettlementStageScore(
                 scoreResult.BaseScore,
+                scoreResult.OriginalBaseScore,
                 cumulativeBonusPercent);
             var animateTaskProgressHere = animateIndependentTaskProgress;
             yield return AnimateSettlementBonusStage(
@@ -10739,9 +10751,16 @@ public class GameScene : MonoBehaviour
         SetSettlementTaskProgress(taskItem, task, toProgress);
     }
 
-    private static int CalculateSettlementStageScore(int baseScore, int cumulativeBonusPercent)
+    private static int CalculateSettlementStageScore(
+        int awardedBaseScore,
+        int originalBaseScore,
+        int cumulativeBonusPercent)
     {
-        return (baseScore * (100 + cumulativeBonusPercent) + 99) / 100;
+        var cumulativeBonusScore = originalBaseScore * cumulativeBonusPercent;
+        cumulativeBonusScore = cumulativeBonusScore <= 0
+            ? 0
+            : (cumulativeBonusScore + 99) / 100;
+        return awardedBaseScore + cumulativeBonusScore;
     }
 
     private static void SetSettlementTaskProgress(

@@ -1,9 +1,19 @@
 # 当前任务
 
+## 2026-09-01 重玩积分与卡包奖励限制
+
+- 状态：运行时代码与稳定需求已修改，Runtime/Editor 编译通过，等待 Unity Play Mode 数据验收。
+- 重玩判定：进入 GameScene 时当前 PackId 已经是 `Completed`，即 `_wasSelectedPackCompletedOnEntry=true`，本局按重玩处理；进行中会话的继续游戏不属于重玩。
+- 积分：正常局保持原规则。重玩的可得基础分为尺寸原始基础分的 `10%`；每项加成仍以原始基础分为计算基数。公式为 `ReplayFinalScore = Ceil(OriginalBaseScore * 10%) + Ceil(OriginalBaseScore * TotalBonusRate)`。结算动画先滚到折算基础分，再逐项显示按原始基础分换算的实际加分。
+- 发包：重玩结算不执行首次完成发包，也不尝试发放任何已有待发任务奖励，不显示 `ImgBagBg` 获包动画。任务是否累计仍由 `TaskConfig.csv/CountReplay` 控制；重玩中达成任务时，保底卡包权益继续写入待发队列并推进任务，但不在本局分配 PackId，留到后续非重玩结算再按常规规则尝试发放。
+- 数据：没有修改 SQLite 或 JSON 结构，不需要删除本地数据。
+- 修改文件：`Assets/Scripts/Model/GameTaskUtility.cs`、`Assets/Scripts/Controller/GameScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`Documents/GAME_DESIGN_REQUIREMENTS.md`。
+- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 均为 `0` 警告、`0` 错误。仍需在 Unity 验证正常首次完成、普通重玩、重玩达成任务、存在待发任务奖励时重玩四种情况。
+
 ## 2026-09-01 结算完成后奖励卡与首页列表入场
 
 - 状态：运行时代码和需求记录已修改，Runtime/Editor 编译通过，等待 Unity Play Mode 视觉验收。
-- 完成按钮退场：点击 `BtnFinish` 后先让顶部 `TaskBg2` 与当前 `TaskItem` 反向收回屏幕上方，底部 `ImgBagBg`、`BtnFinish` 与 `BtnCamera` 同时反向收回屏幕下方；顶部沿用入场 `0.52s` 的反向节奏，先向下回摆约 `14px` 再加速上收，底部沿用 `0.42s` 的反向加速曲线。真实奖励图标在退场前临时提升到 `RewardPanel` 顶层并保持原屏幕位置，不随 `ImgBagBg` 下沉，继续作为后续跨场景飞行起点。
+- 完成按钮退场：点击 `BtnFinish` 后先让顶部 `TaskBg2` 与当前 `TaskItem` 反向收回屏幕上方，底部 `ImgBagBg`、`BtnFinish` 与 `BtnCamera` 同时反向收回屏幕下方；顶部沿用入场 `0.52s` 的反向节奏，先向下回摆约 `14px` 再加速上收，底部沿用 `0.42s` 的反向加速曲线。真实奖励图标在退场前临时提升到 `RewardPanel` 顶层并保持原屏幕位置，不随 `ImgBagBg` 下沉。退场截图保留该奖励卡；首页交叉淡入期间，跨场景飞行副本在原位置从透明同步接管，结束后直接开始飞向列表，全程不得隐藏一帧或重新跳现。
 - 场景切换：点击 `BtnFinish` 后截取结算页最后一帧并作为跨场景覆盖图保留；MainScene 卡包列表完成创建、排序和布局后，先缓存最终槽位并把全部列表卡包移到屏幕下方外侧，再用 `0.30s` 将结算覆盖图直接淡出到首页。中间不经过纯黑画面，截图失败时直接切换首页，也不显示黑色兜底层。
 - 奖励卡：只有已经分配真实 PackId 的结算奖励参与飞行。飞行图标分别复制本局首次完成奖励槽和任务奖励槽中默认 `ImgBag` 的 Sprite、颜色、尺寸及实际起点，不提前切换为真实卡包纹理；单张飞行 `0.72s`，多张按 `0.12s` 错峰，一边移动一边缩放到对应列表卡包尺寸。
 - 落位揭晓：奖励卡落位后为后续闪光特效预留 `0.20s`，当前不创建替代特效；预留结束后隐藏飞行图标，并显示该槽真实卡包的完整状态、标签、系列叠加和进行中碎片。

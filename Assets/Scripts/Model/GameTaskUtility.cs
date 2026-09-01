@@ -547,11 +547,13 @@ public struct GameScoreContext
     public bool WasHintUsed;
     public bool IsLevelOutlineEnabled;
     public bool IsStickerOutlineEnabled;
+    public bool IsReplay;
     public float CompletionTimeSeconds;
 }
 
 public struct GameScoreResult
 {
+    public int OriginalBaseScore;
     public int BaseScore;
     public int NoHintBonusPercent;
     public int LevelOutlineDisabledBonusPercent;
@@ -571,6 +573,7 @@ public static class GameScoreUtility
     private const int NoHintBonusPercent = 5;
     private const int LevelOutlineDisabledBonusPercent = 2;
     private const int StickerOutlineDisabledBonusPercent = 5;
+    private const int ReplayBaseScorePercent = 10;
 
     public static int GetBaseScore(CardPackSize packSize)
     {
@@ -606,11 +609,15 @@ public static class GameScoreUtility
             return false;
         }
 
-        var baseScore = GetBaseScore(packSize);
-        if (baseScore <= 0)
+        var originalBaseScore = GetBaseScore(packSize);
+        if (originalBaseScore <= 0)
         {
             return false;
         }
+
+        var baseScore = context.IsReplay
+            ? DivideAndRoundUp(originalBaseScore * ReplayBaseScorePercent, 100)
+            : originalBaseScore;
 
         var completionTimeSeconds = SanitizeCompletionTime(context.CompletionTimeSeconds);
         var noHintBonus = context.WasHintUsed ? 0 : NoHintBonusPercent;
@@ -625,10 +632,11 @@ public static class GameScoreUtility
             + levelOutlineBonus
             + stickerOutlineBonus
             + completionTimeBonus;
-        var scaledScore = baseScore * (100 + totalBonus);
+        var bonusScore = DivideAndRoundUp(originalBaseScore * totalBonus, 100);
 
         result = new GameScoreResult
         {
+            OriginalBaseScore = originalBaseScore,
             BaseScore = baseScore,
             NoHintBonusPercent = noHintBonus,
             LevelOutlineDisabledBonusPercent = levelOutlineBonus,
@@ -636,9 +644,14 @@ public static class GameScoreUtility
             CompletionTimeBonusPercent = completionTimeBonus,
             TotalBonusPercent = totalBonus,
             CompletionTimeSeconds = completionTimeSeconds,
-            FinalScore = (scaledScore + 99) / 100
+            FinalScore = baseScore + bonusScore
         };
         return true;
+    }
+
+    private static int DivideAndRoundUp(int value, int divisor)
+    {
+        return value <= 0 ? 0 : (value + divisor - 1) / divisor;
     }
 
     private static int GetCompletionTimeBonusPercent(float completionTimeSeconds)

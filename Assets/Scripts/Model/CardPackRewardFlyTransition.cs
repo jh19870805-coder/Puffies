@@ -21,7 +21,7 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
         public int PackId;
         public RectTransform RectTransform;
         public Image Image;
-        public Image SourceImage;
+        public Color BaseColor;
         public bool HasLanded;
         public bool HasRevealed;
         public float LandedAt;
@@ -136,12 +136,13 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
             iconImage.color = sourceImage.color;
             iconImage.preserveAspect = sourceImage.preserveAspect;
             iconImage.raycastTarget = false;
+            iconImage.enabled = false;
             mIcons.Add(new FlyIcon
             {
                 PackId = packId,
                 RectTransform = iconRect,
                 Image = iconImage,
-                SourceImage = sourceImage
+                BaseColor = sourceImage.color
             });
         }
 
@@ -255,22 +256,6 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
             yield break;
         }
 
-        var sourceImageStates = new Dictionary<Image, bool>();
-        for (var i = 0; i < mIcons.Count; i++)
-        {
-            var icon = mIcons[i];
-            if (icon.SourceImage != null && !sourceImageStates.ContainsKey(icon.SourceImage))
-            {
-                sourceImageStates.Add(icon.SourceImage, icon.SourceImage.enabled);
-                icon.SourceImage.enabled = false;
-            }
-
-            if (icon.Image != null)
-            {
-                icon.Image.enabled = false;
-            }
-        }
-
         yield return new WaitForEndOfFrame();
 
         try
@@ -302,19 +287,15 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
         }
         finally
         {
-            foreach (var pair in sourceImageStates)
-            {
-                if (pair.Key != null)
-                {
-                    pair.Key.enabled = pair.Value;
-                }
-            }
-
             for (var i = 0; i < mIcons.Count; i++)
             {
-                if (mIcons[i].Image != null)
+                var icon = mIcons[i];
+                if (icon.Image != null)
                 {
-                    mIcons[i].Image.enabled = true;
+                    icon.Image.color = mSceneSnapshotImage.enabled
+                        ? WithAlpha(icon.BaseColor, 0f)
+                        : icon.BaseColor;
+                    icon.Image.enabled = true;
                 }
             }
         }
@@ -334,10 +315,33 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
             var normalized = Mathf.Clamp01(elapsed / SceneCrossFadeDuration);
             var eased = Mathf.SmoothStep(0f, 1f, normalized);
             mSceneSnapshotImage.color = new Color(1f, 1f, 1f, 1f - eased);
+            for (var i = 0; i < mIcons.Count; i++)
+            {
+                var icon = mIcons[i];
+                if (icon.Image != null)
+                {
+                    icon.Image.color = WithAlpha(icon.BaseColor, icon.BaseColor.a * eased);
+                }
+            }
+
             yield return null;
         }
 
+        for (var i = 0; i < mIcons.Count; i++)
+        {
+            if (mIcons[i].Image != null)
+            {
+                mIcons[i].Image.color = mIcons[i].BaseColor;
+            }
+        }
+
         ReleaseSceneSnapshot();
+    }
+
+    private static Color WithAlpha(Color color, float alpha)
+    {
+        color.a = alpha;
+        return color;
     }
 
     private void ReleaseSceneSnapshot()
