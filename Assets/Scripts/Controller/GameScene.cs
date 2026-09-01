@@ -109,7 +109,7 @@ public class GameScene : MonoBehaviour
     private const float TutorialArrowScale = 0.7f;
     private const float TutorialPracticePromptGap = 24f;
     private const float TutorialPromptScreenMargin = 24f;
-    private const float TutorialHintPromptButtonClearance = 48f;
+    private const float TutorialHintArrowButtonGap = 16f;
     private const string TutorialInvalidLineStartCharacters = "，。！？；：、”’）】》";
     private const string TutorialCollection = "Tutorial";
     private const string PiecePlacementTutorialKey = "CardBag001TutorialCompleted";
@@ -8729,10 +8729,10 @@ public class GameScene : MonoBehaviour
         arrowRect.localRotation = templateArrowRect.localRotation;
         arrowRect.localScale = templateArrowRect.localScale;
 
-        if (TryGetTutorialHintButtonCanvasPosition(canvasRect, out var hintButtonPosition))
+        if (TryGetTutorialHintArrowTargetCanvasPosition(canvasRect, out var arrowTargetPosition))
         {
             var targetWorld = canvasRect.TransformPoint(
-                hintButtonPosition - TutorialHintArrowMotion.PulseOffset);
+                arrowTargetPosition - TutorialHintArrowMotion.PulseOffset);
             var targetLocal = parent.InverseTransformPoint(targetWorld);
             var arrowTipWorld = arrowRect.TransformPoint(
                 new Vector3(arrowRect.rect.xMax, arrowRect.rect.center.y));
@@ -8772,8 +8772,7 @@ public class GameScene : MonoBehaviour
                 parent.rect,
                 hintButtonPosition
                 - GetTutorialHintArrowTipOffset()
-                - TutorialHintArrowMotion.PulseOffset
-                - Vector2.right * TutorialHintPromptButtonClearance,
+                - TutorialHintArrowMotion.PulseOffset,
                 promptSize);
         }
 
@@ -8809,6 +8808,27 @@ public class GameScene : MonoBehaviour
                    screenCenter,
                    null,
                    out position);
+    }
+
+    private bool TryGetTutorialHintArrowTargetCanvasPosition(
+        RectTransform canvasRect,
+        out Vector2 position)
+    {
+        position = Vector2.zero;
+        var hintRect = _hintButton != null
+            ? _hintButton.transform as RectTransform
+            : null;
+        if (hintRect == null
+            || !TryGetRectTransformScreenRect(hintRect, out var hintScreenRect)
+            || !TryScreenRectToCanvasRect(canvasRect, hintScreenRect, out var hintCanvasRect))
+        {
+            return false;
+        }
+
+        position = new Vector2(
+            hintCanvasRect.xMin - TutorialHintArrowButtonGap,
+            hintCanvasRect.center.y);
+        return true;
     }
 
     private static Vector2 GetTutorialHintArrowTipOffset()
