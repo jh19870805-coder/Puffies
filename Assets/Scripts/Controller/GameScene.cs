@@ -8305,7 +8305,10 @@ public class GameScene : MonoBehaviour
 
         if (!CardPackRewardFlyTransition.TryStart(
                 BuildSettlementRewardTransitionSources(),
-                _settlementPackRewardIds))
+                _settlementPackRewardIds,
+                IsSettlementUiVisible(_settlementRewardBagRect)
+                    ? _settlementRewardBagRect
+                    : null))
         {
             GameManager.EnterMainScene();
         }
@@ -8468,7 +8471,6 @@ public class GameScene : MonoBehaviour
     {
         var summaryStart = GetAnchoredPosition(_settlementSummaryRect);
         var taskStart = GetAnchoredPosition(_rewardTaskItemRect);
-        var rewardBagStart = GetAnchoredPosition(_settlementRewardBagRect);
         var finishStart = GetAnchoredPosition(_settlementFinishButtonRect);
         var cameraStart = GetAnchoredPosition(_settlementCameraButtonRect);
         var summaryEnd = CalculateSettlementOffscreenPosition(
@@ -8479,10 +8481,6 @@ public class GameScene : MonoBehaviour
             _rewardTaskItemRect,
             taskStart,
             above: true);
-        var rewardBagEnd = CalculateSettlementOffscreenPosition(
-            _settlementRewardBagRect,
-            rewardBagStart,
-            above: false);
         var finishEnd = CalculateSettlementOffscreenPosition(
             _settlementFinishButtonRect,
             finishStart,
@@ -8493,12 +8491,11 @@ public class GameScene : MonoBehaviour
             above: false);
         var animateSummary = IsSettlementUiVisible(_settlementSummaryRect);
         var animateTask = IsSettlementUiVisible(_rewardTaskItemRect);
-        var animateRewardBag = IsSettlementUiVisible(_settlementRewardBagRect);
         var animateFinish = IsSettlementUiVisible(_settlementFinishButtonRect);
         var animateCamera = IsSettlementUiVisible(_settlementCameraButtonRect);
         var duration = Mathf.Max(
             animateSummary || animateTask ? SettlementHeaderDropDuration : 0f,
-            animateRewardBag || animateFinish || animateCamera
+            animateFinish || animateCamera
                 ? SettlementRewardPanelSlideDuration
                 : 0f);
         var elapsed = 0f;
@@ -8524,14 +8521,6 @@ public class GameScene : MonoBehaviour
             }
 
             var bottomProgress = bottomNormalized * bottomNormalized * bottomNormalized;
-            if (animateRewardBag)
-            {
-                _settlementRewardBagRect.anchoredPosition = Vector2.LerpUnclamped(
-                    rewardBagStart,
-                    rewardBagEnd,
-                    bottomProgress);
-            }
-
             if (animateFinish)
             {
                 _settlementFinishButtonRect.anchoredPosition = Vector2.LerpUnclamped(
@@ -8553,7 +8542,6 @@ public class GameScene : MonoBehaviour
 
         SetAnchoredPosition(_settlementSummaryRect, summaryEnd, animateSummary);
         SetAnchoredPosition(_rewardTaskItemRect, taskEnd, animateTask);
-        SetAnchoredPosition(_settlementRewardBagRect, rewardBagEnd, animateRewardBag);
         SetAnchoredPosition(_settlementFinishButtonRect, finishEnd, animateFinish);
         SetAnchoredPosition(_settlementCameraButtonRect, cameraEnd, animateCamera);
     }

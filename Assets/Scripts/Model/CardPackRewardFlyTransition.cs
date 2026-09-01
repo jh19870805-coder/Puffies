@@ -9,6 +9,9 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
     private const string TransitionObjectName = "CardPackRewardFlyTransition";
     private const float TargetMoveDuration = 0.72f;
     private const float TargetMoveStagger = 0.12f;
+    private const float RewardBackdropExitDelay = 0.08f;
+    private const float RewardBackdropExitDuration = 0.42f;
+    private const float RewardBackdropOffscreenPadding = 20f;
     private const float RewardRevealDisplayDuration = 0.3f;
     private const float TargetLookupTimeout = 5f;
     private const float TargetArcHeight = 72f;
@@ -47,6 +50,7 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
     private readonly List<FlyIcon> mIcons = new List<FlyIcon>();
     private Canvas mCanvas;
     private RectTransform mCanvasRect;
+    private RectTransform mRewardBackdropRect;
     private MainScene mPreparedMainScene;
 
     public static bool IsActive => sInstance != null;
@@ -58,7 +62,8 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
 
     public static bool TryStart(
         IReadOnlyList<RectTransform> sources,
-        IReadOnlyList<int> packIds)
+        IReadOnlyList<int> packIds,
+        RectTransform rewardBackdrop)
     {
         if (sInstance != null || packIds == null)
         {
@@ -88,7 +93,7 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
 
         var transition = transitionObject.GetComponent<CardPackRewardFlyTransition>();
         sInstance = transition;
-        if (transition.Initialize(uniqueSources, uniquePackIds))
+        if (transition.Initialize(uniqueSources, uniquePackIds, rewardBackdrop))
         {
             return true;
         }
@@ -100,7 +105,8 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
 
     private bool Initialize(
         IReadOnlyList<RectTransform> sources,
-        IReadOnlyList<int> packIds)
+        IReadOnlyList<int> packIds,
+        RectTransform rewardBackdrop)
     {
         mCanvas = GetComponent<Canvas>();
         mCanvasRect = GetComponent<RectTransform>();
@@ -158,6 +164,7 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
         }
 
         mPackIds.AddRange(packIds);
+        AttachRewardBackdrop(rewardBackdrop);
         for (var i = 0; i < rewardSources.Count; i++)
         {
             var source = rewardSources[i];
@@ -227,6 +234,52 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
 
         StartCoroutine(PlayTransition());
         return true;
+    }
+
+    private void AttachRewardBackdrop(RectTransform rewardBackdrop)
+    {
+        if (rewardBackdrop == null
+            || !rewardBackdrop.gameObject.activeInHierarchy
+            || !TryGetCanvasGeometry(
+                rewardBackdrop,
+                out var sourcePosition,
+                out var sourceSize))
+        {
+            return;
+        }
+
+        rewardBackdrop.SetParent(mCanvasRect, false);
+        rewardBackdrop.localRotation = Quaternion.identity;
+        rewardBackdrop.localScale = Vector3.one;
+        rewardBackdrop.SetAsLastSibling();
+        Canvas.ForceUpdateCanvases();
+        if (!TryGetCanvasGeometry(
+                rewardBackdrop,
+                out var currentPosition,
+                out var currentSize))
+        {
+            Debug.LogWarning(
+                "CardPackRewardFlyTransition: ImgBagBg geometry was lost while reparenting.");
+            rewardBackdrop.gameObject.SetActive(false);
+            return;
+        }
+
+        rewardBackdrop.localScale *= CalculateUniformDisplayScale(currentSize, sourceSize);
+        Canvas.ForceUpdateCanvases();
+        if (!TryGetCanvasGeometry(
+                rewardBackdrop,
+                out currentPosition,
+                out currentSize))
+        {
+            rewardBackdrop.gameObject.SetActive(false);
+            return;
+        }
+
+        var positionDelta = sourcePosition - currentPosition;
+        rewardBackdrop.localPosition += new Vector3(positionDelta.x, positionDelta.y, 0f);
+        rewardBackdrop.SetAsLastSibling();
+        mRewardBackdropRect = rewardBackdrop;
+        Canvas.ForceUpdateCanvases();
     }
 
     private void CreateInputBlocker()
@@ -322,6 +375,10 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
         var startSizes = new Vector2[mIcons.Count];
         var targetScales = new float[mIcons.Count];
         var targetItemPositions = new Vector2[mIcons.Count];
+        var backdropStartPosition = mRewardBackdropRect != null
+            ? (Vector2)mRewardBackdropRect.localPosition
+            : Vector2.zero;
+        var backdropEndPosition = CalculateRewardBackdropExitPosition(backdropStartPosition);
         for (var i = 0; i < mIcons.Count; i++)
         {
             var icon = mIcons[i];
@@ -370,7 +427,17 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
                 }
             }
 
+            UpdateRewardBackdropExit(
+                elapsed,
+                backdropStartPosition,
+                backdropEndPosition);
+
             yield return null;
+        }
+
+        if (mRewardBackdropRect != null)
+        {
+            mRewardBackdropRect.localPosition = backdropEndPosition;
         }
 
         for (var i = 0; i < mIcons.Count; i++)
@@ -428,6 +495,41 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
                 yield return null;
             }
         }
+    }
+
+    private Vector2 CalculateRewardBackdropExitPosition(Vector2 startPosition)
+    {
+        if (mRewardBackdropRect == null || mCanvasRect == null)
+        {
+            return startPosition;
+        }
+
+        var halfHeight = mRewardBackdropRect.rect.height
+                         * Mathf.Abs(mRewardBackdropRect.localScale.y)
+                         * 0.5f;
+        return new Vector2(
+            startPosition.x,
+            mCanvasRect.rect.yMin - halfHeight - RewardBackdropOffscreenPadding);
+    }
+
+    private void UpdateRewardBackdropExit(
+        float rewardMoveElapsed,
+        Vector2 startPosition,
+        Vector2 endPosition)
+    {
+        if (mRewardBackdropRect == null
+            || rewardMoveElapsed <= RewardBackdropExitDelay)
+        {
+            return;
+        }
+
+        var normalized = Mathf.Clamp01(
+            (rewardMoveElapsed - RewardBackdropExitDelay) / RewardBackdropExitDuration);
+        var eased = normalized * normalized * normalized;
+        mRewardBackdropRect.localPosition = Vector2.LerpUnclamped(
+            startPosition,
+            endPosition,
+            eased);
     }
 
     private void PlayRewardRevealEffect(FlyIcon icon)

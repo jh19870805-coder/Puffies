@@ -9,10 +9,11 @@
 - 结算页：任务奖励不再从 `BagCover` 单独复制 `TaskRewardFlyIcon`；只让完整 `BagRewardItem` 自身播放出现动画。只有真正分配到正数 PackId 的奖励才显示，已记入待发队列但本局未分配 PackId 的任务奖励不显示问号占位。
 - 跨场景交接：不再创建 `SceneSnapshot`、`RenderTexture` 或 `RawImage`，也不再捕获 GameScene 最后一帧。结算页现有完整 `BagRewardItem` 先换父到 `DontDestroyOnLoad` 的转场 Canvas，切换 MainScene 后仍由同一对象继续飞行和缩放，不存在截图卡面副本。
 - 双奖励对象：`GameScene/RewardPanel/ImgBagBg` 已在编辑器场景中预置 `BagRewardItem` 与 `BagRewardItemSecondary` 两个完整 Prefab 实例。单奖励启用一个，双奖励启用两个；已删除第二奖励的运行时 `Instantiate`、临时命名和销毁列表，两份对象后续均只做父节点切换。
+- 奖励背板：结算页黑色半透明条 `ImgBagBg` 不再随完成按钮提前退出 GameScene；奖励卡从其层级提升后，`ImgBagBg` 与完整奖励卡一起换父到持久化 Canvas 并进入 MainScene。首页奖励卡开始飞行 `0.08s` 后，背板沿用原 `0.42s` 三次缓入节奏下移出屏幕，奖励卡飞行、落位和揭晓时序不变。
 - 首页顺序：MainScene 列表在分批创建的全部让帧期间由 Content `CanvasGroup` 预隐藏，完成排序、目标缓存和全部卡包离屏布置后才恢复显示，因此不会先闪出其他卡包。完整 `BagRewardItem` 一边飞行一边等比缩放到首页目标卡包的实际尺寸并精确落位；实例内 `FX_ui_jieSuo_w` 播放约 `0.3s` 到首闪时，同一帧隐藏完整飞行对象并显示对应真实卡包；所有奖励都完成替换后，才让其余原有卡包从屏幕下方依次上移。不得等待 `dot` 粒子的 `12s` 发射周期。
 - 容错：完整 `BagRewardItem`、`BagCover`、实例内特效或首页目标槽缺失时输出警告；没有特效时仍按原流程揭晓真实卡包并返回首页。
 - 修改文件：`Assets/Scripts/Controller/GameScene.cs`、`Assets/Scripts/Controller/MainScene.cs`、`Assets/Scripts/Model/CardPackRewardFlyTransition.cs`、`Assets/Scenes/GameScene.unity`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。`Assets/Prefabs/BagRewardItem.prefab` 与美术粒子参数未修改。
-- 验证：最新 Play Mode 日志确认旧流程落位后实际等待 `12.20s`，对应特效 Prefab 内 `dot` 粒子的 `12s` 发射周期；现已删除粒子存活轮询。已确认 `TaskRewardFlyIcon`、单独复制 `BagCover`、`SceneSnapshot`、`RenderTexture`、`RawImage` 和截图捕获逻辑均已移除。首次运行暴露的 `MissingComponentException` 已按调用栈修复，Runtime/Editor 重新编译为 `0` 警告、`0` 错误；仍需在 Play Mode 确认 MainScene 初始化不中断、列表没有首帧闪现、飞行缩放终点尺寸一致、落位约 `0.3s` 首闪时同帧替换真实卡包，以及其余列表最后入场。
+- 验证：最新 Play Mode 日志确认旧流程落位后实际等待 `12.20s`，对应特效 Prefab 内 `dot` 粒子的 `12s` 发射周期；现已删除粒子存活轮询。已确认 `TaskRewardFlyIcon`、单独复制 `BagCover`、`SceneSnapshot`、`RenderTexture`、`RawImage` 和截图捕获逻辑均已移除。首次运行暴露的 `MissingComponentException` 已按调用栈修复；`ImgBagBg` 跨场景与延后下移动画接入后，Runtime/Editor 重新编译为 `0` 警告、`0` 错误。仍需在 Play Mode 确认黑色条无跳位地进入首页并在卡包起飞后下移、列表没有首帧闪现、落位约 `0.3s` 首闪时同帧替换真实卡包，以及其余列表最后入场。
 
 ## 2026-09-01 重玩积分与卡包奖励限制
 

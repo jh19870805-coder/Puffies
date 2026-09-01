@@ -1259,6 +1259,7 @@
 10. WHEN 从 GameScene 切换到 MainScene THEN 系统 SHALL 让现有完整 `BagRewardItem` 通过 `DontDestroyOnLoad` Canvas 直接跨场景并继续飞行；MUST NOT 创建 `SceneSnapshot`、`RenderTexture`、`RawImage` 或任何卡面截图副本。
 11. WHEN 落位特效播放 THEN 系统 SHALL 在约 `0.3s` 的粒子首闪时停止并清理长尾粒子，MUST NOT 等待 `dot` 粒子的 `12s` 发射周期；随后同帧隐藏飞行对象并显示真实卡包。
 12. WHEN MainScene 在奖励转场期间分批创建卡包列表 THEN 列表 SHALL 从创建前保持整体不可见，直到排序、目标槽缓存和全部卡包离屏布置在同一帧完成后才恢复显示；MUST NOT 在协程批次让帧时闪现其他卡包。
+13. WHEN 结算页返回 MainScene THEN `ImgBagBg` SHALL 与完整奖励卡一起跨场景并保持结算页位置；WHEN 奖励卡开始飞向首页列表约 `0.08s` 后 THEN `ImgBagBg` SHALL 使用原 `0.42s` 三次缓入节奏向下移出屏幕，不得在 GameScene 退场阶段提前消失，也不得跟随奖励卡飞向目标槽。
 
 ### 设计与任务
 
@@ -1274,3 +1275,4 @@
 - [x] 10. 根据 Play Mode 的 `effectDuration=12.20s` 日志定位 `dot` 长发射粒子，改为约 `0.3s` 粒子首闪时立即替换真实卡包。
 - [x] 11. 在 GameScene 预置第二个完整 `BagRewardItemSecondary`，删除双奖励的运行时 `Instantiate` 和清理列表。
 - [x] 12. MainScene 在卡包分批创建前预隐藏列表，完成目标缓存和离屏布置后同帧恢复，消除其他卡包首帧闪现。
+- [x] 13. 将 `ImgBagBg` 纳入完整奖励卡的持久化 Canvas，移除其 GameScene 提前退场，并在卡包起飞后延迟下移。
