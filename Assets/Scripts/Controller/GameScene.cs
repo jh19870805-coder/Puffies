@@ -114,7 +114,10 @@ public class GameScene : MonoBehaviour
     private const float TutorialArrowScale = 0.7f;
     private const float TutorialPracticePromptGap = 24f;
     private const float TutorialPromptScreenMargin = 24f;
+    private const float TutorialHintPromptLeftOffset = 48f;
+    private const float TutorialHintPromptDownOffset = 20f;
     private const float TutorialHintArrowButtonGap = 16f;
+    private const float TutorialHintArrowTargetDownOffset = 20f;
     private const string TutorialInvalidLineStartCharacters = "，。！？；：、”’）】》";
     private const string TutorialCollection = "Tutorial";
     private const string PiecePlacementTutorialKey = "CardBag001TutorialCompleted";
@@ -8841,7 +8844,9 @@ public class GameScene : MonoBehaviour
                 parent.rect,
                 hintButtonPosition
                 - GetTutorialHintArrowTipOffset()
-                - TutorialHintArrowMotion.PulseOffset,
+                - TutorialHintArrowMotion.PulseOffset
+                + Vector2.left * TutorialHintPromptLeftOffset
+                + Vector2.down * TutorialHintPromptDownOffset,
                 promptSize);
         }
 
@@ -8896,7 +8901,7 @@ public class GameScene : MonoBehaviour
 
         position = new Vector2(
             hintCanvasRect.xMin - TutorialHintArrowButtonGap,
-            hintCanvasRect.center.y);
+            hintCanvasRect.center.y - TutorialHintArrowTargetDownOffset);
         return true;
     }
 
