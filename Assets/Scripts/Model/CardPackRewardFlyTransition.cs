@@ -14,22 +14,38 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
     private const float RewardVisualOverlapDuration = 0.05f;
     private const float TargetLookupTimeout = 5f;
     private const float TargetArcHeight = 72f;
-    private const int TransitionSortingOrder = 32000;
+    private const int SnapshotSortingOrder = 32000;
+    private const int RewardContentSortingOrder = 1;
     private static CardPackRewardFlyTransition sInstance;
 
     private sealed class FlyIcon
     {
         public int PackId;
-        public RectTransform RectTransform;
+        public Transform RewardItemTransform;
+        public RectTransform CoverRect;
         public Image Image;
         public Color BaseColor;
         public GameObject RevealEffect;
-        public Vector3 RevealEffectBaseScale;
+        public Vector3 InitialItemScale;
+        public Vector2 CoverOffsetFromItem;
+        public Vector2 DisplaySize;
         public bool HasLanded;
         public bool HasTargetRevealed;
         public bool HasRevealed;
         public float LandedAt;
         public float TargetRevealedAt;
+    }
+
+    private sealed class RewardSource
+    {
+        public int PackId;
+        public Transform RewardItemTransform;
+        public RectTransform RewardCanvasRect;
+        public RectTransform CoverRect;
+        public Image CoverImage;
+        public GameObject RevealEffect;
+        public Vector2 Position;
+        public Vector2 Size;
     }
 
     private readonly List<int> mPackIds = new List<int>();
@@ -49,8 +65,7 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
 
     public static bool TryStart(
         IReadOnlyList<RectTransform> sources,
-        IReadOnlyList<int> packIds,
-        GameObject revealEffectTemplate)
+        IReadOnlyList<int> packIds)
     {
         if (sInstance != null || packIds == null)
         {
@@ -80,7 +95,7 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
 
         var transition = transitionObject.GetComponent<CardPackRewardFlyTransition>();
         sInstance = transition;
-        if (transition.Initialize(uniqueSources, uniquePackIds, revealEffectTemplate))
+        if (transition.Initialize(uniqueSources, uniquePackIds))
         {
             return true;
         }
@@ -92,15 +107,13 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
 
     private bool Initialize(
         IReadOnlyList<RectTransform> sources,
-        IReadOnlyList<int> packIds,
-        GameObject revealEffectTemplate)
+        IReadOnlyList<int> packIds)
     {
-        mPackIds.AddRange(packIds);
         mCanvas = GetComponent<Canvas>();
         mCanvasRect = GetComponent<RectTransform>();
-        mCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        ConfigureTransitionCanvas(Camera.main);
         mCanvas.overrideSorting = true;
-        mCanvas.sortingOrder = TransitionSortingOrder;
+        mCanvas.sortingOrder = SnapshotSortingOrder;
 
         var scaler = GetComponent<CanvasScaler>();
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
@@ -111,69 +124,117 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
         CreateInputBlocker();
         CreateSceneSnapshotLayer();
         Canvas.ForceUpdateCanvases();
-        for (var i = 0; i < mPackIds.Count; i++)
+
+        var rewardSources = new List<RewardSource>(packIds.Count);
+        var rewardItemRoots = new HashSet<Transform>();
+        for (var i = 0; i < packIds.Count; i++)
         {
-            var packId = mPackIds[i];
+            var packId = packIds[i];
             var source = sources != null && i < sources.Count ? sources[i] : null;
             var sourceImage = source != null ? source.GetComponent<Image>() : null;
+            var rewardCanvasRect = source != null ? source.parent as RectTransform : null;
+            var rewardCanvas = rewardCanvasRect != null
+                ? rewardCanvasRect.GetComponent<Canvas>()
+                : null;
+            var rewardItemTransform = rewardCanvasRect != null
+                ? rewardCanvasRect.parent
+                : null;
             if (sourceImage == null
                 || sourceImage.sprite == null
-                || !TryGetOverlayGeometry(source, out var sourcePosition, out var sourceSize))
+                || rewardCanvas == null
+                || rewardItemTransform == null
+                || !rewardItemRoots.Add(rewardItemTransform)
+                || !TryGetCanvasGeometry(source, out var sourcePosition, out var sourceSize))
             {
                 Debug.LogWarning(
-                    $"CardPackRewardFlyTransition: settlement reward source missing. packId={packId}");
+                    $"CardPackRewardFlyTransition: complete BagRewardItem source missing. "
+                    + $"packId={packId}");
                 return false;
             }
 
-            var iconObject = new GameObject(
-                $"RewardPack_{packId:D3}",
-                typeof(RectTransform),
-                typeof(CanvasRenderer),
-                typeof(Image));
-            var iconRect = iconObject.GetComponent<RectTransform>();
-            iconRect.SetParent(mCanvasRect, false);
-            iconRect.anchorMin = new Vector2(0.5f, 0.5f);
-            iconRect.anchorMax = new Vector2(0.5f, 0.5f);
-            iconRect.pivot = new Vector2(0.5f, 0.5f);
-            iconRect.anchoredPosition = sourcePosition;
-            iconRect.sizeDelta = sourceSize;
-
-            var iconImage = iconObject.GetComponent<Image>();
-            iconImage.sprite = sourceImage.sprite;
-            iconImage.color = sourceImage.color;
-            iconImage.preserveAspect = sourceImage.preserveAspect;
-            iconImage.raycastTarget = false;
-            iconImage.enabled = false;
-            var revealEffect = CreateRevealEffect(revealEffectTemplate, packId);
-            mIcons.Add(new FlyIcon
+            rewardSources.Add(new RewardSource
             {
                 PackId = packId,
-                RectTransform = iconRect,
-                Image = iconImage,
-                BaseColor = sourceImage.color,
-                RevealEffect = revealEffect,
-                RevealEffectBaseScale = revealEffect != null
-                    ? revealEffect.transform.localScale
-                    : Vector3.one
+                RewardItemTransform = rewardItemTransform,
+                RewardCanvasRect = rewardCanvasRect,
+                CoverRect = source,
+                CoverImage = sourceImage,
+                RevealEffect = rewardCanvasRect.Find("FX_ui_jieSuo_w")?.gameObject,
+                Position = sourcePosition,
+                Size = sourceSize
             });
+        }
+
+        mPackIds.AddRange(packIds);
+        for (var i = 0; i < rewardSources.Count; i++)
+        {
+            var source = rewardSources[i];
+            source.RewardItemTransform.SetParent(mCanvasRect, false);
+            source.RewardItemTransform.localRotation = Quaternion.identity;
+            source.RewardItemTransform.localScale = Vector3.one;
+            Canvas.ForceUpdateCanvases();
+            if (!TryGetCanvasGeometry(
+                    source.CoverRect,
+                    out var currentPosition,
+                    out var currentSize))
+            {
+                Debug.LogWarning(
+                    $"CardPackRewardFlyTransition: BagRewardItem geometry was lost while reparenting. "
+                    + $"packId={source.PackId}");
+                return false;
+            }
+
+            source.RewardItemTransform.localScale *= CalculateUniformDisplayScale(
+                currentSize,
+                source.Size);
+            Canvas.ForceUpdateCanvases();
+            if (!TryGetCanvasGeometry(
+                    source.CoverRect,
+                    out currentPosition,
+                    out currentSize))
+            {
+                return false;
+            }
+
+            var positionDelta = source.Position - currentPosition;
+            source.RewardItemTransform.localPosition += new Vector3(
+                positionDelta.x,
+                positionDelta.y,
+                0f);
+            Canvas.ForceUpdateCanvases();
+            TryGetCanvasGeometry(
+                source.CoverRect,
+                out var restoredPosition,
+                out var restoredSize);
+            source.CoverImage.raycastTarget = false;
+            source.CoverImage.enabled = true;
+            StopAndClearParticleSystems(source.RevealEffect);
+            if (source.RevealEffect != null)
+            {
+                source.RevealEffect.SetActive(false);
+            }
+
+            mIcons.Add(new FlyIcon
+            {
+                PackId = source.PackId,
+                RewardItemTransform = source.RewardItemTransform,
+                CoverRect = source.CoverRect,
+                Image = source.CoverImage,
+                BaseColor = source.CoverImage.color,
+                RevealEffect = source.RevealEffect,
+                InitialItemScale = source.RewardItemTransform.localScale,
+                CoverOffsetFromItem = source.Position
+                                      - (Vector2)source.RewardItemTransform.localPosition,
+                DisplaySize = source.Size
+            });
+            Debug.Log(
+                $"CardPackRewardFlyTransition: complete BagRewardItem reparented. "
+                + $"packId={source.PackId}, center={source.Position}->{restoredPosition}, "
+                + $"size={source.Size}->{restoredSize}");
         }
 
         StartCoroutine(PlayTransition());
         return true;
-    }
-
-    private GameObject CreateRevealEffect(GameObject template, int packId)
-    {
-        if (template == null)
-        {
-            return null;
-        }
-
-        var effect = Instantiate(template, transform, false);
-        effect.name = $"RewardRevealEffect_{packId:D3}";
-        StopAndClearParticleSystems(effect);
-        effect.SetActive(false);
-        return effect;
     }
 
     private void CreateInputBlocker()
@@ -226,6 +287,13 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
         while (elapsed < TargetLookupTimeout)
         {
             elapsed += Time.unscaledDeltaTime;
+            var activeCamera = Camera.main;
+            if (activeCamera != null && mCanvas.worldCamera != activeCamera)
+            {
+                ConfigureTransitionCanvas(activeCamera);
+                Canvas.ForceUpdateCanvases();
+            }
+
             mainScene = FindObjectOfType<MainScene>();
             if (mainScene != null && mainScene.TryPreparePackageRewardEntrance(mPackIds))
             {
@@ -251,7 +319,7 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
             if (!mPreparedMainScene.TryGetPackageRewardTargetScreenRect(
                     mIcons[i].PackId,
                     out var targetScreenRect)
-                || !TryGetOverlayGeometry(
+                || !TryGetCanvasGeometry(
                     targetScreenRect,
                     out targetPositions[i],
                     out targetSizes[i]))
@@ -265,6 +333,8 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
         }
 
         yield return AnimateSceneSnapshotFade();
+        mCanvas.sortingOrder = RewardContentSortingOrder;
+        Canvas.ForceUpdateCanvases();
         if (mIcons.Count > 0)
         {
             yield return AnimateRewardIconsIntoTargets(targetPositions, targetSizes);
@@ -398,10 +468,19 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
     {
         var startPositions = new Vector2[mIcons.Count];
         var startSizes = new Vector2[mIcons.Count];
+        var targetScales = new float[mIcons.Count];
+        var targetItemPositions = new Vector2[mIcons.Count];
         for (var i = 0; i < mIcons.Count; i++)
         {
-            startPositions[i] = mIcons[i].RectTransform.anchoredPosition;
-            startSizes[i] = mIcons[i].RectTransform.sizeDelta;
+            var icon = mIcons[i];
+            var localPosition = icon.RewardItemTransform.localPosition;
+            startPositions[i] = new Vector2(localPosition.x, localPosition.y);
+            startSizes[i] = icon.DisplaySize;
+            targetScales[i] = CalculateUniformDisplayScale(
+                startSizes[i],
+                targetSizes[i]);
+            targetItemPositions[i] = targetPositions[i]
+                                     - icon.CoverOffsetFromItem * targetScales[i];
         }
 
         var totalDuration = TargetMoveDuration
@@ -419,22 +498,25 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
                 var normalized = Mathf.Clamp01(iconElapsed / TargetMoveDuration);
                 var eased = Mathf.SmoothStep(0f, 1f, normalized);
                 var arc = Mathf.Sin(normalized * Mathf.PI) * TargetArcHeight;
-                var position = Vector2.LerpUnclamped(startPositions[i], targetPositions[i], eased);
+                var position = Vector2.LerpUnclamped(
+                    startPositions[i],
+                    targetItemPositions[i],
+                    eased);
                 position.y += arc;
-                icon.RectTransform.anchoredPosition = position;
-                icon.RectTransform.sizeDelta = Vector2.LerpUnclamped(
-                    startSizes[i],
-                    targetSizes[i],
+                icon.RewardItemTransform.localPosition = new Vector3(
+                    position.x,
+                    position.y,
+                    0f);
+                icon.RewardItemTransform.localScale = Vector3.LerpUnclamped(
+                    icon.InitialItemScale,
+                    icon.InitialItemScale * targetScales[i],
                     eased);
 
                 if (!icon.HasLanded && normalized >= 1f)
                 {
                     icon.HasLanded = true;
                     icon.LandedAt = elapsed;
-                    PlayRewardRevealEffect(
-                        icon,
-                        startSizes[i],
-                        targetSizes[i]);
+                    PlayRewardRevealEffect(icon);
                 }
 
                 if (icon.HasLanded
@@ -462,8 +544,11 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
         for (var i = 0; i < mIcons.Count; i++)
         {
             var icon = mIcons[i];
-            icon.RectTransform.anchoredPosition = targetPositions[i];
-            icon.RectTransform.sizeDelta = targetSizes[i];
+            icon.RewardItemTransform.localPosition = new Vector3(
+                targetItemPositions[i].x,
+                targetItemPositions[i].y,
+                0f);
+            icon.RewardItemTransform.localScale = icon.InitialItemScale * targetScales[i];
             if (!icon.HasTargetRevealed)
             {
                 mPreparedMainScene.RevealPackageRewardTarget(icon.PackId);
@@ -479,46 +564,19 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
         }
     }
 
-    private void PlayRewardRevealEffect(
-        FlyIcon icon,
-        Vector2 sourceSize,
-        Vector2 targetSize)
+    private void PlayRewardRevealEffect(FlyIcon icon)
     {
-        if (icon?.RevealEffect == null || mPreparedMainScene == null)
+        if (icon?.RevealEffect == null)
         {
             return;
         }
 
-        var widthScale = sourceSize.x > 0.01f
-            ? targetSize.x / sourceSize.x
-            : 1f;
-        var heightScale = sourceSize.y > 0.01f
-            ? targetSize.y / sourceSize.y
-            : 1f;
-        var uniformScale = Mathf.Min(widthScale, heightScale);
-        if (!float.IsFinite(uniformScale) || uniformScale <= 0.0001f)
-        {
-            uniformScale = 1f;
-        }
-
-        if (!mPreparedMainScene.TryAttachPackageRewardRevealEffect(
-                icon.PackId,
-                icon.RevealEffect,
-                out var inheritedUiScale))
-        {
-            Debug.LogWarning(
-                $"CardPackRewardFlyTransition: could not attach reward reveal effect. "
-                + $"packId={icon.PackId}");
-            return;
-        }
-
-        icon.RevealEffect.transform.localScale =
-            icon.RevealEffectBaseScale * (uniformScale / inheritedUiScale);
         Debug.Log(
-            $"CardPackRewardFlyTransition: reward reveal effect attached. "
-            + $"packId={icon.PackId}, displayScale={uniformScale:F3}, "
-            + $"inheritedUiScale={inheritedUiScale:F3}, "
-            + $"localScale={icon.RevealEffect.transform.localScale}");
+            $"CardPackRewardFlyTransition: existing BagRewardItem effect played. "
+            + $"packId={icon.PackId}, itemScale={icon.RewardItemTransform.localScale}, "
+            + $"effectLocalScale={icon.RevealEffect.transform.localScale}, "
+            + $"canvasMode={mCanvas.renderMode}, camera={mCanvas.worldCamera?.name}, "
+            + $"sortingOrder={mCanvas.sortingOrder}");
         StopAndClearParticleSystems(icon.RevealEffect);
         icon.RevealEffect.SetActive(true);
         var particleSystems = icon.RevealEffect.GetComponentsInChildren<ParticleSystem>(true);
@@ -526,6 +584,22 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
         {
             particleSystems[i].Play(false);
         }
+    }
+
+    private static float CalculateUniformDisplayScale(
+        Vector2 sourceSize,
+        Vector2 targetSize)
+    {
+        var widthScale = sourceSize.x > 0.01f
+            ? targetSize.x / sourceSize.x
+            : 1f;
+        var heightScale = sourceSize.y > 0.01f
+            ? targetSize.y / sourceSize.y
+            : 1f;
+        var uniformScale = Mathf.Min(widthScale, heightScale);
+        return float.IsFinite(uniformScale) && uniformScale > 0.0001f
+            ? uniformScale
+            : 1f;
     }
 
     private static void StopAndClearParticleSystems(GameObject root)
@@ -544,7 +618,24 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
         }
     }
 
-    private bool TryGetOverlayGeometry(
+    private void ConfigureTransitionCanvas(Camera camera)
+    {
+        if (mCanvas == null || camera == null)
+        {
+            return;
+        }
+
+        GameCommonUtility.ConfigureCanvasForGameplay(
+            mCanvas,
+            camera,
+            GameDefine.DesignWidth,
+            GameDefine.DesignHeight,
+            GameDefine.PixelsPerUnit);
+        mCanvas.overrideSorting = true;
+        mCanvas.sortingOrder = SnapshotSortingOrder;
+    }
+
+    private bool TryGetCanvasGeometry(
         RectTransform source,
         out Vector2 localPosition,
         out Vector2 localSize)
@@ -569,17 +660,17 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
         if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(
                 mCanvasRect,
                 centerScreen,
-                null,
+                GetTransitionEventCamera(),
                 out localPosition)
             || !RectTransformUtility.ScreenPointToLocalPointInRectangle(
                 mCanvasRect,
                 bottomLeftScreen,
-                null,
+                GetTransitionEventCamera(),
                 out var bottomLeft)
             || !RectTransformUtility.ScreenPointToLocalPointInRectangle(
                 mCanvasRect,
                 topRightScreen,
-                null,
+                GetTransitionEventCamera(),
                 out var topRight))
         {
             return false;
@@ -591,7 +682,7 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
         return localSize.x > 0.01f && localSize.y > 0.01f;
     }
 
-    private bool TryGetOverlayGeometry(
+    private bool TryGetCanvasGeometry(
         Rect screenRect,
         out Vector2 localPosition,
         out Vector2 localSize)
@@ -604,17 +695,17 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
             || !RectTransformUtility.ScreenPointToLocalPointInRectangle(
                 mCanvasRect,
                 screenRect.center,
-                null,
+                GetTransitionEventCamera(),
                 out localPosition)
             || !RectTransformUtility.ScreenPointToLocalPointInRectangle(
                 mCanvasRect,
                 screenRect.min,
-                null,
+                GetTransitionEventCamera(),
                 out var minimum)
             || !RectTransformUtility.ScreenPointToLocalPointInRectangle(
                 mCanvasRect,
                 screenRect.max,
-                null,
+                GetTransitionEventCamera(),
                 out var maximum))
         {
             return false;
@@ -626,6 +717,13 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
         return localSize.x > 0.01f && localSize.y > 0.01f;
     }
 
+    private Camera GetTransitionEventCamera()
+    {
+        return mCanvas != null && mCanvas.renderMode != RenderMode.ScreenSpaceOverlay
+            ? mCanvas.worldCamera ?? Camera.main
+            : null;
+    }
+
     private void OnDestroy()
     {
         for (var i = 0; i < mIcons.Count; i++)
@@ -634,7 +732,6 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
             if (revealEffect != null)
             {
                 StopAndClearParticleSystems(revealEffect);
-                Destroy(revealEffect);
             }
         }
 

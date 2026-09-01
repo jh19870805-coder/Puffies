@@ -367,7 +367,7 @@ public class GameScene : MonoBehaviour
     private GameObject _settlementRewardRevealEffect;
     private Image _completionRewardDisplayImage;
     private Image _taskRewardDisplayImage;
-    private readonly List<Image> _runtimeSettlementRewardImages = new List<Image>();
+    private readonly List<GameObject> _runtimeSettlementRewardItems = new List<GameObject>();
     private Vector2 _settlementSummaryTargetPosition;
     private Vector2 _rewardTaskItemTargetPosition;
     private Vector2 _settlementRewardBagTargetPosition;
@@ -7494,7 +7494,7 @@ public class GameScene : MonoBehaviour
 
     private void PrepareSettlementVisualState()
     {
-        ClearRuntimeSettlementRewardImages();
+        ClearRuntimeSettlementRewardItems();
         _completionRewardDisplayImage = null;
         _taskRewardDisplayImage = null;
         StopAndHideSettlementRewardRevealEffect();
@@ -7863,7 +7863,7 @@ public class GameScene : MonoBehaviour
 
     private void PrepareSettlementRewardSlots()
     {
-        ClearRuntimeSettlementRewardImages();
+        ClearRuntimeSettlementRewardItems();
         _completionRewardDisplayImage = null;
         _taskRewardDisplayImage = null;
         var showTaskReward = _settlementTaskRewardPackId > 0
@@ -7927,13 +7927,36 @@ public class GameScene : MonoBehaviour
 
     private Image CreateSettlementRewardImage(string objectName)
     {
+        var sourceItemRoot = GetSettlementRewardItemRoot(_taskRewardImage);
+        if (sourceItemRoot == null)
+        {
+            Debug.LogWarning(
+                "GameScene: could not create the second settlement reward; "
+                + "BagCover is not inside BagRewardItem/Canvas.");
+            return null;
+        }
+
         var clone = Instantiate(
-            _taskRewardImage.gameObject,
-            _taskRewardImage.transform.parent,
+            sourceItemRoot.gameObject,
+            sourceItemRoot.parent,
             false);
-        clone.name = objectName;
-        var image = clone.GetComponent<Image>();
-        _runtimeSettlementRewardImages.Add(image);
+        clone.name = $"BagRewardItem_{objectName}";
+        var rewardCanvas = clone.GetComponentInChildren<Canvas>(true);
+        var image = rewardCanvas != null
+            ? rewardCanvas.transform.Find("BagCover")?.GetComponent<Image>()
+            : null;
+        if (rewardCanvas == null || image == null)
+        {
+            Destroy(clone);
+            Debug.LogWarning(
+                "GameScene: cloned BagRewardItem is missing Canvas/BagCover.");
+            return null;
+        }
+
+        rewardCanvas.transform.localScale = Vector3.one;
+        var revealEffect = rewardCanvas.transform.Find("FX_ui_jieSuo_w")?.gameObject;
+        StopAndHideSettlementRewardRevealEffect(revealEffect);
+        _runtimeSettlementRewardItems.Add(clone);
         return image;
     }
 
@@ -8080,17 +8103,17 @@ public class GameScene : MonoBehaviour
         return size.x > 0.01f && size.y > 0.01f;
     }
 
-    private void ClearRuntimeSettlementRewardImages()
+    private void ClearRuntimeSettlementRewardItems()
     {
-        for (var i = 0; i < _runtimeSettlementRewardImages.Count; i++)
+        for (var i = 0; i < _runtimeSettlementRewardItems.Count; i++)
         {
-            if (_runtimeSettlementRewardImages[i] != null)
+            if (_runtimeSettlementRewardItems[i] != null)
             {
-                Destroy(_runtimeSettlementRewardImages[i].gameObject);
+                Destroy(_runtimeSettlementRewardItems[i]);
             }
         }
 
-        _runtimeSettlementRewardImages.Clear();
+        _runtimeSettlementRewardItems.Clear();
     }
 
     private void ShowRewardPanel()
@@ -8412,19 +8435,18 @@ public class GameScene : MonoBehaviour
 
     private IEnumerator PlaySettlementFinishTransition()
     {
-        DetachSettlementRewardImagesForExit();
+        PrepareSettlementRewardImagesForExit();
         yield return AnimateSettlementUiExit();
 
         if (!CardPackRewardFlyTransition.TryStart(
                 BuildSettlementRewardTransitionSources(),
-                _settlementPackRewardIds,
-                _settlementRewardRevealEffect))
+                _settlementPackRewardIds))
         {
             GameManager.EnterMainScene();
         }
     }
 
-    private void DetachSettlementRewardImagesForExit()
+    private void PrepareSettlementRewardImagesForExit()
     {
         var rewardPanelRect = _rewardPanelRoot != null
             ? _rewardPanelRoot.transform as RectTransform
@@ -8434,45 +8456,147 @@ public class GameScene : MonoBehaviour
             return;
         }
 
-        var detachedImages = new HashSet<Image>();
-        DetachRewardImage(_completionRewardDisplayImage);
-        DetachRewardImage(_taskRewardDisplayImage);
+        var movedItems = new HashSet<Transform>();
+        MoveRewardItem(_completionRewardDisplayImage);
+        MoveRewardItem(_taskRewardDisplayImage);
 
-        void DetachRewardImage(Image image)
+        void MoveRewardItem(Image image)
         {
             if (image == null
-                || !image.gameObject.activeInHierarchy
-                || !detachedImages.Add(image))
+                || !image.gameObject.activeInHierarchy)
             {
                 return;
             }
 
-            var imageRect = image.rectTransform;
-            if (!TryGetRelativeRectGeometry(
-                    imageRect,
-                    rewardPanelRect,
-                    out var center,
-                    out var size))
+            var itemRoot = GetSettlementRewardItemRoot(image);
+            if (itemRoot == null)
             {
                 Debug.LogWarning(
-                    $"GameScene: could not preserve settlement reward geometry. "
-                    + $"object={image.name}");
+                    $"GameScene: could not move complete settlement reward item. "
+                    + $"BagCover={image.name}");
                 return;
             }
 
-            imageRect.SetParent(rewardPanelRect, false);
-            imageRect.anchorMin = new Vector2(0.5f, 0.5f);
-            imageRect.anchorMax = new Vector2(0.5f, 0.5f);
-            imageRect.pivot = new Vector2(0.5f, 0.5f);
-            imageRect.anchoredPosition = center;
-            imageRect.sizeDelta = size;
-            imageRect.localScale = Vector3.one;
-            imageRect.localRotation = Quaternion.identity;
-            image.transform.SetAsLastSibling();
+            if (!movedItems.Add(itemRoot))
+            {
+                return;
+            }
+
+            if (!TryGetScreenRectGeometry(
+                    image.rectTransform,
+                    out var screenCenter,
+                    out var screenSize))
+            {
+                Debug.LogWarning(
+                    $"GameScene: could not preserve complete settlement reward geometry. "
+                    + $"item={itemRoot.name}, BagCover={image.name}");
+                return;
+            }
+
+            itemRoot.SetParent(rewardPanelRect, false);
+            itemRoot.SetAsLastSibling();
+            Canvas.ForceUpdateCanvases();
+            RestoreRewardItemScreenGeometry(
+                itemRoot,
+                image.rectTransform,
+                rewardPanelRect,
+                screenCenter,
+                screenSize);
+            TryGetScreenRectGeometry(
+                image.rectTransform,
+                out var restoredScreenCenter,
+                out var restoredScreenSize);
             Debug.Log(
-                $"GameScene: settlement reward detached without visual movement. "
-                + $"object={image.name}, center={center}, size={size}");
+                $"GameScene: complete settlement reward item retained for exit. "
+                + $"item={itemRoot.name}, BagCover={image.name}, "
+                + $"center={screenCenter}->{restoredScreenCenter}, "
+                + $"size={screenSize}->{restoredScreenSize}");
         }
+    }
+
+    private static void RestoreRewardItemScreenGeometry(
+        Transform itemRoot,
+        RectTransform coverRect,
+        RectTransform parentRect,
+        Vector2 targetScreenCenter,
+        Vector2 targetScreenSize)
+    {
+        if (itemRoot == null || coverRect == null || parentRect == null)
+        {
+            return;
+        }
+
+        if (TryGetScreenRectGeometry(coverRect, out _, out var currentScreenSize))
+        {
+            var displayScale = CalculateUniformRectScale(currentScreenSize, targetScreenSize);
+            itemRoot.localScale *= displayScale;
+            Canvas.ForceUpdateCanvases();
+        }
+
+        if (!TryGetScreenRectGeometry(coverRect, out var currentScreenCenter, out _))
+        {
+            return;
+        }
+
+        var parentCanvas = parentRect.GetComponentInParent<Canvas>();
+        var rootCanvas = parentCanvas != null ? parentCanvas.rootCanvas : null;
+        var eventCamera = rootCanvas != null
+                          && rootCanvas.renderMode != RenderMode.ScreenSpaceOverlay
+            ? rootCanvas.worldCamera ?? Camera.main
+            : null;
+        if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                parentRect,
+                targetScreenCenter,
+                eventCamera,
+                out var targetLocal)
+            || !RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                parentRect,
+                currentScreenCenter,
+                eventCamera,
+                out var currentLocal))
+        {
+            return;
+        }
+
+        itemRoot.localPosition += (Vector3)(targetLocal - currentLocal);
+        Canvas.ForceUpdateCanvases();
+    }
+
+    private static bool TryGetScreenRectGeometry(
+        RectTransform rect,
+        out Vector2 screenCenter,
+        out Vector2 screenSize)
+    {
+        screenCenter = Vector2.zero;
+        screenSize = Vector2.zero;
+        if (rect == null)
+        {
+            return false;
+        }
+
+        var sourceCanvas = rect.GetComponentInParent<Canvas>();
+        var rootCanvas = sourceCanvas != null ? sourceCanvas.rootCanvas : null;
+        var eventCamera = rootCanvas != null
+                          && rootCanvas.renderMode != RenderMode.ScreenSpaceOverlay
+            ? rootCanvas.worldCamera ?? Camera.main
+            : null;
+        var corners = new Vector3[4];
+        rect.GetWorldCorners(corners);
+        var bottomLeft = RectTransformUtility.WorldToScreenPoint(eventCamera, corners[0]);
+        var topRight = RectTransformUtility.WorldToScreenPoint(eventCamera, corners[2]);
+        screenCenter = (bottomLeft + topRight) * 0.5f;
+        screenSize = new Vector2(
+            Mathf.Abs(topRight.x - bottomLeft.x),
+            Mathf.Abs(topRight.y - bottomLeft.y));
+        return screenSize.x > 0.01f && screenSize.y > 0.01f;
+    }
+
+    private static float CalculateUniformRectScale(Vector2 currentSize, Vector2 targetSize)
+    {
+        var widthScale = currentSize.x > 0.01f ? targetSize.x / currentSize.x : 1f;
+        var heightScale = currentSize.y > 0.01f ? targetSize.y / currentSize.y : 1f;
+        var scale = Mathf.Min(widthScale, heightScale);
+        return float.IsFinite(scale) && scale > 0.0001f ? scale : 1f;
     }
 
     private IEnumerator AnimateSettlementUiExit()
@@ -8642,14 +8766,27 @@ public class GameScene : MonoBehaviour
         return sources;
     }
 
+    private static Transform GetSettlementRewardItemRoot(Image image)
+    {
+        var rewardCanvas = image != null ? image.transform.parent : null;
+        return rewardCanvas != null && rewardCanvas.GetComponent<Canvas>() != null
+            ? rewardCanvas.parent
+            : null;
+    }
+
     private void StopAndHideSettlementRewardRevealEffect()
     {
-        if (_settlementRewardRevealEffect == null)
+        StopAndHideSettlementRewardRevealEffect(_settlementRewardRevealEffect);
+    }
+
+    private static void StopAndHideSettlementRewardRevealEffect(GameObject revealEffect)
+    {
+        if (revealEffect == null)
         {
             return;
         }
 
-        var particleSystems = _settlementRewardRevealEffect.GetComponentsInChildren<
+        var particleSystems = revealEffect.GetComponentsInChildren<
             ParticleSystem>(true);
         for (var i = 0; i < particleSystems.Length; i++)
         {
@@ -8658,7 +8795,7 @@ public class GameScene : MonoBehaviour
                 ParticleSystemStopBehavior.StopEmittingAndClear);
         }
 
-        _settlementRewardRevealEffect.SetActive(false);
+        revealEffect.SetActive(false);
     }
 
     private void InitializeScoringSession()

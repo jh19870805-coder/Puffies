@@ -1030,47 +1030,6 @@ public class MainScene : MonoBehaviour
         SetPackageVisualsVisible(entry, true);
     }
 
-    public bool TryAttachPackageRewardRevealEffect(
-        int bagId,
-        GameObject effectObject,
-        out float inheritedUiScale)
-    {
-        inheritedUiScale = 1f;
-        var entry = FindPackageEntryForPackId(bagId);
-        if (entry?.Image == null || effectObject == null)
-        {
-            return false;
-        }
-
-        var targetRect = entry.Image.rectTransform;
-        var targetCanvas = targetRect.GetComponentInParent<Canvas>();
-        var rootCanvas = targetCanvas != null ? targetCanvas.rootCanvas : null;
-        if (rootCanvas != null)
-        {
-            var targetScale = targetRect.lossyScale;
-            var canvasScale = rootCanvas.transform.lossyScale;
-            var inheritedX = Mathf.Abs(canvasScale.x) > 0.0001f
-                ? Mathf.Abs(targetScale.x / canvasScale.x)
-                : 1f;
-            var inheritedY = Mathf.Abs(canvasScale.y) > 0.0001f
-                ? Mathf.Abs(targetScale.y / canvasScale.y)
-                : 1f;
-            inheritedUiScale = Mathf.Min(inheritedX, inheritedY);
-            if (!float.IsFinite(inheritedUiScale) || inheritedUiScale <= 0.0001f)
-            {
-                inheritedUiScale = 1f;
-            }
-        }
-
-        var effectTransform = effectObject.transform;
-        var localZ = effectTransform.localPosition.z;
-        effectTransform.SetParent(targetRect, false);
-        effectTransform.localPosition = new Vector3(0f, 0f, localZ);
-        effectTransform.localRotation = Quaternion.identity;
-        effectTransform.SetAsLastSibling();
-        return true;
-    }
-
     public IEnumerator AnimateRemainingPackageRewardEntrance()
     {
         var animatedStates = new List<PackageRewardEntranceState>();

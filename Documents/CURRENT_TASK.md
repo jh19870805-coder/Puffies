@@ -2,13 +2,14 @@
 
 ## 2026-09-01 结算奖励卡落位特效接入
 
-- 状态：运行时代码与规格记录已修改，并完成两轮 Play Mode 反馈修复；Runtime/Editor 编译和 Unity 实时导入均无错误，等待再次视觉验收。
+- 状态：最新 Play Mode 日志确认跨场景接管、MainScene 加载、飞行协程和落位粒子播放均已执行，但飞行内容 Canvas 与 MainScene 根 Canvas 同为排序 `0`，后加载的首页 Canvas 覆盖了整套动画；已将飞行内容排序改为 `1`，等待再次视觉验收。
 - 新节点：结算奖励占位图改为 `ImgBagBg/BagRewardItem/Canvas/BagCover`；`BagRewardItem` 内 `FX_ui_jieSuo_w` 在结算页保持停止和隐藏，不会提前播放。
-- 跨场景播放：点击完成后，`CardPackRewardFlyTransition` 从场景中的 `FX_ui_jieSuo_w` 复制运行时副本；奖励占位卡飞到 MainScene 对应真实卡包槽位时，副本继续挂到已经验证可以正常渲染的目标 `PackCover` 下。代码读取 `PackCover` 相对根 Canvas 的实际继承缩放，并以“占位卡/目标卡显示尺寸比 ÷ 继承缩放”计算特效本地 Scale，精确抵消 `PackNode=0.4`，不得再改挂根 Canvas导致粒子不可见。
+- 跨场景播放：点击完成后，`CardPackRewardFlyTransition` 直接接管 GameScene 编辑器中现有的完整 `BagRewardItem` 实例；`Canvas/BagCover` 与同级 `FX_ui_jieSuo_w` 保持在原 Prefab 层级中一起跨场景移动。换父时只移动和等比缩放 `BagRewardItem` 根节点，并按 `BagCover` 换父前后的真实屏幕中心与尺寸校正；不得重置内部 Canvas 或 `BagCover` 的锚点、位置、尺寸、旋转和缩放。落位时直接播放该实例内部现成的 `FX_ui_jieSuo_w`，不再复制特效、不改挂首页 `PackCover`、不覆盖粒子参数；随后切换成 MainScene 对应真实卡包。
+- 渲染环境：持久化转场 Canvas 使用与 GameScene/MainScene 根 Canvas 相同的 `Screen Space - Camera` 路径，并在场景切换后重新绑定当前 `Main Camera`；截图淡出阶段保持覆盖首页的高排序，截图释放后、飞行和落位阶段将完整卡包 Canvas 设为 `sortingOrder=1`，稳定显示在 MainScene 根 Canvas `0` 之上。美术背光粒子保持 Renderer 排序 `0`，前景闪光和粒子保持原生 `3~112`，不覆盖任何粒子排序参数。
 - 揭晓时机：沿用既有落位后 `0.20s` 揭晓点；先显示真实卡包并强制刷新 Canvas，飞行占位卡继续覆盖 `0.05s` 后再隐藏，保证至少一个渲染帧重叠，不得先消失再出现。根粒子为循环粒子，因此不等待自然停止，也不阻塞其余首页卡包入场；跨场景流程结束时清理特效副本。
-- 容错：`BagCover`、特效模板或首页目标槽缺失时输出警告；没有特效时仍按原流程揭晓真实卡包并返回首页。
+- 容错：完整 `BagRewardItem`、`BagCover`、实例内特效或首页目标槽缺失时输出警告；没有特效时仍按原流程揭晓真实卡包并返回首页。
 - 修改文件：`Assets/Scripts/Controller/GameScene.cs`、`Assets/Scripts/Controller/MainScene.cs`、`Assets/Scripts/Model/CardPackRewardFlyTransition.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`Documents/GAME_DESIGN_REQUIREMENTS.md`、`specs/spec-driven-development.md`。美术新增的 `Assets/Prefabs/BagRewardItem.prefab`、`.meta` 与 `Assets/Scenes/GameScene.unity` 保持用户当前修改，代码未改写其粒子参数。
-- 验证：首轮 Play Mode 确认存在“落位切换空帧”和“特效尺寸过小”；第二轮确认奖励卡在出场换父节点时被带到中间，且特效改挂根 Canvas 后不可见。代码检查确认出场问题来自 `DetachSettlementRewardImagesForExit()` 仅调用 `SetParent(true)`，现已改为换父前读取奖励图在 `RewardPanel` 下的实际中心与尺寸，换父后显式恢复 Anchor、Pivot、中心、尺寸、单位缩放和零旋转；特效恢复到原本可见的 `PackCover` 层级并反算继承缩放。修复后 `Assembly-CSharp.csproj`、`Assembly-CSharp-Editor.csproj` 均为 `0` 警告、`0` 错误；`git diff --check` 仅有既有 LF/CRLF 提示；Unity Editor 日志没有脚本编译、奖励几何或特效挂载错误。仍需在 Play Mode 再次验收单奖励、双奖励、无奖励，以及出场位置、特效中心、尺寸和渲染层级。
+- 验证：本次失败日志记录换父前后屏幕中心和尺寸完全一致：`(439.06,153.67)`、`(48.02,62.43)`；转场接管后的中心和尺寸也一致：`(0.16,-272.09)`、`(140,182)`。`TryStart`、MainScene 加载和 `FX_ui_jieSuo_w.Play` 均执行，确认动画丢失来自两个独立根 Canvas 同序遮挡，而非流程中断。已将飞行内容排序改为 `1`；仍需 Play Mode 视觉复验。
 
 ## 2026-09-01 重玩积分与卡包奖励限制
 
