@@ -1,5 +1,14 @@
 # 当前任务
 
+## 2026-09-01 新手引导第三步提示框避让
+
+- 状态：代码修改完成，Runtime/Editor 编译通过，等待 Unity Play Mode 视觉验收。
+- 修改：CardBag001 新手引导第三步提示框在现有 `BtnTips` 动态定位结果上整体向左移动 `48` 个设计像素、向下移动 `20` 个设计像素，避免提示背板遮挡提示按钮；屏幕安全边距限制继续生效。
+- 箭头：仍按 `BtnTips` 的实际矩形独立定位，横向终点保持在按钮左边缘外 `16` 个设计像素，并在按钮垂直中心基础上向下移动 `20` 个设计像素，使视觉尖端不再偏高。
+- 保留：提示框尺寸、文案、入场动画、按钮位置以及第一、二步引导均未修改。
+- 修改文件：`Assets/Scripts/Controller/GameScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。没有修改 `Assets/Scenes/GameScene.unity`。
+- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 均为 `0` 警告、`0` 错误；仍需在 Unity Play Mode 确认提示背板不再遮挡 `BtnTips`，箭头仍准确指向按钮。
+
 ## 2026-08-31 结算面板入场、卡包数与奖励卡包动画
 
 - 状态：运行时代码已修改，Runtime/Editor 编译通过，等待 Unity Play Mode 视觉验收。
