@@ -212,6 +212,11 @@ public class MainScene : MonoBehaviour
     private readonly System.Random mPackTornMaskRandom = new System.Random();
     private GameObject mPackageItemTemplate;
     private RectTransform mPackageContentRoot;
+    private CanvasGroup mPackageRewardPreHideCanvasGroup;
+    private float mPackageRewardPreHideOriginalAlpha;
+    private bool mPackageRewardPreHideOriginalInteractable;
+    private bool mPackageRewardPreHideOriginalBlocksRaycasts;
+    private bool mIsPackageRewardListPreHidden;
     private RectTransform mPackagePageTemplate;
     private ScrollRect mPackageScrollRect;
     private Coroutine mPackagePageSnapCoroutine;
@@ -999,6 +1004,7 @@ public class MainScene : MonoBehaviour
 
         mIsPlayingAnimation = true;
         Canvas.ForceUpdateCanvases();
+        RestorePackageRewardListVisibility();
         return true;
     }
 
@@ -1070,6 +1076,7 @@ public class MainScene : MonoBehaviour
     public void CancelPackageRewardEntrance()
     {
         ClearPackageRewardEntranceState(restorePositions: true);
+        RestorePackageRewardListVisibility();
         mIsPlayingAnimation = false;
     }
 
@@ -2403,6 +2410,7 @@ public class MainScene : MonoBehaviour
         }
 
         mPackageContentRoot = mPackageScrollRect.content;
+        PreHidePackageRewardList();
         mPackagePageTemplate = FindDirectChild(mPackageContentRoot, PackageFirstPageObjectName) as RectTransform;
         if (mPackagePageTemplate == null)
         {
@@ -2429,6 +2437,58 @@ public class MainScene : MonoBehaviour
         mPackagePageTemplate.gameObject.SetActive(true);
         NormalizePagedPackageLayout();
         return true;
+    }
+
+    private void PreHidePackageRewardList()
+    {
+        if (!CardPackRewardFlyTransition.IsActive
+            || mPackageContentRoot == null
+            || mIsPackageRewardListPreHidden)
+        {
+            return;
+        }
+
+        mPackageRewardPreHideCanvasGroup =
+            mPackageContentRoot.GetComponent<CanvasGroup>();
+        if (mPackageRewardPreHideCanvasGroup == null)
+        {
+            mPackageRewardPreHideCanvasGroup =
+                mPackageContentRoot.gameObject.AddComponent<CanvasGroup>();
+        }
+
+        if (mPackageRewardPreHideCanvasGroup == null)
+        {
+            Debug.LogWarning(
+                "MainScene: package reward list could not be pre-hidden because Content has no CanvasGroup.");
+            return;
+        }
+
+        mPackageRewardPreHideOriginalAlpha = mPackageRewardPreHideCanvasGroup.alpha;
+        mPackageRewardPreHideOriginalInteractable = mPackageRewardPreHideCanvasGroup.interactable;
+        mPackageRewardPreHideOriginalBlocksRaycasts = mPackageRewardPreHideCanvasGroup.blocksRaycasts;
+        mPackageRewardPreHideCanvasGroup.alpha = 0f;
+        mPackageRewardPreHideCanvasGroup.interactable = false;
+        mPackageRewardPreHideCanvasGroup.blocksRaycasts = false;
+        mIsPackageRewardListPreHidden = true;
+    }
+
+    private void RestorePackageRewardListVisibility()
+    {
+        if (!mIsPackageRewardListPreHidden)
+        {
+            return;
+        }
+
+        if (mPackageRewardPreHideCanvasGroup != null)
+        {
+            mPackageRewardPreHideCanvasGroup.alpha = mPackageRewardPreHideOriginalAlpha;
+            mPackageRewardPreHideCanvasGroup.interactable =
+                mPackageRewardPreHideOriginalInteractable;
+            mPackageRewardPreHideCanvasGroup.blocksRaycasts =
+                mPackageRewardPreHideOriginalBlocksRaycasts;
+        }
+
+        mIsPackageRewardListPreHidden = false;
     }
 
     private void ConfigurePackagePageSnapInput(GameObject scrollViewObject)

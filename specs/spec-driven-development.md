@@ -1250,14 +1250,15 @@
 1. WHEN 结算页显示获得的奖励卡包 THEN 系统 SHALL 使用 `ImgBagBg/BagRewardItem/Canvas/BagCover` 作为占位卡图，并保持 `FX_ui_jieSuo_w` 停止且不可见。
 2. WHEN 奖励卡跨场景飞到 MainScene 对应卡包槽位 THEN 系统 SHALL 直接接管 GameScene 编辑器中现有的完整 `BagRewardItem` 实例，并在目标卡包中心播放该实例内制作方配置好的 `FX_ui_jieSuo_w`；不得拆分 `BagCover` 与特效，不得复制或改挂特效。
 3. WHEN 落位特效开始播放 THEN 系统 SHALL 按结算占位卡与首页目标卡包的实际显示尺寸统一等比适配整个 `BagRewardItem` 的显示内容，不得分别拉伸 X/Y，也不得覆盖制作方粒子参数、材质和子层级。
-4. WHEN 完整奖励对象落到首页目标槽 THEN 系统 SHALL 保持该对象可见并播放实例内解锁特效的 `1.0s` 主视觉阶段；随后停止长尾粒子，并在同一帧隐藏完整飞行对象、显示对应真实卡包。所有奖励完成替换后，首页其余卡包 SHALL 才从屏幕下方入场。
+4. WHEN 完整奖励对象落到首页目标槽 THEN 系统 SHALL 播放实例内解锁特效，并在约 `0.3s` 的粒子首闪时停止长尾粒子、同一帧隐藏完整飞行对象并显示对应真实卡包。所有奖励完成替换后，首页其余卡包 SHALL 才从屏幕下方入场。
 5. IF 完整奖励实例、`BagCover` 或实例内 `FX_ui_jieSuo_w` 缺失 THEN 系统 SHALL 输出明确警告，并沿用无特效的真实卡包揭晓流程，不得阻断返回首页。
 6. WHEN 点击完成按钮并退出结算 UI THEN 系统 SHALL 把整个 `BagRewardItem` 从 `ImgBagBg` 提升到 `RewardPanel` 并保持原显示位置；MUST NOT 单独换父、复制或隐藏 `BagCover`。GameScene SHALL 在编辑器中预置 `BagRewardItem` 与 `BagRewardItemSecondary` 两个完整实例；单奖励启用一个、双奖励启用两个，运行时 MUST NOT 克隆奖励卡对象。
 7. WHEN 完整 `BagRewardItem` 在结算层与跨场景层之间换父 THEN 系统 SHALL 仅移动和等比缩放完整根节点，并按 `BagCover` 换父前后的真实屏幕矩形恢复显示；MUST NOT 重置内部 Canvas 或 `BagCover` 的 Transform。
 8. WHEN `FX_ui_jieSuo_w` 随完整实例跨场景播放 THEN 转场 Canvas SHALL 使用 `Screen Space - Camera`、当前场景 `Main Camera` 与高于 MainScene 根 Canvas 的 `sortingOrder=1`；美术粒子 Renderer 的 `0~112` 排序保持不变，不得使用会覆盖普通 ParticleSystemRenderer 的 Screen Space Overlay 或极高 UI 排序。
 9. WHEN 结算页展示任务卡包奖励 THEN 系统 SHALL 只显示完整 `BagRewardItem`，不得复制 `BagCover` 创建 `TaskRewardFlyIcon`；仅实际分配到正数 PackId 的奖励可见，未分配的待发奖励不得显示问号占位。
 10. WHEN 从 GameScene 切换到 MainScene THEN 系统 SHALL 让现有完整 `BagRewardItem` 通过 `DontDestroyOnLoad` Canvas 直接跨场景并继续飞行；MUST NOT 创建 `SceneSnapshot`、`RenderTexture`、`RawImage` 或任何卡面截图副本。
-11. WHEN 落位特效播放 THEN 系统 SHALL 展示 `1.0s` 主视觉后停止并清理长尾粒子，MUST NOT 等待 `dot` 粒子的 `12s` 发射周期；随后同帧隐藏飞行对象并显示真实卡包。
+11. WHEN 落位特效播放 THEN 系统 SHALL 在约 `0.3s` 的粒子首闪时停止并清理长尾粒子，MUST NOT 等待 `dot` 粒子的 `12s` 发射周期；随后同帧隐藏飞行对象并显示真实卡包。
+12. WHEN MainScene 在奖励转场期间分批创建卡包列表 THEN 列表 SHALL 从创建前保持整体不可见，直到排序、目标槽缓存和全部卡包离屏布置在同一帧完成后才恢复显示；MUST NOT 在协程批次让帧时闪现其他卡包。
 
 ### 设计与任务
 
@@ -1270,5 +1271,6 @@
 - [x] 7. 根据 Play Mode 失败反馈定位并移除内部 Canvas/`BagCover` Transform 重置，增加完整根节点的屏幕几何保持；转场 Canvas 改为相机路径、飞行内容排序 `1` 并跨场景重绑当前相机。
 - [x] 8. 删除结算页 `TaskRewardFlyIcon` 和未分配奖励问号占位；将首页流程改为“飞行缩放 -> 完整特效 -> 同帧替换真实卡包 -> 其余列表入场”。
 - [x] 9. 根据继续出现的问号残影反馈，彻底删除整屏截图转场，改为同一个完整对象仅通过换父节点跨场景。
-- [x] 10. 根据 Play Mode 的 `effectDuration=12.20s` 日志定位 `dot` 长发射粒子，改为 `1.0s` 主视觉后立即替换真实卡包。
+- [x] 10. 根据 Play Mode 的 `effectDuration=12.20s` 日志定位 `dot` 长发射粒子，改为约 `0.3s` 粒子首闪时立即替换真实卡包。
 - [x] 11. 在 GameScene 预置第二个完整 `BagRewardItemSecondary`，删除双奖励的运行时 `Instantiate` 和清理列表。
+- [x] 12. MainScene 在卡包分批创建前预隐藏列表，完成目标缓存和离屏布置后同帧恢复，消除其他卡包首帧闪现。

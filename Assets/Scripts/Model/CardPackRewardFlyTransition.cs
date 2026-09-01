@@ -9,7 +9,7 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
     private const string TransitionObjectName = "CardPackRewardFlyTransition";
     private const float TargetMoveDuration = 0.72f;
     private const float TargetMoveStagger = 0.12f;
-    private const float RewardRevealDisplayDuration = 1f;
+    private const float RewardRevealDisplayDuration = 0.3f;
     private const float TargetLookupTimeout = 5f;
     private const float TargetArcHeight = 72f;
     private const int RewardContentSortingOrder = 1;
@@ -277,6 +277,7 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
 
         if (mPreparedMainScene == null)
         {
+            mainScene?.CancelPackageRewardEntrance();
             Debug.LogWarning(
                 "CardPackRewardFlyTransition: MainScene package list was not ready before timeout.");
             Destroy(gameObject);
