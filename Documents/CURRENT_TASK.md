@@ -2,18 +2,19 @@
 
 ## 2026-09-01 结算奖励卡落位特效接入
 
-- 状态：用户确认卡包倒影已经消失；MainScene 列表现于批量创建前整体预隐藏，完成目标缓存和离屏布置后同帧恢复；问号卡在粒子首闪约 `0.3s` 时即切换真实卡包。首次 Play Mode 验证发现 Unity 假空引用导致 `CanvasGroup` 获取失败并中断首页初始化，现已改为 Unity 显式空判断后添加组件，等待再次视觉验收。
-- 新节点：结算奖励占位图改为 `ImgBagBg/BagRewardItem/Canvas/BagCover`；`BagRewardItem` 内 `FX_ui_jieSuo_w` 在结算页保持停止和隐藏，不会提前播放。
-- 跨场景播放：点击完成后，`CardPackRewardFlyTransition` 直接接管 GameScene 编辑器中现有的完整 `BagRewardItem` 实例；`Canvas/BagCover` 与同级 `FX_ui_jieSuo_w` 保持在原 Prefab 层级中一起跨场景移动。换父时只移动和等比缩放 `BagRewardItem` 根节点，并按 `BagCover` 换父前后的真实屏幕中心与尺寸校正；不得重置内部 Canvas 或 `BagCover` 的锚点、位置、尺寸、旋转和缩放。落位时直接播放该实例内部现成的 `FX_ui_jieSuo_w`，不再复制特效、不改挂首页 `PackCover`、不覆盖粒子参数；随后切换成 MainScene 对应真实卡包。
+- 状态：多奖励落位改为每个完整 `BagRewardItem` 独立播放自身 Prefab 内的 `FX_ui_jieSuo_w`；问号封面与特效生命周期已经拆开，约 `0.3s` 首闪时只隐藏该卡的 `BagCover` 并显示真实卡包，特效继续播放到自身结束后才回收完整奖励对象。双奖励左右分槽只移动 `BagCover` 导致两份特效挤在中间的问题已修复，Runtime/Editor 编译通过，等待 Unity Play Mode 视觉验收。
+- 新节点：结算奖励占位图为 `ImgBagBg/BagRewardItem/Canvas/BagCover`；`BagRewardItem` 内 `FX_ui_jieSuo_w` 在结算页保持停止和隐藏，不会提前播放。特效允许位于 `Canvas` 下的中间容器内，运行时在每个奖励实例自身范围递归查找，不依赖直属子节点路径。
+- 跨场景播放：点击完成后，`CardPackRewardFlyTransition` 直接接管 GameScene 编辑器中现有的完整 `BagRewardItem` 实例；`BagCover` 与该实例自己的 `FX_ui_jieSuo_w` 保持原 Prefab 层级并一起跨场景移动。换父时只移动和等比缩放 `BagRewardItem` 根节点，并按 `BagCover` 换父前后的真实屏幕中心与尺寸校正；不得重置内部 Canvas 或 `BagCover` 的锚点、位置、尺寸、旋转和缩放。每张奖励卡落位时分别启动自身现成特效，不复制、不换父、不覆盖粒子参数，也不共享另一张奖励卡的特效实例。
 - 渲染环境：持久化转场 Canvas 使用与 GameScene/MainScene 根 Canvas 相同的 `Screen Space - Camera` 路径，并在场景切换后重新绑定当前 `Main Camera`；完整卡包 Canvas 全程使用 `sortingOrder=1`，稳定显示在 MainScene 根 Canvas `0` 之上。美术背光粒子保持 Renderer 排序 `0`，前景闪光和粒子保持原生 `3~112`，不覆盖任何粒子排序参数。
 - 结算页：任务奖励不再从 `BagCover` 单独复制 `TaskRewardFlyIcon`；只让完整 `BagRewardItem` 自身播放出现动画。只有真正分配到正数 PackId 的奖励才显示，已记入待发队列但本局未分配 PackId 的任务奖励不显示问号占位。
 - 跨场景交接：不再创建 `SceneSnapshot`、`RenderTexture` 或 `RawImage`，也不再捕获 GameScene 最后一帧。结算页现有完整 `BagRewardItem` 先换父到 `DontDestroyOnLoad` 的转场 Canvas，切换 MainScene 后仍由同一对象继续飞行和缩放，不存在截图卡面副本。
-- 双奖励对象：`GameScene/RewardPanel/ImgBagBg` 已在编辑器场景中预置 `BagRewardItem` 与 `BagRewardItemSecondary` 两个完整 Prefab 实例。单奖励启用一个，双奖励启用两个；已删除第二奖励的运行时 `Instantiate`、临时命名和销毁列表，两份对象后续均只做父节点切换。
+- 双奖励对象：`GameScene/RewardPanel/ImgBagBg` 已在编辑器场景中预置 `BagRewardItem` 与 `BagRewardItemSecondary` 两个完整 Prefab 实例。单奖励启用一个，双奖励启用两个；两份对象分别绑定并播放各自层级内的 `FX_ui_jieSuo_w`，落位错峰、首闪揭晓和播放结束回收均独立计算。
+- 双奖励特效位置：结算页的左右分槽位置保存在各自 `BagCover` 上，特效外层父节点默认仍位于内部 Canvas 中心。转场接管每个实例后，必须把该实例中位于 Canvas 下的特效布局父节点对齐到自身 `BagCover` 的真实中心；只调整新增的外层父节点，不修改 `FX_ui_jieSuo_w` 内部 Transform、粒子参数或 Renderer 排序。此后整包移动与缩放时，特效始终跟随自己的卡包。
 - 奖励背板：结算页黑色半透明条 `ImgBagBg` 不再随完成按钮提前退出 GameScene；奖励卡从其层级提升后，`ImgBagBg` 与完整奖励卡一起换父到持久化 Canvas 并进入 MainScene。首页奖励卡开始飞行 `0.08s` 后，背板沿用原 `0.42s` 三次缓入节奏下移出屏幕，奖励卡飞行、落位和揭晓时序不变。
-- 首页顺序：MainScene 列表在分批创建的全部让帧期间由 Content `CanvasGroup` 预隐藏，完成排序、目标缓存和全部卡包离屏布置后才恢复显示，因此不会先闪出其他卡包。完整 `BagRewardItem` 一边飞行一边等比缩放到首页目标卡包的实际尺寸并精确落位；实例内 `FX_ui_jieSuo_w` 播放约 `0.3s` 到首闪时，同一帧隐藏完整飞行对象并显示对应真实卡包；所有奖励都完成替换后，才让其余原有卡包从屏幕下方依次上移。不得等待 `dot` 粒子的 `12s` 发射周期。
+- 首页顺序：MainScene 列表在分批创建的全部让帧期间由 Content `CanvasGroup` 预隐藏，完成排序、目标缓存和全部卡包离屏布置后才恢复显示，因此不会先闪出其他卡包。完整 `BagRewardItem` 一边飞行一边等比缩放到首页目标卡包的实际尺寸并精确落位；实例内特效播放约 `0.3s` 到首闪时，只隐藏问号 `BagCover` 并同帧显示对应真实卡包，不能关闭特效或整个奖励根节点。所有奖励完成真实卡揭晓后，其余原有卡包从屏幕下方依次上移；各奖励特效继续独立播放，有限粒子全部结束后才分别停止循环粒子并回收自己的 `BagRewardItem`。列表入场完成后即解除输入拦截，不等待长尾特效结束。
 - 容错：完整 `BagRewardItem`、`BagCover`、实例内特效或首页目标槽缺失时输出警告；没有特效时仍按原流程揭晓真实卡包并返回首页。
 - 修改文件：`Assets/Scripts/Controller/GameScene.cs`、`Assets/Scripts/Controller/MainScene.cs`、`Assets/Scripts/Model/CardPackRewardFlyTransition.cs`、`Assets/Scenes/GameScene.unity`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。`Assets/Prefabs/BagRewardItem.prefab` 与美术粒子参数未修改。
-- 验证：最新 Play Mode 日志确认旧流程落位后实际等待 `12.20s`，对应特效 Prefab 内 `dot` 粒子的 `12s` 发射周期；现已删除粒子存活轮询。已确认 `TaskRewardFlyIcon`、单独复制 `BagCover`、`SceneSnapshot`、`RenderTexture`、`RawImage` 和截图捕获逻辑均已移除。首次运行暴露的 `MissingComponentException` 已按调用栈修复；`ImgBagBg` 跨场景与延后下移动画接入后，Runtime/Editor 重新编译为 `0` 警告、`0` 错误。仍需在 Play Mode 确认黑色条无跳位地进入首页并在卡包起飞后下移、列表没有首帧闪现、落位约 `0.3s` 首闪时同帧替换真实卡包，以及其余列表最后入场。
+- 验证：已确认 `TaskRewardFlyIcon`、单独复制 `BagCover`、`SceneSnapshot`、`RenderTexture`、`RawImage` 和截图捕获逻辑均已移除；`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 均为 `0` 警告、`0` 错误，`git diff --check` 仅有仓库既有 CRLF 转换提示。仍需在 Play Mode 用双奖励确认两张卡各自只播放自己的特效、问号封面首闪隐藏后特效不中断、真实卡保持显示、两份特效按各自实际播放结束时间分别回收，以及长尾播放期间首页输入在列表入场完成后正常恢复。
 
 ## 2026-09-01 重玩积分与卡包奖励限制
 

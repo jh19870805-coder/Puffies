@@ -7408,10 +7408,10 @@ public class GameScene : MonoBehaviour
         _taskRewardImage = _rewardPanelRoot.transform.Find(TaskRewardImgBagPath)?.GetComponent<Image>();
         _secondaryRewardImage = _rewardPanelRoot.transform.Find(
             SecondaryRewardImgBagPath)?.GetComponent<Image>();
-        _settlementRewardRevealEffect = _rewardPanelRoot.transform.Find(
-            TaskRewardRevealEffectPath)?.gameObject;
-        _secondarySettlementRewardRevealEffect = _rewardPanelRoot.transform.Find(
-            SecondaryRewardRevealEffectPath)?.gameObject;
+        _settlementRewardRevealEffect = FindSettlementRewardRevealEffect(
+            rewardItemCanvas);
+        _secondarySettlementRewardRevealEffect = FindSettlementRewardRevealEffect(
+            secondaryRewardItemCanvas);
         StopAndHideSettlementRewardRevealEffect();
         if (!_hasSettlementLayoutTargets
             && _settlementSummaryRect != null
@@ -8631,6 +8631,28 @@ public class GameScene : MonoBehaviour
     {
         StopAndHideSettlementRewardRevealEffect(_settlementRewardRevealEffect);
         StopAndHideSettlementRewardRevealEffect(_secondarySettlementRewardRevealEffect);
+    }
+
+    private static GameObject FindSettlementRewardRevealEffect(Transform rewardItemCanvas)
+    {
+        if (rewardItemCanvas == null)
+        {
+            return null;
+        }
+
+        var descendants = rewardItemCanvas.GetComponentsInChildren<Transform>(true);
+        for (var i = 0; i < descendants.Length; i++)
+        {
+            if (descendants[i] != null
+                && descendants[i].name.Equals(
+                    "FX_ui_jieSuo_w",
+                    StringComparison.Ordinal))
+            {
+                return descendants[i].gameObject;
+            }
+        }
+
+        return null;
     }
 
     private static void StopAndHideSettlementRewardRevealEffect(GameObject revealEffect)
