@@ -8378,14 +8378,41 @@ public class GameScene : MonoBehaviour
             _finishButton.interactable = false;
         }
 
-        if (_settlementPackRewardIds.Count == 0
-            || _taskRewardImage == null
-            || !CardPackRewardFlyTransition.TryStart(
-                _taskRewardImage.rectTransform,
+        if (!CardPackRewardFlyTransition.TryStart(
+                BuildSettlementRewardTransitionSources(),
                 _settlementPackRewardIds))
         {
             GameManager.EnterMainScene();
         }
+    }
+
+    private List<RectTransform> BuildSettlementRewardTransitionSources()
+    {
+        var sources = new List<RectTransform>(_settlementPackRewardIds.Count);
+        for (var i = 0; i < _settlementPackRewardIds.Count; i++)
+        {
+            var packId = _settlementPackRewardIds[i];
+            RectTransform source = null;
+            if (packId == _settlementCompletionRewardPackId
+                && _completionRewardDisplayImage != null)
+            {
+                source = _completionRewardDisplayImage.rectTransform;
+            }
+            else if (packId == _settlementTaskRewardPackId
+                     && _taskRewardDisplayImage != null)
+            {
+                source = _taskRewardDisplayImage.rectTransform;
+            }
+
+            if (source == null && _taskRewardImage != null)
+            {
+                source = _taskRewardImage.rectTransform;
+            }
+
+            sources.Add(source);
+        }
+
+        return sources;
     }
 
     private void InitializeScoringSession()

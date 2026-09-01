@@ -7,55 +7,59 @@ using UnityEngine.UI;
 public sealed class CardPackRewardFlyTransition : MonoBehaviour
 {
     private const string TransitionObjectName = "CardPackRewardFlyTransition";
-    private const float CenterMoveDuration = 0.46f;
-    private const float CenterHoldDuration = 0.42f;
-    private const float TargetMoveDuration = 0.64f;
-    private const float TargetMoveStagger = 0.08f;
-    private const float CenterSizeOvershoot = 0.06f;
+    private const float SceneFadeOutDuration = 0.22f;
+    private const float SceneFadeInDuration = 0.3f;
+    private const float TargetMoveDuration = 0.72f;
+    private const float TargetMoveStagger = 0.12f;
+    private const float RewardRevealEffectPlaceholderDuration = 0.2f;
     private const float TargetLookupTimeout = 5f;
-    private const float CenterSpacing = 32f;
-    private const float CenterHorizontalPadding = 80f;
-    private const float TargetArcHeight = 90f;
+    private const float TargetArcHeight = 72f;
     private const int TransitionSortingOrder = 32000;
-    private static readonly Vector2 DefaultCenterIconSize = new Vector2(240f, 272f);
     private static CardPackRewardFlyTransition sInstance;
 
     private sealed class FlyIcon
     {
         public int PackId;
         public RectTransform RectTransform;
+        public Image Image;
+        public bool HasLanded;
+        public bool HasRevealed;
+        public float LandedAt;
     }
 
     private readonly List<int> mPackIds = new List<int>();
     private readonly List<FlyIcon> mIcons = new List<FlyIcon>();
     private Canvas mCanvas;
     private RectTransform mCanvasRect;
+    private Image mSceneFadeImage;
+    private MainScene mPreparedMainScene;
+
+    public static bool IsActive => sInstance != null;
 
     public static bool IsPackPending(int packId)
     {
         return sInstance != null && sInstance.mPackIds.Contains(packId);
     }
 
-    public static bool TryStart(RectTransform source, IReadOnlyList<int> packIds)
+    public static bool TryStart(
+        IReadOnlyList<RectTransform> sources,
+        IReadOnlyList<int> packIds)
     {
-        if (sInstance != null || source == null || packIds == null || packIds.Count == 0)
+        if (sInstance != null || packIds == null)
         {
             return false;
         }
 
         var uniquePackIds = new List<int>(packIds.Count);
+        var uniqueSources = new List<RectTransform>(packIds.Count);
         for (var i = 0; i < packIds.Count; i++)
         {
             var packId = packIds[i];
             if (packId > 0 && !uniquePackIds.Contains(packId))
             {
                 uniquePackIds.Add(packId);
+                uniqueSources.Add(sources != null && i < sources.Count ? sources[i] : null);
             }
-        }
-
-        if (uniquePackIds.Count == 0)
-        {
-            return false;
         }
 
         var transitionObject = new GameObject(
@@ -69,7 +73,7 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
 
         var transition = transitionObject.GetComponent<CardPackRewardFlyTransition>();
         sInstance = transition;
-        if (transition.Initialize(source, uniquePackIds))
+        if (transition.Initialize(uniqueSources, uniquePackIds))
         {
             return true;
         }
@@ -79,7 +83,9 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
         return false;
     }
 
-    private bool Initialize(RectTransform source, List<int> packIds)
+    private bool Initialize(
+        IReadOnlyList<RectTransform> sources,
+        IReadOnlyList<int> packIds)
     {
         mPackIds.AddRange(packIds);
         mCanvas = GetComponent<Canvas>();
@@ -95,23 +101,20 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
         scaler.matchWidthOrHeight = 0.5f;
 
         CreateInputBlocker();
+        CreateSceneFade();
         Canvas.ForceUpdateCanvases();
-        if (!TryGetOverlayGeometry(source, out var sourcePosition, out var sourceSize))
-        {
-            return false;
-        }
-
-        var fallbackSprite = source.GetComponent<Image>()?.sprite;
         for (var i = 0; i < mPackIds.Count; i++)
         {
             var packId = mPackIds[i];
-            var sprite = GameCommonUtility.LoadSpriteByPath(
-                GameDefine.FormatPackImagePath(packId),
-                GameDefine.PixelsPerUnit) ?? fallbackSprite;
-            if (sprite == null)
+            var source = sources != null && i < sources.Count ? sources[i] : null;
+            var sourceImage = source != null ? source.GetComponent<Image>() : null;
+            if (sourceImage == null
+                || sourceImage.sprite == null
+                || !TryGetOverlayGeometry(source, out var sourcePosition, out var sourceSize))
             {
-                Debug.LogWarning($"CardPackRewardFlyTransition: pack sprite missing. packId={packId}");
-                continue;
+                Debug.LogWarning(
+                    $"CardPackRewardFlyTransition: settlement reward source missing. packId={packId}");
+                return false;
             }
 
             var iconObject = new GameObject(
@@ -128,20 +131,16 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
             iconRect.sizeDelta = sourceSize;
 
             var iconImage = iconObject.GetComponent<Image>();
-            iconImage.sprite = sprite;
-            iconImage.color = Color.white;
-            iconImage.preserveAspect = true;
+            iconImage.sprite = sourceImage.sprite;
+            iconImage.color = sourceImage.color;
+            iconImage.preserveAspect = sourceImage.preserveAspect;
             iconImage.raycastTarget = false;
             mIcons.Add(new FlyIcon
             {
                 PackId = packId,
-                RectTransform = iconRect
+                RectTransform = iconRect,
+                Image = iconImage
             });
-        }
-
-        if (mIcons.Count == 0)
-        {
-            return false;
         }
 
         StartCoroutine(PlayTransition());
@@ -167,106 +166,108 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
         blockerImage.raycastTarget = true;
     }
 
+    private void CreateSceneFade()
+    {
+        var fadeObject = new GameObject(
+            "SceneFade",
+            typeof(RectTransform),
+            typeof(CanvasRenderer),
+            typeof(Image));
+        var fadeRect = fadeObject.GetComponent<RectTransform>();
+        fadeRect.SetParent(mCanvasRect, false);
+        fadeRect.anchorMin = Vector2.zero;
+        fadeRect.anchorMax = Vector2.one;
+        fadeRect.offsetMin = Vector2.zero;
+        fadeRect.offsetMax = Vector2.zero;
+
+        mSceneFadeImage = fadeObject.GetComponent<Image>();
+        mSceneFadeImage.color = new Color(0f, 0f, 0f, 0f);
+        mSceneFadeImage.raycastTarget = false;
+    }
+
     private IEnumerator PlayTransition()
     {
-        var centerPositions = BuildCenterPositions();
-        var centerSizes = new Vector2[mIcons.Count];
-        for (var i = 0; i < centerSizes.Length; i++)
-        {
-            centerSizes[i] = GetCenterIconSize();
-        }
-
-        yield return AnimateIcons(
-            centerPositions,
-            centerSizes,
-            CenterMoveDuration,
-            0f,
-            0f,
-            CenterSizeOvershoot);
-        yield return new WaitForSecondsRealtime(CenterHoldDuration);
-
+        yield return AnimateSceneFade(0f, 1f, SceneFadeOutDuration);
         GameManager.EnterMainScene();
         yield return null;
 
-        var targets = new RectTransform[mIcons.Count];
         var mainScene = default(MainScene);
         var elapsed = 0f;
         while (elapsed < TargetLookupTimeout)
         {
             elapsed += Time.unscaledDeltaTime;
             mainScene = FindObjectOfType<MainScene>();
-            if (mainScene != null && TryResolveTargets(mainScene, targets))
+            if (mainScene != null && mainScene.TryPreparePackageRewardEntrance(mPackIds))
             {
+                mPreparedMainScene = mainScene;
                 break;
             }
 
             yield return null;
         }
 
-        if (mainScene == null || !TryResolveTargets(mainScene, targets))
+        if (mPreparedMainScene == null)
         {
-            Debug.LogWarning("CardPackRewardFlyTransition: MainScene package targets were not ready before timeout.");
-            RevealTargets(mainScene);
+            Debug.LogWarning(
+                "CardPackRewardFlyTransition: MainScene package list was not ready before timeout.");
             Destroy(gameObject);
             yield break;
         }
 
         var targetPositions = new Vector2[mIcons.Count];
         var targetSizes = new Vector2[mIcons.Count];
-        for (var i = 0; i < targets.Length; i++)
+        for (var i = 0; i < mIcons.Count; i++)
         {
-            if (!TryGetOverlayGeometry(targets[i], out targetPositions[i], out targetSizes[i]))
+            if (!mPreparedMainScene.TryGetPackageRewardTargetScreenRect(
+                    mIcons[i].PackId,
+                    out var targetScreenRect)
+                || !TryGetOverlayGeometry(
+                    targetScreenRect,
+                    out targetPositions[i],
+                    out targetSizes[i]))
             {
-                targetPositions[i] = mIcons[i].RectTransform.anchoredPosition;
-                targetSizes[i] = mIcons[i].RectTransform.sizeDelta;
+                Debug.LogWarning(
+                    $"CardPackRewardFlyTransition: target slot missing. packId={mIcons[i].PackId}");
+                mPreparedMainScene.CancelPackageRewardEntrance();
+                Destroy(gameObject);
+                yield break;
             }
         }
 
-        yield return AnimateIcons(
-            targetPositions,
-            targetSizes,
-            TargetMoveDuration,
-            TargetArcHeight,
-            TargetMoveStagger,
-            0f);
-        RevealTargets(mainScene);
+        yield return AnimateSceneFade(1f, 0f, SceneFadeInDuration);
+        if (mIcons.Count > 0)
+        {
+            yield return AnimateRewardIconsIntoTargets(targetPositions, targetSizes);
+        }
+
+        yield return mPreparedMainScene.AnimateRemainingPackageRewardEntrance();
+        mPreparedMainScene = null;
         Destroy(gameObject);
     }
 
-    private Vector2[] BuildCenterPositions()
+    private IEnumerator AnimateSceneFade(float from, float to, float duration)
     {
-        var iconSize = GetCenterIconSize();
-        var step = iconSize.x + CenterSpacing;
-        var firstX = -(mIcons.Count - 1) * step * 0.5f;
-        var positions = new Vector2[mIcons.Count];
-        for (var i = 0; i < positions.Length; i++)
+        if (mSceneFadeImage == null)
         {
-            positions[i] = new Vector2(firstX + i * step, 0f);
+            yield break;
         }
 
-        return positions;
+        var elapsed = 0f;
+        while (elapsed < duration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            var normalized = Mathf.Clamp01(elapsed / duration);
+            var eased = Mathf.SmoothStep(0f, 1f, normalized);
+            mSceneFadeImage.color = new Color(0f, 0f, 0f, Mathf.Lerp(from, to, eased));
+            yield return null;
+        }
+
+        mSceneFadeImage.color = new Color(0f, 0f, 0f, to);
     }
 
-    private Vector2 GetCenterIconSize()
-    {
-        var canvasWidth = mCanvasRect != null && mCanvasRect.rect.width > 0f
-            ? mCanvasRect.rect.width
-            : GameDefine.DesignWidth;
-        var availableWidth = Mathf.Max(1f, canvasWidth - CenterHorizontalPadding * 2f);
-        var width = Mathf.Min(
-            DefaultCenterIconSize.x,
-            (availableWidth - CenterSpacing * Mathf.Max(0, mIcons.Count - 1)) / mIcons.Count);
-        width = Mathf.Max(1f, width);
-        return new Vector2(width, width * DefaultCenterIconSize.y / DefaultCenterIconSize.x);
-    }
-
-    private IEnumerator AnimateIcons(
+    private IEnumerator AnimateRewardIconsIntoTargets(
         Vector2[] targetPositions,
-        Vector2[] targetSizes,
-        float duration,
-        float arcHeight,
-        float stagger,
-        float sizeOvershoot)
+        Vector2[] targetSizes)
     {
         var startPositions = new Vector2[mIcons.Count];
         var startSizes = new Vector2[mIcons.Count];
@@ -276,30 +277,43 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
             startSizes[i] = mIcons[i].RectTransform.sizeDelta;
         }
 
-        var totalDuration = duration + stagger * Mathf.Max(0, mIcons.Count - 1);
+        var totalDuration = TargetMoveDuration
+                            + TargetMoveStagger * Mathf.Max(0, mIcons.Count - 1)
+                            + RewardRevealEffectPlaceholderDuration;
         var elapsed = 0f;
         while (elapsed < totalDuration)
         {
             elapsed += Time.unscaledDeltaTime;
             for (var i = 0; i < mIcons.Count; i++)
             {
-                var iconElapsed = elapsed - stagger * i;
-                var normalized = Mathf.Clamp01(iconElapsed / duration);
+                var icon = mIcons[i];
+                var iconElapsed = elapsed - TargetMoveStagger * i;
+                var normalized = Mathf.Clamp01(iconElapsed / TargetMoveDuration);
                 var eased = Mathf.SmoothStep(0f, 1f, normalized);
-                var arc = Mathf.Sin(normalized * Mathf.PI) * arcHeight;
+                var arc = Mathf.Sin(normalized * Mathf.PI) * TargetArcHeight;
                 var position = Vector2.LerpUnclamped(startPositions[i], targetPositions[i], eased);
                 position.y += arc;
-                mIcons[i].RectTransform.anchoredPosition = position;
-                var size = Vector2.LerpUnclamped(
+                icon.RectTransform.anchoredPosition = position;
+                icon.RectTransform.sizeDelta = Vector2.LerpUnclamped(
                     startSizes[i],
                     targetSizes[i],
                     eased);
-                if (sizeOvershoot > 0f)
+
+                if (!icon.HasLanded && normalized >= 1f)
                 {
-                    size *= 1f + Mathf.Sin(normalized * Mathf.PI) * sizeOvershoot;
+                    icon.HasLanded = true;
+                    icon.LandedAt = elapsed;
                 }
 
-                mIcons[i].RectTransform.sizeDelta = size;
+                // The imported landing flash will play during this reserved interval.
+                if (icon.HasLanded
+                    && !icon.HasRevealed
+                    && elapsed - icon.LandedAt >= RewardRevealEffectPlaceholderDuration)
+                {
+                    icon.HasRevealed = true;
+                    mPreparedMainScene.RevealPackageRewardTarget(icon.PackId);
+                    icon.Image.enabled = false;
+                }
             }
 
             yield return null;
@@ -307,34 +321,14 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
 
         for (var i = 0; i < mIcons.Count; i++)
         {
-            mIcons[i].RectTransform.anchoredPosition = targetPositions[i];
-            mIcons[i].RectTransform.sizeDelta = targetSizes[i];
-        }
-    }
-
-    private bool TryResolveTargets(MainScene mainScene, RectTransform[] targets)
-    {
-        for (var i = 0; i < mIcons.Count; i++)
-        {
-            if (!mainScene.TryGetPackageFlyTarget(mIcons[i].PackId, out targets[i]))
+            var icon = mIcons[i];
+            icon.RectTransform.anchoredPosition = targetPositions[i];
+            icon.RectTransform.sizeDelta = targetSizes[i];
+            if (!icon.HasRevealed)
             {
-                return false;
+                mPreparedMainScene.RevealPackageRewardTarget(icon.PackId);
+                icon.Image.enabled = false;
             }
-        }
-
-        return true;
-    }
-
-    private void RevealTargets(MainScene mainScene)
-    {
-        if (mainScene == null)
-        {
-            return;
-        }
-
-        for (var i = 0; i < mPackIds.Count; i++)
-        {
-            mainScene.RevealPackageFlyTarget(mPackIds[i]);
         }
     }
 
@@ -385,8 +379,49 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
         return localSize.x > 0.01f && localSize.y > 0.01f;
     }
 
+    private bool TryGetOverlayGeometry(
+        Rect screenRect,
+        out Vector2 localPosition,
+        out Vector2 localSize)
+    {
+        localPosition = Vector2.zero;
+        localSize = Vector2.zero;
+        if (mCanvasRect == null
+            || screenRect.width <= 0.01f
+            || screenRect.height <= 0.01f
+            || !RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                mCanvasRect,
+                screenRect.center,
+                null,
+                out localPosition)
+            || !RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                mCanvasRect,
+                screenRect.min,
+                null,
+                out var minimum)
+            || !RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                mCanvasRect,
+                screenRect.max,
+                null,
+                out var maximum))
+        {
+            return false;
+        }
+
+        localSize = new Vector2(
+            Mathf.Abs(maximum.x - minimum.x),
+            Mathf.Abs(maximum.y - minimum.y));
+        return localSize.x > 0.01f && localSize.y > 0.01f;
+    }
+
     private void OnDestroy()
     {
+        if (mPreparedMainScene != null)
+        {
+            mPreparedMainScene.CancelPackageRewardEntrance();
+            mPreparedMainScene = null;
+        }
+
         if (sInstance == this)
         {
             sInstance = null;

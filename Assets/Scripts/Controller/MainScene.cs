@@ -29,6 +29,9 @@ public class MainScene : MonoBehaviour
     internal const float PackageCoverHeight = 272f;
     private const float PackageHorizontalSpacing = 20f;
     private const float PackageVerticalSpacing = 20f;
+    private const float RewardListEntranceDuration = 0.44f;
+    private const float RewardListEntranceStagger = 0.055f;
+    private const float RewardListOffscreenPadding = 80f;
     private const float PackagePageSnapDuration = 0.26f;
     private const float DefaultPackagePageWidth = 1625f;
     private const float DefaultPackagePageHeight = 950f;
@@ -195,6 +198,13 @@ public class MainScene : MonoBehaviour
     [SerializeField] private GameObject mPackageItemPrefab;
 
     private readonly Dictionary<int, PackageEntry> mPackageSlotsById = new Dictionary<int, PackageEntry>();
+    private readonly List<PackageEntry> mOrderedPackageEntries = new List<PackageEntry>();
+    private readonly List<PackageRewardEntranceState> mPackageRewardEntranceStates =
+        new List<PackageRewardEntranceState>();
+    private readonly Dictionary<int, Rect> mPackageRewardTargetScreenRects =
+        new Dictionary<int, Rect>();
+    private readonly List<GridLayoutGroup> mSuspendedPackageGridLayouts =
+        new List<GridLayoutGroup>();
     private readonly Sprite[] mPackTornMaskSprites = new Sprite[PackTornMaskCount];
     private readonly Material[] mPackTornMaskMaterials = new Material[PackTornMaskCount];
     private readonly Material[] mPackCompletedTornMaskMaterials = new Material[PackTornMaskCount];
@@ -309,6 +319,7 @@ public class MainScene : MonoBehaviour
     private bool mIsTrackingTearTap;
     private bool mIsSelectedPackageProgressPieceTransitioning;
     private bool mDidWarnPackTornMaskUnavailable;
+    private bool mIsPackageListRefreshComplete;
     private Vector2 mTearSwipeStartScreenPosition;
     private Rect mTearSwipeScreenRect;
 
@@ -341,6 +352,14 @@ public class MainScene : MonoBehaviour
         public int SeriesRootPackId;
         public bool IsSeries;
         public List<int> SeriesPackIds;
+    }
+
+    private sealed class PackageRewardEntranceState
+    {
+        public PackageEntry Entry;
+        public Vector2 StartPosition;
+        public Vector2 TargetPosition;
+        public bool IsRewardTarget;
     }
 
     private sealed class PackageListDisplay
@@ -795,27 +814,6 @@ public class MainScene : MonoBehaviour
         mPackagePageSnapCoroutine = StartCoroutine(SnapPackageListToNearestPage());
     }
 
-    public bool TryGetPackageFlyTarget(int bagId, out RectTransform target)
-    {
-        target = null;
-        Canvas.ForceUpdateCanvases();
-        if (!mPackageSlotsById.TryGetValue(bagId, out var entry) || entry.Image == null)
-        {
-            return false;
-        }
-
-        target = entry.Image.rectTransform;
-        return target != null && target.gameObject.activeInHierarchy;
-    }
-
-    public void RevealPackageFlyTarget(int bagId)
-    {
-        if (mPackageSlotsById.TryGetValue(bagId, out var entry))
-        {
-            SetPackageVisualsVisible(entry, true);
-        }
-    }
-
     public void HandlePackageGesture(int bagId, Image image)
     {
         if (!CanAcceptPackageInput() || image == null)
@@ -935,6 +933,144 @@ public class MainScene : MonoBehaviour
 
         CacheBagSelectButtonPositions();
         SetBagSelectPanelVisible(false);
+    }
+
+    public bool TryPreparePackageRewardEntrance(IReadOnlyList<int> rewardPackIds)
+    {
+        if (!mIsPackageListRefreshComplete
+            || mOrderedPackageEntries.Count == 0
+            || mPackageContentRoot == null)
+        {
+            return false;
+        }
+
+        RefreshPackagePageLayout();
+        Canvas.ForceUpdateCanvases();
+        ClearPackageRewardEntranceState(restorePositions: true);
+
+        var rewardEntries = new HashSet<PackageEntry>();
+        if (rewardPackIds != null)
+        {
+            for (var i = 0; i < rewardPackIds.Count; i++)
+            {
+                var rewardEntry = FindPackageEntryForPackId(rewardPackIds[i]);
+                if (rewardEntry != null)
+                {
+                    rewardEntries.Add(rewardEntry);
+                    mPackageRewardTargetScreenRects[rewardPackIds[i]] = GetScreenRect(
+                        rewardEntry.Image.rectTransform,
+                        ResolveCanvasCamera(rewardEntry.Image.rectTransform));
+                }
+            }
+        }
+
+        SuspendPackageGridLayouts();
+        var viewportHeight = GetPackageViewportSize().y;
+        for (var i = 0; i < mOrderedPackageEntries.Count; i++)
+        {
+            var entry = mOrderedPackageEntries[i];
+            if (entry?.RectTransform == null)
+            {
+                continue;
+            }
+
+            var targetPosition = entry.RectTransform.anchoredPosition;
+            var startPosition = targetPosition + Vector2.down * (
+                viewportHeight + PackageSlotHeight + RewardListOffscreenPadding);
+            var isRewardTarget = rewardEntries.Contains(entry);
+            mPackageRewardEntranceStates.Add(new PackageRewardEntranceState
+            {
+                Entry = entry,
+                StartPosition = startPosition,
+                TargetPosition = targetPosition,
+                IsRewardTarget = isRewardTarget
+            });
+            entry.RectTransform.anchoredPosition = startPosition;
+            SetPackageVisualsVisible(entry, !isRewardTarget);
+        }
+
+        if (mPackageScrollRect != null)
+        {
+            StopPackagePageSnap();
+            mPackageScrollRect.StopMovement();
+            mPackageScrollRect.horizontalNormalizedPosition = 0f;
+            mPackageScrollRect.enabled = false;
+        }
+
+        mIsPlayingAnimation = true;
+        Canvas.ForceUpdateCanvases();
+        return true;
+    }
+
+    public bool TryGetPackageRewardTargetScreenRect(int bagId, out Rect screenRect)
+    {
+        return mPackageRewardTargetScreenRects.TryGetValue(bagId, out screenRect)
+               && screenRect.width > 0.01f
+               && screenRect.height > 0.01f;
+    }
+
+    public void RevealPackageRewardTarget(int bagId)
+    {
+        var entry = FindPackageEntryForPackId(bagId);
+        if (entry == null)
+        {
+            return;
+        }
+
+        for (var i = 0; i < mPackageRewardEntranceStates.Count; i++)
+        {
+            var state = mPackageRewardEntranceStates[i];
+            if (state.Entry == entry && state.Entry.RectTransform != null)
+            {
+                state.Entry.RectTransform.anchoredPosition = state.TargetPosition;
+                break;
+            }
+        }
+
+        SetPackageVisualsVisible(entry, true);
+    }
+
+    public IEnumerator AnimateRemainingPackageRewardEntrance()
+    {
+        var animatedStates = new List<PackageRewardEntranceState>();
+        for (var i = 0; i < mPackageRewardEntranceStates.Count; i++)
+        {
+            var state = mPackageRewardEntranceStates[i];
+            if (!state.IsRewardTarget && state.Entry?.RectTransform != null)
+            {
+                animatedStates.Add(state);
+            }
+        }
+
+        var totalDuration = RewardListEntranceDuration
+                            + RewardListEntranceStagger * Mathf.Max(0, animatedStates.Count - 1);
+        var elapsed = 0f;
+        while (elapsed < totalDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            for (var i = 0; i < animatedStates.Count; i++)
+            {
+                var state = animatedStates[i];
+                var normalized = Mathf.Clamp01(
+                    (elapsed - RewardListEntranceStagger * i) / RewardListEntranceDuration);
+                var eased = 1f - Mathf.Pow(1f - normalized, 3f);
+                state.Entry.RectTransform.anchoredPosition = Vector2.LerpUnclamped(
+                    state.StartPosition,
+                    state.TargetPosition,
+                    eased);
+            }
+
+            yield return null;
+        }
+
+        ClearPackageRewardEntranceState(restorePositions: true);
+        mIsPlayingAnimation = false;
+    }
+
+    public void CancelPackageRewardEntrance()
+    {
+        ClearPackageRewardEntranceState(restorePositions: true);
+        mIsPlayingAnimation = false;
     }
 
     private void ConfigureBagVolumePanel()
@@ -2394,6 +2530,7 @@ public class MainScene : MonoBehaviour
 
     private IEnumerator RefreshPackageList()
     {
+        mIsPackageListRefreshComplete = false;
         if (mPackageContentRoot == null || mPackageItemTemplate == null)
         {
             yield break;
@@ -2409,6 +2546,7 @@ public class MainScene : MonoBehaviour
         var unlockedPackIds = CardPackDataUtility.GetMainSceneOrderedPackIds();
         var packageDisplays = BuildPackageListDisplays(unlockedPackIds);
         ClearPackageSlots();
+        mOrderedPackageEntries.Clear();
         yield return null;
 
         for (var i = 0; i < packageDisplays.Count; i++)
@@ -2423,6 +2561,7 @@ public class MainScene : MonoBehaviour
             ApplyPackageSlotVisual(entry, display);
             entry.Root.SetActive(true);
             mPackageSlotsById[display.PrimaryPackId] = entry;
+            mOrderedPackageEntries.Add(entry);
             if ((i + 1) % PackageListBuildBatchSize == 0)
             {
                 yield return null;
@@ -2436,6 +2575,8 @@ public class MainScene : MonoBehaviour
             mPackageScrollRect.StopMovement();
             mPackageScrollRect.horizontalNormalizedPosition = 0f;
         }
+
+        mIsPackageListRefreshComplete = true;
 
         Debug.Log(
             $"MainScene: package list refreshed. unlocked={unlockedPackIds.Count}, "
@@ -2589,6 +2730,7 @@ public class MainScene : MonoBehaviour
 
     private void ClearPackageSlots()
     {
+        ClearPackageRewardEntranceState(restorePositions: false);
         foreach (var pair in mPackageSlotsById)
         {
             if (pair.Value.Root != null)
@@ -2599,6 +2741,7 @@ public class MainScene : MonoBehaviour
         }
 
         mPackageSlotsById.Clear();
+        mOrderedPackageEntries.Clear();
         if (mPackageContentRoot == null)
         {
             return;
@@ -3566,6 +3709,77 @@ public class MainScene : MonoBehaviour
         }
 
         SetPackageBackgroundVisible(entry.SecondaryEntry, visible);
+    }
+
+    private PackageEntry FindPackageEntryForPackId(int bagId)
+    {
+        if (mPackageSlotsById.TryGetValue(bagId, out var directEntry))
+        {
+            return directEntry;
+        }
+
+        for (var i = 0; i < mOrderedPackageEntries.Count; i++)
+        {
+            var entry = mOrderedPackageEntries[i];
+            if (entry?.SeriesPackIds != null && entry.SeriesPackIds.Contains(bagId))
+            {
+                return entry;
+            }
+        }
+
+        return null;
+    }
+
+    private void SuspendPackageGridLayouts()
+    {
+        mSuspendedPackageGridLayouts.Clear();
+        if (mPackageContentRoot == null)
+        {
+            return;
+        }
+
+        for (var i = 0; i < mPackageContentRoot.childCount; i++)
+        {
+            var grid = mPackageContentRoot.GetChild(i).GetComponent<GridLayoutGroup>();
+            if (grid != null && grid.enabled)
+            {
+                grid.enabled = false;
+                mSuspendedPackageGridLayouts.Add(grid);
+            }
+        }
+    }
+
+    private void ClearPackageRewardEntranceState(bool restorePositions)
+    {
+        if (restorePositions)
+        {
+            for (var i = 0; i < mPackageRewardEntranceStates.Count; i++)
+            {
+                var state = mPackageRewardEntranceStates[i];
+                if (state.Entry?.RectTransform != null)
+                {
+                    state.Entry.RectTransform.anchoredPosition = state.TargetPosition;
+                    SetPackageVisualsVisible(state.Entry, true);
+                }
+            }
+        }
+
+        for (var i = 0; i < mSuspendedPackageGridLayouts.Count; i++)
+        {
+            if (mSuspendedPackageGridLayouts[i] != null)
+            {
+                mSuspendedPackageGridLayouts[i].enabled = true;
+            }
+        }
+
+        if (mPackageScrollRect != null)
+        {
+            mPackageScrollRect.enabled = true;
+        }
+
+        mPackageRewardEntranceStates.Clear();
+        mPackageRewardTargetScreenRects.Clear();
+        mSuspendedPackageGridLayouts.Clear();
     }
 
     private static void SetPackageSizeImageVisible(PackageEntry entry, bool visible)
