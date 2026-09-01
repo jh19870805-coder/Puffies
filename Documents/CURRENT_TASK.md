@@ -2,14 +2,17 @@
 
 ## 2026-09-01 结算奖励卡落位特效接入
 
-- 状态：最新 Play Mode 日志确认跨场景接管、MainScene 加载、飞行协程和落位粒子播放均已执行，但飞行内容 Canvas 与 MainScene 根 Canvas 同为排序 `0`，后加载的首页 Canvas 覆盖了整套动画；已将飞行内容排序改为 `1`，等待再次视觉验收。
+- 状态：用户确认整屏截图仍会把问号卡面作为残影保留，且落位后等待过长；已彻底删除结算截图转场，改为同一个完整 `BagRewardItem` 仅通过换父节点跨场景。已把特效等待从错误的粒子完整存活期改为 `1.0s` 主视觉展示期，Runtime/Editor 编译通过，等待视觉验收。
 - 新节点：结算奖励占位图改为 `ImgBagBg/BagRewardItem/Canvas/BagCover`；`BagRewardItem` 内 `FX_ui_jieSuo_w` 在结算页保持停止和隐藏，不会提前播放。
 - 跨场景播放：点击完成后，`CardPackRewardFlyTransition` 直接接管 GameScene 编辑器中现有的完整 `BagRewardItem` 实例；`Canvas/BagCover` 与同级 `FX_ui_jieSuo_w` 保持在原 Prefab 层级中一起跨场景移动。换父时只移动和等比缩放 `BagRewardItem` 根节点，并按 `BagCover` 换父前后的真实屏幕中心与尺寸校正；不得重置内部 Canvas 或 `BagCover` 的锚点、位置、尺寸、旋转和缩放。落位时直接播放该实例内部现成的 `FX_ui_jieSuo_w`，不再复制特效、不改挂首页 `PackCover`、不覆盖粒子参数；随后切换成 MainScene 对应真实卡包。
-- 渲染环境：持久化转场 Canvas 使用与 GameScene/MainScene 根 Canvas 相同的 `Screen Space - Camera` 路径，并在场景切换后重新绑定当前 `Main Camera`；截图淡出阶段保持覆盖首页的高排序，截图释放后、飞行和落位阶段将完整卡包 Canvas 设为 `sortingOrder=1`，稳定显示在 MainScene 根 Canvas `0` 之上。美术背光粒子保持 Renderer 排序 `0`，前景闪光和粒子保持原生 `3~112`，不覆盖任何粒子排序参数。
-- 揭晓时机：沿用既有落位后 `0.20s` 揭晓点；先显示真实卡包并强制刷新 Canvas，飞行占位卡继续覆盖 `0.05s` 后再隐藏，保证至少一个渲染帧重叠，不得先消失再出现。根粒子为循环粒子，因此不等待自然停止，也不阻塞其余首页卡包入场；跨场景流程结束时清理特效副本。
+- 渲染环境：持久化转场 Canvas 使用与 GameScene/MainScene 根 Canvas 相同的 `Screen Space - Camera` 路径，并在场景切换后重新绑定当前 `Main Camera`；完整卡包 Canvas 全程使用 `sortingOrder=1`，稳定显示在 MainScene 根 Canvas `0` 之上。美术背光粒子保持 Renderer 排序 `0`，前景闪光和粒子保持原生 `3~112`，不覆盖任何粒子排序参数。
+- 结算页：任务奖励不再从 `BagCover` 单独复制 `TaskRewardFlyIcon`；只让完整 `BagRewardItem` 自身播放出现动画。只有真正分配到正数 PackId 的奖励才显示，已记入待发队列但本局未分配 PackId 的任务奖励不显示问号占位。
+- 跨场景交接：不再创建 `SceneSnapshot`、`RenderTexture` 或 `RawImage`，也不再捕获 GameScene 最后一帧。结算页现有完整 `BagRewardItem` 先换父到 `DontDestroyOnLoad` 的转场 Canvas，切换 MainScene 后仍由同一对象继续飞行和缩放，不存在截图卡面副本。
+- 双奖励对象：`GameScene/RewardPanel/ImgBagBg` 已在编辑器场景中预置 `BagRewardItem` 与 `BagRewardItemSecondary` 两个完整 Prefab 实例。单奖励启用一个，双奖励启用两个；已删除第二奖励的运行时 `Instantiate`、临时命名和销毁列表，两份对象后续均只做父节点切换。
+- 首页顺序：完整 `BagRewardItem` 先一边飞行一边等比缩放到首页目标卡包的实际尺寸并精确落位；然后保持完整对象可见并播放实例内 `FX_ui_jieSuo_w` 的 `1.0s` 主视觉阶段。主视觉结束时停止并清理长尾粒子，同一帧隐藏完整飞行对象并显示对应真实卡包；所有奖励都完成替换后，才让其余原有卡包从屏幕下方依次上移。不得等待 `dot` 粒子的 `12s` 发射周期。
 - 容错：完整 `BagRewardItem`、`BagCover`、实例内特效或首页目标槽缺失时输出警告；没有特效时仍按原流程揭晓真实卡包并返回首页。
-- 修改文件：`Assets/Scripts/Controller/GameScene.cs`、`Assets/Scripts/Controller/MainScene.cs`、`Assets/Scripts/Model/CardPackRewardFlyTransition.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`Documents/GAME_DESIGN_REQUIREMENTS.md`、`specs/spec-driven-development.md`。美术新增的 `Assets/Prefabs/BagRewardItem.prefab`、`.meta` 与 `Assets/Scenes/GameScene.unity` 保持用户当前修改，代码未改写其粒子参数。
-- 验证：本次失败日志记录换父前后屏幕中心和尺寸完全一致：`(439.06,153.67)`、`(48.02,62.43)`；转场接管后的中心和尺寸也一致：`(0.16,-272.09)`、`(140,182)`。`TryStart`、MainScene 加载和 `FX_ui_jieSuo_w.Play` 均执行，确认动画丢失来自两个独立根 Canvas 同序遮挡，而非流程中断。已将飞行内容排序改为 `1`；仍需 Play Mode 视觉复验。
+- 修改文件：`Assets/Scripts/Controller/GameScene.cs`、`Assets/Scripts/Model/CardPackRewardFlyTransition.cs`、`Assets/Scenes/GameScene.unity`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。`Assets/Prefabs/BagRewardItem.prefab` 与美术粒子参数未修改。
+- 验证：最新 Play Mode 日志确认旧流程落位后实际等待 `12.20s`，对应特效 Prefab 内 `dot` 粒子的 `12s` 发射周期；现已删除粒子存活轮询。已确认 `TaskRewardFlyIcon`、单独复制 `BagCover`、`SceneSnapshot`、`RenderTexture`、`RawImage` 和截图捕获逻辑均已移除。Runtime/Editor 编译为 `0` 警告、`0` 错误。仍需 Play Mode 确认切换 MainScene 时无问号残影、飞行缩放终点尺寸一致、落位约 `1.0s` 后同帧替换真实卡包，以及其余列表最后入场。
 
 ## 2026-09-01 重玩积分与卡包奖励限制
 
@@ -27,7 +30,7 @@
 - 完成按钮退场：点击 `BtnFinish` 后先让顶部 `TaskBg2` 与当前 `TaskItem` 反向收回屏幕上方，底部 `ImgBagBg`、`BtnFinish` 与 `BtnCamera` 同时反向收回屏幕下方；顶部沿用入场 `0.52s` 的反向节奏，先向下回摆约 `14px` 再加速上收，底部沿用 `0.42s` 的反向加速曲线。真实奖励图标在退场前临时提升到 `RewardPanel` 顶层并保持原屏幕位置，不随 `ImgBagBg` 下沉。退场截图保留该奖励卡；首页交叉淡入期间，跨场景飞行副本在原位置从透明同步接管，结束后直接开始飞向列表，全程不得隐藏一帧或重新跳现。
 - 场景切换：点击 `BtnFinish` 后截取结算页最后一帧并作为跨场景覆盖图保留；MainScene 卡包列表完成创建、排序和布局后，先缓存最终槽位并把全部列表卡包移到屏幕下方外侧，再用 `0.30s` 将结算覆盖图直接淡出到首页。中间不经过纯黑画面，截图失败时直接切换首页，也不显示黑色兜底层。
 - 奖励卡：只有已经分配真实 PackId 的结算奖励参与飞行。飞行图标分别复制本局首次完成奖励槽和任务奖励槽中默认 `ImgBag` 的 Sprite、颜色、尺寸及实际起点，不提前切换为真实卡包纹理；单张飞行 `0.72s`，多张按 `0.12s` 错峰，一边移动一边缩放到对应列表卡包尺寸。
-- 落位揭晓：奖励卡落位后播放 `BagRewardItem/Canvas/FX_ui_jieSuo_w`，并在 `0.20s` 揭晓点隐藏飞行图标、显示该槽真实卡包的完整状态、标签、系列叠加和进行中碎片。
+- 落位揭晓：奖励卡落位后完整播放 `BagRewardItem/Canvas/FX_ui_jieSuo_w`；有可见 Renderer 的非循环粒子结束后，同帧隐藏完整飞行对象并显示该槽真实卡包的完整状态、标签、系列叠加和进行中碎片。
 - 列表入场：全部奖励卡揭晓后，其余卡包才按当前列表顺序从屏幕下方依次上滑；单卡时长 `0.44s`、错峰 `0.055s`。无真实奖励时仍执行场景淡入淡出和整列上滑。动画期间暂停分页布局、拖动和卡包输入，结束或异常取消时恢复位置、布局和交互。
 - 系列卡包：奖励 PackId 若属于系列后层，目标解析到该系列实际占用的列表槽，不额外创建空槽。
 - 修改文件：`Assets/Scripts/Controller/GameScene.cs`、`Assets/Scripts/Controller/MainScene.cs`、`Assets/Scripts/Model/CardPackRewardFlyTransition.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`Documents/GAME_DESIGN_REQUIREMENTS.md`。

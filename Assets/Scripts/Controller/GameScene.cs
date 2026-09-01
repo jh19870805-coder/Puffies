@@ -43,10 +43,8 @@ public class GameScene : MonoBehaviour
     private const float SettlementBagCountIncrementRise = 64f;
     private const float SettlementRewardPanelSlideDuration = 0.42f;
     private const float SettlementRewardPopDuration = 0.36f;
-    private const float SettlementTaskRewardFlyDuration = 0.52f;
     private const float SettlementRewardAnimationLead = 0.26f;
     private const float SettlementRewardAnimationStagger = 0.14f;
-    private const float SettlementTaskRewardFlyArcHeight = 80f;
     private const float SettlementRewardSlotOffset = 82f;
     private const float SettlementBoardViewportFill = 0.9f;
     private const float SettlementBoardFitDuration = 0.46f;
@@ -178,7 +176,12 @@ public class GameScene : MonoBehaviour
         "ImgBagBg/BagRewardItem/Canvas/BagCover";
     private const string TaskRewardRevealEffectPath =
         "ImgBagBg/BagRewardItem/Canvas/FX_ui_jieSuo_w";
-    private const string TaskRewardSourceIconObjectName = "BagIcon";
+    private const string SecondaryRewardItemCanvasPath =
+        "ImgBagBg/BagRewardItemSecondary/Canvas";
+    private const string SecondaryRewardImgBagPath =
+        "ImgBagBg/BagRewardItemSecondary/Canvas/BagCover";
+    private const string SecondaryRewardRevealEffectPath =
+        "ImgBagBg/BagRewardItemSecondary/Canvas/FX_ui_jieSuo_w";
     private const string SettlementCameraButtonObjectName = "BtnCamera";
     private const string HintButtonObjectName = "BtnTips";
     private const string PieceHintOutlineObjectName = "PieceHintOutline";
@@ -363,11 +366,11 @@ public class GameScene : MonoBehaviour
     private TMP_Text _settlementScoreText;
     private TMP_Text _settlementBagCountText;
     private Image _taskRewardImage;
-    private Image _taskRewardSourceImage;
+    private Image _secondaryRewardImage;
     private GameObject _settlementRewardRevealEffect;
+    private GameObject _secondarySettlementRewardRevealEffect;
     private Image _completionRewardDisplayImage;
     private Image _taskRewardDisplayImage;
-    private readonly List<GameObject> _runtimeSettlementRewardItems = new List<GameObject>();
     private Vector2 _settlementSummaryTargetPosition;
     private Vector2 _rewardTaskItemTargetPosition;
     private Vector2 _settlementRewardBagTargetPosition;
@@ -7364,8 +7367,9 @@ public class GameScene : MonoBehaviour
         _settlementScoreText = null;
         _settlementBagCountText = null;
         _taskRewardImage = null;
-        _taskRewardSourceImage = null;
+        _secondaryRewardImage = null;
         _settlementRewardRevealEffect = null;
+        _secondarySettlementRewardRevealEffect = null;
         if (_rewardPanelRoot == null)
         {
             return;
@@ -7394,15 +7398,21 @@ public class GameScene : MonoBehaviour
             rewardItemCanvas.localScale = Vector3.one;
         }
 
+        var secondaryRewardItemCanvas = _rewardPanelRoot.transform.Find(
+            SecondaryRewardItemCanvasPath);
+        if (secondaryRewardItemCanvas != null)
+        {
+            secondaryRewardItemCanvas.localScale = Vector3.one;
+        }
+
         _taskRewardImage = _rewardPanelRoot.transform.Find(TaskRewardImgBagPath)?.GetComponent<Image>();
+        _secondaryRewardImage = _rewardPanelRoot.transform.Find(
+            SecondaryRewardImgBagPath)?.GetComponent<Image>();
         _settlementRewardRevealEffect = _rewardPanelRoot.transform.Find(
             TaskRewardRevealEffectPath)?.gameObject;
+        _secondarySettlementRewardRevealEffect = _rewardPanelRoot.transform.Find(
+            SecondaryRewardRevealEffectPath)?.gameObject;
         StopAndHideSettlementRewardRevealEffect();
-        _taskRewardSourceImage = _rewardTaskItem != null
-            ? _rewardTaskItem.GetComponentsInChildren<Image>(true).FirstOrDefault(
-                image => image.name == TaskRewardSourceIconObjectName)
-            : null;
-
         if (!_hasSettlementLayoutTargets
             && _settlementSummaryRect != null
             && _rewardTaskItemRect != null
@@ -7490,11 +7500,19 @@ public class GameScene : MonoBehaviour
                 $"GameScene: settlement reward reveal effect not found. "
                 + $"Expected {TaskRewardRevealEffectPath}.");
         }
+
+        if (_secondaryRewardImage == null
+            || _secondarySettlementRewardRevealEffect == null)
+        {
+            Debug.LogWarning(
+                "GameScene: secondary authored BagRewardItem is incomplete. "
+                + $"Expected {SecondaryRewardImgBagPath} and "
+                + $"{SecondaryRewardRevealEffectPath}.");
+        }
     }
 
     private void PrepareSettlementVisualState()
     {
-        ClearRuntimeSettlementRewardItems();
         _completionRewardDisplayImage = null;
         _taskRewardDisplayImage = null;
         StopAndHideSettlementRewardRevealEffect();
@@ -7553,6 +7571,16 @@ public class GameScene : MonoBehaviour
             _taskRewardImage.rectTransform.anchoredPosition = _taskRewardImageTargetPosition;
             _taskRewardImage.rectTransform.localScale = Vector3.one;
             _taskRewardImage.gameObject.SetActive(false);
+        }
+
+        if (_secondaryRewardImage != null)
+        {
+            _secondaryRewardImage.sprite = _taskRewardDefaultSprite;
+            _secondaryRewardImage.color = _taskRewardDefaultColor;
+            _secondaryRewardImage.rectTransform.anchoredPosition =
+                _taskRewardImageTargetPosition;
+            _secondaryRewardImage.rectTransform.localScale = Vector3.one;
+            _secondaryRewardImage.gameObject.SetActive(false);
         }
 
         Canvas.ForceUpdateCanvases();
@@ -7772,7 +7800,7 @@ public class GameScene : MonoBehaviour
             }
 
             StartCoroutine(RunSettlementAnimation(
-                AnimateTaskRewardIntoSettlementSlot(_taskRewardDisplayImage),
+                AnimateSettlementRewardPop(_taskRewardDisplayImage.rectTransform),
                 () => taskRewardComplete = true));
         }
 
@@ -7863,11 +7891,9 @@ public class GameScene : MonoBehaviour
 
     private void PrepareSettlementRewardSlots()
     {
-        ClearRuntimeSettlementRewardItems();
         _completionRewardDisplayImage = null;
         _taskRewardDisplayImage = null;
-        var showTaskReward = _settlementTaskRewardPackId > 0
-                             || _didEarnTaskPackRewardDuringSettlement;
+        var showTaskReward = _settlementTaskRewardPackId > 0;
         var rewardCount = (_settlementCompletionRewardPackId > 0 ? 1 : 0)
                           + (showTaskReward ? 1 : 0);
         if (rewardCount <= 0 || _taskRewardImage == null)
@@ -7880,7 +7906,6 @@ public class GameScene : MonoBehaviour
         {
             _completionRewardDisplayImage = ConfigureSettlementRewardSlot(
                 _taskRewardImage,
-                "ImgBagCompletionReward",
                 slotIndex++,
                 rewardCount);
         }
@@ -7889,10 +7914,9 @@ public class GameScene : MonoBehaviour
         {
             var taskImage = slotIndex == 0
                 ? _taskRewardImage
-                : CreateSettlementRewardImage("ImgBagTaskReward");
+                : _secondaryRewardImage;
             _taskRewardDisplayImage = ConfigureSettlementRewardSlot(
                 taskImage,
-                "ImgBagTaskReward",
                 slotIndex,
                 rewardCount);
         }
@@ -7900,7 +7924,6 @@ public class GameScene : MonoBehaviour
 
     private Image ConfigureSettlementRewardSlot(
         Image image,
-        string objectName,
         int slotIndex,
         int slotCount)
     {
@@ -7909,10 +7932,6 @@ public class GameScene : MonoBehaviour
             return null;
         }
 
-        if (image != _taskRewardImage)
-        {
-            image.name = objectName;
-        }
         image.raycastTarget = false;
         var rect = image.rectTransform;
         var offsetX = slotCount > 1
@@ -7922,41 +7941,6 @@ public class GameScene : MonoBehaviour
         rect.localRotation = Quaternion.identity;
         rect.localScale = Vector3.one;
         image.gameObject.SetActive(false);
-        return image;
-    }
-
-    private Image CreateSettlementRewardImage(string objectName)
-    {
-        var sourceItemRoot = GetSettlementRewardItemRoot(_taskRewardImage);
-        if (sourceItemRoot == null)
-        {
-            Debug.LogWarning(
-                "GameScene: could not create the second settlement reward; "
-                + "BagCover is not inside BagRewardItem/Canvas.");
-            return null;
-        }
-
-        var clone = Instantiate(
-            sourceItemRoot.gameObject,
-            sourceItemRoot.parent,
-            false);
-        clone.name = $"BagRewardItem_{objectName}";
-        var rewardCanvas = clone.GetComponentInChildren<Canvas>(true);
-        var image = rewardCanvas != null
-            ? rewardCanvas.transform.Find("BagCover")?.GetComponent<Image>()
-            : null;
-        if (rewardCanvas == null || image == null)
-        {
-            Destroy(clone);
-            Debug.LogWarning(
-                "GameScene: cloned BagRewardItem is missing Canvas/BagCover.");
-            return null;
-        }
-
-        rewardCanvas.transform.localScale = Vector3.one;
-        var revealEffect = rewardCanvas.transform.Find("FX_ui_jieSuo_w")?.gameObject;
-        StopAndHideSettlementRewardRevealEffect(revealEffect);
-        _runtimeSettlementRewardItems.Add(clone);
         return image;
     }
 
@@ -7995,125 +7979,6 @@ public class GameScene : MonoBehaviour
         }
 
         rewardRect.localScale = Vector3.one;
-    }
-
-    private IEnumerator AnimateTaskRewardIntoSettlementSlot(Image targetImage)
-    {
-        if (targetImage == null)
-        {
-            yield break;
-        }
-
-        var rewardPanelRect = _rewardPanelRoot.transform as RectTransform;
-        if (_taskRewardSourceImage == null
-            || !TryGetRelativeRectGeometry(
-                _taskRewardSourceImage.rectTransform,
-                rewardPanelRect,
-                out var startPosition,
-                out _)
-            || !TryGetRelativeRectGeometry(
-                targetImage.rectTransform,
-                rewardPanelRect,
-                out var endPosition,
-                out var endSize))
-        {
-            yield return AnimateSettlementRewardPop(targetImage.rectTransform);
-            yield break;
-        }
-
-        var flyObject = Instantiate(
-            targetImage.gameObject,
-            _rewardPanelRoot.transform,
-            false);
-        flyObject.name = "TaskRewardFlyIcon";
-        flyObject.SetActive(true);
-        flyObject.transform.SetAsLastSibling();
-        var flyRect = flyObject.GetComponent<RectTransform>();
-        var flyImage = flyObject.GetComponent<Image>();
-        flyRect.anchorMin = new Vector2(0.5f, 0.5f);
-        flyRect.anchorMax = new Vector2(0.5f, 0.5f);
-        flyRect.pivot = new Vector2(0.5f, 0.5f);
-        flyRect.anchoredPosition = startPosition;
-        flyRect.sizeDelta = endSize;
-        flyRect.localRotation = Quaternion.identity;
-        flyRect.localScale = Vector3.one;
-        flyImage.sprite = _taskRewardDefaultSprite;
-        flyImage.color = _taskRewardDefaultColor;
-        flyImage.preserveAspect = targetImage.preserveAspect;
-        flyImage.raycastTarget = false;
-        targetImage.gameObject.SetActive(false);
-
-        var elapsed = 0f;
-        while (elapsed < SettlementTaskRewardFlyDuration)
-        {
-            elapsed += Time.unscaledDeltaTime;
-            if (TryGetRelativeRectGeometry(
-                    targetImage.rectTransform,
-                    rewardPanelRect,
-                    out var currentEndPosition,
-                    out var currentEndSize))
-            {
-                endPosition = currentEndPosition;
-                endSize = currentEndSize;
-            }
-
-            var normalized = Mathf.Clamp01(elapsed / SettlementTaskRewardFlyDuration);
-            var eased = Mathf.SmoothStep(0f, 1f, normalized);
-            var position = Vector2.LerpUnclamped(startPosition, endPosition, eased);
-            position.y += Mathf.Sin(normalized * Mathf.PI)
-                          * SettlementTaskRewardFlyArcHeight;
-            flyRect.anchoredPosition = position;
-            flyRect.sizeDelta = endSize;
-            flyRect.localRotation = Quaternion.identity;
-            yield return null;
-        }
-
-        targetImage.gameObject.SetActive(true);
-        targetImage.rectTransform.localScale = Vector3.one;
-        targetImage.rectTransform.localRotation = Quaternion.identity;
-        Destroy(flyObject);
-    }
-
-    private static bool TryGetRelativeRectGeometry(
-        RectTransform source,
-        RectTransform targetParent,
-        out Vector2 center,
-        out Vector2 size)
-    {
-        center = Vector2.zero;
-        size = Vector2.zero;
-        if (source == null || targetParent == null)
-        {
-            return false;
-        }
-
-        var corners = new Vector3[4];
-        source.GetWorldCorners(corners);
-        var min = new Vector2(float.PositiveInfinity, float.PositiveInfinity);
-        var max = new Vector2(float.NegativeInfinity, float.NegativeInfinity);
-        for (var i = 0; i < corners.Length; i++)
-        {
-            var local = targetParent.InverseTransformPoint(corners[i]);
-            min = Vector2.Min(min, local);
-            max = Vector2.Max(max, local);
-        }
-
-        center = (min + max) * 0.5f;
-        size = max - min;
-        return size.x > 0.01f && size.y > 0.01f;
-    }
-
-    private void ClearRuntimeSettlementRewardItems()
-    {
-        for (var i = 0; i < _runtimeSettlementRewardItems.Count; i++)
-        {
-            if (_runtimeSettlementRewardItems[i] != null)
-            {
-                Destroy(_runtimeSettlementRewardItems[i]);
-            }
-        }
-
-        _runtimeSettlementRewardItems.Clear();
     }
 
     private void ShowRewardPanel()
@@ -8777,6 +8642,7 @@ public class GameScene : MonoBehaviour
     private void StopAndHideSettlementRewardRevealEffect()
     {
         StopAndHideSettlementRewardRevealEffect(_settlementRewardRevealEffect);
+        StopAndHideSettlementRewardRevealEffect(_secondarySettlementRewardRevealEffect);
     }
 
     private static void StopAndHideSettlementRewardRevealEffect(GameObject revealEffect)
@@ -10479,8 +10345,7 @@ public class GameScene : MonoBehaviour
         }
 
         if (_settlementCompletionRewardPackId > 0
-            || _settlementTaskRewardPackId > 0
-            || _didEarnTaskPackRewardDuringSettlement)
+            || _settlementTaskRewardPackId > 0)
         {
             yield return AnimateSettlementPackRewards();
         }
