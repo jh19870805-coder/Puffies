@@ -1,5 +1,14 @@
 # 当前任务
 
+## 2026-09-02 Win32 游戏中切换尺寸后棋盘未适配
+
+- 状态：代码修改和 Runtime/Editor 编译完成，等待 Windows Player 实机验收。
+- 根因：`GameScene` 检测到 `Screen.width/height` 变化后，在同一帧立即用刚更新视口和 CanvasScaler 的 RectTransform 世界边界计算当前组相机与棋盘；该帧 Canvas 边界仍可能是旧尺寸或半更新状态，但代码随即清除了待刷新标记，后续不会再纠正，导致棋盘和托盘停留在旧布局并被有效视口裁切。
+- 修改：连续拉伸期间只记录最新客户区尺寸；最新尺寸稳定两帧且当前没有入场、切组、吸附、拖拽或托盘重排冲突时，再次配置固定 `16:9` 视口、强制刷新全部 Canvas/Layout，并完整重算当前组相机、棋盘、托盘及托盘 Piece。最终布局完成后，若新手引导正在显示，同步重建提示框、箭头和焦点层。
+- 保留：现有棋盘缩放、托盘 Piece 缩放与间距、拖拽、吸附、错误回弹和互斥动画规则不变；重排仍只在安全时机执行，不中断玩家当前操作。
+- 修改文件：`Assets/Scripts/Controller/GameScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
+- 验证：`Assembly-CSharp-Editor.csproj` 编译通过并连带生成 Runtime/firstpass，结果为 `0` 警告、`0` 错误；`git diff --check` 通过，仅有仓库既有的 LF/CRLF 转换提示。仍需在 Windows Player 游戏过程中验证窗口化、最大化、恢复及连续横向/纵向拉伸，确认棋盘、托盘和教程目标始终完整可操作。
+
 ## 2026-09-02 新手引导第三步提示框与箭头修复
 
 - 状态：代码修改和 Runtime/Editor 编译完成，等待 CardBag001 Play Mode 视觉验收。

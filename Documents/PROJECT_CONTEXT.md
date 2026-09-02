@@ -188,7 +188,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 
 - `SliderMusic` 和 `SliderEffect` 使用 `FakeSettingsSliderInput` 驱动现有 `Bar01/Progress/ProgressDot` 美术。圆点中心轨道由 `SliderFill` 完整左右范围各内收圆点实际半宽得到，最小/最大值时圆点外边缘必须分别与凹槽左右端对齐，不得超出凹槽。绿色在圆点下方继续铺到圆点右边缘，使上层圆点不会把绿色视觉终点遮短；满值时绿色必须完整填满凹槽。禁止使用固定 padding 或场景初始圆点坐标计算轨道。
 - Windows Player 默认使用当前显示器原生分辨率的 `FullScreenWindow` 无边框全屏启动；首次没有本地设置时 `IsWindowed=false`，因此 `PanelSet/ToggleFrame` 默认关闭。打开开关后立即切换为 `FullScreenMode.Windowed`；关闭开关后必须读取 `Screen.currentResolution` 并以原生宽高和刷新率明确调用 `Screen.SetResolution(..., FullScreenWindow)`，不得保留窗口客户区尺寸或顶部窗口边框。音乐和音效更新只应用音频，不得重复切换显示模式。窗口模式允许自由拉伸；已有本地设置继续按上次选择启动。
-- Windows 窗口客户区尺寸变化后，所有页面必须按 `2560x1440`、`16:9` 设计区域整体等比缩放并立即刷新 Canvas、RectTransform 和 Layout；不得裁切 UI，也不得分别拉伸 X/Y。超宽窗口在左右显示黑边，偏窄或偏高窗口在上下显示黑边。MainScene 重新计算卡包分页并保持当前页；GameScene 在没有拖拽或互斥动画的安全时机重新适配当前组相机、棋盘、托盘及托盘 Piece。MainScene、GameScene、LoadingScene、RankScene、AchieveScene 和运行时根 Canvas 统一使用居中的固定宽高比相机视口与 `CanvasScaler Expand`；独立的全屏底层相机将视口外区域清为纯黑，避免软件鼠标历史帧残影。
+- Windows 窗口客户区尺寸变化后，所有页面必须按 `2560x1440`、`16:9` 设计区域整体等比缩放并立即刷新 Canvas、RectTransform 和 Layout；不得裁切 UI，也不得分别拉伸 X/Y。超宽窗口在左右显示黑边，偏窄或偏高窗口在上下显示黑边。MainScene 重新计算卡包分页并保持当前页；GameScene 不得在检测到尺寸变化的同一帧使用尚未稳定的 Canvas 边界，必须等待最新尺寸稳定两帧，并在没有拖拽或互斥动画的安全时机再次配置视口、刷新布局、重算当前组相机、棋盘、托盘及托盘 Piece；活动中的新手引导提示框、箭头和焦点层随后按新坐标重建。MainScene、GameScene、LoadingScene、RankScene、AchieveScene 和运行时根 Canvas 统一使用居中的固定宽高比相机视口与 `CanvasScaler Expand`；独立的全屏底层相机将视口外区域清为纯黑，避免软件鼠标历史帧残影。
 
 ---
 

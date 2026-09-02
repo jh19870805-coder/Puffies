@@ -14,6 +14,7 @@ public class GameScene : MonoBehaviour
     private const float DefaultBoardScale = 1f;
     private const float WorldGameplayDepth = -0.5f;
     private const float GamePageCameraPadding = 0.3f;
+    private const int WindowResizeLayoutStabilizationFrameCount = 2;
     private const float MaxBoardToTrayGapViewportRatio = 0.1f;
     private const float DraggableLeftPadding = 0.6f;
     private const float DraggableHorizontalSpacingPixels = 40f;
@@ -461,6 +462,7 @@ public class GameScene : MonoBehaviour
     private int _appliedScreenWidth;
     private int _appliedScreenHeight;
     private bool _isWindowResizeLayoutPending;
+    private int _windowResizeLayoutReadyFrame;
 
     private bool IsTutorialActive => _tutorialStage != TutorialStage.None;
 
@@ -637,11 +639,14 @@ public class GameScene : MonoBehaviour
             _appliedScreenWidth = Screen.width;
             _appliedScreenHeight = Screen.height;
             _isWindowResizeLayoutPending = true;
+            _windowResizeLayoutReadyFrame = Time.frameCount
+                                            + WindowResizeLayoutStabilizationFrameCount;
             ConfigureGameplayCanvas(Camera.main);
             GameCommonUtility.RefreshCanvasLayoutsForScreenSize();
         }
 
         if (!_isWindowResizeLayoutPending
+            || Time.frameCount < _windowResizeLayoutReadyFrame
             || _isGameFinished
             || _isEntranceAnimating
             || _isGroupTransitionAnimating
@@ -654,10 +659,28 @@ public class GameScene : MonoBehaviour
             return;
         }
 
+        ConfigureGameplayCanvas(Camera.main);
+        GameCommonUtility.RefreshCanvasLayoutsForScreenSize();
         FitCameraToActiveGroup(_drag.CurrentGroupIndex);
         RefreshCurrentGroupTrayScalesAndLayout();
         GameCommonUtility.RefreshCanvasLayoutsForScreenSize();
+        RefreshTutorialAfterWindowSizeChange();
         _isWindowResizeLayoutPending = false;
+    }
+
+    private void RefreshTutorialAfterWindowSizeChange()
+    {
+        if (!IsTutorialActive)
+        {
+            return;
+        }
+
+        if (!ShowPiecePlacementTutorialPresentation())
+        {
+            Debug.LogWarning(
+                "GameScene: tutorial presentation could not be refreshed after window resize; tutorial stopped.");
+            StopPiecePlacementTutorial(restoreLevelOutline: true);
+        }
     }
 
     private void InitializeGameplay(int bagId)
