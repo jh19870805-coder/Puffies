@@ -300,6 +300,9 @@ public class MainScene : MonoBehaviour
     private bool mIsSelectedPackageProgressPieceTransitioning;
     private bool mDidWarnPackTornMaskUnavailable;
     private bool mIsPackageListRefreshComplete;
+    private int mAppliedScreenWidth;
+    private int mAppliedScreenHeight;
+    private bool mIsWindowResizeLayoutPending;
     private Vector2 mTearSwipeStartScreenPosition;
     private Rect mTearSwipeScreenRect;
 
@@ -657,6 +660,7 @@ public class MainScene : MonoBehaviour
 
     private void Update()
     {
+        RefreshForWindowSizeChange();
         UpdateInProgressPackagePieceAnimations();
 
         if (!mIsAwaitingTearSwipe)
@@ -698,6 +702,8 @@ public class MainScene : MonoBehaviour
         }
 
         ConfigureMainCanvas();
+        mAppliedScreenWidth = Screen.width;
+        mAppliedScreenHeight = Screen.height;
         CardPackOpeningEffect.PrepareSceneLightEffect();
 
         if (!TryResolvePackageList())
@@ -736,6 +742,9 @@ public class MainScene : MonoBehaviour
             return;
         }
 
+        camera.rect = new Rect(0f, 0f, 1f, 1f);
+        camera.clearFlags = CameraClearFlags.SolidColor;
+
         GameCommonUtility.ConfigureCanvasForGameplay(
             canvas,
             camera,
@@ -744,6 +753,55 @@ public class MainScene : MonoBehaviour
             PixelsPerUnit,
             MainCanvasWorldDepth);
         Canvas.ForceUpdateCanvases();
+        var background = canvas.transform.Find(GameDefine.BackgroundObjectName) as RectTransform;
+        GameCommonUtility.FitRectTransformToParentCover(background);
+        Canvas.ForceUpdateCanvases();
+    }
+
+    private void RefreshForWindowSizeChange()
+    {
+        if (Screen.width <= 0 || Screen.height <= 0)
+        {
+            return;
+        }
+
+        if (Screen.width != mAppliedScreenWidth || Screen.height != mAppliedScreenHeight)
+        {
+            mAppliedScreenWidth = Screen.width;
+            mAppliedScreenHeight = Screen.height;
+            mIsWindowResizeLayoutPending = true;
+            ConfigureMainCanvas();
+            GameCommonUtility.RefreshCanvasLayoutsForScreenSize();
+            FitOpeningStageBackgroundToCamera();
+        }
+
+        if (!mIsWindowResizeLayoutPending
+            || mIsPlayingAnimation
+            || mPackagePageSnapCoroutine != null)
+        {
+            return;
+        }
+
+        var packagePagePosition = mPackageScrollRect != null
+            ? Mathf.Clamp01(mPackageScrollRect.horizontalNormalizedPosition)
+            : 0f;
+        if (mIsPackageListRefreshComplete)
+        {
+            RefreshPackagePageLayout();
+            if (mPackageScrollRect != null)
+            {
+                mPackageScrollRect.StopMovement();
+                mPackageScrollRect.horizontalNormalizedPosition = packagePagePosition;
+            }
+        }
+
+        if (mIsBagVolumeSelectionActive)
+        {
+            RefreshBagVolumeLayout();
+        }
+
+        GameCommonUtility.RefreshCanvasLayoutsForScreenSize();
+        mIsWindowResizeLayoutPending = false;
     }
 
     private static void RefreshTaskProgressUI()

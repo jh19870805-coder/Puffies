@@ -186,6 +186,9 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 | `PackItem/ImgLight` | 卡包气泡/亮光 Image；是 `PackItem` 直属子节点 |
 | `PackItem/PackSize` | 卡包尺寸图标；运行时根据 `CardPackSize` 配置选择 `PackSize_1.png` 到 `PackSize_7.png` |
 
+- Windows Player 默认使用原生分辨率的 `FullScreenWindow` 无边框全屏启动；首次没有本地设置时 `IsWindowed=false`，因此 `PanelSet/ToggleFrame` 默认关闭。打开开关后立即切换为 `FullScreenMode.Windowed`，关闭后立即恢复 `FullScreenMode.FullScreenWindow`，并持久化用户选择。窗口模式允许自由拉伸；已有本地设置继续按上次选择启动。
+- Windows 窗口客户区尺寸变化后，MainScene 与 GameScene 必须强制刷新根 Canvas、RectTransform 和 Layout。MainScene 重新计算卡包分页并保持当前页；GameScene 在没有拖拽或互斥动画的安全时机重新适配当前组相机、棋盘、托盘及托盘 Piece。两个场景的固定 `2560x1440` 主背景按父 Canvas 等比 Cover 并允许边缘裁切，不得分别拉伸 X/Y；MainScene 相机必须使用完整 viewport 和 `SolidColor` 清屏，避免未覆盖区域出现软件鼠标历史帧残影。
+
 ---
 
 ## 4. 设计分辨率与字体

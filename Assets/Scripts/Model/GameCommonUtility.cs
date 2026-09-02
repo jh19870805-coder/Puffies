@@ -353,6 +353,56 @@ public static class GameCommonUtility
         canvas.planeDistance = Mathf.Max(0.01f, Mathf.Abs(camera.transform.position.z - worldDepth));
     }
 
+    /// <summary>
+    /// 用途：窗口客户区尺寸变化后，立即刷新所有根 Canvas 与布局组件。返回：无。
+    /// </summary>
+    public static void RefreshCanvasLayoutsForScreenSize()
+    {
+        Canvas.ForceUpdateCanvases();
+        var canvases = UnityEngine.Object.FindObjectsOfType<Canvas>(true);
+        for (var i = 0; i < canvases.Length; i++)
+        {
+            var canvas = canvases[i];
+            if (canvas == null || !canvas.isRootCanvas)
+            {
+                continue;
+            }
+
+            var canvasRect = canvas.transform as RectTransform;
+            if (canvasRect == null)
+            {
+                continue;
+            }
+
+            canvasRect.ForceUpdateRectTransforms();
+            LayoutRebuilder.ForceRebuildLayoutImmediate(canvasRect);
+        }
+
+        Canvas.ForceUpdateCanvases();
+    }
+
+    /// <summary>
+    /// 用途：将固定尺寸 UI 等比放大到完整覆盖父 Rect，超出部分由屏幕边界裁切。返回：无。
+    /// </summary>
+    public static void FitRectTransformToParentCover(RectTransform target)
+    {
+        var parent = target != null ? target.parent as RectTransform : null;
+        if (target == null
+            || parent == null
+            || target.rect.width <= 0.001f
+            || target.rect.height <= 0.001f
+            || parent.rect.width <= 0.001f
+            || parent.rect.height <= 0.001f)
+        {
+            return;
+        }
+
+        var scale = Mathf.Max(
+            parent.rect.width / target.rect.width,
+            parent.rect.height / target.rect.height);
+        target.localScale = new Vector3(scale, scale, 1f);
+    }
+
     private static Vector2 RectTransformToScreenPoint(RectTransform rectTransform)
     {
         var canvas = rectTransform.GetComponentInParent<Canvas>();

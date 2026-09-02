@@ -1,5 +1,23 @@
 # 当前任务
 
+## 2026-09-02 Win32 窗口拉伸布局与鼠标残影
+
+- 状态：代码修复和编译验证完成，等待 Windows Player 实机连续拉伸验收。
+- 布局刷新：MainScene 与 GameScene 现在检测 `Screen.width/height` 变化，先强制刷新所有根 Canvas、RectTransform 和 Layout；首页卡包列表随后重新计算分页尺寸与网格边距，并恢复拉伸前所在的横向分页位置，系列卡包选择页同步重算当前轮播布局。
+- 游戏适配：GameScene 在窗口尺寸变化后重新执行当前组的相机、棋盘和托盘适配，并重新计算托盘 Piece 缩放与排列；如果当时处于入场、切组、正确放置反馈、托盘缓动、托盘滑动或 Piece 拖拽中，则保留待刷新状态并在互斥状态结束后执行，避免中断当前操作。
+- 背景：MainScene 与 GameScene 固定 `2560x1440` 背景按父 Canvas 新尺寸做统一等比 Cover，超出边缘允许裁切，不分别拉伸 X/Y；MainScene 开包舞台背景也会随窗口变化重新适配相机。
+- 残影：MainScene 的 `Main Camera` 从 `Depth Only` 改为 `Solid Color`，并固定使用完整 viewport，每帧清理未被 UI 覆盖的颜色缓冲，避免强制软件鼠标在新增黑边区域留下历史帧残影。
+- 保留：设计分辨率 `2560x1440`、CanvasScaler `Match=0.5`、窗口自由拉伸、自定义鼠标样式以及默认全屏/窗口化开关规则均未改变。
+- 修改文件：`Assets/Scripts/Model/GameCommonUtility.cs`、`Assets/Scripts/Controller/MainScene.cs`、`Assets/Scripts/Controller/GameScene.cs`、`Assets/Scenes/MainScene.unity`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
+- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 编译均通过，结果为 `0` 警告、`0` 错误；本次相关文件 `git diff --check` 通过，仅有仓库行尾转换提示。仍需在 Windows Player 中连续拖宽、拖窄窗口，验证首页、设置面板、选中卡包页与游戏页在松手后立即完成布局刷新，背景没有黑边，鼠标经过窗口边缘没有残影。
+
+## 2026-09-02 Windows 默认全屏与窗口化设置
+
+- 状态：Windows Player 默认启动模式已改为无边框全屏；首次没有本地设置时，`PanelSet/ToggleFrame` 对应的 `IsWindowed` 固定为 `false`，因此窗口化开关默认关闭。用户打开开关后立即切换到 `FullScreenMode.Windowed` 并保存；关闭开关后立即恢复 `FullScreenMode.FullScreenWindow`。
+- 保留：Windows 窗口仍允许用户自由拉伸，`2560x1440` 设计分辨率、Canvas 缩放规则、音乐/音效与辅助选项设置不变。已有本地 `GameSettings` 继续尊重用户上次保存的窗口化选择，不强制覆盖。
+- 修改文件：`ProjectSettings/ProjectSettings.asset`、`Assets/Scripts/Model/LocalDataStore.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
+- 验证：`Assembly-CSharp-Editor.csproj` 编译通过，并连带生成 Runtime/firstpass，结果为 `0` 警告、`0` 错误；场景 `ToggleFrame` 的编辑器初始值确认是关闭。仍需 Windows Player 验收首次默认全屏、打开开关立即窗口化、关闭开关恢复全屏和重启保持；首次默认状态需要使用没有 `GameSettings/Runtime` 记录的本地数据验证，已有测试数据会继续显示上次保存值。
+
 ## 2026-09-01 跨场景共享拍照面板
 
 - 状态：原拍照面板已由 Unity 编辑器转换并统一重命名为共享 `PackPhotoItem` Prefab，MainScene 与 GameScene 各引用同一个 Prefab 实例；运行时代码接入和编译验证完成，等待 Play Mode 功能验收。

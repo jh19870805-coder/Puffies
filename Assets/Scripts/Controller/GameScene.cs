@@ -459,6 +459,9 @@ public class GameScene : MonoBehaviour
     private GameObject _tutorialFocusRoot;
     private Sprite _tutorialArrowSprite;
     private Sprite _tutorialTipBackgroundSprite;
+    private int _appliedScreenWidth;
+    private int _appliedScreenHeight;
+    private bool _isWindowResizeLayoutPending;
 
     private bool IsTutorialActive => _tutorialStage != TutorialStage.None;
 
@@ -494,6 +497,8 @@ public class GameScene : MonoBehaviour
         }
 
         ConfigureGameplayCanvas(camera);
+        _appliedScreenWidth = Screen.width;
+        _appliedScreenHeight = Screen.height;
         InitializeScoringSession();
         var selectedBagId = GameManager.GetBagId();
         var playEntranceAnimation = GameManager.ConsumeGameEntranceAnimation();
@@ -602,6 +607,7 @@ public class GameScene : MonoBehaviour
 
     private void Update()
     {
+        RefreshForWindowSizeChange();
         EnsureDraggablePieceLights();
         UpdatePieceLightSorting();
         UpdatePieceHintAnimation();
@@ -618,6 +624,41 @@ public class GameScene : MonoBehaviour
             OnPointerEnd);
         UpdateLooseClusterShadows();
         RefreshCursorForPointer(Input.mousePosition);
+    }
+
+    private void RefreshForWindowSizeChange()
+    {
+        if (Screen.width <= 0 || Screen.height <= 0)
+        {
+            return;
+        }
+
+        if (Screen.width != _appliedScreenWidth || Screen.height != _appliedScreenHeight)
+        {
+            _appliedScreenWidth = Screen.width;
+            _appliedScreenHeight = Screen.height;
+            _isWindowResizeLayoutPending = true;
+            ConfigureGameplayCanvas(Camera.main);
+            GameCommonUtility.RefreshCanvasLayoutsForScreenSize();
+        }
+
+        if (!_isWindowResizeLayoutPending
+            || _isGameFinished
+            || _isEntranceAnimating
+            || _isGroupTransitionAnimating
+            || _isPiecePlacementAnimating
+            || _drag.DraggingPiece != null
+            || _isTrayScrolling
+            || _isTrayPieceReflowAnimating
+            || _drag.CurrentGroupIndex < 0)
+        {
+            return;
+        }
+
+        FitCameraToActiveGroup(_drag.CurrentGroupIndex);
+        RefreshCurrentGroupTrayScalesAndLayout();
+        GameCommonUtility.RefreshCanvasLayoutsForScreenSize();
+        _isWindowResizeLayoutPending = false;
     }
 
     private void InitializeGameplay(int bagId)
@@ -1404,6 +1445,9 @@ public class GameScene : MonoBehaviour
                 PixelsPerUnit);
         }
 
+        Canvas.ForceUpdateCanvases();
+        var background = canvas.transform.Find(GameDefine.BackgroundObjectName) as RectTransform;
+        GameCommonUtility.FitRectTransformToParentCover(background);
         Canvas.ForceUpdateCanvases();
     }
 

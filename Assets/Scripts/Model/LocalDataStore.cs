@@ -586,7 +586,9 @@ public static class GameSettingsUtility
         Sanitize(sSettings);
         AudioListener.volume = Mathf.Clamp01(Mathf.Max(sSettings.MusicVolume, sSettings.EffectVolume));
         ApplyAudioSourceVolumes();
-        Screen.fullScreen = !sSettings.IsWindowed;
+        Screen.fullScreenMode = sSettings.IsWindowed
+            ? FullScreenMode.Windowed
+            : FullScreenMode.FullScreenWindow;
     }
 
     private static void EnsureSettingsLoaded()
@@ -637,7 +639,7 @@ public static class GameSettingsUtility
         {
             MusicVolume = 1f,
             EffectVolume = 1f,
-            IsWindowed = !Screen.fullScreen,
+            IsWindowed = false,
             UsableOption1 = false,
             UsableOption2 = false,
             UsableOption3 = false

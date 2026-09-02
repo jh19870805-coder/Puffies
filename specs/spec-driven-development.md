@@ -1276,3 +1276,39 @@
 - [x] 11. 在 GameScene 预置第二个完整 `BagRewardItemSecondary`，删除双奖励的运行时 `Instantiate` 和清理列表。
 - [x] 12. MainScene 在卡包分批创建前预隐藏列表，完成目标缓存和离屏布置后同帧恢复，消除其他卡包首帧闪现。
 - [x] 13. 将 `ImgBagBg` 纳入完整奖励卡的持久化 Canvas，移除其 GameScene 提前退场，并在卡包起飞后延迟下移。
+
+## 2026-09-02 - Windows 默认全屏与窗口化设置
+
+### 需求
+
+1. WHEN Windows Player 首次启动且没有保存的游戏设置 THEN 游戏 SHALL 使用 `FullScreenWindow` 无边框全屏，`PanelSet/ToggleFrame` SHALL 默认为关闭。
+2. WHEN 用户打开 `ToggleFrame` THEN 游戏 SHALL 立即切换为 `FullScreenMode.Windowed`，并持久化窗口化状态。
+3. WHEN 用户关闭 `ToggleFrame` THEN 游戏 SHALL 立即切换为 `FullScreenMode.FullScreenWindow`，并持久化全屏状态。
+4. WHEN 已存在保存的 `GameSettings/Runtime` THEN 游戏 SHALL 尊重上次保存的窗口化选择，不得每次启动强制恢复默认全屏。
+5. 窗口模式 SHALL 继续允许用户自由拉伸；设计分辨率与 Canvas 缩放规则 SHALL 保持 `2560x1440` 和现有宽高各 `0.5` 的适配方式。
+
+### 设计与任务
+
+- [x] 1. 将 Windows Player 默认 `fullscreenMode` 从 `Windowed` 改为 `FullScreenWindow`。
+- [x] 2. 将首次 `GameSettingsData.IsWindowed` 默认值固定为 `false`。
+- [x] 3. 使用明确的 `FullScreenMode.Windowed/FullScreenWindow` 应用并保存开关状态。
+- [x] 4. Runtime/Editor 编译通过，并确认 MainScene 场景中 `ToggleFrame` 初始值为关闭。
+- [ ] 5. 在 Windows Player 中分别使用无设置数据与已有设置数据，验证默认状态、即时切换、窗口拉伸和重启保持。
+
+## 2026-09-02 - Win32 窗口拉伸实时适配
+
+### 需求
+
+1. WHEN Windows 窗口尺寸发生变化 THEN 所有活动 Canvas 和布局组件 SHALL 在下一帧按新的客户区尺寸刷新，不得继续保留拉伸前的页面布局；MainScene 与 GameScene 的固定 `2560x1440` 背景 SHALL 等比覆盖新的客户区并允许边缘裁切，不得分别拉伸 X/Y。
+2. WHEN MainScene 卡包列表已经完成创建 AND 窗口尺寸发生变化 THEN 系统 SHALL 重新计算分页尺寸、网格边距和系列卡包布局，并保持用户当前所在的分页位置。
+3. WHEN GameScene 正在正常拼图 AND 窗口尺寸发生变化 THEN 系统 SHALL 在没有入场、切组或拖拽冲突的安全时机重新适配当前棋盘、托盘和托盘 Piece；如果当时正在播放互斥动画，则延后到动画结束后执行。
+4. WHEN 窗口比例导致页面暂时未覆盖完整客户区 THEN MainScene 相机 SHALL 每帧清理完整颜色缓冲，鼠标经过空白区域不得留下历史帧残影。
+5. 屏幕适配 SHALL 保持 `2560x1440` 设计分辨率、CanvasScaler `Match Width Or Height=0.5`、自由拉伸窗口和现有自定义鼠标样式不变。
+
+### 实现与验证任务
+
+- [x] 1. 增加统一 Canvas/Layout 刷新入口，并接入 MainScene 和 GameScene 的窗口尺寸变化检测。
+- [x] 2. MainScene 刷新分页、系列卡包布局并保留当前横向分页归一化位置。
+- [x] 3. GameScene 在安全时机重新执行当前组相机、棋盘和托盘适配。
+- [x] 4. MainScene 相机改为完整颜色缓冲清理，避免黑边鼠标残影。
+- [ ] 5. 编译 Runtime/Editor，并在 Windows Player 验证首页、设置面板、选中卡包页和游戏页的宽屏/窄屏连续拉伸。
