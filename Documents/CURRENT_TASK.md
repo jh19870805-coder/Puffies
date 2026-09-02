@@ -1,13 +1,41 @@
 # 当前任务
 
-## 2026-09-02 结算双卡包任务奖励下飞动画
+## 2026-09-02 任务奖励独立发包上限
+
+- 状态：代码与需求记录已修改，编译验证已完成，等待 Unity Play Mode 数据和动画复验。
+- 规则：`R/H` 章节阶段门槛只用于首次完成后的自然结算发包。任务奖励只要存在符合章节、系列前置关系的锁定候选，并且全局可玩卡包数 `H=Unlocked+InProgress` 小于最大持有数 `6`，就立即发放；`H>=6` 时保留为待发权益，后续任意成功结算出现空位后重试。
+- 顺序：待发任务奖励仍先于本轮自然结算发包处理；任务奖励发放后，自然结算使用更新后的卡包状态继续执行原阶段判定。同一轮满足条件时仍可获得两个卡包。
+- 结算表现：本轮任务权益成功入队就从任务位置播放问号卡包飞入；真正分配到 PackId 后参与点击完成后的首页列表飞入。达到全局上限而待发时只播放结算占位动画，不提前解锁或飞入首页。
+- 修改文件：`Assets/Scripts/Model/CardPackDataUtility.cs`、`Assets/Scripts/Controller/GameScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`Documents/GAME_DESIGN_REQUIREMENTS.md`、`specs/task-and-settlement.md`。
+- 验证：`dotnet build Assembly-CSharp-Editor.csproj --no-restore` 通过，结果为 `0` 警告、`0` 错误；`git diff --check` 通过，仅有仓库既有的 LF/CRLF 转换提示。仍需在 Play Mode 验证截图场景 `R=7、H=3` 会立即发放任务卡包并播放完整动画，同时验证 `H=6` 时权益保持待发，完成一个可玩卡包降到 `H=5` 后下一次结算会补发。
+
+## 2026-09-02 无奖励重玩返回首页列表不可见
+
+- 状态：根因已由运行日志确认，代码修改与编译验证已完成，等待 Unity Play Mode 复验。
+- 根因：上一轮首页奖励卡已落位、列表也已恢复，但 `FX_ui_jieSuo_w` 的长尾粒子仍让旧 `CardPackRewardFlyTransition` 存活约 `16s`。玩家在此期间进入重玩后，无奖励结算创建新转场时被旧静态实例拒绝，只能直接加载 MainScene；新 MainScene 又因旧实例仍为 `IsActive` 把卡包列表预隐藏，而旧实例已经结束首页入场，不会再次恢复这份列表。
+- 修复：进入 `GameScene` 时结束上一轮遗留的首页奖励长尾转场；点击结算完成并准备创建本轮转场前再次防御性清理旧实例。无奖励结算仍会创建本轮空奖励转场，继续执行首页卡包列表从屏幕下方依次上滑，不改为直接显示或生硬切换。
+- 保留：重玩不产生首次完成奖励、任务奖励独立兑现、已有奖励飞入与解锁特效时序均不修改。
+- 修改文件：`Assets/Scripts/Controller/GameScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`。
+- 验证：`Editor.log` 已确认故障前存在上一轮 `CardPackRewardFlyTransition` 长尾、随后发生无奖励重玩结算及新 MainScene 列表刷新；`dotnet build Assembly-CSharp-Editor.csproj --no-restore` 通过，结果为 `0` 警告、`0` 错误；`git diff --check` 通过，仅有仓库既有的 LF/CRLF 转换提示。仍需在上一轮解锁特效尚未结束时立即进入重玩，完成后点击结算完成，确认首页列表正常上滑并恢复交互。
+
+## 2026-09-02 重玩完成任务未发卡包修复
+
+- 状态：根因已确认，代码与需求记录已修改，等待 Unity Play Mode 数据验收。
+- 根因：`TaskConfig.csv/CountReplay=1` 允许重玩累计三类任务，所以重复完成 M 包能正常推进并完成任务；但结算代码随后以 `_wasSelectedPackCompletedOnEntry` 为条件跳过了整个待发任务奖励分配，导致任务已经推进到下一条、保底权益也已经写入 `CardPackDistribution/Progress`，却没有在本局获得卡包。
+- 修复：重玩仍不执行首次完成/游戏结束发包；任务奖励改为独立处理。任何成功保存的结算都会尝试兑现已赚到的待发任务权益，因此重玩中刚完成任务时会立即按现有章节、系列和全局最大持有数量尝试发包，旧版本已留在队列中的任务权益也会在下一次成功结算重试。
+- 数据：没有修改存储结构，不需要删除本地数据；本次未发出的任务奖励没有丢失，仍在待发队列中。
+- 修改文件：`Assets/Scripts/Controller/GameScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`Documents/GAME_DESIGN_REQUIREMENTS.md`、`specs/task-and-settlement.md`。
+- 验证：Unity `Editor.log` 已确认任务完成前正常累计、完成时权益成功入队并推进下一任务；`dotnet build Assembly-CSharp-Editor.csproj --no-restore` 通过，结果为 `0` 警告、`0` 错误；`git diff --check` 通过，仅有仓库既有的 LF/CRLF 转换提示。仍需在 Play Mode 用“首次完成 1 个 M 包 + 重玩 2 次”复验任务奖励当局发放，并确认普通重玩仍不会触发首次完成奖励。
+
+## 2026-09-02 结算任务奖励下飞动画
 
 - 状态：代码修改与编译验证已完成，等待 Unity Play Mode 视觉复验。
-- 修改：双卡包奖励时，第一个游戏结算奖励继续使用下方槽位原有弹出动画；第二个任务奖励不再在下方第二槽原地弹出，而是直接复用 `BagRewardItemSecondary/Canvas/BagCover` 的真实问号卡包，在任务条 `BagBg/BagIcon` 的实际屏幕位置瞬时接替原图标，再用 `0.52s` 直线下移并同步放大到 `ImgBagBg` 第二槽。飞行期间逐帧读取仍在上滑的第二槽终点，避免落点随背景条移动而偏移。
-- 原地淡出：替换发生时立即隐藏原 `BagIcon`；`BagBg` 的绿色圆圈、`BagAddBg` 和 `TextAddNum` 保持原位置，用 `0.2s` 渐隐，不参与飞行。单奖励流程与第一个奖励动画不变。
-- 对象约束：没有克隆临时问号图，也没有修改 `BagRewardItem.prefab` 或解锁特效；动画结束后第二奖励仍是原完整 `BagRewardItemSecondary` 的组成部分，可继续被结算退场和首页奖励转场接管。
+- 待发奖励修复：运行日志确认任务从 `35/60` 推进到 `68/60` 并成功创建待发权益，但因阶段门槛为 `R=7、H=3、H<=2`，本轮没有分配真实 PackId。结算展示此前错误地只检查真实 PackId，导致整个任务奖励动画被跳过；现在增加本轮任务权益成功入队标记，只要任务奖励已经赚到，就会显示奖励底板并从任务位置飞入对应槽位。该标记只控制结算表现，不参与真实卡包解锁；点击完成时，尚未分配 PackId 的占位卡随 `ImgBagBg` 收回，只有真实任务卡包才提升为跨场景对象并飞入首页列表。
+- 修改：结算奖励动画按奖励来源决定，不再按槽位序号决定。首次完成奖励继续使用下方槽位原有弹出动画；任务奖励无论是唯一奖励还是双奖励中的第二个，都直接复用对应 `BagRewardItem` 内的真实问号卡包，在任务条 `BagBg/BagIcon` 的实际屏幕位置瞬时接替原图标，再用 `0.52s` 直线下移并同步放大到目标槽。只有任务奖励时目标为居中第一槽，同时存在首次完成奖励时目标为右侧第二槽；飞行期间逐帧读取仍在上滑的目标槽终点，避免落点随背景条移动而偏移。
+- 原地淡出：替换发生时立即隐藏原 `BagIcon`；`BagBg` 的绿色圆圈、`BagAddBg` 和 `TextAddNum` 保持原位置，用 `0.2s` 渐隐，不参与飞行。
+- 对象约束：没有克隆临时问号图，也没有修改 `BagRewardItem.prefab` 或解锁特效；动画结束后任务奖励仍属于原完整 `BagRewardItem` 实例，可继续被结算退场和首页奖励转场接管。
 - 修改文件：`Assets/Scripts/Controller/GameScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`。
-- 验证：`dotnet build Assembly-CSharp-Editor.csproj --no-restore` 通过，结果为 `0` 警告、`0` 错误；`git diff --check` 通过，仅有仓库既有的 LF/CRLF 转换提示。仍需在 Play Mode 触发“游戏奖励 + 任务奖励”双卡包结算，确认第二问号卡从任务区下飞、绿圈与 `+1` 原地消失，且完成按钮后的首页飞入流程不变。
+- 验证：运行日志已确认本次未播放动画不是任务判定失败，而是任务权益入队后受到发包门槛拦截；`dotnet build Assembly-CSharp-Editor.csproj --no-restore` 通过，结果为 `0` 警告、`0` 错误；`git diff --check` 通过，仅有仓库既有的 LF/CRLF 转换提示。仍需在 Play Mode 分别触发“仅任务奖励且立即发包”“仅任务奖励但保持待发”和“首次完成奖励 + 任务奖励”，确认任务问号卡从任务区飞向对应槽位、绿圈与 `+1` 原地消失，且只有真实 PackId 参与完成按钮后的首页飞入。
 
 ## 2026-09-02 三档本地存档与 PanelSave 接入
 
@@ -134,7 +162,7 @@
 - 状态：运行时代码与稳定需求已修改，Runtime/Editor 编译通过，等待 Unity Play Mode 数据验收。
 - 重玩判定：进入 GameScene 时当前 PackId 已经是 `Completed`，即 `_wasSelectedPackCompletedOnEntry=true`，本局按重玩处理；进行中会话的继续游戏不属于重玩。
 - 积分：正常局保持原规则。重玩的可得基础分为尺寸原始基础分的 `10%`；每项加成仍以原始基础分为计算基数。公式为 `ReplayFinalScore = Ceil(OriginalBaseScore * 10%) + Ceil(OriginalBaseScore * TotalBonusRate)`。结算动画先滚到折算基础分，再逐项显示按原始基础分换算的实际加分。
-- 发包：重玩结算不执行首次完成发包，也不尝试发放任何已有待发任务奖励，不显示 `ImgBagBg` 获包动画。任务是否累计仍由 `TaskConfig.csv/CountReplay` 控制；重玩中达成任务时，保底卡包权益继续写入待发队列并推进任务，但不在本局分配 PackId，留到后续非重玩结算再按常规规则尝试发放。
+- 发包：重玩结算不执行首次完成发包。任务是否累计仍由 `TaskConfig.csv/CountReplay` 控制；重玩中达成任务时，保底卡包权益写入待发队列并推进任务，随后独立按常规门槛尝试兑现。该规则已由 2026-09-02 的“重玩完成任务未发卡包修复”更新。
 - 数据：没有修改 SQLite 或 JSON 结构，不需要删除本地数据。
 - 修改文件：`Assets/Scripts/Model/GameTaskUtility.cs`、`Assets/Scripts/Controller/GameScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`Documents/GAME_DESIGN_REQUIREMENTS.md`。
 - 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 均为 `0` 警告、`0` 错误。仍需在 Unity 验证正常首次完成、普通重玩、重玩达成任务、存在待发任务奖励时重玩四种情况。

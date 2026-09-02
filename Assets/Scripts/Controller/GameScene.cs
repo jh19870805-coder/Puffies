@@ -399,8 +399,8 @@ public class GameScene : MonoBehaviour
     private int _settlementBagCountBeforeCompletion;
     private int _settlementCompletionRewardPackId;
     private int _settlementTaskRewardPackId;
+    private bool _didQueueTaskRewardDuringSettlement;
     private bool _isFirstCompletionSettlement;
-    private bool _didEarnTaskPackRewardDuringSettlement;
     private bool _hasSettlementBoardFitTarget;
     private Vector2 _settlementBoardFitStartPosition;
     private Vector2 _settlementBoardFitTargetPosition;
@@ -506,6 +506,8 @@ public class GameScene : MonoBehaviour
             return;
         }
 
+        CardPackRewardFlyTransition.CancelPending();
+
         var camera = Camera.main;
         if (camera != null)
         {
@@ -538,6 +540,7 @@ public class GameScene : MonoBehaviour
         _settlementBagCountBeforeCompletion = 0;
         _settlementCompletionRewardPackId = 0;
         _settlementTaskRewardPackId = 0;
+        _didQueueTaskRewardDuringSettlement = false;
         _isFirstCompletionSettlement = false;
         InitializeGameplay(selectedBagId);
         GameManager.NotifyGameSceneLoaded();
@@ -7918,11 +7921,8 @@ public class GameScene : MonoBehaviour
                 yield return new WaitForSecondsRealtime(SettlementRewardAnimationStagger);
             }
 
-            var taskRewardAnimation = _completionRewardDisplayImage != null
-                ? AnimateTaskRewardIntoSettlementSlot(_taskRewardDisplayImage)
-                : AnimateSettlementRewardPop(_taskRewardDisplayImage.rectTransform);
             StartCoroutine(RunSettlementAnimation(
-                taskRewardAnimation,
+                AnimateTaskRewardIntoSettlementSlot(_taskRewardDisplayImage),
                 () => taskRewardComplete = true));
         }
 
@@ -8015,7 +8015,8 @@ public class GameScene : MonoBehaviour
     {
         _completionRewardDisplayImage = null;
         _taskRewardDisplayImage = null;
-        var showTaskReward = _settlementTaskRewardPackId > 0;
+        var showTaskReward = _settlementTaskRewardPackId > 0
+                             || _didQueueTaskRewardDuringSettlement;
         var rewardCount = (_settlementCompletionRewardPackId > 0 ? 1 : 0)
                           + (showTaskReward ? 1 : 0);
         if (rewardCount <= 0 || _taskRewardImage == null)
@@ -8309,7 +8310,7 @@ public class GameScene : MonoBehaviour
         _settlementBagCountBeforeCompletion = CardPackDataUtility.GetCompletedPackCount();
         _settlementCompletionRewardPackId = 0;
         _settlementTaskRewardPackId = 0;
-        _didEarnTaskPackRewardDuringSettlement = false;
+        _didQueueTaskRewardDuringSettlement = false;
         _settlementPackRewardIds.Clear();
         _didSavePackCompletion = SaveCardPackAfterPuzzleComplete();
         _isFirstCompletionSettlement = _didSavePackCompletion
@@ -8623,6 +8624,7 @@ public class GameScene : MonoBehaviour
         PrepareSettlementRewardImagesForExit();
         yield return AnimateSettlementUiExit();
 
+        CardPackRewardFlyTransition.CancelPending();
         if (!CardPackRewardFlyTransition.TryStart(
                 BuildSettlementRewardTransitionSources(),
                 _settlementPackRewardIds,
@@ -8646,7 +8648,10 @@ public class GameScene : MonoBehaviour
 
         var movedItems = new HashSet<Transform>();
         MoveRewardItem(_completionRewardDisplayImage);
-        MoveRewardItem(_taskRewardDisplayImage);
+        if (_settlementTaskRewardPackId > 0)
+        {
+            MoveRewardItem(_taskRewardDisplayImage);
+        }
 
         void MoveRewardItem(Image image)
         {
@@ -10714,17 +10719,16 @@ public class GameScene : MonoBehaviour
         yield return ProcessTaskSettlementCore();
 
         if (_didSavePackCompletion
-            && !_didFailTaskAdvanceDuringSettlement
-            && !_wasSelectedPackCompletedOnEntry)
+            && !_didFailTaskAdvanceDuringSettlement)
         {
             TryGrantPendingTaskPackReward(
-                _didAdvanceTaskDuringSettlement ? "task completion" : "first-completion retry");
-        }
-        else if (_wasSelectedPackCompletedOnEntry)
-        {
-            Debug.Log(
-                "GameScene: pending task pack grant skipped for replay; "
-                + "the guaranteed reward remains pending.");
+                _didAdvanceTaskDuringSettlement
+                    ? _wasSelectedPackCompletedOnEntry
+                        ? "task completion during replay"
+                        : "task completion"
+                    : _wasSelectedPackCompletedOnEntry
+                        ? "replay retry"
+                        : "first-completion retry");
         }
 
         if (_didSavePackCompletion)
@@ -10743,7 +10747,8 @@ public class GameScene : MonoBehaviour
         }
 
         if (_settlementCompletionRewardPackId > 0
-            || _settlementTaskRewardPackId > 0)
+            || _settlementTaskRewardPackId > 0
+            || _didQueueTaskRewardDuringSettlement)
         {
             yield return AnimateSettlementPackRewards();
         }
@@ -10896,7 +10901,7 @@ public class GameScene : MonoBehaviour
             $"templateId={task.TemplateId}, " +
             $"preferredPackId={preferredPackId}, " +
             $"pending={CardPackDistributionUtility.GetPendingTaskRewardCount()}");
-        _didEarnTaskPackRewardDuringSettlement = !_wasSelectedPackCompletedOnEntry;
+        _didQueueTaskRewardDuringSettlement = true;
         return true;
     }
 

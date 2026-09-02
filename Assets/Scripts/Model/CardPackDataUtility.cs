@@ -867,6 +867,7 @@ public static class CardPackDistributionUtility
 {
     private const string ProgressCollection = "CardPackDistribution";
     private const string ProgressKey = "Progress";
+    private const int MaximumHeldPlayablePackCount = 6;
 
     public static bool EnqueueTaskReward(int taskInstanceId, int preferredPackId)
     {
@@ -923,8 +924,8 @@ public static class CardPackDistributionUtility
         }
 
         var remainingLockedCount = CountState(configs, states, chapterId, CardPackLifecycleState.Locked);
-        var heldPlayableCount = CountPlayable(configs, states, chapterId);
-        decision = EvaluateGrant(remainingLockedCount, heldPlayableCount);
+        var heldPlayableCount = CountPlayable(configs, states);
+        decision = EvaluateTaskRewardGrant(remainingLockedCount, heldPlayableCount);
         if (!decision.ShouldGrant)
         {
             return false;
@@ -1050,6 +1051,22 @@ public static class CardPackDistributionUtility
             maximumHeldBeforeGrant,
             expectedHeldAfterGrant,
             shouldGrant);
+    }
+
+    public static CardPackGrantDecision EvaluateTaskRewardGrant(
+        int remainingLockedCount,
+        int heldPlayableCount)
+    {
+        var normalizedRemainingLockedCount = Mathf.Max(0, remainingLockedCount);
+        var normalizedHeldPlayableCount = Mathf.Max(0, heldPlayableCount);
+        return new CardPackGrantDecision(
+            ResolveStage(normalizedRemainingLockedCount),
+            normalizedRemainingLockedCount,
+            normalizedHeldPlayableCount,
+            MaximumHeldPlayablePackCount - 1,
+            MaximumHeldPlayablePackCount,
+            normalizedRemainingLockedCount > 0
+            && normalizedHeldPlayableCount < MaximumHeldPlayablePackCount);
     }
 
     private static CardPackChapterStage ResolveStage(int remainingLockedCount)
@@ -1263,6 +1280,22 @@ public static class CardPackDistributionUtility
         for (var i = 0; i < configs.Count; i++)
         {
             if (configs[i].ChapterId == chapterId && IsPlayable(GetState(states, configs[i].PackId)))
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    private static int CountPlayable(
+        IReadOnlyList<CardPackConfigData> configs,
+        Dictionary<int, CardPackLifecycleState> states)
+    {
+        var count = 0;
+        for (var i = 0; i < configs.Count; i++)
+        {
+            if (IsPlayable(GetState(states, configs[i].PackId)))
             {
                 count++;
             }

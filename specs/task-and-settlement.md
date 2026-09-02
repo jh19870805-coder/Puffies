@@ -20,7 +20,7 @@
 1. 持久化生命周期状态为 `Locked`、`Unlocked`、`InProgress` 和 `Completed`。
 2. 发放使 `Locked` 变为 `Unlocked`；完成多组卡包的第一组后变为 `InProgress`；完成最后一组后变为 `Completed`。
 3. 重玩已完成卡包不再执行首次完成发包尝试，但仍可完成任务并创建任务必得权益。
-4. 任务奖励创建可去重的待发权益。被拦截的权益持久化保存，之后继续重试。
+4. 任务奖励创建可去重的待发权益，不受自然结算的章节阶段门槛限制；全局可玩卡包数 `Unlocked + InProgress` 小于 `6` 时立即发放，达到 `6` 时持久化保存，并在之后任意一次成功结算出现空位后继续重试。重玩只禁止首次完成发包，不禁止兑现已经赚到的任务权益。
 5. 首次完成执行一次受阶段门槛控制的发包尝试。同一轮结算中，任务和首次完成来源可以发放两个不同的锁定卡包。
 6. 内部章节限制可选锁定卡包池，但不向玩家展示。
 
@@ -56,7 +56,7 @@ Renderer2D 修复后，MainScene 复测确认输出可见。仍存在轻微位�
 - GameScene 在播放结算表现前持久化任务进度和奖励状态。
 - `TaskProgressUIUtility` 绑定 MainScene 和 GameScene 共用的 `TaskItem`。
 - 当前积分表现只在 0.8 秒内从 0 滚动到最终分数，尚未逐项显示符合条件的加成及累计阶段分数。
-- `CardPackDistributionUtility` 应用当前确定性的 `R` / 持有卡包门槛，并将待发任务权益存入 SQLite。
+- `CardPackDistributionUtility` 对自然结算应用确定性的 `R/H` 阶段门槛，对任务奖励只应用全局可玩卡包上限 `6`，并将达到上限时的待发任务权益存入 SQLite。
 - 当前配置包含章节 1 和章节 2 的 21 个卡包；目前只有五个可玩 CardBag Prefab：001、002、003、008 和 017。
 - 开包使用 `CardPackOpening.prefab` 和 `CardPackOpening.controller` 作为通用模型和 Animator Controller；PackId 只决定运行时封面，不选择编号 Prefab。
 
