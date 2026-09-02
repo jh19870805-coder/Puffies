@@ -51,16 +51,6 @@ public class MainScene : MonoBehaviour
     private const float PackBreathingPhaseStep = 0.61803398875f;
     private const int BagSelectPanelSortingOrder = 20000;
     private const int SelectedPackageSortingOrder = 30000;
-    private const int PhotoPanelSortingOrder = 32000;
-    private const int PhotoFlashSortingOrder = 33000;
-    private const int PhotoCaptureLayer = 30;
-    private const int PhotoOutputSize = 1024;
-    private const float PhotoPuzzleRotation = 7f;
-    private const float PhotoPuzzleMaxSize = 920f;
-    private const float PhotoPuzzleOffsetY = 8f;
-    private const float PhotoFlashFadeInDuration = 0.06f;
-    private const float PhotoFlashHoldDuration = 0.04f;
-    private const float PhotoFlashFadeOutDuration = 0.16f;
     private const float BagSelectPanelWorldDepth = -0.1f;
     private const float OverlayWorldDepth = -0.2f;
     private const float MainCanvasWorldDepth = 0f;
@@ -175,12 +165,7 @@ public class MainScene : MonoBehaviour
     private const string ReplayConfirmButtonObjectName = "BtnReplay";
     private const string ReplayReturnButtonObjectName = "BtnReturn";
     private const string ReplayCloseButtonObjectName = "BtnClose";
-    private const string PhotoPanelObjectName = "PanelPhoto";
-    private const string PhotoPanelCanvasObjectName = "PanelPhotoCanvas";
-    private const string PhotoImageObjectName = "Photo";
-    private const string PhotoGameIconObjectName = "GameIcon";
-    private const string PhotoOkButtonObjectName = "BtnOK";
-    private const string PhotoFlashCanvasObjectName = "PhotoFlashCanvas";
+    private const string PackPhotoItemObjectName = "PackPhotoItem";
     private const string BagSelectNewPackActionText = "玩";
     private const string BagSelectReplayActionText = "重玩";
     private const string TaskItemObjectName = "TaskItem";
@@ -299,17 +284,7 @@ public class MainScene : MonoBehaviour
     private Button mReplayConfirmButton;
     private Button mReplayReturnButton;
     private Button mReplayCloseButton;
-    private GameObject mPhotoPanelRoot;
-    private Canvas mPhotoPanelCanvas;
-    private Image mPhotoImage;
-    private GameObject mPhotoGameIconRoot;
-    private Sprite mPhotoBackgroundSprite;
-    private Sprite mPhotoGameIconSprite;
-    private Button mPhotoOkButton;
-    private Canvas mPhotoFlashCanvas;
-    private CanvasGroup mPhotoFlashCanvasGroup;
-    private Texture2D mGeneratedPhotoTexture;
-    private Sprite mGeneratedPhotoSprite;
+    private CardPackPhoto mCardPackPhoto;
     private bool mIsCapturingPhoto;
     private bool mIsReplayConfirmationVisible;
     private bool mIsSelectedPackageReplay;
@@ -616,7 +591,6 @@ public class MainScene : MonoBehaviour
             mBagSelectBlurMaterial = null;
         }
 
-        ReleaseGeneratedPhoto();
         ReleaseUsablePanelPreviewSprites();
         ReleasePackTornMaskResources();
         if (mOpeningStageBackgroundSprite != null)
@@ -743,7 +717,7 @@ public class MainScene : MonoBehaviour
         ConfigureBagSelectPanel();
         ConfigureBagVolumePanel();
         ConfigureReplayPanel();
-        ConfigurePhotoPanel();
+        ConfigurePackPhotoItem();
         ConfigureMenuPanel();
         ConfigureSettingsPanel();
         ConfigureUsablePanel();
@@ -1381,122 +1355,28 @@ public class MainScene : MonoBehaviour
         button.onClick.AddListener(action);
     }
 
-    private void ConfigurePhotoPanel()
+    private void ConfigurePackPhotoItem()
     {
-        mPhotoPanelRoot = GameCommonUtility.FindSceneObject(PhotoPanelObjectName);
-        if (mPhotoPanelRoot == null)
+        var packPhotoItem = GameCommonUtility.FindSceneObject(PackPhotoItemObjectName);
+        if (packPhotoItem == null)
         {
-            Debug.LogWarning($"MainScene: photo panel not found. Expected {PhotoPanelObjectName}.");
+            Debug.LogWarning(
+                $"MainScene: photo item not found. Expected {PackPhotoItemObjectName}.");
             return;
         }
 
-        var camera = Camera.main;
-        var sourceCanvas = mPhotoPanelRoot.GetComponentInParent<Canvas>();
-        if (camera == null || sourceCanvas == null)
+        mCardPackPhoto = packPhotoItem.GetComponent<CardPackPhoto>();
+        if (mCardPackPhoto == null)
         {
-            Debug.LogWarning("MainScene: photo panel canvas could not be configured.");
+            Debug.LogWarning(
+                "MainScene: PackPhotoItem prefab is missing CardPackPhoto.");
             return;
         }
 
-        var canvasObject = new GameObject(
-            PhotoPanelCanvasObjectName,
-            typeof(RectTransform),
-            typeof(Canvas),
-            typeof(CanvasScaler),
-            typeof(GraphicRaycaster));
-        canvasObject.layer = mPhotoPanelRoot.layer;
-        mPhotoPanelCanvas = canvasObject.GetComponent<Canvas>();
-        GameCommonUtility.ConfigureCanvasForGameplay(
-            mPhotoPanelCanvas,
-            camera,
-            GameDefine.DesignWidth,
-            ReferenceHeight,
-            PixelsPerUnit,
-            OverlayWorldDepth - 0.03f);
-        mPhotoPanelCanvas.sortingLayerID = mBagSelectOverlayCanvas != null
-            ? mBagSelectOverlayCanvas.sortingLayerID
-            : sourceCanvas.sortingLayerID;
-        mPhotoPanelCanvas.sortingOrder = PhotoPanelSortingOrder;
-        StretchToParent(
-            mPhotoPanelRoot.GetComponent<RectTransform>(),
-            mPhotoPanelCanvas.transform);
-
-        mPhotoImage = FindChild(mPhotoPanelRoot.transform, PhotoImageObjectName)?.GetComponent<Image>();
-        if (mPhotoImage == null)
+        if (!mCardPackPhoto.Initialize())
         {
-            Debug.LogWarning($"MainScene: photo image not found. Expected {PhotoImageObjectName}.");
+            Debug.LogWarning("MainScene: PackPhotoItem prefab could not be initialized.");
         }
-        else
-        {
-            mPhotoBackgroundSprite = mPhotoImage.sprite;
-        }
-
-        var gameIconTransform = FindChild(mPhotoPanelRoot.transform, PhotoGameIconObjectName);
-        mPhotoGameIconRoot = gameIconTransform != null ? gameIconTransform.gameObject : null;
-        var gameIconImage = gameIconTransform != null ? gameIconTransform.GetComponent<Image>() : null;
-        mPhotoGameIconSprite = gameIconImage != null ? gameIconImage.sprite : null;
-
-        var okTransform = FindChild(mPhotoPanelRoot.transform, PhotoOkButtonObjectName);
-        mPhotoOkButton = okTransform != null ? okTransform.GetComponent<Button>() : null;
-        if (mPhotoOkButton == null)
-        {
-            Debug.LogWarning($"MainScene: photo OK button not found. Expected {PhotoOkButtonObjectName}.");
-        }
-        else
-        {
-            mPhotoOkButton.onClick.RemoveListener(OnPhotoOkClicked);
-            mPhotoOkButton.onClick.AddListener(OnPhotoOkClicked);
-        }
-
-        CreatePhotoFlashCanvas();
-        SetPanelVisible(mPhotoPanelRoot, false);
-    }
-
-    private void CreatePhotoFlashCanvas()
-    {
-        var camera = Camera.main;
-        if (camera == null)
-        {
-            Debug.LogWarning("MainScene: photo flash canvas could not be configured without a camera.");
-            return;
-        }
-
-        var canvasObject = new GameObject(
-            PhotoFlashCanvasObjectName,
-            typeof(RectTransform),
-            typeof(Canvas),
-            typeof(CanvasScaler),
-            typeof(GraphicRaycaster),
-            typeof(CanvasGroup));
-        canvasObject.layer = mBagSelectPanelRoot != null ? mBagSelectPanelRoot.layer : 5;
-        mPhotoFlashCanvas = canvasObject.GetComponent<Canvas>();
-        GameCommonUtility.ConfigureCanvasForGameplay(
-            mPhotoFlashCanvas,
-            camera,
-            GameDefine.DesignWidth,
-            ReferenceHeight,
-            PixelsPerUnit,
-            OverlayWorldDepth - 0.02f);
-        mPhotoFlashCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        mPhotoFlashCanvas.worldCamera = null;
-        mPhotoFlashCanvas.sortingLayerID = mBagSelectOverlayCanvas != null
-            ? mBagSelectOverlayCanvas.sortingLayerID
-            : 0;
-        mPhotoFlashCanvas.sortingOrder = PhotoFlashSortingOrder;
-        mPhotoFlashCanvasGroup = canvasObject.GetComponent<CanvasGroup>();
-        mPhotoFlashCanvasGroup.alpha = 0f;
-
-        var flashObject = new GameObject(
-            "Flash",
-            typeof(RectTransform),
-            typeof(CanvasRenderer),
-            typeof(Image));
-        flashObject.layer = canvasObject.layer;
-        StretchToParent(flashObject.GetComponent<RectTransform>(), canvasObject.transform);
-        var flashImage = flashObject.GetComponent<Image>();
-        flashImage.color = Color.white;
-        flashImage.raycastTarget = true;
-        canvasObject.SetActive(false);
     }
 
     private void ConfigureBagSelectOverlayCanvas()
@@ -2282,105 +2162,42 @@ public class MainScene : MonoBehaviour
             || mIsCapturingPhoto
             || mSelectedPackageEntry == null
             || mSelectedBagId <= 0
-            || mPhotoPanelRoot == null
-            || mPhotoImage == null)
+            || mCardPackPhoto == null)
         {
             return;
         }
 
-        StartCoroutine(CaptureSelectedPackagePhoto());
-    }
-
-    private IEnumerator CaptureSelectedPackagePhoto()
-    {
         mIsCapturingPhoto = true;
         mIsPlayingAnimation = true;
         SetBagSelectButtonsInteractable(false);
-        yield return PlayPhotoFlash();
-
-        if (!TryCreatePhotoTexture(mSelectedBagId, out var photoTexture)
-            || !TrySavePhotoToDesktop(photoTexture, mSelectedBagId, out var savedPath))
+        if (!mCardPackPhoto.TryCapture(
+                mSelectedBagId,
+                OnPhotoPreviewReady,
+                OnPhotoPreviewClosed,
+                OnPhotoCaptureFailed))
         {
-            if (photoTexture != null)
-            {
-                Destroy(photoTexture);
-            }
-
-            mIsCapturingPhoto = false;
-            mIsPlayingAnimation = false;
-            SetBagSelectButtonsInteractable(true);
-            yield break;
+            OnPhotoCaptureFailed();
         }
+    }
 
-        ApplyGeneratedPhoto(photoTexture);
-        if (mPhotoGameIconRoot != null)
-        {
-            mPhotoGameIconRoot.SetActive(false);
-        }
-
+    private void OnPhotoPreviewReady(string savedPath)
+    {
         SetSelectedPackageImageVisible(false);
-        SetPanelVisible(mPhotoPanelRoot, true);
-        mPhotoPanelRoot.transform.SetAsLastSibling();
         mIsCapturingPhoto = false;
         mIsPlayingAnimation = false;
         Debug.Log($"MainScene: photo saved to {savedPath}");
     }
 
-    private IEnumerator PlayPhotoFlash()
+    private void OnPhotoPreviewClosed()
     {
-        if (mPhotoFlashCanvas == null || mPhotoFlashCanvasGroup == null)
-        {
-            yield break;
-        }
-
-        mPhotoFlashCanvas.gameObject.SetActive(true);
-        yield return FadeCanvasGroup(
-            mPhotoFlashCanvasGroup,
-            0f,
-            1f,
-            PhotoFlashFadeInDuration);
-        yield return new WaitForSecondsRealtime(PhotoFlashHoldDuration);
-        yield return FadeCanvasGroup(
-            mPhotoFlashCanvasGroup,
-            1f,
-            0f,
-            PhotoFlashFadeOutDuration);
-        mPhotoFlashCanvas.gameObject.SetActive(false);
-    }
-
-    private static IEnumerator FadeCanvasGroup(
-        CanvasGroup canvasGroup,
-        float from,
-        float to,
-        float duration)
-    {
-        if (canvasGroup == null)
-        {
-            yield break;
-        }
-
-        var elapsed = 0f;
-        canvasGroup.alpha = from;
-        while (elapsed < duration)
-        {
-            elapsed += Time.unscaledDeltaTime;
-            var normalized = duration > 0f ? Mathf.Clamp01(elapsed / duration) : 1f;
-            canvasGroup.alpha = Mathf.LerpUnclamped(from, to, normalized);
-            yield return null;
-        }
-
-        canvasGroup.alpha = to;
-    }
-
-    private void OnPhotoOkClicked()
-    {
-        if (mIsCapturingPhoto || mPhotoPanelRoot == null)
-        {
-            return;
-        }
-
-        SetPanelVisible(mPhotoPanelRoot, false);
         SetSelectedPackageImageVisible(!mIsBagVolumeSelectionActive);
+        SetBagSelectButtonsInteractable(true);
+    }
+
+    private void OnPhotoCaptureFailed()
+    {
+        mIsCapturingPhoto = false;
+        mIsPlayingAnimation = false;
         SetBagSelectButtonsInteractable(true);
     }
 
@@ -5873,244 +5690,6 @@ public class MainScene : MonoBehaviour
         return true;
     }
 
-    private bool TryCreatePhotoTexture(int bagId, out Texture2D photoTexture)
-    {
-        photoTexture = null;
-        if (mPhotoBackgroundSprite == null)
-        {
-            Debug.LogError("MainScene: photo background Sprite is missing from PanelPhoto/Photo.");
-            return false;
-        }
-
-        var cardBagPrefab = Resources.Load<GameObject>(
-            GameDefine.FormatCardBagPrefabResourcesPath(bagId));
-        if (cardBagPrefab == null)
-        {
-            Debug.LogError(
-                $"MainScene: photo capture CardBag prefab not found. bagId={bagId}");
-            return false;
-        }
-
-        GameObject cameraObject = null;
-        GameObject canvasObject = null;
-        GameObject cardBagObject = null;
-        RenderTexture renderTexture = null;
-        var previousRenderTexture = RenderTexture.active;
-        try
-        {
-            renderTexture = RenderTexture.GetTemporary(
-                PhotoOutputSize,
-                PhotoOutputSize,
-                24,
-                RenderTextureFormat.ARGB32,
-                RenderTextureReadWrite.sRGB);
-            renderTexture.name = "CardBagPhotoRenderTexture";
-            renderTexture.filterMode = FilterMode.Bilinear;
-            renderTexture.wrapMode = TextureWrapMode.Clamp;
-
-            cameraObject = new GameObject("CardBagPhotoCamera", typeof(Camera));
-            cameraObject.layer = PhotoCaptureLayer;
-            var photoCamera = cameraObject.GetComponent<Camera>();
-            photoCamera.enabled = false;
-            photoCamera.orthographic = true;
-            photoCamera.orthographicSize = 5f;
-            photoCamera.clearFlags = CameraClearFlags.SolidColor;
-            photoCamera.backgroundColor = Color.black;
-            photoCamera.cullingMask = 1 << PhotoCaptureLayer;
-            photoCamera.allowHDR = false;
-            photoCamera.allowMSAA = true;
-            photoCamera.targetTexture = renderTexture;
-            photoCamera.transform.position = new Vector3(0f, 0f, -10f);
-
-            canvasObject = new GameObject(
-                "CardBagPhotoCanvas",
-                typeof(RectTransform),
-                typeof(Canvas),
-                typeof(CanvasScaler));
-            canvasObject.layer = PhotoCaptureLayer;
-            var canvas = canvasObject.GetComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceCamera;
-            canvas.worldCamera = photoCamera;
-            canvas.planeDistance = 1f;
-            canvas.pixelPerfect = false;
-            var canvasScaler = canvasObject.GetComponent<CanvasScaler>();
-            canvasScaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            canvasScaler.referenceResolution = new Vector2(PhotoOutputSize, PhotoOutputSize);
-            canvasScaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-            canvasScaler.matchWidthOrHeight = 0.5f;
-
-            var background = CreatePhotoCaptureImage(
-                canvas.transform,
-                "Background",
-                mPhotoBackgroundSprite,
-                new Vector2(PhotoOutputSize, PhotoOutputSize),
-                Vector2.zero);
-            background.rectTransform.anchorMin = Vector2.zero;
-            background.rectTransform.anchorMax = Vector2.one;
-            background.rectTransform.offsetMin = Vector2.zero;
-            background.rectTransform.offsetMax = Vector2.zero;
-
-            cardBagObject = Instantiate(cardBagPrefab, canvas.transform, false);
-            cardBagObject.name = $"PhotoCardBag{bagId:D3}";
-            SetLayerRecursively(cardBagObject.transform, PhotoCaptureLayer);
-            SetPhotoCardBagComplete(cardBagObject);
-            var cardBagRect = cardBagObject.GetComponent<RectTransform>();
-            var gameBoardTransform = FindChild(
-                cardBagObject.transform,
-                GameDefine.GameBoardObjectName) as RectTransform;
-            if (cardBagRect == null || gameBoardTransform == null)
-            {
-                Debug.LogError(
-                    $"MainScene: photo capture prefab is missing RectTransform/GameBoard. bagId={bagId}");
-                return false;
-            }
-
-            var boardSize = gameBoardTransform.rect.size;
-            if (boardSize.x <= 0f || boardSize.y <= 0f)
-            {
-                boardSize = gameBoardTransform.sizeDelta;
-            }
-
-            var rotationRadians = PhotoPuzzleRotation * Mathf.Deg2Rad;
-            var cosine = Mathf.Abs(Mathf.Cos(rotationRadians));
-            var sine = Mathf.Abs(Mathf.Sin(rotationRadians));
-            var rotatedWidth = boardSize.x * cosine + boardSize.y * sine;
-            var rotatedHeight = boardSize.x * sine + boardSize.y * cosine;
-            var boardScale = Mathf.Min(
-                PhotoPuzzleMaxSize / Mathf.Max(1f, rotatedWidth),
-                PhotoPuzzleMaxSize / Mathf.Max(1f, rotatedHeight));
-            cardBagRect.anchorMin = new Vector2(0.5f, 0.5f);
-            cardBagRect.anchorMax = new Vector2(0.5f, 0.5f);
-            cardBagRect.pivot = new Vector2(0.5f, 0.5f);
-            cardBagRect.anchoredPosition = new Vector2(0f, PhotoPuzzleOffsetY);
-            cardBagRect.localRotation = Quaternion.Euler(0f, 0f, PhotoPuzzleRotation);
-            cardBagRect.localScale = Vector3.one * boardScale;
-
-            var boardImage = gameBoardTransform.GetComponent<Image>();
-            if (boardImage != null && boardImage.GetComponent<Shadow>() == null)
-            {
-                var boardShadow = boardImage.gameObject.AddComponent<Shadow>();
-                boardShadow.effectColor = new Color(0f, 0f, 0f, 0.24f);
-                boardShadow.effectDistance = new Vector2(18f, -24f);
-                boardShadow.useGraphicAlpha = true;
-            }
-
-            if (mPhotoGameIconSprite != null)
-            {
-                CreatePhotoCaptureImage(
-                    canvas.transform,
-                    PhotoGameIconObjectName,
-                    mPhotoGameIconSprite,
-                    new Vector2(145f, 139f),
-                    new Vector2(-410f, -400f));
-            }
-
-            Canvas.ForceUpdateCanvases();
-            photoCamera.targetTexture = renderTexture;
-            photoCamera.Render();
-            photoCamera.targetTexture = null;
-            RenderTexture.active = renderTexture;
-            photoTexture = new Texture2D(
-                PhotoOutputSize,
-                PhotoOutputSize,
-                TextureFormat.RGBA32,
-                false,
-                false)
-            {
-                name = $"CardBagPhoto{bagId:D3}",
-                filterMode = FilterMode.Bilinear,
-                wrapMode = TextureWrapMode.Clamp
-            };
-            photoTexture.ReadPixels(
-                new Rect(0f, 0f, PhotoOutputSize, PhotoOutputSize),
-                0,
-                0,
-                false);
-            photoTexture.Apply(false, false);
-            return true;
-        }
-        catch (Exception exception)
-        {
-            Debug.LogError($"MainScene: photo capture failed. {exception}");
-            if (photoTexture != null)
-            {
-                Destroy(photoTexture);
-                photoTexture = null;
-            }
-
-            return false;
-        }
-        finally
-        {
-            RenderTexture.active = previousRenderTexture;
-            if (renderTexture != null)
-            {
-                RenderTexture.ReleaseTemporary(renderTexture);
-            }
-
-            if (cameraObject != null)
-            {
-                Destroy(cameraObject);
-            }
-
-            if (canvasObject != null)
-            {
-                Destroy(canvasObject);
-            }
-        }
-    }
-
-    private static Image CreatePhotoCaptureImage(
-        Transform parent,
-        string objectName,
-        Sprite sprite,
-        Vector2 size,
-        Vector2 anchoredPosition)
-    {
-        var imageObject = new GameObject(
-            objectName,
-            typeof(RectTransform),
-            typeof(CanvasRenderer),
-            typeof(Image));
-        imageObject.layer = PhotoCaptureLayer;
-        var rectTransform = imageObject.GetComponent<RectTransform>();
-        rectTransform.SetParent(parent, false);
-        rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
-        rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
-        rectTransform.pivot = new Vector2(0.5f, 0.5f);
-        rectTransform.anchoredPosition = anchoredPosition;
-        rectTransform.sizeDelta = size;
-        var image = imageObject.GetComponent<Image>();
-        image.sprite = sprite;
-        image.color = Color.white;
-        image.preserveAspect = true;
-        image.raycastTarget = false;
-        return image;
-    }
-
-    private static void SetPhotoCardBagComplete(GameObject cardBagObject)
-    {
-        var transforms = cardBagObject.GetComponentsInChildren<Transform>(true);
-        for (var i = 0; i < transforms.Length; i++)
-        {
-            transforms[i].gameObject.SetActive(true);
-        }
-
-        var images = cardBagObject.GetComponentsInChildren<Image>(true);
-        for (var i = 0; i < images.Length; i++)
-        {
-            var image = images[i];
-            if (image.sprite != null)
-            {
-                var color = image.color;
-                color.a = 1f;
-                image.color = color;
-            }
-
-            image.raycastTarget = false;
-        }
-    }
-
     private static void SetLayerRecursively(Transform root, int layer)
     {
         if (root == null)
@@ -6122,87 +5701,6 @@ public class MainScene : MonoBehaviour
         for (var i = 0; i < root.childCount; i++)
         {
             SetLayerRecursively(root.GetChild(i), layer);
-        }
-    }
-
-    private static bool TrySavePhotoToDesktop(
-        Texture2D photoTexture,
-        int bagId,
-        out string savedPath)
-    {
-        savedPath = null;
-        if (photoTexture == null)
-        {
-            return false;
-        }
-
-        try
-        {
-            var desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
-            if (string.IsNullOrWhiteSpace(desktopPath) || !Directory.Exists(desktopPath))
-            {
-                Debug.LogError($"MainScene: desktop folder is unavailable. path={desktopPath}");
-                return false;
-            }
-
-            var productName = SanitizeFileName(Application.productName);
-            var fileName = $"{productName}-{DateTime.Now:yyyy-MM-dd}-{bagId:D3}.png";
-            savedPath = Path.Combine(desktopPath, fileName);
-            File.WriteAllBytes(savedPath, photoTexture.EncodeToPNG());
-            return true;
-        }
-        catch (Exception exception)
-        {
-            Debug.LogError($"MainScene: failed to save photo to desktop. {exception}");
-            savedPath = null;
-            return false;
-        }
-    }
-
-    private static string SanitizeFileName(string value)
-    {
-        var safeValue = string.IsNullOrWhiteSpace(value) ? "Puffies" : value.Trim();
-        var invalidCharacters = Path.GetInvalidFileNameChars();
-        for (var i = 0; i < invalidCharacters.Length; i++)
-        {
-            safeValue = safeValue.Replace(invalidCharacters[i], '_');
-        }
-
-        return safeValue;
-    }
-
-    private void ApplyGeneratedPhoto(Texture2D photoTexture)
-    {
-        ReleaseGeneratedPhoto();
-        mGeneratedPhotoTexture = photoTexture;
-        mGeneratedPhotoSprite = Sprite.Create(
-            photoTexture,
-            new Rect(0f, 0f, photoTexture.width, photoTexture.height),
-            new Vector2(0.5f, 0.5f),
-            PixelsPerUnit);
-        mGeneratedPhotoSprite.name = photoTexture.name + "Sprite";
-        mPhotoImage.sprite = mGeneratedPhotoSprite;
-        mPhotoImage.color = Color.white;
-        mPhotoImage.preserveAspect = true;
-    }
-
-    private void ReleaseGeneratedPhoto()
-    {
-        if (mPhotoImage != null && mPhotoImage.sprite == mGeneratedPhotoSprite)
-        {
-            mPhotoImage.sprite = mPhotoBackgroundSprite;
-        }
-
-        if (mGeneratedPhotoSprite != null)
-        {
-            Destroy(mGeneratedPhotoSprite);
-            mGeneratedPhotoSprite = null;
-        }
-
-        if (mGeneratedPhotoTexture != null)
-        {
-            Destroy(mGeneratedPhotoTexture);
-            mGeneratedPhotoTexture = null;
         }
     }
 

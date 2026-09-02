@@ -1,5 +1,15 @@
 # 当前任务
 
+## 2026-09-01 跨场景共享拍照面板
+
+- 状态：原拍照面板已由 Unity 编辑器转换并统一重命名为共享 `PackPhotoItem` Prefab，MainScene 与 GameScene 各引用同一个 Prefab 实例；运行时代码接入和编译验证完成，等待 Play Mode 功能验收。
+- Prefab：共享资源命名为 `Assets/Prefabs/PackPhotoItem.prefab`，Prefab 根节点与两个场景实例也统一命名为 `PackPhotoItem`；完整保留 MainScene 原有 `Photo`、`GameIcon`、`BtnOK` 和美术布局。根节点使用独立 Overlay Canvas、CanvasScaler、GraphicRaycaster 与 CanvasGroup，确保预览层级高于首页选中卡包和结算 UI。
+- 通用逻辑：脚本与组件类型命名为 `CardPackPhoto`，统一负责白色闪光、生成 `1024x1024` PNG、保存桌面、替换预览图、`BtnOK` 关闭及运行时纹理释放。文件名继续使用 `游戏名-YYYY-MM-DD-BagId.png`。
+- MainScene：原内嵌拍照面板已替换为根级 `PackPhotoItem` Prefab 实例，原拍照生成代码从 `MainScene` 移入通用组件；卡包选中页相机按钮继续使用当前选中 PackId，预览关闭后恢复选中卡包和按钮交互。
+- GameScene：结算页 `BtnCamera` 已绑定同一拍照功能，使用当前 `GameManager.GetBagId()`；拍照及预览期间完成按钮和相机按钮不可交互，关闭预览或拍照失败后恢复。
+- 修改文件：`Assets/Prefabs/PackPhotoItem.prefab`、`Assets/Scripts/Model/CardPackPhoto.cs`、`Assets/Scenes/MainScene.unity`、`Assets/Scenes/GameScene.unity`、`Assets/Scripts/Controller/MainScene.cs`、`Assets/Scripts/Controller/GameScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`。
+- 验证：Unity 批处理成功创建并保存 Prefab 和两个场景，日志明确输出创建成功且返回码为 `0`；两个场景各有且仅有一个相同 GUID 的 Prefab 实例，Prefab 内 `Photo`、`BtnOK` 和 `CardPackPhoto` 各一份；重命名保留原 `.meta` GUID，场景 Prefab 和组件引用不变。Runtime/Editor C# 串行编译均通过，`0` 警告、`0` 错误；`git diff --check` 仅有仓库既有 LF/CRLF 提示。仍需在 Play Mode 分别验证 MainScene 选中页与 GameScene 结算页的闪光、桌面文件、预览、OK 关闭和按钮恢复。
+
 ## 2026-09-01 结算奖励卡落位特效接入
 
 - 状态：多奖励落位改为每个完整 `BagRewardItem` 独立播放自身 Prefab 内的 `FX_ui_jieSuo_w`；问号封面与特效生命周期已经拆开，约 `0.3s` 首闪时只隐藏该卡的 `BagCover` 并显示真实卡包，特效继续播放到自身结束后才回收完整奖励对象。双奖励左右分槽只移动 `BagCover` 导致两份特效挤在中间的问题已修复，Runtime/Editor 编译通过，等待 Unity Play Mode 视觉验收。

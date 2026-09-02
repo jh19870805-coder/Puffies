@@ -183,6 +183,7 @@ public class GameScene : MonoBehaviour
     private const string SecondaryRewardRevealEffectPath =
         "ImgBagBg/BagRewardItemSecondary/Canvas/FX_ui_jieSuo_w";
     private const string SettlementCameraButtonObjectName = "BtnCamera";
+    private const string PackPhotoItemObjectName = "PackPhotoItem";
     private const string HintButtonObjectName = "BtnTips";
     private const string PieceHintOutlineObjectName = "PieceHintOutline";
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
@@ -392,6 +393,7 @@ public class GameScene : MonoBehaviour
     private Vector3 _settlementBoardFitTargetScale;
     private Button _finishButton;
     private Button _settlementCameraButton;
+    private CardPackPhoto _cardPackPhoto;
     private bool _isSettlementReadyForFinish;
     private bool _isFinishTransitionStarted;
     private bool _isEntranceAnimating;
@@ -7350,6 +7352,22 @@ public class GameScene : MonoBehaviour
         _finishButton.interactable = false;
         _finishButton.onClick.RemoveListener(OnFinishButtonClicked);
         _finishButton.onClick.AddListener(OnFinishButtonClicked);
+
+        if (_settlementCameraButton != null)
+        {
+            _settlementCameraButton.onClick.RemoveListener(OnSettlementCameraClicked);
+            _settlementCameraButton.onClick.AddListener(OnSettlementCameraClicked);
+        }
+
+        var packPhotoItem = GameCommonUtility.FindSceneObject(PackPhotoItemObjectName);
+        _cardPackPhoto = packPhotoItem != null
+            ? packPhotoItem.GetComponent<CardPackPhoto>()
+            : null;
+        if (_cardPackPhoto == null || !_cardPackPhoto.Initialize())
+        {
+            Debug.LogWarning(
+                "GameScene: reusable PackPhotoItem prefab is missing or incomplete.");
+        }
     }
 
     private void CacheRewardPanelReferences()
@@ -8296,6 +8314,47 @@ public class GameScene : MonoBehaviour
         }
 
         StartCoroutine(PlaySettlementFinishTransition());
+    }
+
+    private void OnSettlementCameraClicked()
+    {
+        if (!_isSettlementReadyForFinish
+            || _isFinishTransitionStarted
+            || _cardPackPhoto == null
+            || _cardPackPhoto.IsCapturing
+            || _cardPackPhoto.IsPreviewVisible)
+        {
+            return;
+        }
+
+        SetSettlementActionButtonsInteractable(false);
+        if (!_cardPackPhoto.TryCapture(
+                GameManager.GetBagId(),
+                _ => { },
+                RestoreSettlementActionButtons,
+                RestoreSettlementActionButtons))
+        {
+            RestoreSettlementActionButtons();
+        }
+    }
+
+    private void RestoreSettlementActionButtons()
+    {
+        SetSettlementActionButtonsInteractable(
+            _isSettlementReadyForFinish && !_isFinishTransitionStarted);
+    }
+
+    private void SetSettlementActionButtonsInteractable(bool interactable)
+    {
+        if (_finishButton != null)
+        {
+            _finishButton.interactable = interactable;
+        }
+
+        if (_settlementCameraButton != null)
+        {
+            _settlementCameraButton.interactable = interactable;
+        }
     }
 
     private IEnumerator PlaySettlementFinishTransition()

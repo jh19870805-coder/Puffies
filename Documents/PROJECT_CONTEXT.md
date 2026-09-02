@@ -34,6 +34,8 @@ Unity **2022.3** / Built-in Render Pipeline 项目，使用 Linear 色彩空间�
 | RankScene | 仅占位；首个 Demo 不包含排行榜后端功能。当前模拟列表前三名的 `RankBg` 分别使用原生 `1646 x 148` 的 `RankCellBg_1.png`、`RankCellBg_2.png`、`RankCellBg_3.png`，第四名以后使用 `1636 x 136` 的 `RankCellBg.png`；`RankItem` 根高度为 `148`，列表纵向间距为 `5`，条目中心步距为 `153` |
 | AchieveScene | 当前显示 20 条模拟成就，前 5 条已达成、后 15 条未达成；接入 Steam 后替换数据源。成就网格固定为 6 列，单元尺寸 `240 x 332`，横纵间距均为 `40` |
 
+MainScene 卡包选中页与 GameScene 结算页共用 `Assets/Prefabs/PackPhotoItem.prefab` 和 `CardPackPhoto`。两个场景都必须保持一个名为 `PackPhotoItem` 的根级 Prefab 实例；拍照统一生成 `1024x1024` PNG，保存到桌面并命名为 `游戏名-YYYY-MM-DD-BagId.png`，随后在面板 `Photo` 中预览，点击 `BtnOK` 关闭。通用组件负责闪光、离屏渲染、保存、预览和临时纹理释放，场景控制器只传入当前 PackId 并控制各自按钮状态，不得复制第二套拍照实现。
+
 所有场景常规鼠标图标为 `UI/BasicUI/ImgHand_1.png`。GameScene 悬停当前可拖 Piece 时切换 `ImgHand_2.png`，按住左键拖拽 Piece 时切换 `ImgHand_3.png`；松开、结算或离开 GameScene 后恢复常规图标。三张资源随 `BasicUI` 同步到 Player 的 `StreamingAssets/UI/BasicUI`。运行时使用 `CursorMode.ForceSoftware`，以 `2560x1440` 设计分辨率和 CanvasScaler `Match=0.5` 计算统一缩放系数，分别等比重建三张光标纹理并同步缩放热点；窗口尺寸变化时自动刷新，不能把三种不同比例的源图压入固定画布。
 
 ### 数据与奖励需求
@@ -254,7 +256,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 - RewardPanel 的完成按钮在顶部入场、积分与任务进度、首次完成卡包数 `+1`、`ImgBagBg` 入场以及本轮奖励图标动画全部结束前保持不可交互，避免跳过中间结算表现。卡包数右上角飘出的 `+1` 使用编辑器 `TaskBg2/TaskTitle2` 的字号，不跟随红色数字 `TaskBagNum` 的字号。
 - RewardPanel 的 `ImgBagBg` 开始上滑 `0.26s` 后启动首张奖励卡，双奖励再错峰 `0.14s` 启动任务奖励飞入；任务奖励逐帧读取移动中的槽位终点。`BtnFinish` 和 `BtnCamera` 在结算首帧只沿 Y 轴放到屏幕下方，不修改编辑器透明度、缩放、旋转或样式；底板和全部奖励卡动画结束后，两按钮同步复用 `ImgBagBg` 的 `0.42s` 位移缓动滑回编辑器终点。无奖励卡包时则在积分和卡包数流程结束后进入。两按钮到位前不可交互。
 - `PanelBagSelect` 每次打开时直接复制当前列表项的完整 `PackNode`，按同一状态放大到 `600 x 680`，因此撕口、`PackBg`、进行中装饰碎片、封面、尺寸标签和状态材质必须与列表一致。完整彩色卡包显示“玩”，点击后进入现有拆包舞台、等待轻点/滑动并播放完整拆包动画。完成第一组后的彩色撕开卡包显示“玩”，点击后跳过拆包特效；`Completed` 且没有活动会话的灰色撕开卡包显示“重玩”，先弹出 `PanelReplay`，确认后清除旧会话、创建空会话，但卡包继续保持灰色完成态。两种撕开卡包随后执行同一套无额外停顿的跨场景下落和真实 Piece 发牌节奏；彩色撕开额外将其已有的首页展示碎片收进撕口并隐藏，灰色撕开不创建或处理假碎片。`BtnReturn` 和 `BtnClose` 取消。相机按钮只对历史上至少完整完成过一次、生命周期为 `Completed` 的卡包显示；首次拼图尚未完成的 `InProgress` 卡包不显示。弹窗显示期间隐藏选中卡包、其他列表卡包 Renderer 和尺寸图标，并锁定选择页按钮；取消时全部恢复。
-- 点击 `BtnCamera` 后播放一次全屏白色闪光，并离屏生成 `1024 x 1024` PNG。图片由 `MainPhotoBg` 木纹底图、当前 `CardBagNNN` Prefab 还原的完整拼图和左下角 `MainGameIcon` 组成；拼图等比适配并轻微旋转。文件以 `Application.productName-YYYY-MM-DD-BagId.png` 保存到桌面，BagId 使用三位编号，同日同一卡包重复拍照覆盖旧文件。保存成功后通过独立顶层 `PanelPhotoCanvas` 显示 `PanelPhoto` 并将 `Photo` 替换为生成图；预览期间隐藏选中卡包，点击 `BtnOK` 关闭预览并恢复卡包。拍照不写业务持久化数据。
+- 点击 `BtnCamera` 后播放一次全屏白色闪光，并离屏生成 `1024 x 1024` PNG。图片由 `MainPhotoBg` 木纹底图、当前 `CardBagNNN` Prefab 还原的完整拼图和左下角 `MainGameIcon` 组成；拼图等比适配并轻微旋转。文件以 `Application.productName-YYYY-MM-DD-BagId.png` 保存到桌面，BagId 使用三位编号，同日同一卡包重复拍照覆盖旧文件。保存成功后通过独立顶层 `PackPhotoItem` 将 `Photo` 替换为生成图；预览期间隐藏选中卡包，点击 `BtnOK` 关闭预览并恢复卡包。拍照不写业务持久化数据。
 
 - 首次入场和切组动画期间暂停托盘光点通用补建；每块 Piece 落稳时显式创建，动画结束后才恢复对“活动、未放置且缺少光点”的 Piece 幂等补建。`SpriteMask` 排序范围覆盖 Piece 本体到其上方两级，光点固定处于中间一级。
 
