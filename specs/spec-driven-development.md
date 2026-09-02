@@ -1352,6 +1352,8 @@
 3. `PackPhoto` 动画 SHALL 保持资源内现有时序：`TaskContent` 先显示再消失，随后 `BtnOK` 出现；代码不得重新实现或覆盖文字和按钮的动画曲线。
 4. WHEN 预览开始显示 THEN 系统 SHALL 立即执行现有预览就绪回调，使 MainScene 同帧隐藏原选中卡包；WHEN 动画尚未完整结束 THEN `BtnOK` SHALL 不可点击，WHEN 动画完整结束 THEN `BtnOK` SHALL 可点击。
 5. MainScene 与 GameScene SHALL 继续共用同一个 `PackPhotoItem.prefab` 和 `CardPackPhoto` 流程，不复制第二套实现。
+6. WHEN 离屏生成桌面 PNG THEN 临时 `CardBag` 副本中的 `GameBoard` 与 `BoardTitle` SHALL NOT 渲染游戏内投影材质、UI Shadow 或投影网格扩边；该处理 SHALL NOT 修改原关卡 Prefab、GameScene 棋盘或 Piece 投影。
+7. WHEN `PhotoFlashCanvas` 播放白色闪光 THEN Canvas 排序 SHALL 位于 Unity 支持的范围内并高于预览面板；系统 SHALL 在每次播放前绑定当前主相机、激活并刷新 Canvas，至少等待一帧进入渲染队列后再开始透明度动画。
 
 ### 实现与验证任务
 
@@ -1359,3 +1361,7 @@
 - [x] 2. 预览显示前将动画重置到第 0 帧并单次播放，等待动画真实结束后启用按钮。
 - [x] 3. 关闭 `PackPhoto.anim` 循环，保留美术现有曲线与时长。
 - [ ] 4. 编译 Runtime/Editor，并在 MainScene 与 GameScene 分别验收完整时序。
+- [x] 5. 删除拍照流程额外添加的右下 UI Shadow，并仅在离屏副本上禁用 `GameBoard/BoardTitle` 的投影材质和 `PackCoverShadowEffect`。
+- [ ] 6. 分别从 MainScene 与 GameScene 保存桌面 PNG，确认棋盘右侧和下侧无投影，其他照片内容保持不变。
+- [x] 7. 将闪光层排序从越界的 `33000` 修正为 `32767`，并在每次播放前重新配置相机 Canvas、强制刷新和等待一帧。
+- [ ] 8. 分别在 MainScene 与 GameScene 首次和重复拍照，确认完整白色闪光均可见且后续预览顺序不变。

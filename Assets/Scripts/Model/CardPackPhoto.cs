@@ -7,7 +7,7 @@ using UnityEngine.UI;
 public sealed class CardPackPhoto : MonoBehaviour
 {
     private const int PanelSortingOrder = 32000;
-    private const int FlashSortingOrder = 33000;
+    private const int FlashSortingOrder = short.MaxValue;
     private const int CaptureLayer = 30;
     private const int OutputSize = 1024;
     private const float PuzzleRotation = 7f;
@@ -356,6 +356,13 @@ public sealed class CardPackPhoto : MonoBehaviour
         }
 
         mFlashCanvas.gameObject.SetActive(true);
+        var scaler = mFlashCanvas.GetComponent<CanvasScaler>();
+        ConfigureFixedAspectCanvas(mFlashCanvas, scaler);
+        mFlashCanvas.overrideSorting = true;
+        mFlashCanvas.sortingOrder = FlashSortingOrder;
+        mFlashCanvasGroup.alpha = 0f;
+        Canvas.ForceUpdateCanvases();
+        yield return null;
         yield return FadeCanvasGroup(
             mFlashCanvasGroup,
             0f,
@@ -467,6 +474,7 @@ public sealed class CardPackPhoto : MonoBehaviour
             cardBagObject.name = $"PhotoCardBag{bagId:D3}";
             SetLayerRecursively(cardBagObject.transform, CaptureLayer);
             SetCardBagComplete(cardBagObject);
+            RemovePhotoBoardShadows(cardBagObject);
             var cardBagRect = cardBagObject.GetComponent<RectTransform>();
             var gameBoardTransform = FindDescendant(
                 cardBagObject.transform,
@@ -498,15 +506,6 @@ public sealed class CardPackPhoto : MonoBehaviour
             cardBagRect.anchoredPosition = new Vector2(0f, PuzzleOffsetY);
             cardBagRect.localRotation = Quaternion.Euler(0f, 0f, PuzzleRotation);
             cardBagRect.localScale = Vector3.one * boardScale;
-
-            var boardImage = gameBoardTransform.GetComponent<Image>();
-            if (boardImage != null && boardImage.GetComponent<Shadow>() == null)
-            {
-                var boardShadow = boardImage.gameObject.AddComponent<Shadow>();
-                boardShadow.effectColor = new Color(0f, 0f, 0f, 0.24f);
-                boardShadow.effectDistance = new Vector2(18f, -24f);
-                boardShadow.useGraphicAlpha = true;
-            }
 
             if (mGameIconSprite != null)
             {
@@ -620,6 +619,37 @@ public sealed class CardPackPhoto : MonoBehaviour
             }
 
             image.raycastTarget = false;
+        }
+    }
+
+    private static void RemovePhotoBoardShadows(GameObject cardBagObject)
+    {
+        var images = cardBagObject.GetComponentsInChildren<Image>(true);
+        for (var i = 0; i < images.Length; i++)
+        {
+            var image = images[i];
+            if (image == null
+                || (image.gameObject.name != GameDefine.GameBoardObjectName
+                    && image.gameObject.name != "BoardTitle"))
+            {
+                continue;
+            }
+
+            image.material = null;
+            var shadows = image.GetComponents<Shadow>();
+            for (var shadowIndex = 0; shadowIndex < shadows.Length; shadowIndex++)
+            {
+                shadows[shadowIndex].enabled = false;
+            }
+
+            var meshShadow = image.GetComponent<PackCoverShadowEffect>();
+            if (meshShadow != null)
+            {
+                meshShadow.enabled = false;
+            }
+
+            image.SetMaterialDirty();
+            image.SetVerticesDirty();
         }
     }
 

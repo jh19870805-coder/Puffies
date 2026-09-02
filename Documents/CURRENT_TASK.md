@@ -1,5 +1,22 @@
 # 当前任务
 
+## 2026-09-02 首页拍照白色闪光不可见
+
+- 状态：代码修改和 Runtime/Editor 编译完成，等待 MainScene/GameScene 拍照实测。
+- 根因：首页 `BtnCamera -> CardPackPhoto.TryCapture -> PlayPhotoFlash` 调用顺序正确，选中卡包也在预览真正出现后才隐藏；问题位于运行时 `PhotoFlashCanvas`：排序值使用 `33000`，超过 Unity Canvas 稳定支持的最高值 `32767`，且首次激活后同帧立即开始仅 `0.26s` 的闪光，没有等待 Screen Space - Camera Canvas 注册到当前相机渲染。
+- 修改：闪光 Canvas 排序固定为 `short.MaxValue (32767)`；每次拍照开始时重新绑定当前 `Main Camera` 和固定 `16:9` Canvas 配置，激活后强制刷新 Canvas 并等待一帧，再沿用原 `0.06s` 淡入、`0.04s` 停留、`0.16s` 淡出。
+- 保留：拍照按钮逻辑、选中卡包隐藏时机、离屏图片生成、去棋盘投影、保存路径和预览动画时序不变；MainScene 与 GameScene 继续共用同一组件。
+- 修改文件：`Assets/Scripts/Model/CardPackPhoto.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
+- 验证：`Assembly-CSharp-Editor.csproj` 编译通过并连带生成 Runtime/firstpass，结果为 `0` 警告、`0` 错误；`git diff --check` 通过，仅有仓库既有的 LF/CRLF 转换提示。仍需分别在 MainScene 和 GameScene 点击拍照，确认先看到完整白色闪光，再生成照片并显示预览。
+
+## 2026-09-02 桌面照片移除棋盘投影
+
+- 状态：代码修改和 Runtime/Editor 编译完成，等待 MainScene/GameScene 拍照实测。
+- 根因：`CardPackPhoto` 的离屏拍照副本既继承 `CardBagNNN.prefab` 中 `GameBoard/BoardTitle` 的 `IngameCoverShadow01` 投影材质和 `PackCoverShadowEffect` 扩边，又额外为 `GameBoard` 动态添加了偏移 `(18,-24)` 的 `UnityEngine.UI.Shadow`，因此导出的 PNG 在棋盘右侧和下侧出现明显双重投影。
+- 修改：删除拍照流程主动创建右下 `Shadow` 的代码；离屏副本完整显示后，仅对副本中的 `GameBoard` 和 `BoardTitle` 清空投影材质，并禁用 UI Shadow 与 `PackCoverShadowEffect`。关卡 Prefab、游戏内棋盘和贴纸投影均不修改。
+- 修改文件：`Assets/Scripts/Model/CardPackPhoto.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
+- 验证：`Assembly-CSharp-Editor.csproj` 编译通过并连带生成 Runtime/firstpass，结果为 `0` 警告、`0` 错误；`git diff --check` 通过，仅有仓库既有的 LF/CRLF 转换提示。仍需分别从 MainScene 历史卡包和 GameScene 结算页拍照，确认桌面 PNG 的棋盘右侧、下侧无投影且拼图内容、旋转、木纹背景和左下角图标保持不变。
+
 ## 2026-09-02 Win32 游戏中切换尺寸后棋盘未适配
 
 - 状态：代码修改和 Runtime/Editor 编译完成，等待 Windows Player 实机验收。
