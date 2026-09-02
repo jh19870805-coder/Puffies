@@ -44,6 +44,8 @@ public class GameScene : MonoBehaviour
     private const float SettlementBagCountIncrementRise = 64f;
     private const float SettlementRewardPanelSlideDuration = 0.42f;
     private const float SettlementRewardPopDuration = 0.36f;
+    private const float SettlementTaskRewardFlyDuration = 0.52f;
+    private const float SettlementTaskRewardDecorationFadeDuration = 0.2f;
     private const float SettlementRewardAnimationLead = 0.26f;
     private const float SettlementRewardAnimationStagger = 0.14f;
     private const float SettlementRewardSlotOffset = 82f;
@@ -184,6 +186,10 @@ public class GameScene : MonoBehaviour
         "ImgBagBg/BagRewardItemSecondary/Canvas/BagCover";
     private const string SecondaryRewardRevealEffectPath =
         "ImgBagBg/BagRewardItemSecondary/Canvas/FX_ui_jieSuo_w";
+    private const string TaskRewardSourceRootPath = "BagBg";
+    private const string TaskRewardSourceIconPath = "BagBg/BagIcon";
+    private const string TaskRewardSourceCountBackgroundPath = "BagBg/BagAddBg";
+    private const string TaskRewardSourceCountPath = "BagBg/TextAddNum";
     private const string SettlementCameraButtonObjectName = "BtnCamera";
     private const string PackPhotoItemObjectName = "PackPhotoItem";
     private const string HintButtonObjectName = "BtnTips";
@@ -368,6 +374,10 @@ public class GameScene : MonoBehaviour
     private TMP_Text _settlementBagCountText;
     private Image _taskRewardImage;
     private Image _secondaryRewardImage;
+    private Image _taskRewardSourceCircleImage;
+    private Image _taskRewardSourceImage;
+    private Image _taskRewardSourceCountBackgroundImage;
+    private TMP_Text _taskRewardSourceCountText;
     private GameObject _settlementRewardRevealEffect;
     private GameObject _secondarySettlementRewardRevealEffect;
     private Image _completionRewardDisplayImage;
@@ -380,6 +390,11 @@ public class GameScene : MonoBehaviour
     private Vector2 _settlementCameraButtonTargetPosition;
     private Sprite _taskRewardDefaultSprite;
     private Color _taskRewardDefaultColor = Color.white;
+    private Color _taskRewardSourceCircleDefaultColor = Color.white;
+    private Color _taskRewardSourceDefaultColor = Color.white;
+    private Color _taskRewardSourceCountBackgroundDefaultColor = Color.white;
+    private Color _taskRewardSourceCountDefaultColor = Color.white;
+    private bool _hasTaskRewardSourceDefaultColors;
     private bool _hasSettlementLayoutTargets;
     private int _settlementBagCountBeforeCompletion;
     private int _settlementCompletionRewardPackId;
@@ -7439,6 +7454,10 @@ public class GameScene : MonoBehaviour
         _settlementBagCountText = null;
         _taskRewardImage = null;
         _secondaryRewardImage = null;
+        _taskRewardSourceCircleImage = null;
+        _taskRewardSourceImage = null;
+        _taskRewardSourceCountBackgroundImage = null;
+        _taskRewardSourceCountText = null;
         _settlementRewardRevealEffect = null;
         _secondarySettlementRewardRevealEffect = null;
         if (_rewardPanelRoot == null)
@@ -7479,6 +7498,34 @@ public class GameScene : MonoBehaviour
         _taskRewardImage = _rewardPanelRoot.transform.Find(TaskRewardImgBagPath)?.GetComponent<Image>();
         _secondaryRewardImage = _rewardPanelRoot.transform.Find(
             SecondaryRewardImgBagPath)?.GetComponent<Image>();
+        if (_rewardTaskItem != null)
+        {
+            _taskRewardSourceCircleImage = _rewardTaskItem.Find(
+                TaskRewardSourceRootPath)?.GetComponent<Image>();
+            _taskRewardSourceImage = _rewardTaskItem.Find(
+                TaskRewardSourceIconPath)?.GetComponent<Image>();
+            _taskRewardSourceCountBackgroundImage = _rewardTaskItem.Find(
+                TaskRewardSourceCountBackgroundPath)?.GetComponent<Image>();
+            _taskRewardSourceCountText = _rewardTaskItem.Find(
+                TaskRewardSourceCountPath)?.GetComponent<TMP_Text>();
+        }
+
+        if (!_hasTaskRewardSourceDefaultColors && _taskRewardSourceImage != null)
+        {
+            _taskRewardSourceCircleDefaultColor = _taskRewardSourceCircleImage != null
+                ? _taskRewardSourceCircleImage.color
+                : Color.white;
+            _taskRewardSourceDefaultColor = _taskRewardSourceImage.color;
+            _taskRewardSourceCountBackgroundDefaultColor =
+                _taskRewardSourceCountBackgroundImage != null
+                    ? _taskRewardSourceCountBackgroundImage.color
+                    : Color.white;
+            _taskRewardSourceCountDefaultColor = _taskRewardSourceCountText != null
+                ? _taskRewardSourceCountText.color
+                : Color.white;
+            _hasTaskRewardSourceDefaultColors = true;
+        }
+
         _settlementRewardRevealEffect = FindSettlementRewardRevealEffect(
             rewardItemCanvas);
         _secondarySettlementRewardRevealEffect = FindSettlementRewardRevealEffect(
@@ -7609,6 +7656,7 @@ public class GameScene : MonoBehaviour
                 task,
                 GameTaskUtility.GetCurrentCompleteValue(),
                 GameTaskUtility.IsCurrentTaskCompleted());
+            RestoreTaskRewardSourceVisuals();
         }
 
         if (_rewardTaskItemRect != null)
@@ -7870,8 +7918,11 @@ public class GameScene : MonoBehaviour
                 yield return new WaitForSecondsRealtime(SettlementRewardAnimationStagger);
             }
 
+            var taskRewardAnimation = _completionRewardDisplayImage != null
+                ? AnimateTaskRewardIntoSettlementSlot(_taskRewardDisplayImage)
+                : AnimateSettlementRewardPop(_taskRewardDisplayImage.rectTransform);
             StartCoroutine(RunSettlementAnimation(
-                AnimateSettlementRewardPop(_taskRewardDisplayImage.rectTransform),
+                taskRewardAnimation,
                 () => taskRewardComplete = true));
         }
 
@@ -8050,6 +8101,163 @@ public class GameScene : MonoBehaviour
         }
 
         rewardRect.localScale = Vector3.one;
+    }
+
+    private IEnumerator AnimateTaskRewardIntoSettlementSlot(Image targetImage)
+    {
+        if (targetImage == null
+            || _taskRewardSourceImage == null
+            || !_taskRewardSourceImage.gameObject.activeInHierarchy)
+        {
+            if (targetImage != null)
+            {
+                yield return AnimateSettlementRewardPop(targetImage.rectTransform);
+            }
+
+            yield break;
+        }
+
+        var targetRect = targetImage.rectTransform;
+        var targetParent = targetRect.parent as RectTransform;
+        if (targetParent == null)
+        {
+            yield return AnimateSettlementRewardPop(targetRect);
+            yield break;
+        }
+
+        targetImage.gameObject.SetActive(true);
+        targetRect.localRotation = Quaternion.identity;
+        targetRect.localScale = Vector3.one;
+        Canvas.ForceUpdateCanvases();
+        if (!TryGetScreenRectGeometry(
+                _taskRewardSourceImage.rectTransform,
+                out _,
+                out var sourceScreenSize)
+            || !TryGetScreenRectGeometry(
+                targetRect,
+                out _,
+                out var targetScreenSize))
+        {
+            targetImage.gameObject.SetActive(false);
+            yield return AnimateSettlementRewardPop(targetRect);
+            yield break;
+        }
+
+        var targetAnchoredPosition = targetRect.anchoredPosition;
+        var targetLocalPosition = targetRect.localPosition;
+        var targetWorldPosition = targetParent.TransformPoint(targetLocalPosition);
+        var sourceWorldPosition = _taskRewardSourceImage.rectTransform.TransformPoint(
+            _taskRewardSourceImage.rectTransform.rect.center);
+        sourceWorldPosition.z = targetWorldPosition.z;
+        var sourceScale = CalculateUniformRectScale(targetScreenSize, sourceScreenSize);
+
+        targetRect.position = sourceWorldPosition;
+        targetRect.localScale = Vector3.one * sourceScale;
+        _taskRewardSourceImage.gameObject.SetActive(false);
+        StartCoroutine(AnimateTaskRewardSourceDecorationsFade());
+
+        var elapsed = 0f;
+        while (elapsed < SettlementTaskRewardFlyDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            var normalized = Mathf.Clamp01(elapsed / SettlementTaskRewardFlyDuration);
+            var eased = Mathf.SmoothStep(0f, 1f, normalized);
+            targetWorldPosition = targetParent.TransformPoint(targetLocalPosition);
+            targetRect.position = Vector3.LerpUnclamped(
+                sourceWorldPosition,
+                targetWorldPosition,
+                eased);
+            targetRect.localScale = Vector3.one * Mathf.LerpUnclamped(
+                sourceScale,
+                1f,
+                eased);
+            targetRect.localRotation = Quaternion.identity;
+            yield return null;
+        }
+
+        targetRect.anchoredPosition = targetAnchoredPosition;
+        targetRect.localScale = Vector3.one;
+        targetRect.localRotation = Quaternion.identity;
+    }
+
+    private IEnumerator AnimateTaskRewardSourceDecorationsFade()
+    {
+        var elapsed = 0f;
+        while (elapsed < SettlementTaskRewardDecorationFadeDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            var normalized = Mathf.Clamp01(
+                elapsed / SettlementTaskRewardDecorationFadeDuration);
+            var alpha = 1f - Mathf.SmoothStep(0f, 1f, normalized);
+            SetGraphicColorAlpha(
+                _taskRewardSourceCircleImage,
+                _taskRewardSourceCircleDefaultColor,
+                alpha);
+            SetGraphicColorAlpha(
+                _taskRewardSourceCountBackgroundImage,
+                _taskRewardSourceCountBackgroundDefaultColor,
+                alpha);
+            SetGraphicColorAlpha(
+                _taskRewardSourceCountText,
+                _taskRewardSourceCountDefaultColor,
+                alpha);
+            yield return null;
+        }
+
+        SetGraphicColorAlpha(
+            _taskRewardSourceCircleImage,
+            _taskRewardSourceCircleDefaultColor,
+            0f);
+        SetGraphicColorAlpha(
+            _taskRewardSourceCountBackgroundImage,
+            _taskRewardSourceCountBackgroundDefaultColor,
+            0f);
+        SetGraphicColorAlpha(
+            _taskRewardSourceCountText,
+            _taskRewardSourceCountDefaultColor,
+            0f);
+    }
+
+    private void RestoreTaskRewardSourceVisuals()
+    {
+        if (_taskRewardSourceCircleImage != null)
+        {
+            _taskRewardSourceCircleImage.gameObject.SetActive(true);
+            _taskRewardSourceCircleImage.color = _taskRewardSourceCircleDefaultColor;
+        }
+
+        if (_taskRewardSourceImage != null)
+        {
+            _taskRewardSourceImage.gameObject.SetActive(true);
+            _taskRewardSourceImage.color = _taskRewardSourceDefaultColor;
+        }
+
+        if (_taskRewardSourceCountBackgroundImage != null)
+        {
+            _taskRewardSourceCountBackgroundImage.gameObject.SetActive(true);
+            _taskRewardSourceCountBackgroundImage.color =
+                _taskRewardSourceCountBackgroundDefaultColor;
+        }
+
+        if (_taskRewardSourceCountText != null)
+        {
+            _taskRewardSourceCountText.gameObject.SetActive(true);
+            _taskRewardSourceCountText.color = _taskRewardSourceCountDefaultColor;
+        }
+    }
+
+    private static void SetGraphicColorAlpha(
+        Graphic graphic,
+        Color baseColor,
+        float alphaMultiplier)
+    {
+        if (graphic == null)
+        {
+            return;
+        }
+
+        baseColor.a *= Mathf.Clamp01(alphaMultiplier);
+        graphic.color = baseColor;
     }
 
     private void ShowRewardPanel()

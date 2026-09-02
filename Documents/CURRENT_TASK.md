@@ -1,5 +1,14 @@
 # 当前任务
 
+## 2026-09-02 结算双卡包任务奖励下飞动画
+
+- 状态：代码修改与编译验证已完成，等待 Unity Play Mode 视觉复验。
+- 修改：双卡包奖励时，第一个游戏结算奖励继续使用下方槽位原有弹出动画；第二个任务奖励不再在下方第二槽原地弹出，而是直接复用 `BagRewardItemSecondary/Canvas/BagCover` 的真实问号卡包，在任务条 `BagBg/BagIcon` 的实际屏幕位置瞬时接替原图标，再用 `0.52s` 直线下移并同步放大到 `ImgBagBg` 第二槽。飞行期间逐帧读取仍在上滑的第二槽终点，避免落点随背景条移动而偏移。
+- 原地淡出：替换发生时立即隐藏原 `BagIcon`；`BagBg` 的绿色圆圈、`BagAddBg` 和 `TextAddNum` 保持原位置，用 `0.2s` 渐隐，不参与飞行。单奖励流程与第一个奖励动画不变。
+- 对象约束：没有克隆临时问号图，也没有修改 `BagRewardItem.prefab` 或解锁特效；动画结束后第二奖励仍是原完整 `BagRewardItemSecondary` 的组成部分，可继续被结算退场和首页奖励转场接管。
+- 修改文件：`Assets/Scripts/Controller/GameScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`。
+- 验证：`dotnet build Assembly-CSharp-Editor.csproj --no-restore` 通过，结果为 `0` 警告、`0` 错误；`git diff --check` 通过，仅有仓库既有的 LF/CRLF 转换提示。仍需在 Play Mode 触发“游戏奖励 + 任务奖励”双卡包结算，确认第二问号卡从任务区下飞、绿圈与 `+1` 原地消失，且完成按钮后的首页飞入流程不变。
+
 ## 2026-09-02 三档本地存档与 PanelSave 接入
 
 - 状态：存储层、MainScene UI 逻辑及切档后列表不可见修复已完成，等待 Unity Play Mode 复验。
