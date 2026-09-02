@@ -19,6 +19,9 @@ public sealed class CardPackPhoto : MonoBehaviour
     private const string PhotoImageObjectName = "Photo";
     private const string GameIconObjectName = "GameIcon";
     private const string OkButtonObjectName = "BtnOK";
+    private const string PreviewAnimationStateName = "Base Layer.PackPhoto";
+    private static readonly int PreviewAnimationStateId =
+        Animator.StringToHash(PreviewAnimationStateName);
 
     private Canvas mPanelCanvas;
     private CanvasGroup mPanelCanvasGroup;
@@ -27,6 +30,7 @@ public sealed class CardPackPhoto : MonoBehaviour
     private Sprite mPhotoBackgroundSprite;
     private Sprite mGameIconSprite;
     private Button mOkButton;
+    private Animator mPreviewAnimator;
     private Canvas mFlashCanvas;
     private CanvasGroup mFlashCanvasGroup;
     private Texture2D mGeneratedPhotoTexture;
@@ -102,6 +106,15 @@ public sealed class CardPackPhoto : MonoBehaviour
         {
             mOkButton.onClick.RemoveListener(ClosePreview);
             mOkButton.onClick.AddListener(ClosePreview);
+            mOkButton.interactable = false;
+            mOkButton.gameObject.SetActive(false);
+        }
+
+        mPreviewAnimator = GetComponent<Animator>();
+        if (mPreviewAnimator != null)
+        {
+            mPreviewAnimator.updateMode = AnimatorUpdateMode.UnscaledTime;
+            mPreviewAnimator.enabled = false;
         }
 
         SetPreviewVisible(false);
@@ -129,6 +142,7 @@ public sealed class CardPackPhoto : MonoBehaviour
 
         mPreviewClosed = onPreviewClosed;
         mCaptureFailed = onCaptureFailed;
+        StopPreviewAnimation();
         gameObject.SetActive(true);
         SetPreviewVisible(false);
         IsCapturing = true;
@@ -164,9 +178,9 @@ public sealed class CardPackPhoto : MonoBehaviour
             mGameIconRoot.SetActive(false);
         }
 
-        SetPreviewVisible(true);
+        yield return ShowPreviewAndPlayAnimation(
+            () => onPreviewReady?.Invoke(savedPath));
         IsCapturing = false;
-        onPreviewReady?.Invoke(savedPath);
         Debug.Log($"CardPackPhoto: photo saved to {savedPath}");
     }
 
@@ -177,6 +191,7 @@ public sealed class CardPackPhoto : MonoBehaviour
             return;
         }
 
+        StopPreviewAnimation();
         SetPreviewVisible(false);
         ReleaseGeneratedPhoto();
         if (mGameIconRoot != null)
@@ -188,6 +203,80 @@ public sealed class CardPackPhoto : MonoBehaviour
         var previewClosed = mPreviewClosed;
         ClearCallbacks();
         previewClosed?.Invoke();
+    }
+
+    private IEnumerator ShowPreviewAndPlayAnimation(Action onPreviewShown)
+    {
+        if (mOkButton != null)
+        {
+            mOkButton.interactable = false;
+            mOkButton.gameObject.SetActive(false);
+        }
+
+        if (mPreviewAnimator == null
+            || mPreviewAnimator.runtimeAnimatorController == null
+            || !mPreviewAnimator.HasState(0, PreviewAnimationStateId))
+        {
+            Debug.LogWarning(
+                "CardPackPhoto: PackPhoto preview animation is missing; showing BtnOK immediately.");
+            SetPreviewVisible(true);
+            onPreviewShown?.Invoke();
+            ShowPreviewButton();
+            yield break;
+        }
+
+        mPreviewAnimator.enabled = true;
+        mPreviewAnimator.Play(PreviewAnimationStateId, 0, 0f);
+        mPreviewAnimator.Update(0f);
+        SetPreviewVisible(true);
+        onPreviewShown?.Invoke();
+
+        while (mPreviewAnimator != null
+               && mPreviewAnimator.enabled
+               && mPreviewAnimator.gameObject.activeInHierarchy)
+        {
+            var stateInfo = mPreviewAnimator.GetCurrentAnimatorStateInfo(0);
+            if (stateInfo.fullPathHash == PreviewAnimationStateId
+                && stateInfo.normalizedTime >= 1f
+                && !mPreviewAnimator.IsInTransition(0))
+            {
+                break;
+            }
+
+            yield return null;
+        }
+
+        if (mPreviewAnimator != null)
+        {
+            mPreviewAnimator.enabled = false;
+        }
+
+        ShowPreviewButton();
+    }
+
+    private void ShowPreviewButton()
+    {
+        if (mOkButton == null)
+        {
+            return;
+        }
+
+        mOkButton.gameObject.SetActive(true);
+        mOkButton.interactable = true;
+    }
+
+    private void StopPreviewAnimation()
+    {
+        if (mPreviewAnimator != null)
+        {
+            mPreviewAnimator.enabled = false;
+        }
+
+        if (mOkButton != null)
+        {
+            mOkButton.interactable = false;
+            mOkButton.gameObject.SetActive(false);
+        }
     }
 
     private void SetPreviewVisible(bool visible)
@@ -650,6 +739,7 @@ public sealed class CardPackPhoto : MonoBehaviour
 
     private void OnDestroy()
     {
+        StopPreviewAnimation();
         ReleaseGeneratedPhoto();
         if (mFlashCanvas != null)
         {

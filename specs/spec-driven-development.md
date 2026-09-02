@@ -1312,3 +1312,20 @@
 - [x] 3. GameScene 在安全时机重新执行当前组相机、棋盘和托盘适配。
 - [x] 4. MainScene 相机改为完整颜色缓冲清理，避免黑边鼠标残影。
 - [ ] 5. 编译 Runtime/Editor，并在 Windows Player 验证首页、设置面板、选中卡包页和游戏页的宽屏/窄屏连续拉伸。
+
+## 2026-09-02 - 拍照预览提示动画接入
+
+### 需求
+
+1. WHEN 用户点击 MainScene 选中卡包页或 GameScene 结算页的拍照按钮 THEN 系统 SHALL 先完整播放现有全屏白色闪光，再生成并显示拍照预览弹窗。
+2. WHEN 拍照预览弹窗开始显示 THEN `PackPhotoItem` SHALL 从第 0 帧单次播放美术制作的 `PackPhoto` 动画，不得在闪光或离屏生成图片期间提前播放，也不得循环。
+3. `PackPhoto` 动画 SHALL 保持资源内现有时序：`TaskContent` 先显示再消失，随后 `BtnOK` 出现；代码不得重新实现或覆盖文字和按钮的动画曲线。
+4. WHEN 预览开始显示 THEN 系统 SHALL 立即执行现有预览就绪回调，使 MainScene 同帧隐藏原选中卡包；WHEN 动画尚未完整结束 THEN `BtnOK` SHALL 不可点击，WHEN 动画完整结束 THEN `BtnOK` SHALL 可点击。
+5. MainScene 与 GameScene SHALL 继续共用同一个 `PackPhotoItem.prefab` 和 `CardPackPhoto` 流程，不复制第二套实现。
+
+### 实现与验证任务
+
+- [x] 1. 缓存并控制 Prefab 根 Animator，拍照生成期间保持停止。
+- [x] 2. 预览显示前将动画重置到第 0 帧并单次播放，等待动画真实结束后启用按钮。
+- [x] 3. 关闭 `PackPhoto.anim` 循环，保留美术现有曲线与时长。
+- [ ] 4. 编译 Runtime/Editor，并在 MainScene 与 GameScene 分别验收完整时序。

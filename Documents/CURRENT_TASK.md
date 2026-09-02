@@ -1,5 +1,15 @@
 # 当前任务
 
+## 2026-09-02 拍照预览提示动画接入
+
+- 状态：代码和动画资源接入完成，Runtime/Editor 编译通过，等待 MainScene 与 GameScene Play Mode 视觉验收。
+- 顺序：点击拍照按钮后仍先播放原有全屏白色闪光并离屏生成、保存图片；生成成功后显示共享 `PackPhotoItem` 预览，同时从第 `0` 帧单次播放根 Animator 的 `PackPhoto` 状态。
+- 美术动画：保留 `PackPhoto.anim` 的全部现有曲线和 `2.667s` 时长，由资源控制 `TaskContent` 先淡入、停留、淡出，再激活并淡入 `BtnOK`；仅关闭了错误的循环设置，代码不重做文字或按钮的透明度动画。
+- 交互：Animator 在闪光和图片生成阶段保持停止，避免预览出现前提前播放；动画开始显示预览时立即执行原有预览就绪回调，使 MainScene 同帧隐藏原选中卡包。动画期间 `BtnOK` 即使已被曲线激活也不可点击，完整播放结束后才启用；关闭预览时停止 Animator 并恢复现有场景按钮与选中卡包状态。
+- 共用：MainScene 选中卡包页和 GameScene 结算页继续使用同一个 `Assets/Prefabs/PackPhotoItem.prefab` 与 `CardPackPhoto`，没有复制第二套逻辑，也没有修改 Prefab 层级或动画曲线。
+- 修改文件：`Assets/Scripts/Model/CardPackPhoto.cs`、`Assets/Animation/PackPhoto.anim`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
+- 验证：`Assembly-CSharp.csproj` 和 `Assembly-CSharp-Editor.csproj` 编译通过，均为 `0` 警告、`0` 错误；`git diff --check` 通过，仅有仓库行尾转换提示。仍需分别从 MainScene 历史卡包相机按钮和 GameScene 结算相机按钮验收“闪光 -> 预览出现 -> 文字显示/消失 -> OK 按钮出现并可点击 -> 关闭恢复”的完整顺序。
+
 ## 2026-09-02 Win32 窗口拉伸布局与鼠标残影
 
 - 状态：代码修复和编译验证完成，等待 Windows Player 实机连续拉伸验收。
