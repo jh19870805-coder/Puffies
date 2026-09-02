@@ -129,6 +129,12 @@ public class MainScene : MonoBehaviour
     private const string UsableStickerOutlinePath = GameDefine.UiRoot + "/MainScene/MainSetLine3.png";
     private const string SavePanelObjectName = "PanelSave";
     private const string SaveButtonObjectName = "BtnData";
+    private const string SaveSlotButtonPrefix = "BtnSave";
+    private const string SaveSlotTitleObjectName = "TextTitle";
+    private const string SaveSlotContentObjectName = "TextContent";
+    private const string SaveContinueButtonObjectName = "BtnContinue";
+    private const string SaveDeleteButtonObjectName = "BtnDelete";
+    private const string EmptySaveSlotText = "新游戏";
     private const string BagSelectPanelObjectName = "PanelBagSelect";
     private const string BagSelectCanvasObjectName = "PanelBagSelectCanvas";
     private const string BagSelectBackdropObjectName = "PanelBagSelectBlurredBackdrop";
@@ -194,6 +200,7 @@ public class MainScene : MonoBehaviour
     private readonly Material[] mPackTornMaskMaterials = new Material[PackTornMaskCount];
     private readonly Material[] mPackCompletedTornMaskMaterials = new Material[PackTornMaskCount];
     private readonly bool[] mPackTornMaskLoadAttempted = new bool[PackTornMaskCount];
+    private readonly SaveSlotView[] mSaveSlotViews = new SaveSlotView[LocalSaveSlotUtility.SlotCount];
     private readonly System.Random mPackTornMaskRandom = new System.Random();
     private GameObject mPackageItemTemplate;
     private RectTransform mPackageContentRoot;
@@ -209,6 +216,12 @@ public class MainScene : MonoBehaviour
     private GameObject mSettingsPanelRoot;
     private GameObject mUsablePanelRoot;
     private GameObject mSavePanelRoot;
+    private Button mSaveDeleteButton;
+    private int mSelectedSaveSlotId = 1;
+    private Color mSaveSelectedTitleColor;
+    private Color mSaveSelectedContentColor;
+    private Color mSaveUnselectedTitleColor;
+    private Color mSaveUnselectedContentColor;
     private GameObject mBagSelectPanelRoot;
     private GameObject mBagVolumePanelRoot;
     private Canvas mBagSelectOverlayCanvas;
@@ -343,6 +356,20 @@ public class MainScene : MonoBehaviour
         public Vector2 StartPosition;
         public Vector2 TargetPosition;
         public bool IsRewardTarget;
+    }
+
+    private sealed class SaveSlotView
+    {
+        public int SlotId;
+        public Button Button;
+        public TMP_Text TitleText;
+        public TMP_Text ContentText;
+        public RectTransform ContentRect;
+        public Vector2 ContentAnchorMin;
+        public Vector2 ContentAnchorMax;
+        public Vector2 ContentAnchoredPosition;
+        public Vector2 ContentSizeDelta;
+        public TextAlignmentOptions ContentAlignment;
     }
 
     private sealed class PackageListDisplay
@@ -4418,8 +4445,81 @@ public class MainScene : MonoBehaviour
             return;
         }
 
+        if (!TryResolveSaveSlotViews())
+        {
+            Debug.LogWarning("MainScene: save panel slots are incomplete.");
+        }
+
         BindSaveControls();
+        mSelectedSaveSlotId = LocalSaveSlotUtility.ActiveSlotId;
+        RefreshSavePanel();
         SetPanelVisible(mSavePanelRoot, false);
+    }
+
+    private bool TryResolveSaveSlotViews()
+    {
+        for (var i = 0; i < mSaveSlotViews.Length; i++)
+        {
+            var slotId = i + 1;
+            var buttonTransform = FindDirectChild(
+                mSavePanelRoot.transform,
+                SaveSlotButtonPrefix + slotId);
+            var titleTransform = FindDirectChild(buttonTransform, SaveSlotTitleObjectName);
+            var contentTransform = FindDirectChild(buttonTransform, SaveSlotContentObjectName);
+            var contentRect = contentTransform as RectTransform;
+            var view = new SaveSlotView
+            {
+                SlotId = slotId,
+                Button = buttonTransform != null ? buttonTransform.GetComponent<Button>() : null,
+                TitleText = titleTransform != null ? titleTransform.GetComponent<TMP_Text>() : null,
+                ContentText = contentTransform != null ? contentTransform.GetComponent<TMP_Text>() : null,
+                ContentRect = contentRect
+            };
+            if (contentRect != null)
+            {
+                view.ContentAnchorMin = contentRect.anchorMin;
+                view.ContentAnchorMax = contentRect.anchorMax;
+                view.ContentAnchoredPosition = contentRect.anchoredPosition;
+                view.ContentSizeDelta = contentRect.sizeDelta;
+            }
+
+            if (view.ContentText != null)
+            {
+                view.ContentAlignment = view.ContentText.alignment;
+            }
+
+            mSaveSlotViews[i] = view;
+        }
+
+        var selectedTemplate = mSaveSlotViews[0];
+        var unselectedTemplate = mSaveSlotViews.Length > 1 ? mSaveSlotViews[1] : null;
+        if (selectedTemplate?.TitleText != null)
+        {
+            mSaveSelectedTitleColor = selectedTemplate.TitleText.color;
+        }
+
+        if (selectedTemplate?.ContentText != null)
+        {
+            mSaveSelectedContentColor = selectedTemplate.ContentText.color;
+        }
+
+        mSaveUnselectedTitleColor = unselectedTemplate?.TitleText != null
+            ? unselectedTemplate.TitleText.color
+            : mSaveSelectedTitleColor;
+        mSaveUnselectedContentColor = unselectedTemplate?.ContentText != null
+            ? unselectedTemplate.ContentText.color
+            : mSaveSelectedContentColor;
+
+        for (var i = 0; i < mSaveSlotViews.Length; i++)
+        {
+            var view = mSaveSlotViews[i];
+            if (view?.Button == null || view.TitleText == null || view.ContentText == null)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private void BindSaveControls()
@@ -4437,6 +4537,40 @@ public class MainScene : MonoBehaviour
             returnButton.onClick.RemoveListener(OnSaveCloseButtonClicked);
             returnButton.onClick.AddListener(OnSaveCloseButtonClicked);
         }
+
+        BindSaveSlotButton(0, OnSaveSlot1ButtonClicked);
+        BindSaveSlotButton(1, OnSaveSlot2ButtonClicked);
+        BindSaveSlotButton(2, OnSaveSlot3ButtonClicked);
+
+        var continueButton = FindDirectChild(
+            mSavePanelRoot.transform,
+            SaveContinueButtonObjectName)?.GetComponent<Button>();
+        if (continueButton != null)
+        {
+            continueButton.onClick.RemoveListener(OnSaveContinueButtonClicked);
+            continueButton.onClick.AddListener(OnSaveContinueButtonClicked);
+        }
+
+        mSaveDeleteButton = FindDirectChild(
+            mSavePanelRoot.transform,
+            SaveDeleteButtonObjectName)?.GetComponent<Button>();
+        if (mSaveDeleteButton != null)
+        {
+            mSaveDeleteButton.onClick.RemoveListener(OnSaveDeleteButtonClicked);
+            mSaveDeleteButton.onClick.AddListener(OnSaveDeleteButtonClicked);
+        }
+    }
+
+    private void BindSaveSlotButton(int index, UnityEngine.Events.UnityAction action)
+    {
+        if (index < 0 || index >= mSaveSlotViews.Length || mSaveSlotViews[index]?.Button == null)
+        {
+            return;
+        }
+
+        var button = mSaveSlotViews[index].Button;
+        button.onClick.RemoveListener(action);
+        button.onClick.AddListener(action);
     }
 
     private void OnSaveButtonClicked()
@@ -4447,7 +4581,122 @@ public class MainScene : MonoBehaviour
         }
 
         SetPanelVisible(mMenuPanelRoot, false);
+        mSelectedSaveSlotId = LocalSaveSlotUtility.ActiveSlotId;
+        RefreshSavePanel();
         SetPanelVisible(mSavePanelRoot, true);
+    }
+
+    private void OnSaveSlot1ButtonClicked()
+    {
+        SelectSaveSlot(1);
+    }
+
+    private void OnSaveSlot2ButtonClicked()
+    {
+        SelectSaveSlot(2);
+    }
+
+    private void OnSaveSlot3ButtonClicked()
+    {
+        SelectSaveSlot(3);
+    }
+
+    private void SelectSaveSlot(int slotId)
+    {
+        if (slotId < 1 || slotId > LocalSaveSlotUtility.SlotCount)
+        {
+            return;
+        }
+
+        mSelectedSaveSlotId = slotId;
+        RefreshSavePanel();
+    }
+
+    private void RefreshSavePanel()
+    {
+        var selectedHasData = false;
+        for (var i = 0; i < mSaveSlotViews.Length; i++)
+        {
+            var view = mSaveSlotViews[i];
+            if (view == null)
+            {
+                continue;
+            }
+
+            var summary = LocalSaveSlotUtility.GetSlotSummary(view.SlotId);
+            var isSelected = view.SlotId == mSelectedSaveSlotId;
+            RefreshSaveSlotView(view, summary, isSelected);
+            if (isSelected)
+            {
+                selectedHasData = summary.HasData;
+            }
+        }
+
+        if (mSaveDeleteButton != null)
+        {
+            mSaveDeleteButton.gameObject.SetActive(selectedHasData);
+        }
+    }
+
+    private void RefreshSaveSlotView(
+        SaveSlotView view,
+        LocalSaveSlotSummary summary,
+        bool isSelected)
+    {
+        if (view.TitleText != null)
+        {
+            view.TitleText.color = isSelected ? mSaveSelectedTitleColor : mSaveUnselectedTitleColor;
+            view.TitleText.text = view.SlotId.ToString();
+            view.TitleText.gameObject.SetActive(true);
+        }
+
+        if (view.ContentText == null || view.ContentRect == null)
+        {
+            return;
+        }
+
+        view.ContentText.color = isSelected ? mSaveSelectedContentColor : mSaveUnselectedContentColor;
+        if (!summary.HasData)
+        {
+            view.ContentText.text = EmptySaveSlotText;
+            view.ContentText.alignment = TextAlignmentOptions.Center;
+            view.ContentRect.anchorMin = view.ContentAnchorMin;
+            view.ContentRect.anchorMax = view.ContentAnchorMax;
+            view.ContentRect.anchoredPosition = view.ContentAnchoredPosition;
+            view.ContentRect.sizeDelta = view.ContentSizeDelta;
+            return;
+        }
+
+        view.ContentRect.anchorMin = view.ContentAnchorMin;
+        view.ContentRect.anchorMax = view.ContentAnchorMax;
+        view.ContentRect.anchoredPosition = view.ContentAnchoredPosition;
+        view.ContentRect.sizeDelta = view.ContentSizeDelta;
+        view.ContentText.alignment = view.ContentAlignment;
+        var lastUpdatedText = summary.LastUpdatedTime > DateTime.MinValue
+            ? summary.LastUpdatedTime.ToString("dd/MM/yyyy HH:mm")
+            : string.Empty;
+        view.ContentText.text =
+            $"已解锁的拼图包：{summary.UnlockedPackCount}\n{lastUpdatedText}";
+    }
+
+    private void OnSaveContinueButtonClicked()
+    {
+        if (!LocalSaveSlotUtility.TryActivateSlot(mSelectedSaveSlotId))
+        {
+            return;
+        }
+
+        CardPackRewardFlyTransition.CancelPending();
+        SetPanelVisible(mSavePanelRoot, false);
+        SceneManager.LoadScene(GameDefine.SceneLoading);
+    }
+
+    private void OnSaveDeleteButtonClicked()
+    {
+        if (LocalSaveSlotUtility.DeleteSlot(mSelectedSaveSlotId))
+        {
+            RefreshSavePanel();
+        }
     }
 
     private void OnSaveCloseButtonClicked()

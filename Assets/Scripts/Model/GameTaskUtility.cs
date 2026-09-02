@@ -125,6 +125,12 @@ public static class GameTaskUtility
 
     public static bool IsInitialized => sIsInitialized;
 
+    internal static void ResetForSaveSlotChange()
+    {
+        sProgress = default;
+        sIsInitialized = false;
+    }
+
     /// <summary>
     /// 用途：当前任务完成后随机生成下一任务；积分任务的超额分数保留到下一个积分任务。返回：是否成功。
     /// </summary>

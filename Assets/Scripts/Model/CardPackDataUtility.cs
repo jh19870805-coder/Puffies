@@ -84,6 +84,12 @@ public static class CardPackDataUtility
 
     public static bool IsInitialized => sIsInitialized;
 
+    internal static void ResetForSaveSlotChange()
+    {
+        sIsInitialized = false;
+        sNewlyUnlockedPackIds.Clear();
+    }
+
     /// <summary>
     /// 用途：确保默认卡包已解锁，保证新玩家可进入游戏。返回：是否成功。
     /// </summary>

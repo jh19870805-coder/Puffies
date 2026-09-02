@@ -1,5 +1,16 @@
 # 当前任务
 
+## 2026-09-02 三档本地存档与 PanelSave 接入
+
+- 状态：存储层、MainScene UI 逻辑及切档后列表不可见修复已完成，等待 Unity Play Mode 复验。
+- 存储结构：新增 `LocalSaveSlotUtility`，当前活动档位记录在 `persistentDataPath/SaveSlots.json`；三份进度分别保存到 `SaveSlot1/2/3/LocalData.db` 和 `LocalData.json`。SQLite、JSON、任务、卡包与设置的静态状态会在点击“继续”正式切档时统一清空，再由 `LoadingScene` 按新档位重新初始化。
+- 摘要与删除：存档面板不打开其他档位进行业务初始化，只读各档文件；有数据时统计 SQLite 中非 `Locked` 的卡包数量，并取档位目录内数据文件的最新修改时间，显示为“已解锁的拼图包：数量”和 `dd/MM/yyyy HH:mm`。删除当前活动档前先关闭连接、清理缓存，再删除该档目录；空档不显示删除按钮。
+- UI：`PanelSave/BtnSave1~3`、`BtnContinue`、`BtnDelete` 已按实际层级绑定。第一档现有文字颜色作为选中模板，第二档作为未选中模板；点击档位立即刷新三档样式。空档也始终保留左侧 `1/2/3` 编号，并在编辑器原右侧内容区域居中显示“新游戏”；有数据时显示编号及原两行摘要布局。点击“继续”保存活动档位并进入 `LoadingScene`；关闭与返回逻辑不变。
+- 列表修复：Unity 日志确认切回 `SaveSlot1` 后任务进度 `33/45` 和 `3` 个已解锁卡包均已正确读取；不可见是因为上一轮结算的 `CardPackRewardFlyTransition` 在解锁特效收尾期间仍为活动状态，新 MainScene 因此把列表预隐藏，但该过渡不会再接管第二次载入的 MainScene。存档“继续”成功后现在先取消旧奖励过渡、清除静态活动标记和输入层，再进入 `LoadingScene`。
+- 修改文件：`Assets/Scripts/Model/LocalDataStore.cs`、`Assets/Scripts/Model/GameTaskUtility.cs`、`Assets/Scripts/Model/CardPackDataUtility.cs`、`Assets/Scripts/Model/GameDefine.cs`、`Assets/Scripts/Controller/MainScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`。`Assets/Scenes/MainScene.unity` 中 `PanelSave` 节点命名是用户已有未提交修改，本轮保留并直接使用。
+- 验证：`dotnet build Assembly-CSharp-Editor.csproj --no-restore` 通过并连带生成 Runtime/firstpass，结果为 `0` 警告、`0` 错误；`git diff --check` 通过，仅有仓库既有的 LF/CRLF 转换提示。仍需在 Play Mode 验证三档新建、互相切换、退出重进、删除、摘要数量和更新时间刷新。
+- 数据重置：这是不兼容的存储路径变更，不迁移旧根目录数据。当前工程实际 `persistentDataPath` 为 `%USERPROFILE%/AppData/LocalLow/MainTown/Ducky Stickers`；关闭 Unity 后删除该目录旧根级 `LocalData.db` 与 `LocalData.json`。若要把三档一起重新测试，同时删除 `SaveSlots.json` 和 `SaveSlot1/2/3` 目录。
+
 ## 2026-09-02 首页拍照白色闪光不可见
 
 - 状态：代码修改和 Runtime/Editor 编译完成，等待 MainScene/GameScene 拍照实测。

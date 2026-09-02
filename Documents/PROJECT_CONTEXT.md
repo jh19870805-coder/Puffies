@@ -169,8 +169,11 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 | `PanelUsable` | MainScene 辅助选项弹窗 |
 | `PanelUsable/Toggle1` / `Toggle2` / `Toggle3` | 持久化辅助选项开关 |
 | `PanelUsable/BtnClose` / `PanelUsable/BtnReturn` | 关闭辅助选项弹窗 |
-| `PanelSave` | MainScene 存档/数据弹窗，目前仅显示和隐藏 |
-| `PanelSave/BtnClose` / `PanelSave/BtnReturn` | 关闭存档弹窗 |
+| `PanelSave` | MainScene 三档本地进度选择弹窗；每次运行只使用当前活动档位 |
+| `PanelSave/BtnSave1~3` | 选择待使用或待删除的存档；点击后立即刷新三档选中/未选中文字样式。空档仍显示左侧 `1/2/3`，右侧居中显示“新游戏” |
+| `PanelSave/BtnContinue` | 保存活动档位并重新进入 `LoadingScene`，按所选档位重新加载 |
+| `PanelSave/BtnDelete` | 删除当前选中档位；空档时隐藏 |
+| `PanelSave/BtnClose` / `PanelSave/BtnReturn` | 关闭存档弹窗，不改变当前活动档位 |
 | `BtnReturn` | Rank / Game -> Main；位于 `PanelMenu` 时关闭 MainScene 菜单 |
 | `CloseBtn` | Achieve -> Main |
 | `BtnFinish` | 将新发卡包从 RewardPanel 动画移动到 MainScene 列表位置，然后完成返回 |
@@ -213,11 +216,11 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 | 数据 | 来源 | 运行时持久化 |
 |------|------|-------------|
 | 任务配置 | `GameConfigRepository` 读取 `Resources/Configs/TaskConfig.csv` | 只读 |
-| 任务进度 | `GameTaskUtility` | `persistentDataPath/LocalData.json` 根对象 `TaskProgressData` |
+| 任务进度 | `GameTaskUtility` | `persistentDataPath/SaveSlotN/LocalData.json` 根对象 `TaskProgressData` |
 | 卡包配置（`PackId`、`PackSize`、`StickerCount`、`ChapterId`、`BoardScale`、`Series`、`AutoUpdate`） | `GameConfigRepository` 读取 `Resources/Configs/CardPacks.csv` | 只读 |
-| 卡包生命周期 | `CardPackDataUtility` | `LocalData.db` 的 `CardPacks` 表 |
-| 卡包当前拼图会话 | `CardPackDataUtility` | `LocalData.db` 的 `CardPackPuzzleProgress` 表 |
-| 通用集合与键值存储 | `SqliteLocalStore` API | `LocalData.db` 的 `AppRecords` 表 |
+| 卡包生命周期 | `CardPackDataUtility` | `SaveSlotN/LocalData.db` 的 `CardPacks` 表 |
+| 卡包当前拼图会话 | `CardPackDataUtility` | `SaveSlotN/LocalData.db` 的 `CardPackPuzzleProgress` 表 |
+| 通用集合与键值存储 | `SqliteLocalStore` API | `SaveSlotN/LocalData.db` 的 `AppRecords` 表 |
 
 - `GameConfigRepository` 加载并缓存任务和卡包配置。当前数据源为 `ResourcesGameConfigTextSource`，优先使用 `Resources.Load<TextAsset>`，失败时回退到编辑器磁盘路径。
 - `CsvTable` 是统一 CSV 解析器，支持表头访问、引号字段和空行过滤；业务代码不得直接 `Split(',')`。
@@ -225,6 +228,8 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 - 上述自由放置规则中，Piece 与“自身凹槽相交”不再属于非法条件：正确吸附判定仍优先；未达到吸附标准时，只要 Piece 完整位于棋盘范围内、未与已拼区域或其他外部 Piece 冲突且没有触犯棋盘外框或托盘区域限制，即使实际轮廓与自身凹槽部分相交，也允许按未完成 Piece 留在当前位置。未与自身凹槽相交时，其他未填凹槽边界继续使用原判定。
 - `JsonLocalStore` 读写整个文件的单一根对象，目前用于任务进度。
 - `SqliteLocalStore` 在 `AppRecords` 中使用集合/键记录；卡包业务状态使用专用 `CardPacks` 表。
+- 本地进度固定支持三档。`persistentDataPath/SaveSlots.json` 只记录活动档位 Id，实际 SQLite 与 JSON 数据分别隔离在 `SaveSlot1`、`SaveSlot2`、`SaveSlot3` 目录。选择按钮只改变面板中的待选档位；点击“继续”才写入活动档位、重置各存储和业务静态缓存并返回 `LoadingScene`。存档摘要统计 `LifecycleState != Locked` 的卡包数量，更新时间取该档数据文件的最新本地修改时间并显示为 `dd/MM/yyyy HH:mm`。删除档位时直接删除对应目录，不迁移或合并数据。
+- 从 `PanelSave` 点击“继续”切档时必须先取消仍在收尾的 `CardPackRewardFlyTransition`。该对象会跨场景存活，若保留到下一次 MainScene，会让新档位列表进入只为结算飞入准备的预隐藏状态且无人恢复。
 - `CardPackLifecycleState` 为 `Locked=0`、`Unlocked=1`、`InProgress=2`、`Completed=3`。首次进入 GameScene 时将未完成卡包标记为 `InProgress`，完成最后一组后标记为 `Completed`；重玩期间保持 `Completed`，不降级。
 - SQLite `CardPacks` 表包含 `PackId`、`PackSize`、`LifecycleState`、`UnlockTime` 和 `CompletionTime`，不保留旧 `IsUnlocked`、`IsPlayed` 字段。解锁和完成时间使用固定格式的本地时间 `yyyy-MM-dd HH:mm:ss.fff`。`CompletionTime` 仅在首次进入 `Completed` 时写入，重玩不修改。
 - SQLite `CardPackPuzzleProgress` 表包含 `PackId`、`PlacedPieceNumbersJson` 和 `UpdatedTime`。进入 GameScene 即创建会话，即使尚未放置 Piece 也保留空记录；正确吸附后按 `PieceGGII` 的 `组号 * 100 + 组内索引` 完整编号去重、排序并立即保存。桌面 Piece 的位置不持久化。完成整包并成功保存 `Completed` 后清除该会话。
@@ -267,8 +272,8 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 ### 开发期持久化策略
 
 - 开发阶段的本地持久化不保证向后兼容。数据结构和 SQLite 字段类型可直接改为当前需求，不增加迁移或旧数据回退，除非用户明确要求。
-- SQLite 表结构发生不兼容修改后，关闭 Unity，并在测试前删除 `%USERPROFILE%/AppData/LocalLow/MainTown/Puffies/LocalData.db`。
-- JSON 任务进度或跨两个存储的行为发生变化时，同时删除 `LocalData.json`。每次不兼容修改后，助手必须指出需要删除的文件；未经明确要求不得自动删除。
+- SQLite 表结构发生不兼容修改后，关闭 Unity，并在测试前删除受影响的 `%USERPROFILE%/AppData/LocalLow/MainTown/Ducky Stickers/SaveSlotN/LocalData.db`。
+- JSON 任务进度或跨两个存储的行为发生变化时，同时删除对应 `SaveSlotN/LocalData.json`。从旧单档结构切换到三档结构时，旧根目录 `LocalData.db` 和 `LocalData.json` 不迁移，应手动删除；完整重置三档时同时删除 `SaveSlots.json` 和 `SaveSlot1/2/3`。每次不兼容修改后，助手必须指出需要删除的文件；未经明确要求不得自动删除。
 
 ---
 

@@ -59,6 +59,25 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
 
     public static bool IsActive => sInstance != null;
 
+    public static void CancelPending()
+    {
+        var transition = sInstance;
+        if (transition == null)
+        {
+            return;
+        }
+
+        sInstance = null;
+        if (transition.mPreparedMainScene != null)
+        {
+            transition.mPreparedMainScene.CancelPackageRewardEntrance();
+            transition.mPreparedMainScene = null;
+        }
+
+        transition.gameObject.SetActive(false);
+        Destroy(transition.gameObject);
+    }
+
     public static bool IsPackPending(int packId)
     {
         if (sInstance == null)
