@@ -1,5 +1,23 @@
 # Spec Driven Development
 
+## 2026-09-02 - 新手引导三步提示框定位
+
+### 需求
+
+1. WHEN CardBag001 新手引导进入第一步 THEN 提示框 SHALL 位于当前指定 Piece 对应凹槽区域的正上方。
+2. WHEN 新手引导进入第二步 THEN 提示框 SHALL 位于当前阶段全部尚未拼好凹槽区域并集的正上方；已完成 Piece SHALL NOT 扩大目标范围。
+3. IF 第一或第二步的目标凹槽范围暂时无法换算 THEN 提示框 SHALL 先回退到棋盘区域上方；IF 棋盘范围也不可用 THEN 提示框 SHALL 回退到画面顶部居中，SHALL NOT 使用第三步的固定位置。
+4. WHEN 新手引导进入第三步 THEN 提示框和箭头 SHALL 使用教程 Screen Space - Camera Canvas 的实际相机换算 `BtnTips` 矩形；提示框右边缘与按钮左边缘 SHALL 至少间隔 `32` 设计像素，箭头 SHALL 可见且尖端位于按钮左边缘外 `16` 设计像素。
+5. 第三步 SHALL 保留提示框左移 `48`、下移 `20`、箭头下移 `20` 以及现有尺寸、文案、延迟出现和脉冲动画；前两步 SHALL NOT 使用第三步定位分支。
+
+### 设计与任务
+
+- [x] 合并第一、二步目标区域上方定位分支，并按阶段筛选指定或尚未完成的 Groove。
+- [x] 使用教程 Screen Space - Camera Canvas 的实际相机换算 Groove/棋盘屏幕矩形，并增加棋盘上方回退。
+- [x] 第三步按钮矩形和箭头目标改用教程 Canvas 实际相机换算，增加提示框与按钮 `32` 设计像素硬间隔并显式激活运行时 Arrow。
+- [x] 编译 Runtime/Editor，结果为 `0` 警告、`0` 错误。
+- [ ] 在 CardBag001 顺序验收三步提示框位置。
+
 ## 2026-09-01 - 新手引导第三步提示框避让
 
 ### 需求
@@ -1306,6 +1324,8 @@
 5. 黑边 SHALL 每帧由独立的全屏清屏相机清为纯黑，鼠标经过黑边区域不得留下历史帧残影。
 6. MainScene、GameScene、LoadingScene、RankScene、AchieveScene 以及运行时创建的拍照、新手引导和转场根 Canvas SHALL 使用相同的固定宽高比视口与 `CanvasScaler Expand` 规则，保证 `2560x1440` 设计区域完整显示。
 7. 屏幕适配 SHALL 保持自由拉伸窗口和现有自定义鼠标样式不变。
+8. WHEN `PanelSet/SliderMusic` 或 `SliderEffect` 的值变化 THEN `SliderHandle` 中心 SHALL 在扣除圆点半宽后的有效轨道内表示真实进度，绿色填充 SHALL 在圆点下方延伸至圆点右边缘；WHEN 值为 `0` 或 `1` THEN 圆点外边缘 SHALL 分别与凹槽左端或右端对齐且不得超出，WHEN 值为 `1` THEN 绿色填充 SHALL 完整填满凹槽。
+9. WHEN Windows Player 进入非窗口化状态 THEN 系统 SHALL 使用当前显示器原生宽高明确应用 `FullScreenWindow`，不得保留窗口客户区尺寸或顶部窗口边框；音乐和音效值变化 SHALL NOT 重复切换显示模式。
 
 ### 实现与验证任务
 
@@ -1316,6 +1336,9 @@
 - [x] 5. 将 LoadingScene、RankScene、AchieveScene 和运行时根 Canvas 接入相同适配规则。
 - [x] 6. 编译 Runtime/Editor，结果均为 `0` 警告、`0` 错误。
 - [ ] 7. 在 Windows Player 验证所有页面的宽屏/窄屏连续拉伸、完整 UI 和无鼠标残影黑边。
+- [x] 8. 统一设置页音量条的圆点轨道与绿色覆盖；静态验证 `0`、`0.4`、`0.5`、`1` 四档圆点中心使用内收半径后的有效轨道，绿色覆盖至圆点右边缘，圆点在两端与凹槽边缘对齐且满值使用完整填充宽度。
+- [x] 9. Windows 全屏切换时明确应用显示器原生宽高和刷新率；Runtime/Editor 编译均通过。
+- [ ] 10. 在新 Windows Player 构建中验证音量条端点视觉，以及窗口化切回全屏后顶部无黑条。
 
 ## 2026-09-02 - 拍照预览提示动画接入
 

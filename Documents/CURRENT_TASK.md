@@ -1,5 +1,33 @@
 # 当前任务
 
+## 2026-09-02 新手引导第三步提示框与箭头修复
+
+- 状态：代码修改和 Runtime/Editor 编译完成，等待 CardBag001 Play Mode 视觉验收。
+- 根因：第三步仍以 `null` 相机把 `BtnTips` 屏幕坐标换算到 Screen Space - Camera 教程 Canvas；Game 视图缩放后提示框与箭头得到错误的 Canvas 坐标，导致提示框遮挡按钮、箭头被移动到错误位置。场景 `GuideTip/Arrow` 模板、Sprite 和运行时创建逻辑均存在，不是资源丢失。
+- 修改：第三步提示框中心、按钮矩形和箭头目标统一使用教程 Canvas 的实际相机换算；提示框右边缘与按钮左边缘强制保留至少 `32` 设计像素，箭头尖端继续停在按钮左边缘外 `16` 设计像素并使用原下移 `20`、脉冲和延迟出现动画。运行时 Arrow 显式激活。
+- 保留：第一、二步继续位于对应待拼凹槽区域上方；第三步提示框原左移 `48`、下移 `20`、尺寸、文案和动画资源不变。
+- 修改文件：`Assets/Scripts/Controller/GameScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
+- 验证：当前场景 `BtnTips` 中心 `x=1112`、宽 `90`，按钮左边缘为 `1067`；第三步提示框宽 `568`，限制后右边缘为 `1035`，间隔 `32`；箭头脉冲终点为 `1051`，位于按钮左边缘外 `16`。`Assembly-CSharp-Editor.csproj` 编译通过并连带生成 Runtime/firstpass，结果为 `0` 警告、`0` 错误。仍需在 CardBag001 第三步确认提示框不遮挡 `BtnTips`、箭头延迟出现后持续可见并正确指向按钮左侧。
+
+## 2026-09-02 新手引导前两步提示框定位修复
+
+- 状态：代码修改和 Runtime/Editor 编译完成，等待 CardBag001 Play Mode 视觉验收。
+- 根因：第一步提示框使用固定屏幕锚点，第二步才尝试读取当前组凹槽范围；第二步凹槽坐标换算失败时又会落入第三步使用的右上固定锚点，因此提示框可能不在要拼区域上方。
+- 修改：第一步只读取当前指定 Piece 的凹槽范围，第二步读取当前阶段全部尚未拼好的凹槽范围，两者都以目标范围水平中心、上边缘外 `24` 设计像素定位提示框。目标凹槽换算改为使用教程 Screen Space - Camera Canvas 的实际相机；若目标范围暂时不可用，先回退到棋盘区域上方，棋盘也不可用时回退到画面顶部居中，绝不进入第三步定位分支。
+- 保留：第三步继续根据 `BtnTips` 实际位置使用独立提示框、左移/下移和箭头定位规则；三步提示框尺寸、文案与进场动画不变。
+- 修改文件：`Assets/Scripts/Controller/GameScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
+- 验证：`Assembly-CSharp-Editor.csproj` 编译通过，并连带生成 Runtime/firstpass，结果为 `0` 警告、`0` 错误；`git diff --check` 通过，仅有仓库行尾转换提示。仍需在 CardBag001 依次检查第一步提示框位于指定凹槽上方、第二步提示框位于当前待拼区域上方、第三步保持提示按钮旁的独立位置。
+
+## 2026-09-02 设置页音量条与 Windows 全屏修复
+
+- 状态：代码修复、几何检查和 Runtime/Editor 编译完成，等待新 Windows Player 构建视觉验收。
+- 音量条根因：`FakeSettingsSliderInput` 原先用 `SliderFill.sizeDelta.x - 8` 计算绿色宽度，同时直接把场景中圆点初始坐标 `101.1` 当作对称极限，填充和圆点使用了两套不同轨道。中间值时绿色终点与圆点中心不一致，满值时圆点右侧仍会露出深色底槽。
+- 音量条修复：初始化时从 `SliderFill` 的完整世界矩形换算出凹槽左右边界，再按圆点实际半宽内收圆点中心轨道。圆点中心按真实进度移动，绿色在其下方继续铺到圆点右边缘，避免上层圆点遮住绿色后产生“绿色比圆点进度少一截”的观感；`0` 时圆点左边缘与凹槽左端对齐，`1` 时圆点右边缘与凹槽右端对齐且绿色完整填满凹槽。
+- 全屏根因：原逻辑只设置 `Screen.fullScreenMode`，从窗口模式切回全屏时可能继续沿用窗口客户区尺寸或边框状态。Windows Player 现在读取 `Screen.currentResolution`，以当前显示器原生宽高和刷新率明确调用 `Screen.SetResolution(..., FullScreenWindow)`。
+- 显示切换：音乐和音效更新现在只刷新音频，不再重复写全屏模式；显示模式仅在初始化、窗口化开关变化或实际模式不一致时应用。
+- 修改文件：`Assets/Scripts/View/FakeSettingsSliderInput.cs`、`Assets/Scripts/Model/LocalDataStore.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
+- 验证：音量条按当前场景 `SliderFill=[-118.7,118.3]`、圆点半宽 `16` 检查 `0/0.4/0.5/1`；圆点中心轨道为 `[-102.7,102.3]`，两端的圆点外边缘分别为 `-118.7/118.3`，与凹槽左右端对齐。绿色铺到圆点右边缘，满值宽度为完整 `237`。仍需在 Unity 中目测两条音量条的绿紫衔接，并用新 Windows Player 检查窗口化切回全屏后顶部无黑条。
+
 ## 2026-09-02 拍照预览提示动画接入
 
 - 状态：代码和动画资源接入完成，Runtime/Editor 编译通过，等待 MainScene 与 GameScene Play Mode 视觉验收。

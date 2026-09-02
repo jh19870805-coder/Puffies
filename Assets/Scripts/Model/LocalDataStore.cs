@@ -473,6 +473,8 @@ public static class GameSettingsUtility
 
     private static GameSettingsData sSettings = CreateDefaultSettings();
     private static bool sHasLoaded;
+    private static bool sHasAppliedDisplayMode;
+    private static bool sAppliedWindowedState;
 
     public static bool Initialize()
     {
@@ -527,7 +529,7 @@ public static class GameSettingsUtility
     {
         EnsureSettingsLoaded();
         sSettings.MusicVolume = Mathf.Clamp01(value);
-        ApplyRuntimeSettings();
+        ApplyAudioSettings();
         Save();
     }
 
@@ -535,7 +537,7 @@ public static class GameSettingsUtility
     {
         EnsureSettingsLoaded();
         sSettings.EffectVolume = Mathf.Clamp01(value);
-        ApplyRuntimeSettings();
+        ApplyAudioSettings();
         Save();
     }
 
@@ -584,11 +586,43 @@ public static class GameSettingsUtility
     public static void ApplyRuntimeSettings()
     {
         Sanitize(sSettings);
+        ApplyAudioSettings();
+        ApplyDisplayMode();
+    }
+
+    private static void ApplyAudioSettings()
+    {
         AudioListener.volume = Mathf.Clamp01(Mathf.Max(sSettings.MusicVolume, sSettings.EffectVolume));
         ApplyAudioSourceVolumes();
-        Screen.fullScreenMode = sSettings.IsWindowed
+    }
+
+    private static void ApplyDisplayMode()
+    {
+        var isWindowed = sSettings.IsWindowed;
+        var targetMode = isWindowed
             ? FullScreenMode.Windowed
             : FullScreenMode.FullScreenWindow;
+        if (sHasAppliedDisplayMode
+            && sAppliedWindowedState == isWindowed
+            && Screen.fullScreenMode == targetMode)
+        {
+            return;
+        }
+
+        sHasAppliedDisplayMode = true;
+        sAppliedWindowedState = isWindowed;
+        if (!isWindowed && Application.platform == RuntimePlatform.WindowsPlayer)
+        {
+            var nativeResolution = Screen.currentResolution;
+            Screen.SetResolution(
+                nativeResolution.width,
+                nativeResolution.height,
+                FullScreenMode.FullScreenWindow,
+                nativeResolution.refreshRateRatio);
+            return;
+        }
+
+        Screen.fullScreenMode = targetMode;
     }
 
     private static void EnsureSettingsLoaded()

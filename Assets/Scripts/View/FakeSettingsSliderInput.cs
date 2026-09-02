@@ -8,14 +8,15 @@ public sealed class FakeSettingsSliderInput : MonoBehaviour, IPointerDownHandler
     private const string FillObjectName = "SliderFill";
     private const string HandleObjectName = "SliderHandle";
     private const float MinimumTrackWidth = 1f;
-    private const float FillWidthPadding = 8f;
 
     public Action<float> ValueChanged;
 
     private RectTransform mRootRect;
     private RectTransform mFillRect;
     private RectTransform mHandleRect;
+    private float mFillStartX;
     private float mFillMaxWidth;
+    private float mHandleHalfWidth;
     private float mHandleMinX;
     private float mHandleMaxX;
     private float mValue = 1f;
@@ -70,16 +71,13 @@ public sealed class FakeSettingsSliderInput : MonoBehaviour, IPointerDownHandler
         mRootRect = rootRect;
         mFillRect = fillRect;
         mHandleRect = handleRect;
-        mFillMaxWidth = Mathf.Max(MinimumTrackWidth, fillRect.sizeDelta.x - FillWidthPadding);
-
-        var handleLimit = Mathf.Abs(handleRect.anchoredPosition.x);
-        if (handleLimit <= 0f)
-        {
-            handleLimit = Mathf.Max(MinimumTrackWidth, rootRect.rect.width * 0.5f - handleRect.rect.width * 0.5f);
-        }
-
-        mHandleMinX = -handleLimit;
-        mHandleMaxX = handleLimit;
+        GetHorizontalBoundsInRoot(fillRect, rootRect, out var fillMinX, out var fillMaxX);
+        GetHorizontalBoundsInRoot(handleRect, rootRect, out var handleMinX, out var handleMaxX);
+        mFillStartX = fillMinX;
+        mFillMaxWidth = Mathf.Max(MinimumTrackWidth, fillMaxX - fillMinX);
+        mHandleHalfWidth = Mathf.Max(0f, (handleMaxX - handleMinX) * 0.5f);
+        mHandleMinX = fillMinX + mHandleHalfWidth;
+        mHandleMaxX = fillMaxX - mHandleHalfWidth;
         RefreshVisuals();
     }
 
@@ -121,16 +119,39 @@ public sealed class FakeSettingsSliderInput : MonoBehaviour, IPointerDownHandler
 
     private void RefreshVisuals()
     {
+        var handleX = Mathf.Lerp(mHandleMinX, mHandleMaxX, mValue);
         if (mFillRect != null)
         {
-            mFillRect.sizeDelta = new Vector2(mFillMaxWidth * mValue, mFillRect.sizeDelta.y);
+            var fillWidth = Mathf.Clamp(
+                handleX - mFillStartX + mHandleHalfWidth,
+                0f,
+                mFillMaxWidth);
+            mFillRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, fillWidth);
         }
 
         if (mHandleRect != null)
         {
             mHandleRect.anchoredPosition = new Vector2(
-                Mathf.Lerp(mHandleMinX, mHandleMaxX, mValue),
+                handleX,
                 mHandleRect.anchoredPosition.y);
+        }
+    }
+
+    private static void GetHorizontalBoundsInRoot(
+        RectTransform target,
+        RectTransform root,
+        out float minX,
+        out float maxX)
+    {
+        var corners = new Vector3[4];
+        target.GetWorldCorners(corners);
+        minX = float.PositiveInfinity;
+        maxX = float.NegativeInfinity;
+        for (var i = 0; i < corners.Length; i++)
+        {
+            var rootPoint = root.InverseTransformPoint(corners[i]);
+            minX = Mathf.Min(minX, rootPoint.x);
+            maxX = Mathf.Max(maxX, rootPoint.x);
         }
     }
 

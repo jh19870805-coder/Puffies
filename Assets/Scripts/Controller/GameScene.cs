@@ -110,10 +110,11 @@ public class GameScene : MonoBehaviour
     private const float HintOutlineScrollSpeed = 60f;
     private const int TutorialCanvasSortingOrder = 30000;
     private const float TutorialArrowScale = 0.7f;
-    private const float TutorialPracticePromptGap = 24f;
+    private const float TutorialTargetPromptGap = 24f;
     private const float TutorialPromptScreenMargin = 24f;
     private const float TutorialHintPromptLeftOffset = 48f;
     private const float TutorialHintPromptDownOffset = 20f;
+    private const float TutorialHintPromptButtonGap = 32f;
     private const float TutorialHintArrowButtonGap = 16f;
     private const float TutorialHintArrowTargetDownOffset = 20f;
     private const string TutorialInvalidLineStartCharacters = "，。！？；：、”’）】》";
@@ -203,8 +204,6 @@ public class GameScene : MonoBehaviour
     private static readonly int SpritePixelsPerUnitId = Shader.PropertyToID("_SpritePixelsPerUnit");
     private static readonly int ShadowColorId = Shader.PropertyToID("_ShadowColor");
     private const int OpeningPieceRenderQueue = 2000;
-    private static readonly Vector2 TutorialStrongPromptAnchor = new Vector2(0.5f, 0.7f);
-    private static readonly Vector2 TutorialStrongPromptOffset = new Vector2(-30f, -50f);
     private static readonly Vector2 TutorialHintPromptAnchor = new Vector2(0.73f, 0.76f);
 
     private enum TutorialStage
@@ -9193,6 +9192,7 @@ public class GameScene : MonoBehaviour
         arrowImage.preserveAspect = templateArrowImage.preserveAspect;
         arrowImage.raycastTarget = false;
         arrowObject.GetComponent<TutorialHintArrowMotion>().Configure(arrowRect, arrowImage);
+        arrowObject.SetActive(true);
     }
 
     private Vector2 GetTutorialPromptPosition(
@@ -9200,40 +9200,49 @@ public class GameScene : MonoBehaviour
         TutorialStage stage,
         Vector2 promptSize)
     {
-        if (stage == TutorialStage.TwoPiecePractice
-            && TryGetCurrentTutorialGrooveBounds(parent, out var grooveBounds))
+        if (stage != TutorialStage.HintIntroduction
+            && (TryGetTutorialTargetGrooveBounds(parent, stage, out var grooveBounds)
+                || TryGetTutorialBoardBounds(parent, out grooveBounds)))
         {
             return ClampTutorialPromptPosition(
                 parent.rect,
                 new Vector2(
                     grooveBounds.center.x,
-                    grooveBounds.yMax + TutorialPracticePromptGap + promptSize.y * 0.5f),
+                    grooveBounds.yMax + TutorialTargetPromptGap + promptSize.y * 0.5f),
+                promptSize);
+        }
+
+        if (stage != TutorialStage.HintIntroduction)
+        {
+            return ClampTutorialPromptPosition(
+                parent.rect,
+                new Vector2(
+                    parent.rect.center.x,
+                    parent.rect.yMax - TutorialPromptScreenMargin - promptSize.y * 0.5f),
                 promptSize);
         }
 
         if (stage == TutorialStage.HintIntroduction
-            && TryGetTutorialHintButtonCanvasPosition(parent, out var hintButtonPosition))
+            && TryGetTutorialHintButtonCanvasRect(parent, out var hintButtonRect))
         {
+            var hintPromptPosition = hintButtonRect.center
+                                     - GetTutorialHintArrowTipOffset()
+                                     - TutorialHintArrowMotion.PulseOffset
+                                     + Vector2.left * TutorialHintPromptLeftOffset
+                                     + Vector2.down * TutorialHintPromptDownOffset;
+            hintPromptPosition.x = Mathf.Min(
+                hintPromptPosition.x,
+                hintButtonRect.xMin - TutorialHintPromptButtonGap - promptSize.x * 0.5f);
             return ClampTutorialPromptPosition(
                 parent.rect,
-                hintButtonPosition
-                - GetTutorialHintArrowTipOffset()
-                - TutorialHintArrowMotion.PulseOffset
-                + Vector2.left * TutorialHintPromptLeftOffset
-                + Vector2.down * TutorialHintPromptDownOffset,
+                hintPromptPosition,
                 promptSize);
         }
 
-        var normalizedAnchor = stage == TutorialStage.StrongPlacement
-            ? TutorialStrongPromptAnchor
-            : TutorialHintPromptAnchor;
+        var normalizedAnchor = TutorialHintPromptAnchor;
         var position = new Vector2(
             Mathf.Lerp(parent.rect.xMin, parent.rect.xMax, normalizedAnchor.x),
             Mathf.Lerp(parent.rect.yMin, parent.rect.yMax, normalizedAnchor.y));
-        if (stage == TutorialStage.StrongPlacement)
-        {
-            position += Vector2.up * promptSize.y + TutorialStrongPromptOffset;
-        }
 
         return ClampTutorialPromptPosition(
             parent.rect,
@@ -9241,21 +9250,20 @@ public class GameScene : MonoBehaviour
             promptSize);
     }
 
-    private bool TryGetTutorialHintButtonCanvasPosition(
+    private bool TryGetTutorialHintButtonCanvasRect(
         RectTransform canvasRect,
-        out Vector2 position)
+        out Rect hintCanvasRect)
     {
-        position = Vector2.zero;
+        hintCanvasRect = default;
         var hintRect = _hintButton != null
             ? _hintButton.transform as RectTransform
             : null;
         return hintRect != null
-               && TryGetRectTransformScreenCenter(hintRect, out var screenCenter)
-               && RectTransformUtility.ScreenPointToLocalPointInRectangle(
+               && TryGetRectTransformScreenRect(hintRect, out var hintScreenRect)
+               && TryScreenRectToCanvasRectUsingCanvasCamera(
                    canvasRect,
-                   screenCenter,
-                   null,
-                   out position);
+                   hintScreenRect,
+                   out hintCanvasRect);
     }
 
     private bool TryGetTutorialHintArrowTargetCanvasPosition(
@@ -9268,7 +9276,10 @@ public class GameScene : MonoBehaviour
             : null;
         if (hintRect == null
             || !TryGetRectTransformScreenRect(hintRect, out var hintScreenRect)
-            || !TryScreenRectToCanvasRect(canvasRect, hintScreenRect, out var hintCanvasRect))
+            || !TryScreenRectToCanvasRectUsingCanvasCamera(
+                canvasRect,
+                hintScreenRect,
+                out var hintCanvasRect))
         {
             return false;
         }
@@ -9296,17 +9307,29 @@ public class GameScene : MonoBehaviour
         return templateRect.InverseTransformPoint(tipWorld);
     }
 
-    private bool TryGetCurrentTutorialGrooveBounds(
+    private bool TryGetTutorialTargetGrooveBounds(
         RectTransform canvasRect,
+        TutorialStage stage,
         out Rect grooveBounds)
     {
         grooveBounds = default;
         var hasBounds = false;
         for (var i = 0; i < _drag.CurrentGroupDraggables.Count; i++)
         {
-            var grooveRect = _drag.CurrentGroupDraggables[i]?.GrooveRect;
+            var state = _drag.CurrentGroupDraggables[i];
+            if (state == null
+                || state.IsPlaced
+                || (stage == TutorialStage.StrongPlacement && state != _tutorialPiece))
+            {
+                continue;
+            }
+
+            var grooveRect = state.GrooveRect;
             if (!TryGetRectTransformScreenRect(grooveRect, out var screenRect)
-                || !TryScreenRectToCanvasRect(canvasRect, screenRect, out var canvasBounds))
+                || !TryScreenRectToCanvasRectUsingCanvasCamera(
+                    canvasRect,
+                    screenRect,
+                    out var canvasBounds))
             {
                 continue;
             }
@@ -9322,6 +9345,21 @@ public class GameScene : MonoBehaviour
         }
 
         return hasBounds;
+    }
+
+    private bool TryGetTutorialBoardBounds(
+        RectTransform canvasRect,
+        out Rect boardBounds)
+    {
+        boardBounds = default;
+        var boardRect = _board.GameBoardImage != null
+            ? _board.GameBoardImage.rectTransform
+            : null;
+        return TryGetRectTransformScreenRect(boardRect, out var screenRect)
+               && TryScreenRectToCanvasRectUsingCanvasCamera(
+                   canvasRect,
+                   screenRect,
+                   out boardBounds);
     }
 
     private static Vector2 ClampTutorialPromptPosition(
@@ -9607,17 +9645,48 @@ public class GameScene : MonoBehaviour
         Rect screenRect,
         out Rect localRect)
     {
+        return TryScreenRectToCanvasRect(
+            canvasRect,
+            screenRect,
+            null,
+            out localRect);
+    }
+
+    private static bool TryScreenRectToCanvasRectUsingCanvasCamera(
+        RectTransform canvasRect,
+        Rect screenRect,
+        out Rect localRect)
+    {
+        var canvas = canvasRect != null
+            ? canvasRect.GetComponentInParent<Canvas>()
+            : null;
+        var eventCamera = canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay
+            ? canvas.worldCamera
+            : null;
+        return TryScreenRectToCanvasRect(
+            canvasRect,
+            screenRect,
+            eventCamera,
+            out localRect);
+    }
+
+    private static bool TryScreenRectToCanvasRect(
+        RectTransform canvasRect,
+        Rect screenRect,
+        Camera eventCamera,
+        out Rect localRect)
+    {
         localRect = default;
         if (canvasRect == null
             || !RectTransformUtility.ScreenPointToLocalPointInRectangle(
                 canvasRect,
                 screenRect.min,
-                null,
+                eventCamera,
                 out var min)
             || !RectTransformUtility.ScreenPointToLocalPointInRectangle(
                 canvasRect,
                 screenRect.max,
-                null,
+                eventCamera,
                 out var max))
         {
             return false;
