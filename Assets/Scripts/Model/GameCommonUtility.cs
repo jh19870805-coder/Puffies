@@ -8,6 +8,8 @@ using UnityEngine.UI;
 
 public static class GameCommonUtility
 {
+    private const string FixedAspectClearCameraObjectName = "FixedAspectClearCamera";
+    private const float ClearCameraDepthOffset = 100f;
     private static Material sSpriteUnlitMaterial;
 
     /// <summary>
@@ -129,6 +131,43 @@ public static class GameCommonUtility
 
         camera.orthographic = true;
         camera.orthographicSize = referenceHeight / (2f * pixelsPerUnit);
+    }
+
+    /// <summary>
+    /// 用途：将相机限制在居中的固定宽高比视口，并用底层相机清理视口外黑边。返回：无。
+    /// </summary>
+    public static void ConfigureFixedAspectViewport(
+        Camera camera,
+        float referenceWidth,
+        float referenceHeight)
+    {
+        if (camera == null
+            || referenceWidth <= 0f
+            || referenceHeight <= 0f
+            || Screen.width <= 0
+            || Screen.height <= 0)
+        {
+            return;
+        }
+
+        var targetAspect = referenceWidth / referenceHeight;
+        var windowAspect = Screen.width / (float)Screen.height;
+        var viewport = new Rect(0f, 0f, 1f, 1f);
+        if (windowAspect > targetAspect)
+        {
+            viewport.width = targetAspect / windowAspect;
+            viewport.x = (1f - viewport.width) * 0.5f;
+        }
+        else if (windowAspect < targetAspect)
+        {
+            viewport.height = windowAspect / targetAspect;
+            viewport.y = (1f - viewport.height) * 0.5f;
+        }
+
+        camera.rect = viewport;
+        camera.clearFlags = CameraClearFlags.SolidColor;
+        camera.backgroundColor = Color.black;
+        EnsureFixedAspectClearCamera(camera);
     }
 
     /// <summary>
@@ -343,14 +382,57 @@ public static class GameCommonUtility
         {
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(referenceWidth, referenceHeight);
-            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-            scaler.matchWidthOrHeight = 0.5f;
+            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.Expand;
             scaler.referencePixelsPerUnit = pixelsPerUnit;
         }
 
+        ConfigureFixedAspectViewport(camera, referenceWidth, referenceHeight);
         canvas.renderMode = RenderMode.ScreenSpaceCamera;
         canvas.worldCamera = camera;
         canvas.planeDistance = Mathf.Max(0.01f, Mathf.Abs(camera.transform.position.z - worldDepth));
+    }
+
+    /// <summary>
+    /// 用途：在窗口尺寸变化时刷新简单场景的主相机、主 Canvas 和布局。返回：本次是否执行刷新。
+    /// </summary>
+    public static bool RefreshFixedAspectSceneCanvas(
+        ref Camera sceneCamera,
+        ref Canvas sceneCanvas,
+        ref int appliedScreenWidth,
+        ref int appliedScreenHeight,
+        float referenceWidth,
+        float referenceHeight,
+        float pixelsPerUnit)
+    {
+        if (Screen.width <= 0
+            || Screen.height <= 0
+            || (Screen.width == appliedScreenWidth && Screen.height == appliedScreenHeight))
+        {
+            return false;
+        }
+
+        appliedScreenWidth = Screen.width;
+        appliedScreenHeight = Screen.height;
+        if (sceneCamera == null)
+        {
+            sceneCamera = Camera.main;
+        }
+
+        if (sceneCanvas == null)
+        {
+            var canvasObject = FindSceneObject("Canvas");
+            sceneCanvas = canvasObject != null ? canvasObject.GetComponent<Canvas>() : null;
+        }
+
+        SetupOrthographicCamera(sceneCamera, referenceHeight, pixelsPerUnit);
+        ConfigureCanvasForGameplay(
+            sceneCanvas,
+            sceneCamera,
+            referenceWidth,
+            referenceHeight,
+            pixelsPerUnit);
+        RefreshCanvasLayoutsForScreenSize();
+        return true;
     }
 
     /// <summary>
@@ -381,26 +463,31 @@ public static class GameCommonUtility
         Canvas.ForceUpdateCanvases();
     }
 
-    /// <summary>
-    /// 用途：将固定尺寸 UI 等比放大到完整覆盖父 Rect，超出部分由屏幕边界裁切。返回：无。
-    /// </summary>
-    public static void FitRectTransformToParentCover(RectTransform target)
+    private static void EnsureFixedAspectClearCamera(Camera contentCamera)
     {
-        var parent = target != null ? target.parent as RectTransform : null;
-        if (target == null
-            || parent == null
-            || target.rect.width <= 0.001f
-            || target.rect.height <= 0.001f
-            || parent.rect.width <= 0.001f
-            || parent.rect.height <= 0.001f)
+        var clearCameraObject = FindSceneObject(FixedAspectClearCameraObjectName);
+        if (clearCameraObject == null)
         {
-            return;
+            clearCameraObject = new GameObject(FixedAspectClearCameraObjectName, typeof(Camera));
         }
 
-        var scale = Mathf.Max(
-            parent.rect.width / target.rect.width,
-            parent.rect.height / target.rect.height);
-        target.localScale = new Vector3(scale, scale, 1f);
+        var clearCamera = clearCameraObject.GetComponent<Camera>();
+        if (clearCamera == null)
+        {
+            clearCamera = clearCameraObject.AddComponent<Camera>();
+        }
+
+        clearCamera.enabled = true;
+        clearCamera.rect = new Rect(0f, 0f, 1f, 1f);
+        clearCamera.clearFlags = CameraClearFlags.SolidColor;
+        clearCamera.backgroundColor = Color.black;
+        clearCamera.cullingMask = 0;
+        clearCamera.depth = contentCamera.depth - ClearCameraDepthOffset;
+        clearCamera.targetDisplay = contentCamera.targetDisplay;
+        clearCamera.allowHDR = false;
+        clearCamera.allowMSAA = false;
+        clearCamera.useOcclusionCulling = false;
+        clearCamera.stereoTargetEye = StereoTargetEyeMask.None;
     }
 
     private static Vector2 RectTransformToScreenPoint(RectTransform rectTransform)
@@ -728,8 +815,6 @@ public static class GameCursorUtility
     private const string DefaultCursorPath = GameDefine.UiRoot + "/BasicUI/ImgHand_1.png";
     private const string PieceHoverCursorPath = GameDefine.UiRoot + "/BasicUI/ImgHand_2.png";
     private const string PieceDragCursorPath = GameDefine.UiRoot + "/BasicUI/ImgHand_3.png";
-    private const float CanvasScaleMatch = 0.5f;
-
     private static readonly Vector2 DefaultHotspot = new Vector2(4f, 2f);
     private static readonly Vector2 PieceHoverHotspot = new Vector2(4f, 24f);
     private static readonly Vector2 PieceDragHotspot = new Vector2(4f, 24f);
@@ -889,9 +974,7 @@ public static class GameCursorUtility
     {
         var widthScale = Mathf.Max(1f, Screen.width) / GameDefine.DesignWidth;
         var heightScale = Mathf.Max(1f, Screen.height) / GameDefine.DesignHeight;
-        var logWidth = Mathf.Log(widthScale, 2f);
-        var logHeight = Mathf.Log(heightScale, 2f);
-        return Mathf.Pow(2f, Mathf.Lerp(logWidth, logHeight, CanvasScaleMatch));
+        return Mathf.Min(widthScale, heightScale);
     }
 
     private static Texture2D CreateScaledCursorTexture(Texture2D source, float scale)

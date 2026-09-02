@@ -132,12 +132,6 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
         mCanvas.overrideSorting = true;
         mCanvas.sortingOrder = RewardContentSortingOrder;
 
-        var scaler = GetComponent<CanvasScaler>();
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(GameDefine.DesignWidth, GameDefine.DesignHeight);
-        scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-        scaler.matchWidthOrHeight = 0.5f;
-
         CreateInputBlocker();
         Canvas.ForceUpdateCanvases();
 

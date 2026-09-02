@@ -420,7 +420,7 @@
 ### 设计
 
 - 直接修改 `MainScene.unity/Canvas`：`m_RenderMode=1`、`m_Camera=Main Camera`、`m_PlaneDistance=10`。
-- 在 `MainScene.Start()` 开始阶段调用 `ConfigureMainCanvas()`，复用 `GameCommonUtility.ConfigureCanvasForGameplay` 绑定 `Camera.main`，并保持 `2560 x 1440`、`Match=0.5`、`PPU=100`。
+- 在 `MainScene.Start()` 开始阶段调用 `ConfigureMainCanvas()`，复用 `GameCommonUtility.ConfigureCanvasForGameplay` 绑定 `Camera.main`，并保持 `2560 x 1440`、`PPU=100`；本节原 `Match=0.5` 规则已由 2026-09-02 的固定 `16:9 + Expand` 适配替代。
 - `PackItem/PackCover`、`PackHighlight` 和 `PackSize` 都是该主 Canvas 下的 UGUI Graphic，因此修改后统一经过 Main Camera；后续同摄像机改造同时将选中弹窗和 3D 开包最终画面接入 Main Camera，拍照闪屏继续保持独立职责。
 
 ### 任务
@@ -1299,19 +1299,23 @@
 
 ### 需求
 
-1. WHEN Windows 窗口尺寸发生变化 THEN 所有活动 Canvas 和布局组件 SHALL 在下一帧按新的客户区尺寸刷新，不得继续保留拉伸前的页面布局；MainScene 与 GameScene 的固定 `2560x1440` 背景 SHALL 等比覆盖新的客户区并允许边缘裁切，不得分别拉伸 X/Y。
+1. WHEN Windows 窗口尺寸发生变化 THEN 所有活动 Canvas 和布局组件 SHALL 在下一帧按新的客户区尺寸刷新，不得继续保留拉伸前的页面布局；所有页面 SHALL 始终以 `2560x1440` 的 `16:9` 设计区域整体等比缩放，不得分别拉伸 X/Y，也不得裁切任何 UI。
 2. WHEN MainScene 卡包列表已经完成创建 AND 窗口尺寸发生变化 THEN 系统 SHALL 重新计算分页尺寸、网格边距和系列卡包布局，并保持用户当前所在的分页位置。
 3. WHEN GameScene 正在正常拼图 AND 窗口尺寸发生变化 THEN 系统 SHALL 在没有入场、切组或拖拽冲突的安全时机重新适配当前棋盘、托盘和托盘 Piece；如果当时正在播放互斥动画，则延后到动画结束后执行。
-4. WHEN 窗口比例导致页面暂时未覆盖完整客户区 THEN MainScene 相机 SHALL 每帧清理完整颜色缓冲，鼠标经过空白区域不得留下历史帧残影。
-5. 屏幕适配 SHALL 保持 `2560x1440` 设计分辨率、CanvasScaler `Match Width Or Height=0.5`、自由拉伸窗口和现有自定义鼠标样式不变。
+4. WHEN 窗口宽高比大于 `16:9` THEN 有效画面 SHALL 水平居中并在左右显示黑边；WHEN 窗口宽高比小于 `16:9` THEN 有效画面 SHALL 垂直居中并在上下显示黑边。
+5. 黑边 SHALL 每帧由独立的全屏清屏相机清为纯黑，鼠标经过黑边区域不得留下历史帧残影。
+6. MainScene、GameScene、LoadingScene、RankScene、AchieveScene 以及运行时创建的拍照、新手引导和转场根 Canvas SHALL 使用相同的固定宽高比视口与 `CanvasScaler Expand` 规则，保证 `2560x1440` 设计区域完整显示。
+7. 屏幕适配 SHALL 保持自由拉伸窗口和现有自定义鼠标样式不变。
 
 ### 实现与验证任务
 
 - [x] 1. 增加统一 Canvas/Layout 刷新入口，并接入 MainScene 和 GameScene 的窗口尺寸变化检测。
 - [x] 2. MainScene 刷新分页、系列卡包布局并保留当前横向分页归一化位置。
 - [x] 3. GameScene 在安全时机重新执行当前组相机、棋盘和托盘适配。
-- [x] 4. MainScene 相机改为完整颜色缓冲清理，避免黑边鼠标残影。
-- [ ] 5. 编译 Runtime/Editor，并在 Windows Player 验证首页、设置面板、选中卡包页和游戏页的宽屏/窄屏连续拉伸。
+- [x] 4. 增加统一的 `16:9` 相机视口和全屏黑色清屏相机，移除背景 Cover 裁切。
+- [x] 5. 将 LoadingScene、RankScene、AchieveScene 和运行时根 Canvas 接入相同适配规则。
+- [x] 6. 编译 Runtime/Editor，结果均为 `0` 警告、`0` 错误。
+- [ ] 7. 在 Windows Player 验证所有页面的宽屏/窄屏连续拉伸、完整 UI 和无鼠标残影黑边。
 
 ## 2026-09-02 - 拍照预览提示动画接入
 

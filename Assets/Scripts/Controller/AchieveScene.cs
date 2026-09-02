@@ -47,6 +47,10 @@ public class AchieveScene : MonoBehaviour
     private RectTransform mContentRoot;
     private TMP_Text mProgressLabel;
     private GameObject mAchieveItemPrefab;
+    private Camera mSceneCamera;
+    private Canvas mSceneCanvas;
+    private int mAppliedScreenWidth;
+    private int mAppliedScreenHeight;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Bootstrap()
@@ -65,15 +69,28 @@ public class AchieveScene : MonoBehaviour
             return;
         }
 
-        var targetCamera = Camera.main;
-        if (targetCamera != null)
-        {
-            GameCommonUtility.SetupOrthographicCamera(targetCamera, ReferenceHeight, PixelsPerUnit);
-        }
+        RefreshForWindowSizeChange();
 
         ConfigureReturnButton();
         ConfigureMockAchievements();
         ConfigureAchievementScrollView();
+    }
+
+    private void Update()
+    {
+        RefreshForWindowSizeChange();
+    }
+
+    private void RefreshForWindowSizeChange()
+    {
+        GameCommonUtility.RefreshFixedAspectSceneCanvas(
+            ref mSceneCamera,
+            ref mSceneCanvas,
+            ref mAppliedScreenWidth,
+            ref mAppliedScreenHeight,
+            GameDefine.DesignWidth,
+            ReferenceHeight,
+            PixelsPerUnit);
     }
 
     private void ConfigureReturnButton()

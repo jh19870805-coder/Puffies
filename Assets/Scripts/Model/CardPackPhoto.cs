@@ -57,8 +57,6 @@ public sealed class CardPackPhoto : MonoBehaviour
             mPanelCanvas = gameObject.AddComponent<Canvas>();
         }
 
-        mPanelCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        mPanelCanvas.worldCamera = null;
         mPanelCanvas.overrideSorting = true;
         mPanelCanvas.sortingOrder = PanelSortingOrder;
 
@@ -68,12 +66,7 @@ public sealed class CardPackPhoto : MonoBehaviour
             scaler = gameObject.AddComponent<CanvasScaler>();
         }
 
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(
-            GameDefine.DesignWidth,
-            GameDefine.DesignHeight);
-        scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-        scaler.matchWidthOrHeight = 0.5f;
+        ConfigureFixedAspectCanvas(mPanelCanvas, scaler);
 
         if (GetComponent<GraphicRaycaster>() == null)
         {
@@ -307,17 +300,10 @@ public sealed class CardPackPhoto : MonoBehaviour
             typeof(CanvasGroup));
         canvasObject.layer = gameObject.layer;
         mFlashCanvas = canvasObject.GetComponent<Canvas>();
-        mFlashCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        mFlashCanvas.worldCamera = null;
         mFlashCanvas.overrideSorting = true;
         mFlashCanvas.sortingOrder = FlashSortingOrder;
         var scaler = canvasObject.GetComponent<CanvasScaler>();
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(
-            GameDefine.DesignWidth,
-            GameDefine.DesignHeight);
-        scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-        scaler.matchWidthOrHeight = 0.5f;
+        ConfigureFixedAspectCanvas(mFlashCanvas, scaler);
         mFlashCanvasGroup = canvasObject.GetComponent<CanvasGroup>();
         mFlashCanvasGroup.alpha = 0f;
 
@@ -337,6 +323,29 @@ public sealed class CardPackPhoto : MonoBehaviour
         flashImage.color = Color.white;
         flashImage.raycastTarget = true;
         canvasObject.SetActive(false);
+    }
+
+    private static void ConfigureFixedAspectCanvas(Canvas canvas, CanvasScaler scaler)
+    {
+        var camera = Camera.main;
+        if (camera != null)
+        {
+            GameCommonUtility.ConfigureCanvasForGameplay(
+                canvas,
+                camera,
+                GameDefine.DesignWidth,
+                GameDefine.DesignHeight,
+                GameDefine.PixelsPerUnit);
+            return;
+        }
+
+        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        canvas.worldCamera = null;
+        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        scaler.referenceResolution = new Vector2(
+            GameDefine.DesignWidth,
+            GameDefine.DesignHeight);
+        scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.Expand;
     }
 
     private IEnumerator PlayPhotoFlash()

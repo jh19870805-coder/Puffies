@@ -742,9 +742,6 @@ public class MainScene : MonoBehaviour
             return;
         }
 
-        camera.rect = new Rect(0f, 0f, 1f, 1f);
-        camera.clearFlags = CameraClearFlags.SolidColor;
-
         GameCommonUtility.ConfigureCanvasForGameplay(
             canvas,
             camera,
@@ -752,9 +749,6 @@ public class MainScene : MonoBehaviour
             ReferenceHeight,
             PixelsPerUnit,
             MainCanvasWorldDepth);
-        Canvas.ForceUpdateCanvases();
-        var background = canvas.transform.Find(GameDefine.BackgroundObjectName) as RectTransform;
-        GameCommonUtility.FitRectTransformToParentCover(background);
         Canvas.ForceUpdateCanvases();
     }
 
@@ -1531,13 +1525,6 @@ public class MainScene : MonoBehaviour
         mSelectedPackageOverlayCanvas.sortingLayerID = sourceCanvas.sortingLayerID;
         mSelectedPackageOverlayCanvas.overrideSorting = true;
         mSelectedPackageOverlayCanvas.sortingOrder = SelectedPackageSortingOrder;
-
-        var scaler = canvasObject.GetComponent<CanvasScaler>();
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(GameDefine.DesignWidth, ReferenceHeight);
-        scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-        scaler.matchWidthOrHeight = 0.5f;
-        scaler.referencePixelsPerUnit = PixelsPerUnit;
 
         var imageObject = new GameObject(
             SelectedPackageImageObjectName,

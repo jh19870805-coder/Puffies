@@ -141,8 +141,7 @@ public static class CanvasDesignResolutionEditor
         var alreadyMatched = scaler.uiScaleMode == CanvasScaler.ScaleMode.ScaleWithScreenSize
             && scaler.referenceResolution == targetResolution
             && Mathf.Approximately(scaler.referencePixelsPerUnit, GameDefine.PixelsPerUnit)
-            && scaler.screenMatchMode == CanvasScaler.ScreenMatchMode.MatchWidthOrHeight
-            && Mathf.Approximately(scaler.matchWidthOrHeight, 0.5f);
+            && scaler.screenMatchMode == CanvasScaler.ScreenMatchMode.Expand;
         if (alreadyMatched)
         {
             return false;
@@ -156,8 +155,7 @@ public static class CanvasDesignResolutionEditor
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
         scaler.referenceResolution = targetResolution;
         scaler.referencePixelsPerUnit = GameDefine.PixelsPerUnit;
-        scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-        scaler.matchWidthOrHeight = 0.5f;
+        scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.Expand;
         EditorUtility.SetDirty(scaler);
         return true;
     }

@@ -36,7 +36,7 @@ Unity **2022.3** / Built-in Render Pipeline 项目，使用 Linear 色彩空间�
 
 MainScene 卡包选中页与 GameScene 结算页共用 `Assets/Prefabs/PackPhotoItem.prefab` 和 `CardPackPhoto`。两个场景都必须保持一个名为 `PackPhotoItem` 的根级 Prefab 实例；拍照统一生成 `1024x1024` PNG，保存到桌面并命名为 `游戏名-YYYY-MM-DD-BagId.png`，随后在面板 `Photo` 中预览，点击 `BtnOK` 关闭。通用组件负责闪光、离屏渲染、保存、预览、根 Animator 时序和临时纹理释放，场景控制器只传入当前 PackId 并控制各自按钮状态，不得复制第二套拍照实现。闪光与图片生成期间根 Animator 必须停止；预览显示时从第 0 帧单次播放 `PackPhoto`，由美术动画控制 `TaskContent` 显示后消失以及 `BtnOK` 出现，代码只负责在动画完整结束前禁用按钮交互。
 
-所有场景常规鼠标图标为 `UI/BasicUI/ImgHand_1.png`。GameScene 悬停当前可拖 Piece 时切换 `ImgHand_2.png`，按住左键拖拽 Piece 时切换 `ImgHand_3.png`；松开、结算或离开 GameScene 后恢复常规图标。三张资源随 `BasicUI` 同步到 Player 的 `StreamingAssets/UI/BasicUI`。运行时使用 `CursorMode.ForceSoftware`，以 `2560x1440` 设计分辨率和 CanvasScaler `Match=0.5` 计算统一缩放系数，分别等比重建三张光标纹理并同步缩放热点；窗口尺寸变化时自动刷新，不能把三种不同比例的源图压入固定画布。
+所有场景常规鼠标图标为 `UI/BasicUI/ImgHand_1.png`。GameScene 悬停当前可拖 Piece 时切换 `ImgHand_2.png`，按住左键拖拽 Piece 时切换 `ImgHand_3.png`；松开、结算或离开 GameScene 后恢复常规图标。三张资源随 `BasicUI` 同步到 Player 的 `StreamingAssets/UI/BasicUI`。运行时使用 `CursorMode.ForceSoftware`，以 `2560x1440` 设计分辨率的宽高缩放较小值匹配固定 `16:9` 有效视口，分别等比重建三张光标纹理并同步缩放热点；窗口尺寸变化时自动刷新，不能把三种不同比例的源图压入固定画布。
 
 ### 数据与奖励需求
 
@@ -187,7 +187,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 | `PackItem/PackSize` | 卡包尺寸图标；运行时根据 `CardPackSize` 配置选择 `PackSize_1.png` 到 `PackSize_7.png` |
 
 - Windows Player 默认使用原生分辨率的 `FullScreenWindow` 无边框全屏启动；首次没有本地设置时 `IsWindowed=false`，因此 `PanelSet/ToggleFrame` 默认关闭。打开开关后立即切换为 `FullScreenMode.Windowed`，关闭后立即恢复 `FullScreenMode.FullScreenWindow`，并持久化用户选择。窗口模式允许自由拉伸；已有本地设置继续按上次选择启动。
-- Windows 窗口客户区尺寸变化后，MainScene 与 GameScene 必须强制刷新根 Canvas、RectTransform 和 Layout。MainScene 重新计算卡包分页并保持当前页；GameScene 在没有拖拽或互斥动画的安全时机重新适配当前组相机、棋盘、托盘及托盘 Piece。两个场景的固定 `2560x1440` 主背景按父 Canvas 等比 Cover 并允许边缘裁切，不得分别拉伸 X/Y；MainScene 相机必须使用完整 viewport 和 `SolidColor` 清屏，避免未覆盖区域出现软件鼠标历史帧残影。
+- Windows 窗口客户区尺寸变化后，所有页面必须按 `2560x1440`、`16:9` 设计区域整体等比缩放并立即刷新 Canvas、RectTransform 和 Layout；不得裁切 UI，也不得分别拉伸 X/Y。超宽窗口在左右显示黑边，偏窄或偏高窗口在上下显示黑边。MainScene 重新计算卡包分页并保持当前页；GameScene 在没有拖拽或互斥动画的安全时机重新适配当前组相机、棋盘、托盘及托盘 Piece。MainScene、GameScene、LoadingScene、RankScene、AchieveScene 和运行时根 Canvas 统一使用居中的固定宽高比相机视口与 `CanvasScaler Expand`；独立的全屏底层相机将视口外区域清为纯黑，避免软件鼠标历史帧残影。
 
 ---
 

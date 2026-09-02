@@ -13,6 +13,10 @@ public class LoadingScene : MonoBehaviour
     private Text mLoadingText;
     private TMP_Text mLoadingTmpText;
     private Coroutine mLoadingCoroutine;
+    private Camera mSceneCamera;
+    private Canvas mSceneCanvas;
+    private int mAppliedScreenWidth;
+    private int mAppliedScreenHeight;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Bootstrap()
@@ -34,11 +38,7 @@ public class LoadingScene : MonoBehaviour
         GameManager.Initialize();
         InitializeLocalStores();
 
-        var targetCamera = Camera.main;
-        if (targetCamera != null)
-        {
-            GameCommonUtility.SetupOrthographicCamera(targetCamera, ReferenceHeight, PixelsPerUnit);
-        }
+        RefreshForWindowSizeChange();
 
         if (!TryResolveLoadingText())
         {
@@ -50,6 +50,23 @@ public class LoadingScene : MonoBehaviour
 
         StartCoroutine(MainScene.PreloadPackageListVisuals());
         mLoadingCoroutine = StartCoroutine(RunLoadingProgress());
+    }
+
+    private void Update()
+    {
+        RefreshForWindowSizeChange();
+    }
+
+    private void RefreshForWindowSizeChange()
+    {
+        GameCommonUtility.RefreshFixedAspectSceneCanvas(
+            ref mSceneCamera,
+            ref mSceneCanvas,
+            ref mAppliedScreenWidth,
+            ref mAppliedScreenHeight,
+            GameDefine.DesignWidth,
+            ReferenceHeight,
+            PixelsPerUnit);
     }
 
     private void ApplyLoadingTextFont()

@@ -12,14 +12,15 @@
 
 ## 2026-09-02 Win32 窗口拉伸布局与鼠标残影
 
-- 状态：代码修复和编译验证完成，等待 Windows Player 实机连续拉伸验收。
-- 布局刷新：MainScene 与 GameScene 现在检测 `Screen.width/height` 变化，先强制刷新所有根 Canvas、RectTransform 和 Layout；首页卡包列表随后重新计算分页尺寸与网格边距，并恢复拉伸前所在的横向分页位置，系列卡包选择页同步重算当前轮播布局。
-- 游戏适配：GameScene 在窗口尺寸变化后重新执行当前组的相机、棋盘和托盘适配，并重新计算托盘 Piece 缩放与排列；如果当时处于入场、切组、正确放置反馈、托盘缓动、托盘滑动或 Piece 拖拽中，则保留待刷新状态并在互斥状态结束后执行，避免中断当前操作。
-- 背景：MainScene 与 GameScene 固定 `2560x1440` 背景按父 Canvas 新尺寸做统一等比 Cover，超出边缘允许裁切，不分别拉伸 X/Y；MainScene 开包舞台背景也会随窗口变化重新适配相机。
-- 残影：MainScene 的 `Main Camera` 从 `Depth Only` 改为 `Solid Color`，并固定使用完整 viewport，每帧清理未被 UI 覆盖的颜色缓冲，避免强制软件鼠标在新增黑边区域留下历史帧残影。
-- 保留：设计分辨率 `2560x1440`、CanvasScaler `Match=0.5`、窗口自由拉伸、自定义鼠标样式以及默认全屏/窗口化开关规则均未改变。
-- 修改文件：`Assets/Scripts/Model/GameCommonUtility.cs`、`Assets/Scripts/Controller/MainScene.cs`、`Assets/Scripts/Controller/GameScene.cs`、`Assets/Scenes/MainScene.unity`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
-- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 编译均通过，结果为 `0` 警告、`0` 错误；本次相关文件 `git diff --check` 通过，仅有仓库行尾转换提示。仍需在 Windows Player 中连续拖宽、拖窄窗口，验证首页、设置面板、选中卡包页与游戏页在松手后立即完成布局刷新，背景没有黑边，鼠标经过窗口边缘没有残影。
+- 状态：已纠正前一版错误的 Cover 适配；代码和编译验证完成，等待 Windows Player 连续拉伸视觉验收。
+- 固定画面：所有常规页面使用 `2560x1440`、`16:9` 的居中有效视口整体等比缩放。超宽窗口显示左右黑边，偏窄或偏高窗口显示上下黑边；背景和 UI 都不得裁切或分别拉伸 X/Y。
+- Canvas：统一入口将根 Canvas 绑定当前 `Main Camera`，`CanvasScaler` 使用 `Scale With Screen Size + Expand`，缩放比例只取能完整容纳 `2560x1440` 设计区域的较小值。MainScene、GameScene、LoadingScene、RankScene、AchieveScene，以及运行时拍照面板、闪光层、新手引导和奖励转场均已接入。
+- 自动刷新：五个场景都监听 `Screen.width/height` 变化并重算视口、Canvas 与 Layout。MainScene 保留卡包分页位置和系列列表刷新；GameScene 继续在没有拖拽或互斥动画的安全时机重算棋盘、托盘和 Piece，不中断当前操作。
+- 黑边清理：统一入口创建不渲染任何 Layer 的全屏底层相机，每帧将视口外区域清为纯黑；内容相机只在居中 `16:9` 视口内渲染，避免软件鼠标在黑边留下历史帧残影。
+- 鼠标：软件鼠标缩放改为取窗口宽高相对 `2560x1440` 的较小缩放比，与 `16:9` 有效视口保持一致；原图片、热点和三种状态切换不变。
+- 删除：已删除 `FitRectTransformToParentCover` 及 MainScene/GameScene 两处背景 Cover 调用；不再使用完整 viewport 强制铺满窗口。
+- 修改文件：`Assets/Scripts/Model/GameCommonUtility.cs`、`Assets/Scripts/Model/CardPackPhoto.cs`、`Assets/Scripts/Model/CardPackRewardFlyTransition.cs`、`Assets/Scripts/Controller/MainScene.cs`、`Assets/Scripts/Controller/GameScene.cs`、`Assets/Scripts/Controller/LoadingScene.cs`、`Assets/Scripts/Controller/RankScene.cs`、`Assets/Scripts/Controller/AchieveScene.cs`、`Assets/Scripts/Editor/CanvasDesignResolutionEditor.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`、`specs/spec-driven-development.md`。
+- 验证：`Assembly-CSharp.csproj` 与 `Assembly-CSharp-Editor.csproj` 编译均通过，结果为 `0` 警告、`0` 错误。仍需在 Windows Player 验收 `16:9` 无黑边、超宽左右黑边、偏高上下黑边、拉伸后页面立即刷新、所有 UI 完整显示，以及鼠标经过黑边无残影。
 
 ## 2026-09-02 Windows 默认全屏与窗口化设置
 
@@ -31,7 +32,7 @@
 ## 2026-09-01 跨场景共享拍照面板
 
 - 状态：原拍照面板已由 Unity 编辑器转换并统一重命名为共享 `PackPhotoItem` Prefab，MainScene 与 GameScene 各引用同一个 Prefab 实例；运行时代码接入和编译验证完成，等待 Play Mode 功能验收。
-- Prefab：共享资源命名为 `Assets/Prefabs/PackPhotoItem.prefab`，Prefab 根节点与两个场景实例也统一命名为 `PackPhotoItem`；完整保留 MainScene 原有 `Photo`、`GameIcon`、`BtnOK` 和美术布局。根节点使用独立 Overlay Canvas、CanvasScaler、GraphicRaycaster 与 CanvasGroup，确保预览层级高于首页选中卡包和结算 UI。
+- Prefab：共享资源命名为 `Assets/Prefabs/PackPhotoItem.prefab`，Prefab 根节点与两个场景实例也统一命名为 `PackPhotoItem`；完整保留 MainScene 原有 `Photo`、`GameIcon`、`BtnOK` 和美术布局。根节点使用独立 Canvas、CanvasScaler、GraphicRaycaster 与 CanvasGroup；运行时绑定当前 `Main Camera` 并使用固定 `16:9` 视口，排序层级仍高于首页选中卡包和结算 UI。
 - 通用逻辑：脚本与组件类型命名为 `CardPackPhoto`，统一负责白色闪光、生成 `1024x1024` PNG、保存桌面、替换预览图、`BtnOK` 关闭及运行时纹理释放。文件名继续使用 `游戏名-YYYY-MM-DD-BagId.png`。
 - MainScene：原内嵌拍照面板已替换为根级 `PackPhotoItem` Prefab 实例，原拍照生成代码从 `MainScene` 移入通用组件；卡包选中页相机按钮继续使用当前选中 PackId，预览关闭后恢复选中卡包和按钮交互。
 - GameScene：结算页 `BtnCamera` 已绑定同一拍照功能，使用当前 `GameManager.GetBagId()`；拍照及预览期间完成按钮和相机按钮不可交互，关闭预览或拍照失败后恢复。

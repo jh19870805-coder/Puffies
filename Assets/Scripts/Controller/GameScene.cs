@@ -1425,16 +1425,6 @@ public class GameScene : MonoBehaviour
             canvasRect.pivot = new Vector2(0.5f, 0.5f);
         }
 
-        var scaler = canvas.GetComponent<CanvasScaler>();
-        if (scaler != null)
-        {
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(ReferenceHeight * (16f / 9f), ReferenceHeight);
-            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-            scaler.matchWidthOrHeight = 0.5f;
-            scaler.referencePixelsPerUnit = PixelsPerUnit;
-        }
-
         if (camera != null)
         {
             GameCommonUtility.ConfigureCanvasForGameplay(
@@ -1445,9 +1435,6 @@ public class GameScene : MonoBehaviour
                 PixelsPerUnit);
         }
 
-        Canvas.ForceUpdateCanvases();
-        var background = canvas.transform.Find(GameDefine.BackgroundObjectName) as RectTransform;
-        GameCommonUtility.FitRectTransformToParentCover(background);
         Canvas.ForceUpdateCanvases();
     }
 
@@ -8918,16 +8905,14 @@ public class GameScene : MonoBehaviour
             typeof(Canvas),
             typeof(CanvasScaler));
         var tutorialCanvas = _tutorialCanvasRoot.GetComponent<Canvas>();
-        tutorialCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        GameCommonUtility.ConfigureCanvasForGameplay(
+            tutorialCanvas,
+            camera,
+            ReferenceHeight * (16f / 9f),
+            ReferenceHeight,
+            PixelsPerUnit);
         tutorialCanvas.overrideSorting = true;
         tutorialCanvas.sortingOrder = TutorialCanvasSortingOrder;
-
-        var scaler = _tutorialCanvasRoot.GetComponent<CanvasScaler>();
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(ReferenceHeight * (16f / 9f), ReferenceHeight);
-        scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-        scaler.matchWidthOrHeight = 0.5f;
-        scaler.referencePixelsPerUnit = PixelsPerUnit;
         Canvas.ForceUpdateCanvases();
 
         var canvasRect = _tutorialCanvasRoot.GetComponent<RectTransform>();

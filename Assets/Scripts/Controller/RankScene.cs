@@ -27,6 +27,10 @@ public class RankScene : MonoBehaviour
     private static bool sHookedSceneLoaded;
     private RectTransform mContentRoot;
     private GameObject mRankItemPrefab;
+    private Camera mSceneCamera;
+    private Canvas mSceneCanvas;
+    private int mAppliedScreenWidth;
+    private int mAppliedScreenHeight;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Bootstrap()
@@ -45,14 +49,27 @@ public class RankScene : MonoBehaviour
             return;
         }
 
-        var targetCamera = Camera.main;
-        if (targetCamera != null)
-        {
-            GameCommonUtility.SetupOrthographicCamera(targetCamera, ReferenceHeight, PixelsPerUnit);
-        }
+        RefreshForWindowSizeChange();
 
         ConfigureReturnButton();
         ConfigureMockRankItems();
+    }
+
+    private void Update()
+    {
+        RefreshForWindowSizeChange();
+    }
+
+    private void RefreshForWindowSizeChange()
+    {
+        GameCommonUtility.RefreshFixedAspectSceneCanvas(
+            ref mSceneCamera,
+            ref mSceneCanvas,
+            ref mAppliedScreenWidth,
+            ref mAppliedScreenHeight,
+            GameDefine.DesignWidth,
+            ReferenceHeight,
+            PixelsPerUnit);
     }
 
     private void ConfigureReturnButton()
