@@ -1540,3 +1540,21 @@
 - 通过当前 Unity Editor 对 `CardBag010` 单关执行现有描边烘焙器；更新 `Group01` 默认、关卡和贴纸描边，自动删除旧 `Group02` 三类输出及其 `.meta`，未重烘焙其他卡包。
 - 静态检查结果为 `PieceCount=25`、`UniqueCount=25`、`Groups=01`；输出目录仅保留三张 `Group01` 图片及原有 `.meta`。默认描边目视为完整棋盘外边框，符合全部方形 Piece 合并为单组后的边界。
 - [ ] 在 Play Mode 重玩 `CardBag010`，确认一次发出 25 片、托盘横向滑动正常、拼完后直接结算且三种描边显示正确。
+
+## 2026-09-03 - 正确 Piece 顶回错误 Piece 后托盘空槽修复
+
+### 需求
+
+1. WHEN 错误 Piece 位于另一个 Piece 的正确凹槽 AND 正确 Piece 吸附后将它顶回托盘 THEN 托盘 SHALL 按当前组顺序连续重排，不得在前方或中间保留正确 Piece 的空槽。
+2. WHEN 回收完成 THEN 托盘横向滑动 SHALL 能到达真实首片和末片边界，不得因不可见空槽阻塞。
+3. 本次修复 SHALL 保持既有正确吸附标准、错误 Piece 回弹、进入托盘后的红色反馈、`0.5s` 补位和托盘滚动参数不变。
+
+### 根因与实现
+
+- 原调用顺序在正确吸附分支中先执行 `ReturnLoosePiecesToTray`，再将正确 Piece 的 `IsOnTray` 改为 `false`；回收重排因此把即将进入棋盘的正确 Piece 计入托盘并为其分配槽位。
+- 吸附目标确认后，先将本次全部正确吸附成员标记为离开托盘，再收集并回收占位错误 Piece。后续正式 `IsPlaced`、存档和吸附动画顺序保持不变。
+
+### 验证
+
+- `dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 通过并连带编译 Runtime，结果 `0` 警告、`0` 错误。
+- [ ] 在 Play Mode 复现“错误 Piece 占槽 -> 正确 Piece 顶回”路径，确认回弹、红色反馈、连续排布和左右滚动边界。

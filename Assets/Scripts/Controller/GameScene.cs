@@ -4315,6 +4315,15 @@ public class GameScene : MonoBehaviour
         if (TryGetClusterBoardSnapTargets(dragMembers, out var groovePositions))
         {
             var draggedSet = new HashSet<DraggablePieceState>(dragMembers);
+            // Accepted pieces must stop reserving tray slots before displaced pieces reflow.
+            for (var i = 0; i < dragMembers.Count; i++)
+            {
+                if (dragMembers[i] != null)
+                {
+                    dragMembers[i].IsOnTray = false;
+                }
+            }
+
             var displacedPieces = CollectLoosePiecesOverlappingGrooves(
                 dragMembers,
                 draggedSet);

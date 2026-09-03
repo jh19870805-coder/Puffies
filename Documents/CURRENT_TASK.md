@@ -1,5 +1,14 @@
 # 当前任务
 
+## 2026-09-03 正确 Piece 顶回错误 Piece 后托盘首槽空缺
+
+- 状态：根因修复和编译验证完成，等待 Play Mode 按截图路径复验。
+- 根因：正确 Piece 达到吸附标准后，代码先调用 `ReturnLoosePiecesToTray` 收回占位错误 Piece并刷新托盘，随后才把正确 Piece 标记为离开托盘。布局计算因此仍给即将吸附的正确 Piece 保留了一个槽位；它下一步进入棋盘后，托盘前方留下不可滚动消除的空槽。
+- 修改：吸附目标确认后，在收回错误 Piece 之前先将本次全部正确吸附成员的 `IsOnTray` 设为 `false`。错误 Piece 的收集、拆组、回弹、进入托盘后闪红、`0.5s` 补位、随机顺序和滚动边界均保持原逻辑。
+- 修改文件：`Assets/Scripts/Controller/GameScene.cs`、统一 spec 与项目上下文。
+- 验证：`dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 成功并连带编译 Runtime，结果 `0` 警告、`0` 错误；静态调用顺序已确认托盘重排不会再包含本次正确吸附 Piece。
+- 下一步：在 Play Mode 将错误 Piece 放到另一 Piece 的正确凹槽，再用正确 Piece 将其顶回托盘；确认错误 Piece 回弹闪红、托盘全排连续补齐、最左侧没有空槽且可正常滑到左右边界。
+
 ## 2026-09-03 CardBag010 合并为单组
 
 - 状态：已完成 Prefab 分组调整和单关描边重烘焙，等待 Play Mode 实际发牌验收。
