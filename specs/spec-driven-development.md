@@ -1514,7 +1514,7 @@
 - [x] 3. 在 GameScene 的真实进入、成功保存、主动返回节点接入 Start/Complete/Fail，并记录重玩与退出原因。
 - [x] 4. 排除 Editor 和开发测试事件，检查隐私字段及事件幂等性。
 - [x] 5. 完成 Runtime/Editor 编译与静态事件口径检查。
-- [ ] 6. 用户在 Unity GameAnalytics Settings 填写本地 Key 后，通过后台 Realtime 验证 Demo Steam 客户端测试事件到账。
+- [x] 6. 用户在 Unity GameAnalytics Settings 填写本地 Key 后，通过后台 Realtime 验证 Demo Steam 客户端测试事件到账。
 
 ### 实现与验证
 
@@ -1523,4 +1523,5 @@
 - Demo 为默认构建环境并使用 `5034540`；定义 `PUFFIES_STEAM_RELEASE` 后改用正式版 `4906510`。Steamworks.NET 自动生成的 `steam_appid.txt=480` 已改为 `5034540`，用于本地辅助，不替代 Steam 发布配置。
 - GameScene 只在初始化玩法完成后开始事件、成功保存且算出最终分数后完成事件、未通关返回按钮确认离开时失败事件。Manager 对同一活动局的重复 Start/Complete/Fail 做幂等保护。
 - Editor 与 Development Build 在编译期关闭提交路径；短暂 Editor Play Mode 已成功创建空 `Assets/Resources/GameAnalytics/Settings.asset`，未出现 Steam 初始化和远端事件发送。
-- Runtime 与 Editor `dotnet build --no-restore` 均通过，结果为 `0` 警告、`0` 错误。尚未填写用户 Key，也未进行非 Development Steam Demo Player 的 Realtime 到数验证。
+- Runtime 与 Editor `dotnet build --no-restore` 均通过，结果为 `0` 警告、`0` 错误。
+- 2026-09-03 使用 Windows 非 Development Player 和 Steam Demo App ID `5034540` 完成真实环境验收：Player 日志确认 Steam 与 GameAnalytics 初始化成功，用户在 GameAnalytics Live events 确认 Session、Start、Complete、Fail 与 Replay 数据全部到账。GameAnalytics 自动错误采集同时展示了 Unity Warning，属于独立的日志上报，不代表业务事件发送失败。

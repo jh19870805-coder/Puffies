@@ -2,15 +2,15 @@
 
 ## 2026-09-03 Steam 与 GameAnalytics 运营统计接入
 
-- 状态：两个 SDK、统一 Manager 和 GameScene 事件调用已接入，Runtime/Editor 编译与 Editor 隔离验证通过；等待用户填写 GameAnalytics Windows Key 后进行 Steam Demo Player 到数验收。
+- 状态：已完成。两个 SDK、统一 Manager 和 GameScene 事件调用已接入，Runtime/Editor 编译、Editor 隔离及 Windows 非 Development Demo Player 实际到数均已验收。
 - SDK：通过 OpenUPM 固定 `GameAnalytics 8.2.0` 和 `Steamworks.NET 2025.164.1`，`packages-lock.json` 已锁定版本。Steamworks.NET 自动要求的 `STEAMWORKS_NET` Standalone 编译符号已保留。
 - Steam 环境：当前默认 Demo App ID 为 `5034540`，项目根 `steam_appid.txt` 已从 SDK 默认测试值 `480` 改为 Demo ID；定义 `PUFFIES_STEAM_RELEASE` 时切换到正式 App ID `4906510`。App ID 只在 `AnalyticsManager` 集中配置。
 - 身份与隐私：Windows 非 Development Player 启动时初始化 Steam，读取 SteamID 后生成 SHA-256 匿名 ID，再初始化 GameAnalytics；不上传 Steam 昵称、邮箱或本地路径。Steam、网络或 Key 配置失败只告警，不阻塞游戏。
 - 事件：进入关卡记录 `Start/CardBag/NNN`，成功保存且完成分数计算后记录 `Complete/CardBag/NNN/score`，未通关点击返回记录 `Fail/CardBag/NNN` 和 `LevelExit:CardBagNNN:ReturnButton`；重玩额外记录 `LevelReplay:CardBagNNN`，首次通关同步记录当前唯一完成卡包数。
 - 隔离：Unity Editor 与 Development Build 不初始化 Steam、不初始化 GameAnalytics、不发送运营事件，因此“一键完成”测试不会污染正式数据。强制关闭由 GameAnalytics Session 中存在 Start 且没有 Complete/Fail 识别。
 - 修改文件：`Assets/Scripts/Model/AnalyticsManager.cs`、`Assets/Scripts/Controller/GameScene.cs`、`Assets/Resources/GameAnalytics/Settings.asset`、`Packages/manifest.json`、`Packages/packages-lock.json`、`ProjectSettings/PackageManagerSettings.asset`、`ProjectSettings/ProjectSettings.asset`、`steam_appid.txt`、统一 spec 与项目上下文。
-- 验证：Unity Package Manager 已成功导入两个固定版本；`dotnet build Assembly-CSharp.csproj --no-restore -nologo` 与 `Assembly-CSharp-Editor.csproj` 均为 `0` 警告、`0` 错误；短暂 Editor Play Mode 已生成空 Settings 资源且日志没有 Steam 或 GA 初始化；`git diff --check` 已通过，仅有仓库既有的 LF/CRLF 提示。
-- 下一步：在 Unity 执行 `Window > GameAnalytics > Select Settings`，选择手工填写，增加 `Windows` 平台并填入用户本地的 `Game Key` 和 `Secret Key`；随后制作非 Development 的 Steam Demo Player，通过 Steam App ID `5034540` 启动并在 GameAnalytics Realtime 验证 Start、Complete、Fail、Replay 和 Session 事件。
+- 验证：Unity Package Manager 已成功导入两个固定版本；`dotnet build Assembly-CSharp.csproj --no-restore -nologo` 与 `Assembly-CSharp-Editor.csproj` 均为 `0` 警告、`0` 错误；Editor Play Mode 未初始化 Steam 或 GA。Windows 非 Development 构建通过本地 Steam Demo App ID `5034540` 成功初始化 Steam 和 GameAnalytics，用户已在 GameAnalytics Live events 确认 Session、Start、Complete、Fail 与 Replay 数据全部到账；`git diff --check` 已通过，仅有仓库既有的 LF/CRLF 提示。
+- 下一步：后续需要运营报表时，基于现有事件配置关卡漏斗、通关率、中途退出率和重玩次数面板；制作正式版构建时再启用 `PUFFIES_STEAM_RELEASE` 并通过正式 App ID 验证隔离。
 
 ## 2026-09-03 首播与场景切换敏感节点预热
 
