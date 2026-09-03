@@ -1,5 +1,18 @@
 # 当前任务
 
+## 2026-09-03 GameScene 动态窗口尺寸适配修复
+
+- 状态：已根据 Unity Editor 实际诊断日志完成第二版根因修复并删除临时诊断代码，编译通过，等待按“拉窄 -> 拉宽”复验。
+- 根因一：UGUI 托盘矩形先归一化到 Canvas，但随后错误映射到整个 `Screen.width/height`；固定 `16:9` 相机产生左右或上下黑边时，黑边也被算进托盘世界边界，导致托盘 Piece 尺寸和位置偏离可见托盘。
+- 根因二：棋盘每次居中都用 Prefab 初始 `anchoredPosition` 加“当前中心差”；第二次刷新时当前中心已含上次偏移，因此会反向抵消上次结果，造成棋盘在重复刷新后漂移或不居中。
+- 修改：托盘 Canvas 边界统一映射到 `Camera.pixelRect`；托盘回收热区改为相对有效相机视口归一化并在最终布局后重建；棋盘按当前 `anchoredPosition` 增量应用本次中心差。托盘 Piece 随稳定帧继续统一重算缩放与排布。
+- 保留：固定 `16:9` 与黑边、Piece 托盘缩放上限、拿起恢复原尺寸、吸附/回弹、固定间距、托盘滚动和动画参数均未修改。
+- 修改文件：`Assets/Scripts/Controller/GameScene.cs`、统一 spec 与项目上下文。
+- 验证：`dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 成功并连带编译 Runtime，结果 `0` 警告、`0` 错误；`git diff --check` 通过，仅有仓库既有 LF/CRLF 提示。
+- 实际日志根因：错误帧的 `Screen=1086x611`、`cameraAspect=1.778` 正常，但根 Canvas 的 Rect 为 `0x0`；代码仍继续布局，导致托盘实际矩形被锚到屏幕中部 `y=305.5`。完整 `ConfigureGameplayCanvas` 在尺寸检测和最终刷新阶段重复设置根 RectTransform/Canvas 渲染状态，是该无效帧反复出现的直接原因。
+- 第二版修复：窗口变化时只调用固定宽高比相机视口刷新，不再重复初始化 Canvas；最终布局增加根 Canvas 有效尺寸门槛，若仍为 `0x0` 则逐帧延后，直到 Canvas 恢复后才重算相机、棋盘、托盘和 Piece。
+- 下一步：重新进入 Play Mode，按“拉窄 -> 拉宽”复现，确认托盘 Piece 不再进入棋盘中部且棋盘恢复居中；通过后再覆盖连续多次往返拉伸。
+
 ## 2026-09-03 正确 Piece 顶回错误 Piece 后托盘首槽空缺
 
 - 状态：根因修复和编译验证完成，等待 Play Mode 按截图路径复验。

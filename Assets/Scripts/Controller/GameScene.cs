@@ -320,8 +320,8 @@ public class GameScene : MonoBehaviour
     private Vector2 _pieceBoardOriginalAnchoredPosition;
     private bool _hasPieceBoardOriginalAnchoredPosition;
     private bool _isPieceBoardHidden;
-    private Rect _pieceTrayDropNormalizedScreenRect;
-    private bool _hasPieceTrayDropNormalizedScreenRect;
+    private Rect _pieceTrayDropNormalizedViewportRect;
+    private bool _hasPieceTrayDropNormalizedViewportRect;
     private Transform _boardOccupancyProbeRoot;
     private Collider2D _gameBoardOpaqueProbe;
     private Coroutine _pieceTraySlideCoroutine;
@@ -672,7 +672,7 @@ public class GameScene : MonoBehaviour
             _isWindowResizeLayoutPending = true;
             _windowResizeLayoutReadyFrame = Time.frameCount
                                             + WindowResizeLayoutStabilizationFrameCount;
-            ConfigureGameplayCanvas(Camera.main);
+            RefreshGameplayViewport(Camera.main);
             GameCommonUtility.RefreshCanvasLayoutsForScreenSize();
         }
 
@@ -690,11 +690,18 @@ public class GameScene : MonoBehaviour
             return;
         }
 
-        ConfigureGameplayCanvas(Camera.main);
+        RefreshGameplayViewport(Camera.main);
         GameCommonUtility.RefreshCanvasLayoutsForScreenSize();
+        if (!IsGameplayCanvasLayoutReady())
+        {
+            _windowResizeLayoutReadyFrame = Time.frameCount + 1;
+            return;
+        }
+
         FitCameraToActiveGroup(_drag.CurrentGroupIndex);
         RefreshCurrentGroupTrayScalesAndLayout();
         GameCommonUtility.RefreshCanvasLayoutsForScreenSize();
+        CachePieceTrayDropScreenRect();
         RefreshTutorialAfterWindowSizeChange();
         _isWindowResizeLayoutPending = false;
     }
@@ -1494,6 +1501,30 @@ public class GameScene : MonoBehaviour
         }
 
         Canvas.ForceUpdateCanvases();
+    }
+
+    private static void RefreshGameplayViewport(Camera camera)
+    {
+        if (camera == null)
+        {
+            return;
+        }
+
+        GameCommonUtility.ConfigureFixedAspectViewport(
+            camera,
+            ReferenceHeight * (16f / 9f),
+            ReferenceHeight);
+    }
+
+    private static bool IsGameplayCanvasLayoutReady()
+    {
+        var canvas = FindGameplayCanvas();
+        var canvasRect = canvas != null
+            ? canvas.rootCanvas.transform as RectTransform
+            : null;
+        return canvasRect != null
+               && canvasRect.rect.width > 0.001f
+               && canvasRect.rect.height > 0.001f;
     }
 
     private static Canvas FindGameplayCanvas()
@@ -5845,19 +5876,27 @@ public class GameScene : MonoBehaviour
     private bool TryGetPieceTrayDropScreenRect(out Rect screenRect)
     {
         screenRect = default;
-        if (!_hasPieceTrayDropNormalizedScreenRect
-            || Screen.width <= 0
-            || Screen.height <= 0)
+        if (!_hasPieceTrayDropNormalizedViewportRect
+            || !TryGetGameplayViewportRect(out var viewport))
         {
             return false;
         }
 
         screenRect = Rect.MinMaxRect(
-            _pieceTrayDropNormalizedScreenRect.xMin * Screen.width,
-            _pieceTrayDropNormalizedScreenRect.yMin * Screen.height,
-            _pieceTrayDropNormalizedScreenRect.xMax * Screen.width,
-            _pieceTrayDropNormalizedScreenRect.yMax * Screen.height);
+            viewport.xMin + _pieceTrayDropNormalizedViewportRect.xMin * viewport.width,
+            viewport.yMin + _pieceTrayDropNormalizedViewportRect.yMin * viewport.height,
+            viewport.xMin + _pieceTrayDropNormalizedViewportRect.xMax * viewport.width,
+            viewport.yMin + _pieceTrayDropNormalizedViewportRect.yMax * viewport.height);
         return screenRect.width > 0f && screenRect.height > 0f;
+    }
+
+    private static bool TryGetGameplayViewportRect(out Rect viewport)
+    {
+        var camera = Camera.main;
+        viewport = camera != null
+            ? camera.pixelRect
+            : Rect.MinMaxRect(0f, 0f, Screen.width, Screen.height);
+        return viewport.width > 0.001f && viewport.height > 0.001f;
     }
 
     private bool DoesPieceOverlapTray(SpriteRenderer renderer)
@@ -6847,17 +6886,27 @@ public class GameScene : MonoBehaviour
             canvasRect,
             targetRect);
         var canvasLocalRect = canvasRect.rect;
+        var viewport = gameplayCamera.pixelRect;
+        if (viewport.width <= 0.001f || viewport.height <= 0.001f)
+        {
+            return false;
+        }
+
         var screenMin = new Vector3(
-            Mathf.InverseLerp(canvasLocalRect.xMin, canvasLocalRect.xMax, targetBounds.min.x)
-                * Screen.width,
-            Mathf.InverseLerp(canvasLocalRect.yMin, canvasLocalRect.yMax, targetBounds.min.y)
-                * Screen.height,
+            viewport.xMin
+            + Mathf.InverseLerp(canvasLocalRect.xMin, canvasLocalRect.xMax, targetBounds.min.x)
+                * viewport.width,
+            viewport.yMin
+            + Mathf.InverseLerp(canvasLocalRect.yMin, canvasLocalRect.yMax, targetBounds.min.y)
+                * viewport.height,
             Mathf.Abs(gameplayCamera.transform.position.z - WorldGameplayDepth));
         var screenMax = new Vector3(
-            Mathf.InverseLerp(canvasLocalRect.xMin, canvasLocalRect.xMax, targetBounds.max.x)
-                * Screen.width,
-            Mathf.InverseLerp(canvasLocalRect.yMin, canvasLocalRect.yMax, targetBounds.max.y)
-                * Screen.height,
+            viewport.xMin
+            + Mathf.InverseLerp(canvasLocalRect.xMin, canvasLocalRect.xMax, targetBounds.max.x)
+                * viewport.width,
+            viewport.yMin
+            + Mathf.InverseLerp(canvasLocalRect.yMin, canvasLocalRect.yMax, targetBounds.max.y)
+                * viewport.height,
             screenMin.z);
         var worldMin = gameplayCamera.ScreenToWorldPoint(screenMin);
         var worldMax = gameplayCamera.ScreenToWorldPoint(screenMax);
@@ -11625,9 +11674,7 @@ public class GameScene : MonoBehaviour
             return;
         }
 
-        _loadedCardBagRect.anchoredPosition = _originalCardBagAnchoredPosition
-            + targetLocalCenter
-            - groupLocalCenter;
+        _loadedCardBagRect.anchoredPosition += targetLocalCenter - groupLocalCenter;
         Canvas.ForceUpdateCanvases();
         ClampBoardToTrayGap(camera, parentRect, eventCamera);
     }
@@ -12061,19 +12108,18 @@ public class GameScene : MonoBehaviour
 
     private void CachePieceTrayDropScreenRect()
     {
-        if (Screen.width <= 0
-            || Screen.height <= 0
+        if (!TryGetGameplayViewportRect(out var viewport)
             || !TryGetStablePieceTrayDropScreenRect(out var screenRect))
         {
             return;
         }
 
-        _pieceTrayDropNormalizedScreenRect = Rect.MinMaxRect(
-            screenRect.xMin / Screen.width,
-            screenRect.yMin / Screen.height,
-            screenRect.xMax / Screen.width,
-            screenRect.yMax / Screen.height);
-        _hasPieceTrayDropNormalizedScreenRect = true;
+        _pieceTrayDropNormalizedViewportRect = Rect.MinMaxRect(
+            (screenRect.xMin - viewport.xMin) / viewport.width,
+            (screenRect.yMin - viewport.yMin) / viewport.height,
+            (screenRect.xMax - viewport.xMin) / viewport.width,
+            (screenRect.yMax - viewport.yMin) / viewport.height);
+        _hasPieceTrayDropNormalizedViewportRect = true;
     }
 
     private bool TryGetStablePieceTrayDropScreenRect(out Rect screenRect)

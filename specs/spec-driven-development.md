@@ -1558,3 +1558,26 @@
 
 - `dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 通过并连带编译 Runtime，结果 `0` 警告、`0` 错误。
 - [ ] 在 Play Mode 复现“错误 Piece 占槽 -> 正确 Piece 顶回”路径，确认回弹、红色反馈、连续排布和左右滚动边界。
+
+## 2026-09-03 - GameScene 动态窗口尺寸适配修复
+
+### 需求
+
+1. WHEN Windows 游戏窗口尺寸变化并稳定 THEN 当前棋盘 SHALL 重新居中到托盘上方的有效 `16:9` 游戏区域，不得因重复刷新在原位置与居中位置之间漂移。
+2. WHEN 窗口变为超宽或偏高比例 THEN 托盘 Piece SHALL 继续以可见托盘为基准重新计算尺寸与位置，不得把左右或上下黑边计入托盘范围。
+3. WHEN 最终布局刷新完成 THEN 托盘回收与滚动热区 SHALL 按最新有效相机视口重建，Piece 与托盘相交时的回收规则保持准确。
+4. 本次修复 SHALL 保持固定 `16:9`、黑边、Piece 原尺寸上限、拿起与放下缩放、吸附判定、托盘间距、滚动和动画节奏不变。
+
+### 设计与任务
+
+- [x] 1. 将 Canvas 托盘矩形的归一化坐标映射到 `Camera.pixelRect`，不再映射到整个 `Screen`。
+- [x] 2. 棋盘居中改为在当前 `anchoredPosition` 上应用本次屏幕中心差值，消除重复调用时使用原始基准造成的反向漂移。
+- [x] 3. 托盘回收热区按相机有效视口归一化，并在棋盘、托盘和 Piece 最终刷新后重新缓存。
+- [ ] 4. 编译 Runtime/Editor，并在 Play Mode 连续验证 `16:9 -> 超宽 -> 偏高 -> 16:9`。
+
+### 验证
+
+- `dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 成功并连带编译 Runtime，结果 `0` 警告、`0` 错误。
+- 第一版 `Camera.pixelRect` 映射经用户按“拉窄 -> 拉宽”验证仍失败：托盘 Piece 被排到棋盘下沿附近。Editor 实际日志确认错误帧的根 Canvas Rect 为 `0x0`，而代码仍继续按无效父矩形布局。
+- 第二版移除窗口刷新阶段对完整 `ConfigureGameplayCanvas` 的重复调用，只刷新固定宽高比相机视口；布局前检查根 Canvas Rect，尺寸无效时逐帧延后。临时诊断代码已删除，Runtime/Editor 再次编译为 `0` 警告、`0` 错误。
+- [ ] 在 GameScene 连续切换 `16:9 -> 超宽 -> 偏高 -> 16:9`，确认棋盘不漂移、托盘 Piece 保持在可见托盘内且回收/滚动热区准确；同时覆盖桌面错误 Piece 与活动中新手引导。
