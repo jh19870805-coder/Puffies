@@ -1,13 +1,25 @@
 # 当前任务
 
+## 2026-09-03 统一音乐音效播放系统
+
+- 状态：代码、资源目录与持久化已接入，Runtime/Editor 编译及静态完整性验证通过；等待 Unity Play Mode 听感和完整事件时序复验。
+- 单例接口：新增常驻 `AudioManager`，业务代码可直接调用 `AudioManager.Instance.PlayMusic("BGM_MainMenu.mp3")` 或 `PlaySfx("SFX_ButtonClick.mp3")`。BGM 单独循环播放，SFX 使用 `PlayOneShot` 支持并发；文件名大小写不敏感，也兼容不传 `.mp3` 扩展名。
+- 资源目录：新增 `AudioCatalog` ScriptableObject 和 `Assets/Resources/AudioCatalog.asset`，引用 `Assets/Audios` 的全部 `25` 个 AudioClip。`Puffies/Update Audio Catalog`、音频资源变动回调和构建前处理会自动同步目录，不需要手工拖引用。
+- 背景音乐：MainScene 固定播放 `BGM_MainMenu.mp3`；GameScene 首次进入卡包时随机 `BGM_Gameplay_01~05.mp3`。选择以稳定文件名写入当前 SaveSlot 的 SQLite `GameAudioPreferences`；普通卡包按 PackId 保存，系列卡包按系列链首 PackId 保存并由全系列复用。
+- 音效接入：已在真实业务完成点接入通用按钮、卡包点击、弹窗切换、重玩确认、拆包、碎片分发、拿起、普通放置、错误回弹、正确吸附、组切换、普通提示抖动、最后散落块提醒、拼图完成、分数滚动、奖励出现、奖励落位、系列切换和设置开关音效。无效或被锁定输入不会播放对应业务音效。
+- 音量：`SliderMusic` 与 `SliderEffect` 分别作用于 Manager 的 BGM/SFX AudioSource；`AudioListener.volume` 固定为 `1`，移除原先与 AudioSource 同时缩放造成的二次乘算。其他场景既有 AudioSource 仍按对象名中的 `music/bgm` 分类应用音量。
+- 修改文件：`Assets/Scripts/Model/AudioManager.cs`、`AudioCatalog.cs`、`LocalDataStore.cs`、`GameConfigRepository.cs`、`CardPackPhoto.cs`、`CardPackRewardFlyTransition.cs`，`Assets/Scripts/Editor/AudioCatalogEditor.cs`，`Assets/Scripts/Controller/MainScene.cs`、`GameScene.cs`、`RankScene.cs`、`AchieveScene.cs`，`Assets/Resources/AudioCatalog.asset` 及对应 `.meta`，并更新统一 spec 与项目上下文。
+- 验证：`dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 通过，结果 `0` 警告、`0` 错误；Unity 已成功导入独立 `AudioCatalog.cs` 并输出 `AudioCatalog updated: 25 clips.`；Catalog 与 `Assets/Audios` 的 GUID 对比为 `25/25`、无缺失、无额外、无重复；`git diff --check` 通过，仅有仓库既有的 LF/CRLF 提示。自动 Play Mode 快捷键未被当前 Unity 窗口接受，尚未完成实际听感验证。
+- 下一步：在 Unity 从 LoadingScene 进入 MainScene，确认首页 BGM；分别进入普通卡包和系列卡包，复验音乐固定、切档隔离、音量滑杆与 19 类事件音效的音量和时序。若某个美术音频需要提前或延后，只调整该事件的调用点，不修改玩法动画节奏。
+
 ## 2026-09-03 音频资源统一命名
 
-- 状态：`Assets/Audios` 内全部 MP3 与 `.meta` 已完成统一重命名，尚未接入播放逻辑。
+- 状态：`Assets/Audios` 内全部 MP3 与 `.meta` 已完成统一重命名；播放逻辑已由上方“统一音乐音效播放系统”任务接入。
 - 规则：背景音乐统一使用 `BGM_` 前缀，短音效统一使用 `SFX_` 前缀；文件名只使用 ASCII、PascalCase 功能名和必要的两位数字序号，目录继续保持单层扁平。
 - 结果：`6` 个背景音乐重命名为 `BGM_MainMenu.mp3` 与 `BGM_Gameplay_01~05.mp3`；`19` 个音效按实际调用语义重命名为 `SFX_ButtonClick.mp3`、`SFX_CardPackOpen.mp3`、`SFX_PieceCorrect.mp3` 等稳定名称。完整旧名与新名映射记录在 `specs/spec-driven-development.md` 的“音频资源统一命名”章节。
 - 资源完整性：重命名时 MP3 和对应 `.meta` 成对移动；`25/25` 个 MP3 的 SHA-256 保持不变，`25/25` 个 `.meta` GUID 保持不变，没有目标冲突、重复 GUID或遗留中文文件名。
 - 修改范围：仅 `Assets/Audios` 文件名及工程记录；没有修改音频内容、Unity 导入参数、场景、Prefab 或播放代码。
-- 下一步：收到接入指令后，按已确认的音效调用表接入播放，并实现“卡包或系列首次游玩随机 `BGM_Gameplay_01~05`、本地持久化后永久复用”的背景音乐规则。
+- 后续：音效调用表和“卡包或系列首次游玩随机 `BGM_Gameplay_01~05`、本地持久化后永久复用”规则已经实现，当前只剩 Play Mode 听感与时序复验。
 
 ## 2026-09-03 结算动画连续点击卡死修复
 

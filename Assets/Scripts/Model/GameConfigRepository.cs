@@ -21,6 +21,27 @@ public struct CardPackConfigData
 
 public static class CardPackSeriesRules
 {
+    public static int GetSeriesRootPackId(
+        int packId,
+        IReadOnlyList<CardPackConfigData> configs)
+    {
+        if (packId <= 0
+            || !TryBuildPrerequisites(configs, out var prerequisiteByPackId, out _))
+        {
+            return packId;
+        }
+
+        var rootPackId = packId;
+        var visited = new HashSet<int>();
+        while (prerequisiteByPackId.TryGetValue(rootPackId, out var prerequisitePackId)
+               && visited.Add(rootPackId))
+        {
+            rootPackId = prerequisitePackId;
+        }
+
+        return rootPackId;
+    }
+
     public static bool TryBuildPrerequisites(
         IReadOnlyList<CardPackConfigData> configs,
         out Dictionary<int, int> prerequisiteByPackId,

@@ -728,6 +728,8 @@ public class MainScene : MonoBehaviour
             Debug.LogWarning("MainScene: GameSettingsUtility is not ready; settings will use defaults until SQLite is available.");
         }
 
+        AudioManager.Instance.PlayMusic("BGM_MainMenu.mp3");
+
         ConfigureMainCanvas();
         mAppliedScreenWidth = Screen.width;
         mAppliedScreenHeight = Screen.height;
@@ -884,6 +886,8 @@ public class MainScene : MonoBehaviour
         {
             return;
         }
+
+        AudioManager.Instance.PlaySfx("SFX_CardPackClick.mp3");
 
         if (mPlayAnimationCoroutine != null)
         {
@@ -2024,6 +2028,7 @@ public class MainScene : MonoBehaviour
             return;
         }
 
+        AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
         mPlayAnimationCoroutine = StartCoroutine(HideBagVolumeSelection());
     }
 
@@ -2125,6 +2130,7 @@ public class MainScene : MonoBehaviour
             return;
         }
 
+        AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
         mIsSelectedPackageReplay = false;
         if (mSelectedPackageEntry.DisplayState == PackageDisplayState.TornColorInProgress)
         {
@@ -2138,6 +2144,7 @@ public class MainScene : MonoBehaviour
 
     private void ShowReplayConfirmation()
     {
+        AudioManager.Instance.PlaySfx("SFX_CardPackReplayConfirm.mp3");
         mIsReplayConfirmationVisible = true;
         SetBagSelectButtonsInteractable(false);
         SetUnselectedPackageVisualsVisible(false);
@@ -2155,6 +2162,7 @@ public class MainScene : MonoBehaviour
             return;
         }
 
+        AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
         SetPanelVisible(mReplayPanelRoot, false);
         mIsReplayConfirmationVisible = false;
         mIsSelectedPackageReplay = true;
@@ -2201,6 +2209,7 @@ public class MainScene : MonoBehaviour
             return;
         }
 
+        AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
         SetPanelVisible(mReplayPanelRoot, false);
         mIsReplayConfirmationVisible = false;
         if (mIsBagVolumeSelectionActive)
@@ -2225,6 +2234,7 @@ public class MainScene : MonoBehaviour
             return;
         }
 
+        AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
         mPlayAnimationCoroutine = StartCoroutine(HidePackageSelection());
     }
 
@@ -2239,6 +2249,7 @@ public class MainScene : MonoBehaviour
             return;
         }
 
+        AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
         mIsCapturingPhoto = true;
         mIsPlayingAnimation = true;
         SetBagSelectButtonsInteractable(false);
@@ -4008,6 +4019,7 @@ public class MainScene : MonoBehaviour
             return;
         }
 
+        AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
         GameManager.EnterRankScene();
     }
 
@@ -4038,6 +4050,7 @@ public class MainScene : MonoBehaviour
             return;
         }
 
+        AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
         GameManager.EnterAchieveScene();
     }
 
@@ -4051,6 +4064,7 @@ public class MainScene : MonoBehaviour
 
     private static void OnWishListButtonClicked()
     {
+        AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
         Application.OpenURL(WishListUrl);
     }
 
@@ -4064,6 +4078,7 @@ public class MainScene : MonoBehaviour
 
     private static void OnDiscordButtonClicked()
     {
+        AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
         Application.OpenURL(DiscordUrl);
     }
 
@@ -4074,6 +4089,7 @@ public class MainScene : MonoBehaviour
 
     private static void OnQqButtonClicked()
     {
+        AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
         Application.OpenURL(QqGroupUrl);
     }
 
@@ -4160,11 +4176,13 @@ public class MainScene : MonoBehaviour
             return;
         }
 
+        AudioManager.Instance.PlaySfx("SFX_PopupTransition.mp3");
         SetPanelVisible(mMenuPanelRoot, true);
     }
 
     private void OnMenuCloseButtonClicked()
     {
+        AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
         SetPanelVisible(mMenuPanelRoot, false);
     }
 
@@ -4275,12 +4293,14 @@ public class MainScene : MonoBehaviour
             return;
         }
 
+        AudioManager.Instance.PlaySfx("SFX_PopupTransition.mp3");
         SetPanelVisible(mMenuPanelRoot, false);
         SetPanelVisible(mSettingsPanelRoot, true);
     }
 
     private void OnSettingsCloseButtonClicked()
     {
+        AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
         SetPanelVisible(mSettingsPanelRoot, false);
     }
 
@@ -4311,6 +4331,7 @@ public class MainScene : MonoBehaviour
             return;
         }
 
+        AudioManager.Instance.PlaySfx("SFX_ToggleSwitch.mp3");
         GameSettingsUtility.SetWindowed(isWindowed);
     }
 
@@ -4394,12 +4415,14 @@ public class MainScene : MonoBehaviour
             return;
         }
 
+        AudioManager.Instance.PlaySfx("SFX_PopupTransition.mp3");
         SetPanelVisible(mMenuPanelRoot, false);
         SetPanelVisible(mUsablePanelRoot, true);
     }
 
     private void OnUsableCloseButtonClicked()
     {
+        AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
         SetPanelVisible(mUsablePanelRoot, false);
     }
 
@@ -4410,6 +4433,7 @@ public class MainScene : MonoBehaviour
             return;
         }
 
+        AudioManager.Instance.PlaySfx("SFX_ToggleSwitch.mp3");
         GameSettingsUtility.SetUsableOption1(value);
         RefreshUsablePanelPreview();
     }
@@ -4421,6 +4445,7 @@ public class MainScene : MonoBehaviour
             return;
         }
 
+        AudioManager.Instance.PlaySfx("SFX_ToggleSwitch.mp3");
         GameSettingsUtility.SetUsableOption2(value);
         RefreshUsablePanelPreview();
     }
@@ -4432,6 +4457,7 @@ public class MainScene : MonoBehaviour
             return;
         }
 
+        AudioManager.Instance.PlaySfx("SFX_ToggleSwitch.mp3");
         GameSettingsUtility.SetUsableOption3(value);
         RefreshUsablePanelPreview();
     }
@@ -4580,6 +4606,7 @@ public class MainScene : MonoBehaviour
             return;
         }
 
+        AudioManager.Instance.PlaySfx("SFX_PopupTransition.mp3");
         SetPanelVisible(mMenuPanelRoot, false);
         mSelectedSaveSlotId = LocalSaveSlotUtility.ActiveSlotId;
         RefreshSavePanel();
@@ -4608,6 +4635,7 @@ public class MainScene : MonoBehaviour
             return;
         }
 
+        AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
         mSelectedSaveSlotId = slotId;
         RefreshSavePanel();
     }
@@ -4686,6 +4714,7 @@ public class MainScene : MonoBehaviour
             return;
         }
 
+        AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
         CardPackRewardFlyTransition.CancelPending();
         SetPanelVisible(mSavePanelRoot, false);
         SceneManager.LoadScene(GameDefine.SceneLoading);
@@ -4695,12 +4724,14 @@ public class MainScene : MonoBehaviour
     {
         if (LocalSaveSlotUtility.DeleteSlot(mSelectedSaveSlotId))
         {
+            AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
             RefreshSavePanel();
         }
     }
 
     private void OnSaveCloseButtonClicked()
     {
+        AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
         SetPanelVisible(mSavePanelRoot, false);
     }
 
@@ -5083,6 +5114,7 @@ public class MainScene : MonoBehaviour
             yield break;
         }
 
+        AudioManager.Instance.PlaySfx("SFX_PopupTransition.mp3");
         mIsPlayingAnimation = true;
         mIsBagVolumeSelectionActive = true;
         mBagVolumeSourceEntry = sourceEntry;
@@ -5713,7 +5745,13 @@ public class MainScene : MonoBehaviour
     private void StartBagVolumeSnap(int targetIndex)
     {
         StopBagVolumeSnap();
-        mBagVolumeSnapCoroutine = StartCoroutine(SnapBagVolumeToIndex(targetIndex));
+        var clampedTargetIndex = Mathf.Clamp(targetIndex, 0, mBagVolumeCards.Count - 1);
+        if (clampedTargetIndex != mBagVolumeSelectedIndex)
+        {
+            AudioManager.Instance.PlaySfx("SFX_SeriesCardPackSwitch.mp3");
+        }
+
+        mBagVolumeSnapCoroutine = StartCoroutine(SnapBagVolumeToIndex(clampedTargetIndex));
     }
 
     private IEnumerator SnapBagVolumeToIndex(int targetIndex)
@@ -5783,6 +5821,7 @@ public class MainScene : MonoBehaviour
 
     private IEnumerator ShowPackageSelection(int bagId, PackageEntry entry)
     {
+        AudioManager.Instance.PlaySfx("SFX_PopupTransition.mp3");
         mIsPlayingAnimation = true;
         mSelectedPackageEntry = entry;
         mSelectedBagId = bagId;
@@ -6766,6 +6805,7 @@ public class MainScene : MonoBehaviour
             return;
         }
 
+        AudioManager.Instance.PlaySfx("SFX_CardPackOpen.mp3");
         StopOpeningHintAnimation();
         mIsAwaitingTearSwipe = false;
         mIsTrackingTearSwipe = false;

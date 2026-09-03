@@ -94,6 +94,7 @@ public class RankScene : MonoBehaviour
 
     private void OnReturnButtonClicked()
     {
+        AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
         GameManager.EnterMainScene();
     }
 

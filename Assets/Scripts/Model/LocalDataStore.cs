@@ -895,7 +895,8 @@ public static class GameSettingsUtility
 
     private static void ApplyAudioSettings()
     {
-        AudioListener.volume = Mathf.Clamp01(Mathf.Max(sSettings.MusicVolume, sSettings.EffectVolume));
+        AudioListener.volume = 1f;
+        AudioManager.ApplySettingsVolumes(sSettings.MusicVolume, sSettings.EffectVolume);
         ApplyAudioSourceVolumes();
     }
 

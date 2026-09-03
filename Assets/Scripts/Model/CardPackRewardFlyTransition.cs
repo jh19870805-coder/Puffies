@@ -466,6 +466,7 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
                 {
                     icon.HasLanded = true;
                     icon.RevealStartedAt = Time.unscaledTime;
+                    AudioManager.Instance.PlaySfx("SFX_CardPackGain.mp3");
                     PlayRewardRevealEffect(icon);
                 }
             }
@@ -495,6 +496,7 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
             {
                 icon.HasLanded = true;
                 icon.RevealStartedAt = Time.unscaledTime;
+                AudioManager.Instance.PlaySfx("SFX_CardPackGain.mp3");
                 PlayRewardRevealEffect(icon);
             }
         }

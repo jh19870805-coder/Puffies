@@ -521,6 +521,8 @@ public class GameScene : MonoBehaviour
         _appliedScreenHeight = Screen.height;
         InitializeScoringSession();
         var selectedBagId = GameManager.GetBagId();
+        AudioManager.Instance.PlayMusic(
+            GameAudioPreferenceUtility.GetOrCreateGameplayMusicFileName(selectedBagId));
         var playEntranceAnimation = GameManager.ConsumeGameEntranceAnimation();
         var entrancePiecesAlreadyFanned =
             GameManager.ConsumeGameEntrancePiecesAlreadyFanned();
@@ -1128,6 +1130,11 @@ public class GameScene : MonoBehaviour
                 packExitCoroutine = StartCoroutine(
                     CardPackGameEntranceTransition.FinishAfterPieceLaunch());
             }
+        }
+
+        if (pieceCount > 0)
+        {
+            AudioManager.Instance.PlaySfx("SFX_PieceDeal.mp3");
         }
 
         var totalDuration = Mathf.Max(0, pieceCount - 1) * pieceStagger
@@ -3889,6 +3896,7 @@ public class GameScene : MonoBehaviour
             return;
         }
 
+        AudioManager.Instance.PlaySfx("SFX_PiecePickup.mp3");
         StopLoosePieceReminderShake();
         if ((_tutorialStage == TutorialStage.StrongPlacement && state == _tutorialPiece)
             || _tutorialStage == TutorialStage.TwoPiecePractice)
@@ -4319,6 +4327,7 @@ public class GameScene : MonoBehaviour
             }
 
             DetachPiecesFromLooseClusters(dragMembers);
+            AudioManager.Instance.PlaySfx("SFX_PieceCorrect.mp3");
             StartGameplayTimerIfNeeded();
             for (var i = 0; i < dragMembers.Count; i++)
             {
@@ -4350,6 +4359,7 @@ public class GameScene : MonoBehaviour
         var ignoredMembers = new HashSet<DraggablePieceState>(dragMembers);
         if (!IsLooseClusterPlacementAllowed(dragMembers, ignoredMembers))
         {
+            AudioManager.Instance.PlaySfx("SFX_PieceWrongReturn.mp3");
             ReturnDragMembersAfterInvalidDrop(
                 dragMembers,
                 dragStartPositions,
@@ -4370,6 +4380,7 @@ public class GameScene : MonoBehaviour
             RegisterLoosePiece(member);
         }
 
+        AudioManager.Instance.PlaySfx("SFX_PiecePlace.mp3");
         RestorePiecePlacementTutorialPresentation(state);
         ClearActiveDragMembers();
     }
@@ -4956,6 +4967,7 @@ public class GameScene : MonoBehaviour
             ClearPieceHint();
         }
 
+        AudioManager.Instance.PlaySfx("SFX_PiecePlace.mp3");
         StartCoroutine(PlayLooseClusterAttachAnimation(
             movingStates,
             startPositions,
@@ -5638,6 +5650,7 @@ public class GameScene : MonoBehaviour
             return;
         }
 
+        AudioManager.Instance.PlaySfx("SFX_PieceWrongReturn.mp3");
         ResetPieceTrayPosition(instant: true);
         var excludedStates = new HashSet<DraggablePieceState>();
         for (var i = 0; i < states.Count; i++)
@@ -6677,6 +6690,7 @@ public class GameScene : MonoBehaviour
             return;
         }
 
+        AudioManager.Instance.PlaySfx("SFX_FinalPieceHint.mp3");
         _loosePieceReminderStates.Add(state);
         _loosePieceReminderBaseRotations.Add(state.PieceRenderer.transform.rotation);
         _loosePieceReminderShakeCoroutine = StartCoroutine(AnimateLoosePieceReminderShake());
@@ -7132,6 +7146,7 @@ public class GameScene : MonoBehaviour
             return true;
         }
 
+        AudioManager.Instance.PlaySfx("SFX_PuzzleComplete.mp3");
         ShowRewardPanel();
         return true;
     }
@@ -7154,6 +7169,7 @@ public class GameScene : MonoBehaviour
             yield return new WaitForSecondsRealtime(transitionHoldDuration);
         }
 
+        AudioManager.Instance.PlaySfx("SFX_RegionMove.mp3");
         HidePiecePlacementTutorialPresentation();
 
         var camera = Camera.main;
@@ -7909,6 +7925,7 @@ public class GameScene : MonoBehaviour
         }
 
         PrepareSettlementRewardSlots();
+        AudioManager.Instance.PlaySfx("SFX_CardPackAppear.mp3");
         _settlementRewardBagRect.gameObject.SetActive(true);
         _settlementRewardBagRect.anchoredPosition = CalculateSettlementOffscreenPosition(
             _settlementRewardBagRect,
@@ -8698,6 +8715,7 @@ public class GameScene : MonoBehaviour
             return;
         }
 
+        AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
         _isFinishTransitionStarted = true;
         SetSettlementInputLocked(true);
         if (_finishButton != null)
@@ -8719,6 +8737,7 @@ public class GameScene : MonoBehaviour
             return;
         }
 
+        AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
         SetSettlementActionButtonsInteractable(false);
         if (!_cardPackPhoto.TryCapture(
                 GameManager.GetBagId(),
@@ -10403,6 +10422,7 @@ public class GameScene : MonoBehaviour
             return;
         }
 
+        AudioManager.Instance.PlaySfx("SFX_PieceShake.mp3");
         _hintedPiece = state;
         _hintedPieces.Clear();
         _hintedPieceBaseRotations.Clear();
@@ -11304,6 +11324,11 @@ public class GameScene : MonoBehaviour
                     independentTaskProgressTo);
             }
             yield break;
+        }
+
+        if (toScore != fromScore)
+        {
+            AudioManager.Instance.PlaySfx("SFX_ScoreIncrease.mp3");
         }
 
         var elapsed = 0f;
@@ -12390,6 +12415,7 @@ public class GameScene : MonoBehaviour
 
     private void OnReturnButtonClicked()
     {
+        AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
         var packId = GameManager.GetBagId();
         if (!_isGameFinished
             && packId > 0

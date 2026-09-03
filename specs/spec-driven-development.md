@@ -1420,3 +1420,34 @@
 - [x] 1. 验证全部源文件、目标名和 `.meta` 一一对应且不存在命名冲突。
 - [x] 2. 成对重命名 MP3 与 `.meta`，保持目录扁平。
 - [x] 3. 对比重命名前后文件哈希与 `.meta` GUID，并检查 Git 差异。
+
+## 2026-09-03 - 统一音乐音效播放系统
+
+### 需求
+
+1. WHEN 业务代码需要播放音乐或音效 THEN 系统 SHALL 通过常驻单例 `AudioManager` 接口调用，并允许直接传入规范化 MP3 文件名。
+2. WHEN MainScene 启动 THEN 系统 SHALL 循环播放 `BGM_MainMenu.mp3`；WHEN GameScene 启动 THEN 系统 SHALL 循环播放当前卡包已确定的 `BGM_Gameplay_01~05.mp3`。
+3. WHEN 非系列卡包第一次进入 GameScene THEN 系统 SHALL 在五首游戏 BGM 中随机选择并按 PackId 保存文件名；WHEN 同一卡包后续再次进入 THEN 系统 SHALL 永久复用已保存的文件名。
+4. WHEN 系列卡包任意一卷第一次进入 GameScene THEN 系统 SHALL 按该系列链首 PackId 保存随机 BGM；WHEN 该系列其他卡包进入 THEN 系统 SHALL 复用同一首音乐。
+5. 音乐选择 SHALL 跟随当前本地 SaveSlot 保存，切换或删除存档后不得读取另一档的选择。
+6. WHEN 用户调整音乐或音效音量 THEN 系统 SHALL 分别修改 Manager 的 BGM 与 SFX 音源，不得再通过 `AudioListener.volume` 形成二次音量乘算；场景内其他既有 AudioSource 仍按音乐/音效分类应用设置。
+7. WHEN 多个短音效接近同时触发 THEN 系统 SHALL 允许并发播放；WHEN 文件名为空或 Catalog 不包含该音频 THEN 系统 SHALL 跳过播放并输出一次明确警告，不得中断玩法。
+8. `Assets/Audios` SHALL 保持单层目录；运行时音频引用 SHALL 由 `Resources/AudioCatalog.asset` 统一持有，并可由 Editor 工具自动同步新增、删除或重命名的音频。
+9. WHEN 卡包点击、弹窗切换、拆包、碎片分发、拿起、普通放置、错误回弹、正确吸附、组切换、抖动提示、拼图完成、分数上涨、获得卡包、系列切换和设置开关等已定义事件真正成立 THEN 系统 SHALL 播放对应 `SFX_*.mp3`；无效或被锁定的输入不得触发业务音效。
+
+### 设计
+
+- `AudioManager` 使用 `DontDestroyOnLoad` 常驻对象，内含一个循环 BGM AudioSource 与一个使用 `PlayOneShot` 的 SFX AudioSource，对外提供 `PlayMusic(string, bool)`、`PlaySfx(string)`、`StopMusic()` 和音量刷新接口。
+- `AudioCatalog` 是 ScriptableObject，序列化引用 `Assets/Audios` 的全部 AudioClip；运行时按不区分大小写的完整文件名和无扩展名建立索引，业务层继续传 MP3 文件名。
+- Editor 同步器扫描 `Assets/Audios` 并维护 `Assets/Resources/AudioCatalog.asset`，构建前强制同步，避免 Player 包内漏音频。
+- `GameAudioPreferenceUtility` 使用 SQLite `AppRecords` 保存 `seriesRootPackId -> BGM 文件名`，系列链首通过公共 `CardPackSeriesRules.GetSeriesRootPackId` 计算；缓存随 SaveSlot 一起重置。
+- 场景只在语义完成点直接调用音频接口，不依赖动画总时长推测事件。
+
+### 任务
+
+- [x] 1. 实现 `AudioCatalog`、常驻 `AudioManager`、文件名索引、并发 SFX 和独立音量控制。
+- [x] 2. 实现 Editor Catalog 自动同步与构建前校验，并生成包含全部 25 个 MP3 引用的资源。
+- [x] 3. 实现按 SaveSlot、PackId/系列链首持久化的游戏 BGM 选择。
+- [x] 4. MainScene 接入固定 BGM，GameScene 接入卡包 BGM，并在已确认业务完成点接入 19 类音效。
+- [x] 5. 修正设置音量应用，完成 Runtime/Editor 编译、Catalog 完整性和 Git 差异检查。
+- [ ] 6. 在 Unity Play Mode 验证跨场景音乐切换、同卡包/同系列复用、切档隔离、音量滑杆、音效并发及所有事件音效时序。

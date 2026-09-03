@@ -184,6 +184,7 @@ public sealed class CardPackPhoto : MonoBehaviour
             return;
         }
 
+        AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
         StopPreviewAnimation();
         SetPreviewVisible(false);
         ReleaseGeneratedPhoto();
