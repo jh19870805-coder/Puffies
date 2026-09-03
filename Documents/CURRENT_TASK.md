@@ -1,5 +1,15 @@
 # 当前任务
 
+## 2026-09-03 MainScene 通用确认弹窗
+
+- 状态：代码实现和编译验证完成，等待 Play Mode 验收。
+- 用户意图：退出游戏与保存页删除进度共用 `PanelConfirm`；弹窗按入口切换提示内容和确认行为，返回只关闭弹窗。
+- 实现：`PanelMenu/BtnExit` 显示“确认退出游戏？”，确认后 Player 调用 `Application.Quit()`、Editor 停止 Play Mode；`PanelSave/BtnDelete` 显示“确认删除进度存储？”，并锁定点击时选中的槽位，确认后调用现有 `LocalSaveSlotUtility.DeleteSlot` 并刷新保存页。`BtnYes` 统一确认，`BtnNo`、`BtnClose` 及其他 Button 统一取消。
+- 保留：原 `PanelReplay` 卡包重玩确认逻辑和用户当前 `MainScene.unity` 改动不变。
+- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、统一 spec、任务记录与项目上下文。
+- 验证：场景静态检查确认 `BtnExit`、`BtnDelete`、`PanelConfirm/TextContent`、`BtnYes`、`BtnNo` 和 `BtnClose` 结构正确；Runtime/Editor 编译通过，`0` 警告、`0` 错误；`git diff --check` 通过。
+- 下一步：在 Play Mode 分别验证退出与删除入口的文案；验证 `BtnNo/BtnClose` 不产生业务操作、删除确认后对应槽位清空，以及退出确认停止 Play Mode；Windows 构建中确认退出按钮关闭进程。
+
 ## 2026-09-03 结算流程性能优化
 
 - 状态：代码优化和编译验证完成，等待 Play Mode 体感与 Profiler 数据验收。

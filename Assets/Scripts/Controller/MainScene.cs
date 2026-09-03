@@ -110,6 +110,12 @@ public class MainScene : MonoBehaviour
         + "&noverify=0&group_code=1079431440";
     private const string MenuPanelObjectName = "PanelMenu";
     private const string MenuCloseButtonObjectName = "BtnClose";
+    private const string ExitButtonObjectName = "BtnExit";
+    private const string ConfirmationPanelObjectName = "PanelConfirm";
+    private const string ConfirmationButtonObjectName = "BtnYes";
+    private const string ConfirmationContentObjectName = "TextContent";
+    private const string ExitConfirmationText = "确认退出游戏？";
+    private const string DeleteSaveConfirmationText = "确认删除进度存储？";
     private const string SettingsPanelObjectName = "PanelSet";
     private const string SettingsButtonObjectName = "BtnSet";
     private const string MusicSliderObjectName = "SliderMusic";
@@ -213,6 +219,8 @@ public class MainScene : MonoBehaviour
     private ScrollRect mPackageScrollRect;
     private Coroutine mPackagePageSnapCoroutine;
     private GameObject mMenuPanelRoot;
+    private GameObject mConfirmationPanelRoot;
+    private TMP_Text mConfirmationContentText;
     private GameObject mSettingsPanelRoot;
     private GameObject mUsablePanelRoot;
     private GameObject mSavePanelRoot;
@@ -300,6 +308,8 @@ public class MainScene : MonoBehaviour
     private CardPackPhoto mCardPackPhoto;
     private bool mIsCapturingPhoto;
     private bool mIsReplayConfirmationVisible;
+    private ConfirmationAction mConfirmationAction;
+    private int mPendingDeleteSaveSlotId;
     private bool mIsSelectedPackageReplay;
     private int mSelectedBagId;
     private Vector2 mSelectedPackageStartPosition;
@@ -370,6 +380,13 @@ public class MainScene : MonoBehaviour
         public Vector2 ContentAnchoredPosition;
         public Vector2 ContentSizeDelta;
         public TextAlignmentOptions ContentAlignment;
+    }
+
+    private enum ConfirmationAction
+    {
+        None,
+        ExitGame,
+        DeleteSaveSlot
     }
 
     private sealed class PackageListDisplay
@@ -721,6 +738,8 @@ public class MainScene : MonoBehaviour
         mIsTrackingTearTap = false;
         mIsCapturingPhoto = false;
         mIsReplayConfirmationVisible = false;
+        mConfirmationAction = ConfirmationAction.None;
+        mPendingDeleteSaveSlotId = 0;
 
         GameManager.Initialize();
         if (!GameSettingsUtility.Initialize())
@@ -754,6 +773,7 @@ public class MainScene : MonoBehaviour
         ConfigureReplayPanel();
         ConfigurePackPhotoItem();
         ConfigureMenuPanel();
+        ConfigureConfirmationPanel();
         ConfigureSettingsPanel();
         ConfigureUsablePanel();
         ConfigureSavePanel();
@@ -3580,6 +3600,7 @@ public class MainScene : MonoBehaviour
     private bool IsAnyPackagePanelOpen()
     {
         return mMenuPanelRoot != null && mMenuPanelRoot.activeInHierarchy
+            || mConfirmationPanelRoot != null && mConfirmationPanelRoot.activeInHierarchy
             || mSettingsPanelRoot != null && mSettingsPanelRoot.activeInHierarchy
             || mUsablePanelRoot != null && mUsablePanelRoot.activeInHierarchy
             || mSavePanelRoot != null && mSavePanelRoot.activeInHierarchy;
@@ -4167,6 +4188,20 @@ public class MainScene : MonoBehaviour
             saveButton.onClick.RemoveListener(OnSaveButtonClicked);
             saveButton.onClick.AddListener(OnSaveButtonClicked);
         }
+
+        var exitButton = FindChild(
+            mMenuPanelRoot.transform,
+            ExitButtonObjectName)?.GetComponent<Button>();
+        if (exitButton == null)
+        {
+            Debug.LogWarning(
+                $"MainScene: exit button not found. Expected {ExitButtonObjectName} under {MenuPanelObjectName}.");
+        }
+        else
+        {
+            exitButton.onClick.RemoveListener(OnExitButtonClicked);
+            exitButton.onClick.AddListener(OnExitButtonClicked);
+        }
     }
 
     private void OnMenuButtonClicked()
@@ -4184,6 +4219,131 @@ public class MainScene : MonoBehaviour
     {
         AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
         SetPanelVisible(mMenuPanelRoot, false);
+    }
+
+    private void ConfigureConfirmationPanel()
+    {
+        mConfirmationPanelRoot = GameCommonUtility.FindSceneObject(
+            ConfirmationPanelObjectName);
+        if (mConfirmationPanelRoot == null)
+        {
+            Debug.LogWarning(
+                $"MainScene: confirmation panel not found. Expected {ConfirmationPanelObjectName}.");
+            return;
+        }
+
+        mConfirmationContentText = FindChild(
+            mConfirmationPanelRoot.transform,
+            ConfirmationContentObjectName)?.GetComponent<TMP_Text>();
+        if (mConfirmationContentText == null)
+        {
+            Debug.LogWarning(
+                $"MainScene: confirmation content not found. Expected {ConfirmationContentObjectName} under {ConfirmationPanelObjectName}.");
+        }
+
+        var buttons = mConfirmationPanelRoot.GetComponentsInChildren<Button>(true);
+        var hasConfirmButton = false;
+        for (var i = 0; i < buttons.Length; i++)
+        {
+            var button = buttons[i];
+            if (button == null)
+            {
+                continue;
+            }
+
+            if (button.name.Equals(ConfirmationButtonObjectName, StringComparison.Ordinal))
+            {
+                button.onClick.RemoveListener(OnConfirmationConfirmed);
+                button.onClick.AddListener(OnConfirmationConfirmed);
+                hasConfirmButton = true;
+            }
+            else
+            {
+                button.onClick.RemoveListener(OnConfirmationCancelled);
+                button.onClick.AddListener(OnConfirmationCancelled);
+            }
+        }
+
+        if (!hasConfirmButton)
+        {
+            Debug.LogWarning(
+                $"MainScene: confirmation button not found. Expected {ConfirmationButtonObjectName} under {ConfirmationPanelObjectName}.");
+        }
+
+        SetPanelVisible(mConfirmationPanelRoot, false);
+    }
+
+    private void OnExitButtonClicked()
+    {
+        if (mIsPlayingAnimation || mConfirmationPanelRoot == null)
+        {
+            return;
+        }
+
+        SetPanelVisible(mMenuPanelRoot, false);
+        ShowConfirmation(ConfirmationAction.ExitGame, ExitConfirmationText);
+    }
+
+    private void ShowConfirmation(ConfirmationAction action, string content)
+    {
+        if (mConfirmationPanelRoot == null || action == ConfirmationAction.None)
+        {
+            return;
+        }
+
+        AudioManager.Instance.PlaySfx("SFX_PopupTransition.mp3");
+        mConfirmationAction = action;
+        if (mConfirmationContentText != null)
+        {
+            mConfirmationContentText.text = content;
+        }
+
+        SetPanelVisible(mConfirmationPanelRoot, true);
+        mConfirmationPanelRoot.transform.SetAsLastSibling();
+    }
+
+    private void OnConfirmationConfirmed()
+    {
+        var action = mConfirmationAction;
+        if (action == ConfirmationAction.None)
+        {
+            return;
+        }
+
+        AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
+        mConfirmationAction = ConfirmationAction.None;
+        SetPanelVisible(mConfirmationPanelRoot, false);
+
+        if (action == ConfirmationAction.DeleteSaveSlot)
+        {
+            var slotId = mPendingDeleteSaveSlotId;
+            mPendingDeleteSaveSlotId = 0;
+            if (LocalSaveSlotUtility.DeleteSlot(slotId))
+            {
+                RefreshSavePanel();
+            }
+
+            return;
+        }
+
+#if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false;
+#else
+        Application.Quit();
+#endif
+    }
+
+    private void OnConfirmationCancelled()
+    {
+        if (mConfirmationAction == ConfirmationAction.None)
+        {
+            return;
+        }
+
+        AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
+        mConfirmationAction = ConfirmationAction.None;
+        mPendingDeleteSaveSlotId = 0;
+        SetPanelVisible(mConfirmationPanelRoot, false);
     }
 
     private void ConfigureSettingsPanel()
@@ -4722,11 +4882,16 @@ public class MainScene : MonoBehaviour
 
     private void OnSaveDeleteButtonClicked()
     {
-        if (LocalSaveSlotUtility.DeleteSlot(mSelectedSaveSlotId))
+        if (mConfirmationPanelRoot == null
+            || !LocalSaveSlotUtility.GetSlotSummary(mSelectedSaveSlotId).HasData)
         {
-            AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
-            RefreshSavePanel();
+            return;
         }
+
+        mPendingDeleteSaveSlotId = mSelectedSaveSlotId;
+        ShowConfirmation(
+            ConfirmationAction.DeleteSaveSlot,
+            DeleteSaveConfirmationText);
     }
 
     private void OnSaveCloseButtonClicked()

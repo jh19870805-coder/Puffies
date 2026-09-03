@@ -1611,3 +1611,25 @@
 - Profiler 新增 `Puffies.Settlement.Entry`、`BoardPreparation`、`Persistence`、`TaskData` 与 `RewardTransition` 样本；Editor/Development Console 额外输出结算首帧准备和完成存档耗时。
 - `dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 成功并连带编译 Runtime，结果 `0` 警告、`0` 错误；`git diff --check` 通过，仅有仓库既有 LF/CRLF 提示。
 - [ ] 在 Play Mode 完成一次首次通关和一次重玩，观察 `settlement performance` 日志，并确认结算首帧、滚分、奖励出现及返回首页飞行动画连续。
+
+## 2026-09-03 - MainScene 通用确认弹窗
+
+### 需求与实现
+
+1. WHEN 玩家点击 `PanelMenu/BtnExit` THEN 系统 SHALL 关闭菜单并显示独立的 `PanelConfirm`。
+2. WHEN 玩家点击 `PanelConfirm/BtnYes` 确认按钮 THEN Windows Player SHALL 调用 `Application.Quit()` 关闭游戏进程；Unity Editor SHALL 结束 Play Mode。
+3. WHEN 玩家点击保存页 `BtnDelete` THEN 系统 SHALL 保留保存页并显示同一个 `PanelConfirm`，将 `TextContent` 更新为“确认删除进度存储？”，并锁定当时选中的存档槽位。
+4. WHEN 删除确认状态下点击 `BtnYes` THEN 系统 SHALL 使用现有 `LocalSaveSlotUtility.DeleteSlot` 删除锁定的存档并刷新保存页；不得执行退出游戏逻辑。
+5. WHEN 玩家点击 `PanelConfirm` 内除确认按钮外的任意 Button THEN 系统 SHALL 只关闭该确认弹窗，不退出游戏或删除存档。
+6. 通用确认弹窗 SHALL 根据打开来源恢复对应文案与确认行为，并保留原有独立 `PanelReplay` 的卡包重玩逻辑，不修改用户已搭建的场景布局和样式。
+
+- [x] 复用场景现有 `BtnExit`、`PanelConfirm` 及内部按钮并完成运行时绑定。
+- [x] 将保存页删除操作接入同一弹窗，并按来源切换内容和确认行为。
+- [x] 编译 Runtime/Editor，并静态核对场景节点、文案和按钮结构。
+- [ ] 在 Play Mode 验证退出与删除两种用途的打开、取消和确认路径。
+
+### 验证
+
+- 场景静态检查确认 `BtnExit` 位于 `PanelMenu`，`PanelConfirm` 为 Canvas 根级独立面板，文案为“确认退出游戏？”，确认与取消按钮现命名为 `BtnYes`、`BtnNo`，并保留 `BtnClose`；原 `PanelReplay` 仍独立存在。
+- `BtnDelete` 已改为打开确认弹窗，不再直接删除；确认行为锁定点击时的槽位，删除成功后复用现有保存页刷新逻辑。
+- 通用删除确认接入后，`dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 成功并连带编译 Runtime，结果 `0` 警告、`0` 错误；`git diff --check` 通过，仅有仓库既有 LF/CRLF 提示。
