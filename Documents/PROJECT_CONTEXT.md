@@ -422,6 +422,15 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 - 必需命令行 SDK：.NET 8 SDK，不固定具体补丁版本。
 - 必需 VS Code 扩展：C#（`ms-dotnettools.csharp`）、C# Dev Kit（`ms-dotnettools.csdevkit`）和 Microsoft Unity（`visualstudiotoolsforunity.vstuc`）。
 - `.vscode/extensions.json` 提供编辑器推荐；扩展程序和 .NET SDK 需要在每台设备上单独安装。
+
+### Steam 与运营统计
+
+- Windows Steam 接入使用 OpenUPM 固定依赖 `Steamworks.NET 2025.164.1` 与 `GameAnalytics 8.2.0`；包版本由 `Packages/manifest.json` 和 `packages-lock.json` 管理，不把 SDK 源码复制进 `Assets`。
+- Steam Demo App ID 为 `5034540`，正式版 App ID 为 `4906510`。`AnalyticsManager.ConfiguredSteamAppId` 默认返回 Demo ID；正式版构建通过 Standalone 编译符号 `PUFFIES_STEAM_RELEASE` 切换。根目录 `steam_appid.txt` 仅用于本地 Editor/独立运行辅助，固定为 Demo ID，不是发布包的 App ID 来源。
+- `AnalyticsManager` 是 `DontDestroyOnLoad` 常驻单例和第三方统计的唯一业务入口。Windows 非 Development Player 初始化 Steam，并将 SteamID 变换为 SHA-256 匿名 ID后再初始化 GameAnalytics；Editor、Development Build、Steam 初始化失败、未登录或 Key 缺失时不发送事件且不阻塞场景。
+- GameAnalytics Windows Key 保存于 `Assets/Resources/GameAnalytics/Settings.asset`，通过 `Window > GameAnalytics > Select Settings` 配置，不得写入业务代码、spec 或日志。未配置的空 Settings 资源可以提交；填入 Key 后应把该资源按私有客户端配置管理。
+- 关卡统计统一使用三位 PackId：Progression `Start/Complete/Fail -> CardBag -> NNN`，Complete 携带最终得分；Design 使用 `LevelReplay:CardBagNNN`、`LevelExit:CardBagNNN:ReturnButton` 和 `PlayerProgress:CompletedCardBags`。事件附带 `is_replay` 与当前 `save_slot` 原始字段，不上传昵称、邮箱或存档路径。
+- 应用进入/退出使用 GameAnalytics 自动 Session。主动返回立即记录 Fail；强制关闭或崩溃不在退出回调伪造 Fail，由同一 Session 中存在 Start 且缺少 Complete/Fail 分析异常中退。
 - 在新设备上，Codex 应先检查这些前置条件；缺失时请求安装授权，然后再排查 Unity C# 项目加载错误。
 - `Assembly-CSharp*.csproj` 由 Unity 生成，不得为了兼容 VS Code 手工转换或修改。
 - 本地缓存由根目录 `ProjectMaintenance.ps1` 维护：默认只审计，`-Clean` 达到阈值才删除白名单缓存；每台 Windows 设备需单独执行一次 `-InstallScheduledTask`，注册每周日 `03:00` 的本地任务。Git 会同步脚本与规则，但不会同步 Windows 计划任务。

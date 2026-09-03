@@ -1485,3 +1485,42 @@
 - 拆包动画的资源、曲线、坐标和交接时间均未修改；仅把原本位于撕包手势之后的同步资源读取前移。开包碎片优先从 `GameManager` 已预载的 CardBag Prefab 提取。
 - `dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 已通过并连带生成 Runtime，结果 `0` 警告、`0` 错误；25 个 AudioImporter 静态检查为 BGM `6/6`、SFX `19/19` 符合规则；`git diff --check` 通过，仅有既有 LF/CRLF 提示。
 - 尚需从 LoadingScene 进行 Play Mode 复验：首次进入首页并点击卡包、首次触发撕包、首次进入 GameScene 分发碎片、首次拿取/放置 Piece；同时观察 `GameScene bootstrap completed in ...ms` 日志，确认不存在新增等待或动画时序变化。
+
+## 2026-09-03 - Steam 与 GameAnalytics 运营统计接入
+
+### 需求
+
+1. WHEN Windows Steam Player 启动 THEN 系统 SHALL 初始化 Steamworks，并使用构建配置指定的 Steam App ID；Demo 使用 `5034540`，正式版使用 `4906510`，业务代码不得散落硬编码 App ID。
+2. WHEN Steam 初始化成功 THEN 系统 SHALL 读取当前 SteamID，并在 GameAnalytics 初始化前设置稳定的匿名用户标识；不得向 GameAnalytics 发送 Steam 昵称、邮箱或本地存档路径。
+3. WHEN 玩家进入某个卡包关卡 THEN 系统 SHALL 记录一次关卡开始事件；WHEN 该局成功结算并保存 THEN 系统 SHALL 记录完成事件与最终得分；WHEN 玩家在完成前主动返回 THEN 系统 SHALL 记录失败事件与退出原因。
+4. WHEN 已完成过的卡包再次开始游玩 THEN 系统 SHALL 额外记录重玩事件；关卡标识统一使用三位 PackId，例如 `022`。
+5. GameAnalytics SHALL 使用 Progression 事件表达 `Start/Complete/Fail -> CardBag -> NNN`，使用 Design 事件表达重玩与主动退出原因；GameAnalytics 自动 Session 用于应用进入与退出统计。
+6. WHEN Unity Editor、开发测试入口或“一键完成”测试运行 THEN 系统 SHALL 默认不向正式 GameAnalytics 项目发送运营事件；统计初始化失败或网络不可用不得阻塞 LoadingScene、MainScene、GameScene 或存档。
+7. GameAnalytics `Game Key` 与 `Secret Key` SHALL 仅保存在 SDK 的 Unity Settings 资源中并由用户在本机填写，不写入业务代码、spec 或聊天记录；密钥缺失时系统 SHALL 输出一次明确提示并保持游戏可运行。
+8. 业务场景 SHALL 只依赖项目统一的 `AnalyticsManager` 接口，不直接散落调用 GameAnalytics 或 Steamworks API，以便后续替换 SDK、增加同意开关或区分 Demo/正式环境。
+
+### 设计
+
+- 使用 Steamworks.NET 负责 Steam 客户端初始化、SteamID、成就和少量累计 Stat；使用 GameAnalytics 负责 Session、关卡漏斗、通关率、中途退出原因、重玩次数和玩家完成关数分析。
+- `AnalyticsManager` 为 `DontDestroyOnLoad` 常驻单例，负责第三方 SDK 生命周期、匿名用户 ID、一次活跃关卡状态与幂等结束；场景只调用 `StartCardBag(packId, isReplay)`、`CompleteCardBag(packId, score)`、`ExitCardBag(packId, reason)`。
+- GameAnalytics 事件约定：`Start / CardBag / NNN`、`Complete / CardBag / NNN / score`、`Fail / CardBag / NNN`；Design 事件使用 `LevelReplay:CardBagNNN` 与 `LevelExit:CardBagNNN:<Reason>`。
+- 强制关闭无法可靠执行退出回调，由服务端用存在 Start 且缺少 Complete/Fail 的 Session 识别异常中退；主动返回则立即发送 Fail 与退出原因。
+- Steam App ID 通过独立项目配置选择 Demo/正式环境；Editor 使用 `steam_appid.txt` 仅作本地 Steam 初始化辅助，该文件不作为发布包的运行时配置来源。
+
+### 任务
+
+- [x] 1. 固定与 Unity 2022.3 兼容的 Steamworks.NET、GameAnalytics SDK 版本并接入 Package Manager。
+- [x] 2. 增加统一 `AnalyticsManager`、Steam Demo/正式 App ID 配置及初始化失败降级。
+- [x] 3. 在 GameScene 的真实进入、成功保存、主动返回节点接入 Start/Complete/Fail，并记录重玩与退出原因。
+- [x] 4. 排除 Editor 和开发测试事件，检查隐私字段及事件幂等性。
+- [x] 5. 完成 Runtime/Editor 编译与静态事件口径检查。
+- [ ] 6. 用户在 Unity GameAnalytics Settings 填写本地 Key 后，通过后台 Realtime 验证 Demo Steam 客户端测试事件到账。
+
+### 实现与验证
+
+- OpenUPM 依赖固定为 `com.gameanalytics.sdk@8.2.0` 和 `com.rlabrecque.steamworks.net@2025.164.1`，均与 Unity 2022.3 兼容；锁文件已记录 registry 与精确版本。
+- `AnalyticsManager` 在首个 Scene 前常驻创建。正式 Windows Player 使用集中配置的 Steam App ID 初始化 Steam，Steam 用户登录后将 `SHA-256(Puffies:Steam:<SteamID>)` 作为 GameAnalytics Custom ID；Steam callbacks 在主线程逐帧派发，退出时统一 Shutdown。
+- Demo 为默认构建环境并使用 `5034540`；定义 `PUFFIES_STEAM_RELEASE` 后改用正式版 `4906510`。Steamworks.NET 自动生成的 `steam_appid.txt=480` 已改为 `5034540`，用于本地辅助，不替代 Steam 发布配置。
+- GameScene 只在初始化玩法完成后开始事件、成功保存且算出最终分数后完成事件、未通关返回按钮确认离开时失败事件。Manager 对同一活动局的重复 Start/Complete/Fail 做幂等保护。
+- Editor 与 Development Build 在编译期关闭提交路径；短暂 Editor Play Mode 已成功创建空 `Assets/Resources/GameAnalytics/Settings.asset`，未出现 Steam 初始化和远端事件发送。
+- Runtime 与 Editor `dotnet build --no-restore` 均通过，结果为 `0` 警告、`0` 错误。尚未填写用户 Key，也未进行非 Development Steam Demo Player 的 Realtime 到数验证。

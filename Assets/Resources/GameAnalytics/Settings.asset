@@ -1,0 +1,60 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6f78192cec1344d83a177ac5e6139ab3, type: 3}
+  m_Name: Settings
+  m_EditorClassIdentifier: 
+  gameKey:
+  - e5b19db356c5325ee2f2198ea2880d4d
+  secretKey:
+  - b28cd216c01d0ede1461775f725dad88d68d1b51
+  Build:
+  - 1.0.0
+  SelectedPlatformOrganization:
+  - 
+  SelectedPlatformStudio:
+  - 
+  SelectedPlatformGame:
+  - 
+  SelectedPlatformGameID: ffffffff
+  SelectedOrganization: 00000000
+  SelectedStudio: 00000000
+  SelectedGame: 00000000
+  NewVersion: 
+  Changes: 
+  StudioName: MainTown
+  GameName: Ducky Stickers
+  EmailGA: 
+  InfoLogEditor: 1
+  InfoLogBuild: 1
+  VerboseLogBuild: 0
+  UseManualSessionHandling: 0
+  CustomDimensions01: []
+  CustomDimensions02: []
+  CustomDimensions03: []
+  ResourceItemTypes: []
+  ResourceCurrencies: []
+  LastCreatedGamePlatform: 0
+  Platforms: 02000000
+  UsePlayerSettingsBuildNumber: 0
+  BuildNumberAutoDetect: 00
+  SubmitErrors: 1
+  NativeErrorReporting: 0
+  MaxErrorCount: 10
+  SubmitFpsAverage: 0
+  SubmitFpsCritical: 0
+  FpsCriticalThreshold: 20
+  FpsCirticalSubmitInterval: 1
+  EnableMemoryHistogram: 0
+  EnableFPSHistogram: 0
+  EnableSDKInitEvent: 0
+  EnableHardwareTracking: 0
+  EnableMemoryTracking: 0

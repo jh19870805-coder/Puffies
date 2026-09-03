@@ -547,6 +547,9 @@ public class GameScene : MonoBehaviour
         _didQueueTaskRewardDuringSettlement = false;
         _isFirstCompletionSettlement = false;
         InitializeGameplay(selectedBagId);
+        AnalyticsManager.Instance.StartCardBag(
+            selectedBagId,
+            _wasSelectedPackCompletedOnEntry);
         GameManager.NotifyGameSceneLoaded();
         InitializeTaskTracking();
         ConfigureReturnButton();
@@ -10966,6 +10969,14 @@ public class GameScene : MonoBehaviour
             $"time=+{scoreResult.CompletionTimeBonusPercent}% ({scoreResult.CompletionTimeSeconds:F2}s), " +
             $"total=+{scoreResult.TotalBonusPercent}%, final={scoreResult.FinalScore}");
 
+        if (_didSavePackCompletion)
+        {
+            AnalyticsManager.Instance.CompleteCardBag(
+                packId,
+                settlementScore,
+                CardPackDataUtility.GetCompletedPackCount());
+        }
+
         if (!_isTaskTrackingActive
             || !GameTaskUtility.TryGetCurrentTask(out var task))
         {
@@ -12423,6 +12434,13 @@ public class GameScene : MonoBehaviour
         {
             Debug.LogWarning(
                 $"GameScene: failed to preserve puzzle session before returning. packId={packId}");
+        }
+
+        if (!_isGameFinished)
+        {
+            AnalyticsManager.Instance.ExitCardBag(
+                packId,
+                CardBagExitReason.ReturnButton);
         }
 
         GameManager.EnterMainScene();
