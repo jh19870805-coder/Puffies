@@ -1380,3 +1380,43 @@
 - [x] 2. `GameScene.Update()` 在结算状态下停止分发玩法鼠标/触摸输入。
 - [x] 3. 为并行奖励动画增加有界等待和最终状态归一，超时后停止残留协程并恢复卡包与底板的目标位置。
 - [ ] 4. Runtime/Editor 编译和差异检查已通过；仍需在 Play Mode 连续点击结算空白区域复验。
+
+## 2026-09-03 - 音频资源统一命名
+
+### 需求
+
+1. WHEN `Assets/Audios` 中的背景音乐和音效进入正式接入阶段 THEN 所有 MP3 SHALL 使用 ASCII、无空格的稳定资源名。
+2. 背景音乐 SHALL 使用 `BGM_` 前缀，短音效 SHALL 使用 `SFX_` 前缀；同类序列 SHALL 使用两位数字编号。
+3. WHEN 文件重命名 THEN 对应 `.meta` SHALL 同步移动并保持原 GUID，音频内容和 Unity 导入参数不得改变。
+
+### 重命名映射
+
+| 原文件名 | 新文件名 |
+|---|---|
+| `主界面背景音乐.mp3` | `BGM_MainMenu.mp3` |
+| `Bg01.mp3` ~ `Bg05.mp3` | `BGM_Gameplay_01.mp3` ~ `BGM_Gameplay_05.mp3` |
+| `通用按钮.mp3` | `SFX_ButtonClick.mp3` |
+| `点击卡包02.mp3` | `SFX_CardPackClick.mp3` |
+| `ClickCard.mp3` | `SFX_PopupTransition.mp3` |
+| `卡包到二次确认界面.mp3` | `SFX_CardPackReplayConfirm.mp3` |
+| `events_award.mp3` | `SFX_CardPackOpen.mp3` |
+| `分发碎片.mp3` | `SFX_PieceDeal.mp3` |
+| `拼图完成.mp3` | `SFX_PuzzleComplete.mp3` |
+| `ScoreUp.mp3` | `SFX_ScoreIncrease.mp3` |
+| `BagGain.mp3` | `SFX_CardPackGain.mp3` |
+| `放错，回来块.mp3` | `SFX_PieceWrongReturn.mp3` |
+| `放在桌面或者棋盘上.mp3` | `SFX_PiecePlace.mp3` |
+| `卡包出现声音.mp3` | `SFX_CardPackAppear.mp3` |
+| `块抖动声音.mp3` | `SFX_PieceShake.mp3` |
+| `块放对了02.mp3` | `SFX_PieceCorrect.mp3` |
+| `拿起块.mp3` | `SFX_PiecePickup.mp3` |
+| `区域移动.mp3` | `SFX_RegionMove.mp3` |
+| `系列卡包切换.mp3` | `SFX_SeriesCardPackSwitch.mp3` |
+| `开关切换.mp3` | `SFX_ToggleSwitch.mp3` |
+| `抖动提示.mp3` | `SFX_FinalPieceHint.mp3` |
+
+### 任务
+
+- [x] 1. 验证全部源文件、目标名和 `.meta` 一一对应且不存在命名冲突。
+- [x] 2. 成对重命名 MP3 与 `.meta`，保持目录扁平。
+- [x] 3. 对比重命名前后文件哈希与 `.meta` GUID，并检查 Git 差异。

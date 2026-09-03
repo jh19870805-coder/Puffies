@@ -1,5 +1,14 @@
 # 当前任务
 
+## 2026-09-03 音频资源统一命名
+
+- 状态：`Assets/Audios` 内全部 MP3 与 `.meta` 已完成统一重命名，尚未接入播放逻辑。
+- 规则：背景音乐统一使用 `BGM_` 前缀，短音效统一使用 `SFX_` 前缀；文件名只使用 ASCII、PascalCase 功能名和必要的两位数字序号，目录继续保持单层扁平。
+- 结果：`6` 个背景音乐重命名为 `BGM_MainMenu.mp3` 与 `BGM_Gameplay_01~05.mp3`；`19` 个音效按实际调用语义重命名为 `SFX_ButtonClick.mp3`、`SFX_CardPackOpen.mp3`、`SFX_PieceCorrect.mp3` 等稳定名称。完整旧名与新名映射记录在 `specs/spec-driven-development.md` 的“音频资源统一命名”章节。
+- 资源完整性：重命名时 MP3 和对应 `.meta` 成对移动；`25/25` 个 MP3 的 SHA-256 保持不变，`25/25` 个 `.meta` GUID 保持不变，没有目标冲突、重复 GUID或遗留中文文件名。
+- 修改范围：仅 `Assets/Audios` 文件名及工程记录；没有修改音频内容、Unity 导入参数、场景、Prefab 或播放代码。
+- 下一步：收到接入指令后，按已确认的音效调用表接入播放，并实现“卡包或系列首次游玩随机 `BGM_Gameplay_01~05`、本地持久化后永久复用”的背景音乐规则。
+
 ## 2026-09-03 结算动画连续点击卡死修复
 
 - 状态：代码和规格记录已修改，Runtime/Editor 编译通过，等待 Unity Play Mode 连点复验。

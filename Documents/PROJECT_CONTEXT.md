@@ -237,6 +237,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 - 待发任务卡包权益保存在 SQLite `AppRecords` 的 `CardPackDistribution/Progress` 下，并按唯一 `TaskInstanceId` 去重。
 - GameScene 在推进任务前先持久化任务权益，且仅在任务推进保存成功后尝试发放，避免任务进度保存失败时重复发包。
 - MainScene 设置以集合/键 `GameSettings/Runtime` 保存在 `AppRecords`：音乐音量、音效音量和窗口模式。
+- 音频资源统一平铺在 `Assets/Audios`：背景音乐使用 `BGM_` 前缀，短音效使用 `SFX_` 前缀，名称只使用 ASCII、PascalCase 功能名和必要的两位数字序号。主界面固定资源为 `BGM_MainMenu.mp3`，游戏内候选为 `BGM_Gameplay_01~05.mp3`。卡包第一次游玩时随机并持久化一个候选资源标识；非系列按 PackId 保存，系列按系列链首 PackId 保存且后续成员共用，之后再次进入不得重新随机。该播放与持久化逻辑尚待接入。
 - MainScene 辅助选项开关同样保存在 `GameSettings/Runtime`，字段为 `UsableOption1`、`UsableOption2` 和 `UsableOption3`。
 - `UsableOption1` 是关卡描边开关，`UsableOption2` 是贴纸描边开关，两者新建设置时都默认关闭；`UsableOption3` 是高对比度并默认关闭。已持久化的用户选择优先。关卡描边关闭时 GameScene 保留现有当前阶段连接区域，打开时改为显示当前待拼组的完整合并外边界；贴纸描边关闭时不显示单块轮廓，打开时叠加当前组每块凹槽的独立轮廓。PanelUsable 的 `ImgContentBg` 按高对比度状态显示 `MainSetHigh1/2.png`；`ImgContentLine` 在描边全关、仅关卡描边、贴纸描边打开时分别显示 `MainSetLine1/2/3.png`，两项同时打开使用信息更完整的 `MainSetLine3.png`。GameScene 的 `BoardBgXX RawImage` 在高对比度关闭时统一使用 `UI/BasicUI/BgCardBoard1.png`，打开时统一替换为 `BgCardBoard2.png`；CardBag 根 `Image.sprite` 始终为空，运行时不改变背景块布局或 UV。烘焙棋盘描边通过 Alpha-only UGUI Shader 固定输出 `#3f423e`，不随高对比度切换颜色；提示按钮的绿色滚动虚线在高对比度时改用 `#b1d702`，新手引导专用蓝色虚线不变。
 - MainScene 和 GameScene 引用相同 `TaskItem.prefab` GUID。场景 Override 只定位根节点（`MainScene`：`10,508`；`GameScene`：`-6,455`）；子节点布局和视觉必须在共享 Prefab 中修改。
