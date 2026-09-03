@@ -550,11 +550,11 @@ public static class CardPackDataUtility
             return false;
         }
 
-        SqliteLocalStore.ExecuteNonQuery(
+        var affected = SqliteLocalStore.ExecuteNonQuery(
             $@"DELETE FROM {GameDefine.LocalSqliteCardPackPuzzleProgressTable}
                WHERE PackId = ?",
             packId);
-        return !HasActivePuzzleSession(packId);
+        return affected >= 0;
     }
 
     /// <summary>

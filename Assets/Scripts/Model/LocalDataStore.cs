@@ -466,9 +466,24 @@ public static class SqliteLocalStore
             return false;
         }
 
-        return Exists(collection, key)
-            ? Update(collection, key, value)
-            : Create(collection, key, value);
+        lock (sLock)
+        {
+            EnsureInitialized();
+            var now = DateTime.UtcNow.ToString("o");
+            var affected = sConnection.Execute(
+                $@"INSERT INTO {GameDefine.LocalSqliteCollectionTable}
+                   (Collection, RecordKey, JsonValue, CreatedUtc, UpdatedUtc)
+                   VALUES (?, ?, ?, ?, ?)
+                   ON CONFLICT(Collection, RecordKey) DO UPDATE SET
+                    JsonValue = excluded.JsonValue,
+                    UpdatedUtc = excluded.UpdatedUtc",
+                collection,
+                key,
+                value ?? string.Empty,
+                now,
+                now);
+            return affected > 0;
+        }
     }
 
     /// <summary>

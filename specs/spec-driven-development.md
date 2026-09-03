@@ -1581,3 +1581,33 @@
 - 第一版 `Camera.pixelRect` 映射经用户按“拉窄 -> 拉宽”验证仍失败：托盘 Piece 被排到棋盘下沿附近。Editor 实际日志确认错误帧的根 Canvas Rect 为 `0x0`，而代码仍继续按无效父矩形布局。
 - 第二版移除窗口刷新阶段对完整 `ConfigureGameplayCanvas` 的重复调用，只刷新固定宽高比相机视口；布局前检查根 Canvas Rect，尺寸无效时逐帧延后。临时诊断代码已删除，Runtime/Editor 再次编译为 `0` 警告、`0` 错误。
 - [ ] 在 GameScene 连续切换 `16:9 -> 超宽 -> 偏高 -> 16:9`，确认棋盘不漂移、托盘 Piece 保持在可见托盘内且回收/滚动热区准确；同时覆盖桌面错误 Piece 与活动中新手引导。
+
+## 2026-09-03 - 结算流程性能优化
+
+### 需求
+
+1. WHEN 玩家放下最后一片并进入结算 THEN 系统 SHALL 先让 RewardPanel 完成首帧显示，再执行同步完成存档，避免存储耗时阻塞结算画面出现。
+2. WHEN 同一关进入 GameScene THEN 系统 SHALL 提前缓存当前已完成卡包数量；结算阶段不得为同一显示值重复查询 SQLite。
+3. WHEN 任务、奖励分发或其他本地集合执行覆盖保存 THEN SQLite SHALL 使用单条原子 Upsert，不得先后重复执行存在性查询。
+4. WHEN 已完成关卡清理拼图会话 THEN 系统 SHALL 执行一次删除，不得再发起只用于确认删除结果的同步查询。
+5. WHEN 结算奖励粒子跨场景播放 THEN 系统 SHALL 复用初始化时缓存的粒子组件，不得在长尾等待期间每帧递归扫描层级并分配数组。
+6. 本次优化 SHALL 保持结算动画时长、得分与任务规则、奖励分配结果、奖励对象层级以及返回首页视觉顺序不变。
+
+### 设计与任务
+
+- [x] 1. 将完成卡包数读取移到 GameScene 初始化，并把完成存档延后到 RewardPanel 首帧渲染之后。
+- [x] 2. 将 `SqliteLocalStore.Upsert` 合并为单条 `INSERT ... ON CONFLICT DO UPDATE`，移除拼图会话删除后的确认查询。
+- [x] 3. 缓存跨场景奖励对象内的 `ParticleSystem[]`，消除播放期间的逐帧层级扫描与数组分配。
+- [x] 4. 为结算首帧准备、完成存档、任务数据处理和奖励转场增加 Profiler 标记及开发环境耗时日志。
+- [x] 5. 编译 Runtime/Editor，并执行静态差异检查。
+- [ ] 6. 在 Play Mode 比较最后一片到 RewardPanel、点击完成到首页飞行动画两段体感。
+
+### 实现与验证
+
+- `_settlementBagCountBeforeCompletion` 在 GameScene 初始化阶段读取一次；完成保存后由“进入时数量 + 本局是否首次完成”得到结算最终数量，分数动画、卡包数动画和 Analytics 均复用该快照。
+- RewardPanel 完成对象准备并激活后，结算协程先 `yield return null`，再保存卡包完成状态并清理拼图会话。保存结果仍在任务、奖励与 Analytics 处理前确定，不改变结算业务结果。
+- `SqliteLocalStore.Upsert` 现使用单条带复合唯一键冲突更新的 SQL，保留原 `CreatedUtc` 并只更新 `JsonValue/UpdatedUtc`；`TryClearPuzzleSession` 删除后不再追加 `COUNT` 查询。
+- `CardPackRewardFlyTransition` 在接管每个现成 `BagRewardItem` 时缓存其粒子数组，播放、存活判断、停止和销毁均复用缓存；不修改粒子 Transform、参数、Renderer 或动画时序。
+- Profiler 新增 `Puffies.Settlement.Entry`、`BoardPreparation`、`Persistence`、`TaskData` 与 `RewardTransition` 样本；Editor/Development Console 额外输出结算首帧准备和完成存档耗时。
+- `dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 成功并连带编译 Runtime，结果 `0` 警告、`0` 错误；`git diff --check` 通过，仅有仓库既有 LF/CRLF 提示。
+- [ ] 在 Play Mode 完成一次首次通关和一次重玩，观察 `settlement performance` 日志，并确认结算首帧、滚分、奖励出现及返回首页飞行动画连续。

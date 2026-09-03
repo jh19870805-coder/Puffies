@@ -402,6 +402,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 - 结算返回首页时，`ImgBagBg` 的最新时序覆盖上一条“随底部 UI 在 GameScene 退场”的旧描述：黑色半透明条不提前下移，而是与完整奖励卡一起进入持久化转场 Canvas；MainScene 目标槽准备完成且奖励卡开始飞行 `0.08s` 后，`ImgBagBg` 再沿用 `0.42s` 三次缓入节奏向下移出屏幕。奖励卡仍独立换父和飞向列表，背板不得跟随卡包一起飞向目标槽。
 - `CardPackRewardFlyTransition` 在奖励卡揭晓、首页其余列表入场及输入恢复后，允许仅为 `FX_ui_jieSuo_w` 长尾粒子继续跨场景存活；进入 GameScene 时必须清理该上一轮实例，当前结算创建新奖励转场前也必须再次防御性清理，避免旧静态实例阻止新转场。无实际奖励的结算仍创建空奖励转场并接管 MainScene 列表上滑，不能因为旧实例冲突而直接加载一个永久预隐藏列表的 MainScene。
 - GameScene 进入结算后必须停止分发玩法鼠标/触摸输入，并由 RewardPanel 根 `CanvasGroup` 在所有入场、积分和奖励动画完成前统一禁用子级交互；完成后才恢复 `BtnFinish` 与 `BtnCamera`。奖励底板、首次完成奖励和任务奖励的并行动画必须使用有界等待，异常未回调时恢复各对象最终可见状态并继续按钮入场，不得让结算主流程永久等待。
+- 结算性能规则：GameScene 进入时缓存当时已完成卡包数量，结算过程基于该快照和本局首次完成结果刷新 UI 与 Analytics，不重复查询 SQLite。RewardPanel 必须先获得一帧显示机会，再同步保存完成状态和清理拼图会话；保存仍须在任务、奖励和完成事件处理前结束。SQLite 集合型 Upsert 使用单条原子冲突更新语句，拼图会话删除后不追加确认查询。跨场景 `BagRewardItem` 在初始化时缓存自身全部粒子组件，长尾等待期间不得逐帧递归扫描层级。
 - `Assets/Resources/CardBagPrefabs/` 是 GameScene 拼图关卡资源，不属于卡包展示特效，必须保留。
 
 ---

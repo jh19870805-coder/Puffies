@@ -1,5 +1,15 @@
 # 当前任务
 
+## 2026-09-03 结算流程性能优化
+
+- 状态：代码优化和编译验证完成，等待 Play Mode 体感与 Profiler 数据验收。
+- 用户意图：优化最后一片完成到结算展示，以及结算返回首页的卡顿；保持现有动画节奏、分数、任务和奖励逻辑不变。
+- 已确认根因：RewardPanel 激活前同帧执行棋盘清理、Canvas 重建、SQLite 完成数查询、卡包完成写入和拼图会话删除；任务结算阶段还有多次 JSON/SQLite 写入；奖励特效长尾等待每帧执行 `GetComponentsInChildren<ParticleSystem>` 并分配数组。
+- 已完成：进入 GameScene 时缓存完成数；RewardPanel 首帧显示后再持久化；SQLite 集合 Upsert 合并为单条原子语句；会话删除不再额外确认查询；奖励粒子组件初始化时缓存；增加 Profiler 标记与仅 Editor/Development 的耗时日志。
+- 修改范围：`GameScene.cs`、`CardPackRewardFlyTransition.cs`、`CardPackDataUtility.cs`、`LocalDataStore.cs`、统一 spec 和项目记录。
+- 验证：`dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 连带 Runtime 编译通过，`0` 警告、`0` 错误；`git diff --check` 通过，仅有既有换行提示。
+- 下一步：在 Play Mode 各完成一次首次通关和重玩，观察 Console 的 `GameScene: settlement performance` 耗时，并比较最后一片到 RewardPanel、点击完成到首页飞行动画两段体感。
+
 ## 2026-09-03 GameScene 动态窗口尺寸适配修复
 
 - 状态：已根据 Unity Editor 实际诊断日志完成第二版根因修复并删除临时诊断代码，编译通过，等待按“拉窄 -> 拉宽”复验。

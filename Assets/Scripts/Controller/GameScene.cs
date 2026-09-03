@@ -4,11 +4,23 @@ using System.Collections.Generic;
 using System.Linq;
 using TMPro;
 using UnityEngine;
+using Unity.Profiling;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 public class GameScene : MonoBehaviour
 {
+    private static readonly ProfilerMarker SettlementEntryMarker =
+        new ProfilerMarker("Puffies.Settlement.Entry");
+    private static readonly ProfilerMarker SettlementBoardPreparationMarker =
+        new ProfilerMarker("Puffies.Settlement.BoardPreparation");
+    private static readonly ProfilerMarker SettlementPersistenceMarker =
+        new ProfilerMarker("Puffies.Settlement.Persistence");
+    private static readonly ProfilerMarker SettlementTaskDataMarker =
+        new ProfilerMarker("Puffies.Settlement.TaskData");
+    private static readonly ProfilerMarker SettlementRewardTransitionMarker =
+        new ProfilerMarker("Puffies.Settlement.RewardTransition");
+
     private const float ReferenceHeight = GameDefine.DesignHeight;
     private const float PixelsPerUnit = GameDefine.PixelsPerUnit;
     private const float DefaultBoardScale = 1f;
@@ -399,6 +411,7 @@ public class GameScene : MonoBehaviour
     private bool _hasTaskRewardSourceDefaultColors;
     private bool _hasSettlementLayoutTargets;
     private int _settlementBagCountBeforeCompletion;
+    private int _settlementBagCountAfterCompletion;
     private int _settlementCompletionRewardPackId;
     private int _settlementTaskRewardPackId;
     private bool _didQueueTaskRewardDuringSettlement;
@@ -534,6 +547,8 @@ public class GameScene : MonoBehaviour
             + $"replay={isReplaySession}");
         CardPackDataUtility.Initialize();
         _wasSelectedPackCompletedOnEntry = CardPackDataUtility.IsPackCompleted(selectedBagId);
+        _settlementBagCountBeforeCompletion = CardPackDataUtility.GetCompletedPackCount();
+        _settlementBagCountAfterCompletion = _settlementBagCountBeforeCompletion;
         _isTutorialPending = ShouldOfferPiecePlacementTutorial(selectedBagId, isReplaySession);
         _didAdvanceTaskDuringSettlement = false;
         _didFailTaskAdvanceDuringSettlement = false;
@@ -541,7 +556,6 @@ public class GameScene : MonoBehaviour
         _isSettlementReadyForFinish = false;
         _isFinishTransitionStarted = false;
         _settlementPackRewardIds.Clear();
-        _settlementBagCountBeforeCompletion = 0;
         _settlementCompletionRewardPackId = 0;
         _settlementTaskRewardPackId = 0;
         _didQueueTaskRewardDuringSettlement = false;
@@ -7927,7 +7941,7 @@ public class GameScene : MonoBehaviour
             yield break;
         }
 
-        var finalCount = CardPackDataUtility.GetCompletedPackCount();
+        var finalCount = _settlementBagCountAfterCompletion;
         var incrementObject = Instantiate(
             _settlementBagCountText.gameObject,
             _settlementBagCountText.transform.parent,
@@ -8464,6 +8478,10 @@ public class GameScene : MonoBehaviour
 
     private void ShowRewardPanel()
     {
+        using var settlementEntry = SettlementEntryMarker.Auto();
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        var entryStartedAt = System.Diagnostics.Stopwatch.GetTimestamp();
+#endif
         if (_isGameFinished)
         {
             return;
@@ -8507,15 +8525,14 @@ public class GameScene : MonoBehaviour
             return;
         }
 
-        PrepareBoardForRewardPanel();
-        _settlementBagCountBeforeCompletion = CardPackDataUtility.GetCompletedPackCount();
+        using (SettlementBoardPreparationMarker.Auto())
+        {
+            PrepareBoardForRewardPanel();
+        }
         _settlementCompletionRewardPackId = 0;
         _settlementTaskRewardPackId = 0;
         _didQueueTaskRewardDuringSettlement = false;
         _settlementPackRewardIds.Clear();
-        _didSavePackCompletion = SaveCardPackAfterPuzzleComplete();
-        _isFirstCompletionSettlement = _didSavePackCompletion
-                                       && !_wasSelectedPackCompletedOnEntry;
         _isSettlementReadyForFinish = false;
         if (_finishButton != null)
         {
@@ -8532,6 +8549,9 @@ public class GameScene : MonoBehaviour
         _rewardPanelRoot.transform.SetAsLastSibling();
         PrepareSettlementVisualState();
         StartCoroutine(ProcessTaskSettlement());
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        LogSettlementPerformance("entry prepared", entryStartedAt);
+#endif
         Debug.Log("GameScene: puzzle completed, RewardPanel shown.");
     }
 
@@ -8831,16 +8851,25 @@ public class GameScene : MonoBehaviour
 
     private IEnumerator PlaySettlementFinishTransition()
     {
-        PrepareSettlementRewardImagesForExit();
+        using (SettlementRewardTransitionMarker.Auto())
+        {
+            PrepareSettlementRewardImagesForExit();
+        }
         yield return AnimateSettlementUiExit();
 
         CardPackRewardFlyTransition.CancelPending();
-        if (!CardPackRewardFlyTransition.TryStart(
+        bool transitionStarted;
+        using (SettlementRewardTransitionMarker.Auto())
+        {
+            transitionStarted = CardPackRewardFlyTransition.TryStart(
                 BuildSettlementRewardTransitionSources(),
                 _settlementPackRewardIds,
                 IsSettlementUiVisible(_settlementRewardBagRect)
                     ? _settlementRewardBagRect
-                    : null))
+                    : null);
+        }
+
+        if (!transitionStarted)
         {
             GameManager.EnterMainScene();
         }
@@ -10898,6 +10927,7 @@ public class GameScene : MonoBehaviour
 
     private void TryGrantFirstCompletionPackReward()
     {
+        using var taskData = SettlementTaskDataMarker.Auto();
         var completedPackId = GameManager.GetBagId();
         if (_wasSelectedPackCompletedOnEntry)
         {
@@ -10924,6 +10954,23 @@ public class GameScene : MonoBehaviour
 
     private IEnumerator ProcessTaskSettlement()
     {
+        // Let the prepared RewardPanel reach the screen before synchronous local persistence.
+        yield return null;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        var persistenceStartedAt = System.Diagnostics.Stopwatch.GetTimestamp();
+#endif
+        using (SettlementPersistenceMarker.Auto())
+        {
+            _didSavePackCompletion = SaveCardPackAfterPuzzleComplete();
+            _isFirstCompletionSettlement = _didSavePackCompletion
+                                           && !_wasSelectedPackCompletedOnEntry;
+            _settlementBagCountAfterCompletion = _settlementBagCountBeforeCompletion
+                                                 + (_isFirstCompletionSettlement ? 1 : 0);
+        }
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        LogSettlementPerformance("completion persisted", persistenceStartedAt);
+#endif
+
         var boardFitAnimation = StartCoroutine(AnimateCompletedBoardForRewardPanel());
         yield return AnimateSettlementHeaderEntrance();
         yield return boardFitAnimation;
@@ -11032,7 +11079,7 @@ public class GameScene : MonoBehaviour
             AnalyticsManager.Instance.CompleteCardBag(
                 packId,
                 settlementScore,
-                CardPackDataUtility.GetCompletedPackCount());
+                _settlementBagCountAfterCompletion);
         }
 
         if (!_isTaskTrackingActive
@@ -11051,12 +11098,19 @@ public class GameScene : MonoBehaviour
 
         var progressBeforeSettlement = GameTaskUtility.GetCurrentCompleteValue();
         var stickerCount = CountGrooveImages(_board.GrooveImagesByGroup);
-        if (!GameTaskUtility.ApplyCompletedPack(
+        bool taskApplied;
+        int taskContribution;
+        using (SettlementTaskDataMarker.Auto())
+        {
+            taskApplied = GameTaskUtility.ApplyCompletedPack(
                 packId,
                 stickerCount,
                 settlementScore,
                 _wasSelectedPackCompletedOnEntry,
-                out var taskContribution))
+                out taskContribution);
+        }
+
+        if (!taskApplied)
         {
             Debug.LogWarning(
                 $"GameScene: failed to apply completed pack to current task. " +
@@ -11091,9 +11145,15 @@ public class GameScene : MonoBehaviour
         {
             if (QueueTaskReward(task))
             {
-                if (GameTaskUtility.TryCompleteAndAdvanceTask(
+                bool taskAdvanced;
+                using (SettlementTaskDataMarker.Auto())
+                {
+                    taskAdvanced = GameTaskUtility.TryCompleteAndAdvanceTask(
                         packId,
-                        _wasSelectedPackCompletedOnEntry))
+                        _wasSelectedPackCompletedOnEntry);
+                }
+
+                if (taskAdvanced)
                 {
                     _didAdvanceTaskDuringSettlement = true;
                     _isTaskTrackingActive = GameTaskUtility.TryGetCurrentTask(out var nextTask);
@@ -11122,6 +11182,7 @@ public class GameScene : MonoBehaviour
 
     private bool QueueTaskReward(TaskInstanceData task)
     {
+        using var taskData = SettlementTaskDataMarker.Auto();
         var preferredPackId = task.RewardType == RewardType.CardPack
             ? task.RewardId
             : 0;
@@ -11144,6 +11205,7 @@ public class GameScene : MonoBehaviour
 
     private void TryGrantPendingTaskPackReward(string source)
     {
+        using var taskData = SettlementTaskDataMarker.Auto();
         var granted = CardPackDistributionUtility.TryGrantPendingTaskReward(
             out var rewardPackId,
             out var chapterId,
@@ -11571,8 +11633,19 @@ public class GameScene : MonoBehaviour
 
     private void RefreshSettlementBagCount()
     {
-        SetSettlementBagCount(CardPackDataUtility.GetCompletedPackCount());
+        SetSettlementBagCount(_settlementBagCountAfterCompletion);
     }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    private static void LogSettlementPerformance(string operation, long startedAt)
+    {
+        var elapsedMilliseconds =
+            (System.Diagnostics.Stopwatch.GetTimestamp() - startedAt)
+            * 1000d
+            / System.Diagnostics.Stopwatch.Frequency;
+        Debug.Log($"GameScene: settlement performance. operation={operation}, elapsed={elapsedMilliseconds:F2}ms");
+    }
+#endif
 
     private void SetSettlementBagCount(int count)
     {

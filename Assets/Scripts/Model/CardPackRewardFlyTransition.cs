@@ -27,6 +27,7 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
         public Image Image;
         public Color BaseColor;
         public GameObject RevealEffect;
+        public ParticleSystem[] RevealParticleSystems;
         public Vector3 InitialItemScale;
         public Vector2 CoverOffsetFromItem;
         public Vector2 DisplaySize;
@@ -45,6 +46,7 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
         public RectTransform CoverRect;
         public Image CoverImage;
         public GameObject RevealEffect;
+        public ParticleSystem[] RevealParticleSystems;
         public Vector2 Position;
         public Vector2 Size;
     }
@@ -181,6 +183,9 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
                 return false;
             }
 
+            var revealEffect = FindDescendantByName(
+                rewardCanvasRect,
+                "FX_ui_jieSuo_w")?.gameObject;
             rewardSources.Add(new RewardSource
             {
                 PackId = packId,
@@ -188,9 +193,10 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
                 RewardCanvasRect = rewardCanvasRect,
                 CoverRect = source,
                 CoverImage = sourceImage,
-                RevealEffect = FindDescendantByName(
-                    rewardCanvasRect,
-                    "FX_ui_jieSuo_w")?.gameObject,
+                RevealEffect = revealEffect,
+                RevealParticleSystems = revealEffect != null
+                    ? revealEffect.GetComponentsInChildren<ParticleSystem>(true)
+                    : null,
                 Position = sourcePosition,
                 Size = sourceSize
             });
@@ -244,7 +250,7 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
                 source.RevealEffect);
             source.CoverImage.raycastTarget = false;
             source.CoverImage.enabled = true;
-            StopAndClearParticleSystems(source.RevealEffect);
+            StopAndClearParticleSystems(source.RevealParticleSystems);
             if (source.RevealEffect != null)
             {
                 source.RevealEffect.SetActive(false);
@@ -258,6 +264,7 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
                 Image = source.CoverImage,
                 BaseColor = source.CoverImage.color,
                 RevealEffect = source.RevealEffect,
+                RevealParticleSystems = source.RevealParticleSystems,
                 InitialItemScale = source.RewardItemTransform.localScale,
                 CoverOffsetFromItem = source.Position
                                       - (Vector2)source.RewardItemTransform.localPosition,
@@ -561,7 +568,7 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
                     continue;
                 }
 
-                StopAndClearParticleSystems(icon.RevealEffect);
+                StopAndClearParticleSystems(icon.RevealParticleSystems);
                 if (icon.RevealEffect != null)
                 {
                     icon.RevealEffect.SetActive(false);
@@ -593,7 +600,12 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
             return true;
         }
 
-        var particleSystems = icon.RevealEffect.GetComponentsInChildren<ParticleSystem>(true);
+        var particleSystems = icon.RevealParticleSystems;
+        if (particleSystems == null)
+        {
+            return Time.unscaledTime >= icon.RevealCleanupDeadline;
+        }
+
         var hasFiniteParticleSystem = false;
         for (var i = 0; i < particleSystems.Length; i++)
         {
@@ -662,9 +674,14 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
             + $"effectLocalScale={icon.RevealEffect.transform.localScale}, "
             + $"canvasMode={mCanvas.renderMode}, camera={mCanvas.worldCamera?.name}, "
             + $"sortingOrder={mCanvas.sortingOrder}");
-        StopAndClearParticleSystems(icon.RevealEffect);
+        StopAndClearParticleSystems(icon.RevealParticleSystems);
         icon.RevealEffect.SetActive(true);
-        var particleSystems = icon.RevealEffect.GetComponentsInChildren<ParticleSystem>(true);
+        var particleSystems = icon.RevealParticleSystems;
+        if (particleSystems == null)
+        {
+            particleSystems = icon.RevealEffect.GetComponentsInChildren<ParticleSystem>(true);
+            icon.RevealParticleSystems = particleSystems;
+        }
         for (var i = 0; i < particleSystems.Length; i++)
         {
             particleSystems[i].Play(false);
@@ -768,16 +785,20 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
             : 1f;
     }
 
-    private static void StopAndClearParticleSystems(GameObject root)
+    private static void StopAndClearParticleSystems(ParticleSystem[] particleSystems)
     {
-        if (root == null)
+        if (particleSystems == null)
         {
             return;
         }
 
-        var particleSystems = root.GetComponentsInChildren<ParticleSystem>(true);
         for (var i = 0; i < particleSystems.Length; i++)
         {
+            if (particleSystems[i] == null)
+            {
+                continue;
+            }
+
             particleSystems[i].Stop(
                 false,
                 ParticleSystemStopBehavior.StopEmittingAndClear);
@@ -894,11 +915,7 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
     {
         for (var i = 0; i < mIcons.Count; i++)
         {
-            var revealEffect = mIcons[i].RevealEffect;
-            if (revealEffect != null)
-            {
-                StopAndClearParticleSystems(revealEffect);
-            }
+            StopAndClearParticleSystems(mIcons[i].RevealParticleSystems);
         }
 
         if (mPreparedMainScene != null)
