@@ -48,6 +48,7 @@ public class GameScene : MonoBehaviour
     private const float SettlementTaskRewardDecorationFadeDuration = 0.2f;
     private const float SettlementRewardAnimationLead = 0.26f;
     private const float SettlementRewardAnimationStagger = 0.14f;
+    private const float SettlementRewardAnimationTimeoutPadding = 1f;
     private const float SettlementRewardSlotOffset = 82f;
     private const float SettlementBoardViewportFill = 0.9f;
     private const float SettlementBoardFitDuration = 0.46f;
@@ -361,6 +362,7 @@ public class GameScene : MonoBehaviour
     private bool _didFailTaskAdvanceDuringSettlement;
     private bool _didSavePackCompletion;
     private GameObject _rewardPanelRoot;
+    private CanvasGroup _rewardPanelCanvasGroup;
     private Transform _rewardTaskItem;
     private RectTransform _settlementSummaryRect;
     private RectTransform _rewardTaskItemRect;
@@ -632,6 +634,12 @@ public class GameScene : MonoBehaviour
         UpdatePieceHintAnimation();
         UpdateLoosePieceReminder();
         if (_isEntranceAnimating || _isGroupTransitionAnimating)
+        {
+            GameCursorUtility.SetDefault();
+            return;
+        }
+
+        if (_isGameFinished)
         {
             GameCursorUtility.SetDefault();
             return;
@@ -7403,6 +7411,7 @@ public class GameScene : MonoBehaviour
         }
 
         CacheRewardPanelReferences();
+        SetSettlementInputLocked(true);
         _rewardPanelRoot.SetActive(false);
         _isGameFinished = false;
 
@@ -7443,6 +7452,7 @@ public class GameScene : MonoBehaviour
 
     private void CacheRewardPanelReferences()
     {
+        _rewardPanelCanvasGroup = null;
         _rewardTaskItem = null;
         _settlementSummaryRect = null;
         _rewardTaskItemRect = null;
@@ -7466,6 +7476,12 @@ public class GameScene : MonoBehaviour
         if (_rewardPanelRoot == null)
         {
             return;
+        }
+
+        _rewardPanelCanvasGroup = _rewardPanelRoot.GetComponent<CanvasGroup>();
+        if (_rewardPanelCanvasGroup == null)
+        {
+            _rewardPanelCanvasGroup = _rewardPanelRoot.AddComponent<CanvasGroup>();
         }
 
         _rewardTaskItem = _rewardPanelRoot.transform.Find(TaskItemObjectName);
@@ -7899,21 +7915,29 @@ public class GameScene : MonoBehaviour
             _settlementRewardBagTargetPosition,
             above: false);
         var panelComplete = false;
-        StartCoroutine(RunSettlementAnimation(
+        var panelAnimation = StartCoroutine(RunSettlementAnimation(
             AnimateSettlementRewardPanelEntrance(),
             () => panelComplete = true));
 
         yield return new WaitForSecondsRealtime(SettlementRewardAnimationLead);
 
         var completionRewardComplete = _completionRewardDisplayImage == null;
+        var completionRewardTargetPosition = _completionRewardDisplayImage != null
+            ? _completionRewardDisplayImage.rectTransform.anchoredPosition
+            : Vector2.zero;
+        Coroutine completionRewardAnimation = null;
         if (_completionRewardDisplayImage != null)
         {
-            StartCoroutine(RunSettlementAnimation(
+            completionRewardAnimation = StartCoroutine(RunSettlementAnimation(
                 AnimateSettlementRewardPop(_completionRewardDisplayImage.rectTransform),
                 () => completionRewardComplete = true));
         }
 
         var taskRewardComplete = _taskRewardDisplayImage == null;
+        var taskRewardTargetPosition = _taskRewardDisplayImage != null
+            ? _taskRewardDisplayImage.rectTransform.anchoredPosition
+            : Vector2.zero;
+        Coroutine taskRewardAnimation = null;
         if (_taskRewardDisplayImage != null)
         {
             if (_completionRewardDisplayImage != null)
@@ -7921,15 +7945,114 @@ public class GameScene : MonoBehaviour
                 yield return new WaitForSecondsRealtime(SettlementRewardAnimationStagger);
             }
 
-            StartCoroutine(RunSettlementAnimation(
+            taskRewardAnimation = StartCoroutine(RunSettlementAnimation(
                 AnimateTaskRewardIntoSettlementSlot(_taskRewardDisplayImage),
                 () => taskRewardComplete = true));
         }
 
+        var timeout = SettlementRewardAnimationLead
+                      + (_completionRewardDisplayImage != null
+                         && _taskRewardDisplayImage != null
+                          ? SettlementRewardAnimationStagger
+                          : 0f)
+                      + Mathf.Max(
+                          SettlementRewardPanelSlideDuration,
+                          Mathf.Max(
+                              SettlementRewardPopDuration,
+                              SettlementTaskRewardFlyDuration))
+                      + SettlementRewardAnimationTimeoutPadding;
+        var waitStartedAt = Time.realtimeSinceStartup;
         while (!panelComplete || !completionRewardComplete || !taskRewardComplete)
         {
+            if (Time.realtimeSinceStartup - waitStartedAt >= timeout)
+            {
+                if (!panelComplete)
+                {
+                    StopSettlementAnimation(panelAnimation);
+                }
+
+                if (!completionRewardComplete)
+                {
+                    StopSettlementAnimation(completionRewardAnimation);
+                }
+
+                if (!taskRewardComplete)
+                {
+                    StopSettlementAnimation(taskRewardAnimation);
+                }
+
+                Debug.LogWarning(
+                    "GameScene: settlement reward animation timed out; "
+                    + "restored the final reward state and continued settlement.");
+                break;
+            }
+
             yield return null;
         }
+
+        RestoreSettlementRewardAnimationFinalState(
+            _completionRewardDisplayImage,
+            completionRewardTargetPosition,
+            _taskRewardDisplayImage,
+            taskRewardTargetPosition);
+    }
+
+    private void StopSettlementAnimation(Coroutine animation)
+    {
+        if (animation != null)
+        {
+            StopCoroutine(animation);
+        }
+    }
+
+    private void RestoreSettlementRewardAnimationFinalState(
+        Image completionReward,
+        Vector2 completionTargetPosition,
+        Image taskReward,
+        Vector2 taskTargetPosition)
+    {
+        if (_settlementRewardBagRect != null)
+        {
+            _settlementRewardBagRect.gameObject.SetActive(true);
+            _settlementRewardBagRect.anchoredPosition = _settlementRewardBagTargetPosition;
+            _settlementRewardBagRect.localScale = Vector3.one;
+        }
+
+        RestoreSettlementReward(completionReward, completionTargetPosition);
+        RestoreSettlementReward(taskReward, taskTargetPosition);
+        if (taskReward != null)
+        {
+            if (_taskRewardSourceImage != null)
+            {
+                _taskRewardSourceImage.gameObject.SetActive(false);
+            }
+
+            SetGraphicColorAlpha(
+                _taskRewardSourceCircleImage,
+                _taskRewardSourceCircleDefaultColor,
+                0f);
+            SetGraphicColorAlpha(
+                _taskRewardSourceCountBackgroundImage,
+                _taskRewardSourceCountBackgroundDefaultColor,
+                0f);
+            SetGraphicColorAlpha(
+                _taskRewardSourceCountText,
+                _taskRewardSourceCountDefaultColor,
+                0f);
+        }
+    }
+
+    private static void RestoreSettlementReward(Image reward, Vector2 targetPosition)
+    {
+        if (reward == null)
+        {
+            return;
+        }
+
+        reward.gameObject.SetActive(true);
+        reward.rectTransform.anchoredPosition = targetPosition;
+        reward.rectTransform.localScale = Vector3.one;
+        reward.rectTransform.localRotation = Quaternion.identity;
     }
 
     private IEnumerator AnimateSettlementRewardPanelEntrance()
@@ -8321,6 +8444,12 @@ public class GameScene : MonoBehaviour
             _finishButton.interactable = false;
         }
 
+        SetSettlementInputLocked(true);
+        if (UnityEngine.EventSystems.EventSystem.current != null)
+        {
+            UnityEngine.EventSystems.EventSystem.current.SetSelectedGameObject(null);
+        }
+
         _rewardPanelRoot.SetActive(true);
         _rewardPanelRoot.transform.SetAsLastSibling();
         PrepareSettlementVisualState();
@@ -8570,6 +8699,7 @@ public class GameScene : MonoBehaviour
         }
 
         _isFinishTransitionStarted = true;
+        SetSettlementInputLocked(true);
         if (_finishButton != null)
         {
             _finishButton.interactable = false;
@@ -10756,10 +10886,28 @@ public class GameScene : MonoBehaviour
         yield return AnimateSettlementActionButtonsEntrance();
 
         _isSettlementReadyForFinish = true;
-        if (_finishButton != null)
+        SetSettlementInputLocked(false);
+        SetSettlementActionButtonsInteractable(true);
+    }
+
+    private void SetSettlementInputLocked(bool locked)
+    {
+        if (_rewardPanelRoot == null)
         {
-            _finishButton.interactable = true;
+            return;
         }
+
+        if (_rewardPanelCanvasGroup == null)
+        {
+            _rewardPanelCanvasGroup = _rewardPanelRoot.GetComponent<CanvasGroup>();
+            if (_rewardPanelCanvasGroup == null)
+            {
+                _rewardPanelCanvasGroup = _rewardPanelRoot.AddComponent<CanvasGroup>();
+            }
+        }
+
+        _rewardPanelCanvasGroup.interactable = !locked;
+        _rewardPanelCanvasGroup.blocksRaycasts = true;
     }
 
     private IEnumerator ProcessTaskSettlementCore()

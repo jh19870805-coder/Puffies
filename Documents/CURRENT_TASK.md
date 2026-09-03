@@ -1,5 +1,14 @@
 # 当前任务
 
+## 2026-09-03 结算动画连续点击卡死修复
+
+- 状态：代码和规格记录已修改，Runtime/Editor 编译通过，等待 Unity Play Mode 连点复验。
+- 根因与风险：GameScene 进入结算后仍在 `Update()` 中分发玩法鼠标/触摸输入；同时奖励底板、首次完成奖励和任务奖励使用三个独立协程及布尔完成回调汇合，任一子协程未正常回调时，主结算协程会永久等待，表现为卡包消失且完成按钮无法出现。
+- 修复：结算开始立即清除 EventSystem 旧选中态，通过 RewardPanel 根 `CanvasGroup` 锁住全部子级交互并继续承接全屏射线；`GameScene.Update()` 在 `_isGameFinished` 状态下不再分发玩法输入。全部结算动画结束后才统一恢复 `BtnFinish` 和 `BtnCamera`。
+- 容错：奖励并行动画增加有界等待；若子动画未正常完成，停止残留协程并把 `ImgBagBg`、首次完成奖励和任务奖励恢复到各自最终位置、尺寸及可见状态，然后继续按钮入场，避免页面永久卡住。现有动画时长、路径、缩放曲线和视觉资源未修改。
+- 修改文件：`Assets/Scripts/Controller/GameScene.cs`、`specs/spec-driven-development.md`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`。
+- 验证：`dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 通过，结果为 `0` 警告、`0` 错误；`git diff --check` 通过，仅有仓库既有的 LF/CRLF 转换提示。仍需在无奖励、单奖励、双奖励结算动画中分别连续点击空白区域，确认卡包不中断、按钮只在动画结束后启用且页面可正常返回首页。
+
 ## 2026-09-02 任务奖励独立发包上限
 
 - 状态：代码与需求记录已修改，编译验证已完成，等待 Unity Play Mode 数据和动画复验。
