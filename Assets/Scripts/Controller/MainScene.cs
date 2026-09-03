@@ -6042,8 +6042,15 @@ public class MainScene : MonoBehaviour
         StopOpeningHintAnimation();
         mIsPlayingAnimation = true;
         SetBagSelectButtonsInteractable(false);
+        var openingResourcePreload = StartCoroutine(
+            CardPackOpeningEffect.PreloadResources());
         StartCoroutine(GameManager.PreloadGameScene(mSelectedBagId));
         yield return PlayMainToGameBackgroundHandoff();
+        if (!CardPackOpeningEffect.AreResourcesPreloaded)
+        {
+            yield return openingResourcePreload;
+        }
+
         mSelectedPackageStageSize = mSelectedPackageDisplaySize;
         StartOpeningHintAnimation();
         mIsPlayingAnimation = false;
@@ -6400,8 +6407,12 @@ public class MainScene : MonoBehaviour
     private static List<Sprite> LoadCurrentGroupUnplacedPieceSprites(int packId)
     {
         var sprites = new List<Sprite>();
-        var cardBagPrefab = Resources.Load<GameObject>(
-            GameDefine.FormatCardBagPrefabResourcesPath(packId));
+        var cardBagPrefab = GameManager.TryGetPreloadedCardBagPrefab(
+            packId,
+            out var preloadedPrefab)
+            ? preloadedPrefab
+            : Resources.Load<GameObject>(
+                GameDefine.FormatCardBagPrefabResourcesPath(packId));
         if (cardBagPrefab == null)
         {
             Debug.LogWarning(
@@ -6970,8 +6981,17 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
     private const string CardRendererNamePrefix = "mesh_skin_cardPack_";
     private const int FrontRendererNumberLength = 3;
     private const int BackRendererNumberLength = 5;
+    private const float ResourcePreloadTimeoutSeconds = 5f;
     private static readonly int SpritePixelsPerUnitId =
         Shader.PropertyToID("_SpritePixelsPerUnit");
+    private static readonly GameObject[] sPreloadedModelPrefabs =
+        new GameObject[ModelVariantCount];
+    private static RuntimeAnimatorController sPreloadedAnimatorController;
+    private static TimelineAsset sPreloadedOpeningTimeline;
+    private static Material sPreloadedFrontMaterial;
+    private static Material sPreloadedPieceShadowMaterial;
+    private static bool sResourcePreloadInProgress;
+    private static bool sResourcesPreloaded;
 
     private GameObject mWorldRoot;
     private Transform mStageRoot;
@@ -7030,6 +7050,116 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         public Vector3 Scale;
     }
 
+    public static bool AreResourcesPreloaded => sResourcesPreloaded;
+
+    public static IEnumerator PreloadResources()
+    {
+        if (sResourcesPreloaded)
+        {
+            yield break;
+        }
+
+        if (sResourcePreloadInProgress)
+        {
+            while (sResourcePreloadInProgress)
+            {
+                yield return null;
+            }
+
+            yield break;
+        }
+
+        sResourcePreloadInProgress = true;
+        var modelRequests = new ResourceRequest[ModelVariantCount];
+        for (var i = 0; i < modelRequests.Length; i++)
+        {
+            modelRequests[i] = Resources.LoadAsync<GameObject>(
+                string.Format(ModelPathFormat, i + 1));
+        }
+
+        var controllerRequest = Resources.LoadAsync<RuntimeAnimatorController>(
+            AnimatorControllerPath);
+        var timelineRequest = Resources.LoadAsync<TimelineAsset>(OpeningTimelinePath);
+        var frontMaterialRequest = Resources.LoadAsync<Material>(FrontMaterialPath);
+        var pieceShadowRequest = Resources.LoadAsync<Material>(PieceShadowMaterialPath);
+
+        var waiting = true;
+        var preloadStartedAt = Time.realtimeSinceStartup;
+        while (waiting
+               && Time.realtimeSinceStartup - preloadStartedAt
+               < ResourcePreloadTimeoutSeconds)
+        {
+            waiting = !controllerRequest.isDone
+                      || !timelineRequest.isDone
+                      || !frontMaterialRequest.isDone
+                      || !pieceShadowRequest.isDone;
+            for (var i = 0; i < modelRequests.Length && !waiting; i++)
+            {
+                waiting = !modelRequests[i].isDone;
+            }
+
+            if (waiting)
+            {
+                yield return null;
+            }
+        }
+
+        if (waiting)
+        {
+            Debug.LogWarning(
+                $"CardPackOpeningEffect: shared resource preload exceeded "
+                + $"{ResourcePreloadTimeoutSeconds:F0}s; enabling synchronous fallback.");
+        }
+
+        for (var i = 0; i < modelRequests.Length; i++)
+        {
+            if (modelRequests[i].isDone)
+            {
+                sPreloadedModelPrefabs[i] = modelRequests[i].asset as GameObject;
+            }
+        }
+
+        if (controllerRequest.isDone)
+        {
+            sPreloadedAnimatorController = controllerRequest.asset as RuntimeAnimatorController;
+        }
+
+        if (timelineRequest.isDone)
+        {
+            sPreloadedOpeningTimeline = timelineRequest.asset as TimelineAsset;
+        }
+
+        if (frontMaterialRequest.isDone)
+        {
+            sPreloadedFrontMaterial = frontMaterialRequest.asset as Material;
+        }
+
+        if (pieceShadowRequest.isDone)
+        {
+            sPreloadedPieceShadowMaterial = pieceShadowRequest.asset as Material;
+        }
+        sResourcesPreloaded = sPreloadedAnimatorController != null
+                              && sPreloadedOpeningTimeline != null
+                              && sPreloadedFrontMaterial != null
+                              && sPreloadedPieceShadowMaterial != null;
+        for (var i = 0; i < sPreloadedModelPrefabs.Length; i++)
+        {
+            sResourcesPreloaded &= sPreloadedModelPrefabs[i] != null;
+        }
+
+        sResourcePreloadInProgress = false;
+        if (sResourcesPreloaded)
+        {
+            Debug.Log("CardPackOpeningEffect: shared resources preloaded.");
+        }
+        else
+        {
+            Debug.LogWarning(
+                "CardPackOpeningEffect: one or more shared resources failed to preload; "
+                + "synchronous fallback remains enabled.");
+        }
+    }
+
     public static void PrepareSceneLightEffect()
     {
         var lightEffect = FindSceneLightEffect();
@@ -7079,10 +7209,15 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
         }
 
         var variant = UnityEngine.Random.Range(1, ModelVariantCount + 1);
-        var modelPrefab = Resources.Load<GameObject>(string.Format(ModelPathFormat, variant));
-        var controller = Resources.Load<RuntimeAnimatorController>(AnimatorControllerPath);
-        var frontMaterialTemplate = Resources.Load<Material>(FrontMaterialPath);
-        mOpeningTimeline = Resources.Load<TimelineAsset>(OpeningTimelinePath);
+        var modelPrefab = sPreloadedModelPrefabs[variant - 1]
+                          ?? Resources.Load<GameObject>(
+                              string.Format(ModelPathFormat, variant));
+        var controller = sPreloadedAnimatorController
+                         ?? Resources.Load<RuntimeAnimatorController>(AnimatorControllerPath);
+        var frontMaterialTemplate = sPreloadedFrontMaterial
+                                    ?? Resources.Load<Material>(FrontMaterialPath);
+        mOpeningTimeline = sPreloadedOpeningTimeline
+                           ?? Resources.Load<TimelineAsset>(OpeningTimelinePath);
         if (modelPrefab == null
             || controller == null
             || frontMaterialTemplate == null
@@ -7900,7 +8035,8 @@ public sealed class CardPackOpeningEffect : MonoBehaviour
             return;
         }
 
-        var template = Resources.Load<Material>(PieceShadowMaterialPath);
+        var template = sPreloadedPieceShadowMaterial
+                       ?? Resources.Load<Material>(PieceShadowMaterialPath);
         if (template == null)
         {
             Debug.LogWarning(

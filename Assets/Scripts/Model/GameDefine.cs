@@ -241,6 +241,7 @@ public static class GameManager
     private static GameObject sPreloadedCardBagPrefab;
     private static AsyncOperation sGameScenePreloadOperation;
     private static bool sGameSceneActivationRequested;
+    private static string sPreloadedGameMusicFileName;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     private static void Bootstrap()
@@ -313,6 +314,9 @@ public static class GameManager
         ResetGameScenePreloadState(clearPrefab: true);
         sPreloadedGameBagId = bagId;
         sGameSceneActivationRequested = false;
+        sPreloadedGameMusicFileName =
+            GameAudioPreferenceUtility.GetOrCreateGameplayMusicFileName(bagId);
+        AudioManager.Instance.PreloadClip(sPreloadedGameMusicFileName);
 
         sCardBagPreloadRequest = Resources.LoadAsync<GameObject>(
             GameDefine.FormatCardBagPrefabResourcesPath(bagId));
@@ -374,7 +378,18 @@ public static class GameManager
         return sPreloadedGameBagId == bagId
             && sGameScenePreloadOperation != null
             && (sGameScenePreloadOperation.isDone
-                || sGameScenePreloadOperation.progress >= 0.9f);
+               || sGameScenePreloadOperation.progress >= 0.9f);
+    }
+
+    public static string GetPreparedGameplayMusicFileName(int bagId)
+    {
+        if (sPreloadedGameBagId == bagId
+            && !string.IsNullOrEmpty(sPreloadedGameMusicFileName))
+        {
+            return sPreloadedGameMusicFileName;
+        }
+
+        return GameAudioPreferenceUtility.GetOrCreateGameplayMusicFileName(bagId);
     }
 
     public static void NotifyGameSceneLoaded()
@@ -388,6 +403,7 @@ public static class GameManager
         sCardBagPreloadRequest = null;
         sGameScenePreloadOperation = null;
         sGameSceneActivationRequested = false;
+        sPreloadedGameMusicFileName = null;
         if (clearPrefab)
         {
             sPreloadedCardBagPrefab = null;

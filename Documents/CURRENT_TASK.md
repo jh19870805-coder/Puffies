@@ -1,5 +1,17 @@
 # 当前任务
 
+## 2026-09-03 首播与场景切换敏感节点预热
+
+- 状态：代码、音频导入设置与跨场景预加载链已优化，Runtime/Editor 编译及静态校验通过；等待 Unity Play Mode 体感与耗时复验。
+- 启动音频：`AudioManager` 不再在首个 Scene 前同步加载 Catalog。LoadingScene 现在并行异步读取 Catalog，预热 `BGM_MainMenu` 和全部 19 个短音效，并在这些资源就绪后才进入 MainScene；等待上限为 `10s`，失败不会永久卡住加载页。
+- 内存策略：6 首 BGM 合计约 `31 MB`，统一使用 `Streaming + loadInBackground`，不整体解压常驻；19 个 SFX 的 MP3 合计约 `562 KB`，使用 `DecompressOnLoad + preloadAudioData + loadInBackground`。Editor 自动同步器会为后续新增的 `BGM_`/`SFX_` 资源继续应用相同规则。
+- 游戏转场：用户进入卡包放大等待页时，现有 CardBag Prefab 和 GameScene 预加载继续执行，同时后台准备该卡包/系列已固定的 BGM，以及 6 个开包模型、AnimatorController、Timeline 和相关材质。GameScene 激活时复用已确定的 BGM 文件名，不重复查询 SQLite。
+- 开包节点：撕包动画的曲线、坐标、播放起点和场景交接时间未修改。开包所需碎片优先从已预载的 CardBag Prefab 读取，公共特效资源在玩家可以点击/滑动之前准备完成；开包资源等待上限 `5s`，失败时保留原同步降级。
+- 审计结论：进入游戏链原本已经异步预载 CardBag Prefab 和 GameScene 到 `0.9`，该设计保留；本轮移除了音频首次解码、开包公共资源同步读取、开包阶段重复 CardBag 加载和 GameScene 激活帧重复 BGM SQLite 查询。GameScene 激活后的 Prefab 实例化、布局与 Piece 创建属于下一步需用 Profiler/现有 bootstrap 日志定量判断的部分，本轮未在无数据情况下改写玩法初始化。
+- 修改文件：`Assets/Scripts/Model/AudioManager.cs`、`GameDefine.cs`、`Assets/Scripts/Controller/LoadingScene.cs`、`MainScene.cs`、`GameScene.cs`、`Assets/Scripts/Editor/AudioCatalogEditor.cs`、25 个 `Assets/Audios/*.mp3.meta`、统一 spec 与项目上下文。
+- 验证：`dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 通过并连带生成 Runtime，结果 `0` 警告、`0` 错误；BGM 导入设置 `6/6`、SFX 导入设置 `19/19` 校验正确；`git diff --check` 通过，仅有仓库既有 LF/CRLF 提示。尚未完成 Play Mode 体感验收。
+- 下一步：从 LoadingScene 启动，依次复验首次首页点击、首次撕包、首次碎片分发、首次 Piece 拿取/放置；记录 Console 中 `GameScene bootstrap completed in ...ms`。若仍有明显场景激活卡顿，再依据 Profiler 数据拆分 GameScene 的 Prefab 实例化、布局和 Piece 创建，不盲目调整动画时间。
+
 ## 2026-09-03 统一音乐音效播放系统
 
 - 状态：代码、资源目录与持久化已接入，Runtime/Editor 编译及静态完整性验证通过；等待 Unity Play Mode 听感和完整事件时序复验。

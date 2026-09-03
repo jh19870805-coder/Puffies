@@ -1451,3 +1451,37 @@
 - [x] 4. MainScene 接入固定 BGM，GameScene 接入卡包 BGM，并在已确认业务完成点接入 19 类音效。
 - [x] 5. 修正设置音量应用，完成 Runtime/Editor 编译、Catalog 完整性和 Git 差异检查。
 - [ ] 6. 在 Unity Play Mode 验证跨场景音乐切换、同卡包/同系列复用、切档隔离、音量滑杆、音效并发及所有事件音效时序。
+
+## 2026-09-03 - 首播与场景切换敏感节点预热
+
+### 需求
+
+1. WHEN 游戏从 LoadingScene 启动 THEN 系统 SHALL 在进入 MainScene 前完成首页 BGM 与全部短音效的音频数据预热，避免首页首次点击、首次开包和首次拼图操作在播放音效时同步解码。
+2. 短音效 SHALL 使用适合一次性常驻的小体积解压加载方式；背景音乐 SHALL 使用 Streaming，不得把 6 首、约 31 MB 的 MP3 全部解压进内存。
+3. WHEN 用户选择卡包并进入放大等待操作阶段 THEN 系统 SHALL 在后台准备该卡包固定使用的游戏 BGM、GameScene、CardBag Prefab 和公共拆包资源；用户触发撕包时不得再次同步读取已经预加载完成的资源。
+4. WHEN LoadingScene 或预热资源缺失、加载失败 THEN 系统 SHALL 输出明确警告并继续现有降级流程，不得永久卡在加载页。
+5. 本轮优化 SHALL NOT 修改拆包动画曲线、播放起点、场景交接时间、卡包位置、拼图布局或玩法判定。
+
+### 设计
+
+- `AudioManager` 延迟到 LoadingScene 内通过 `Resources.LoadAsync` 读取 `AudioCatalog`；LoadingScene 并行执行 MainScene、卡包列表图片和启动音频预热，并将音频完成状态纳入 100% 前的等待条件。直接从其他 Scene 启动时保留同步 Catalog 降级读取。
+- `AudioCatalogEditor` 按命名自动维护导入参数：`SFX_` 使用 `DecompressOnLoad + preloadAudioData`，`BGM_` 使用 `Streaming + loadInBackground`。新增音频进入 `Assets/Audios` 后沿用同一规则。
+- `GameManager.PreloadGameScene` 在现有 CardBag/GameScene 异步预加载开始时启动选中 BGM 的后台数据准备，不增加额外固定等待。
+- `CardPackOpeningEffect` 缓存 6 个小型开包模型、AnimatorController、Timeline 和材质；放大页转场期间并行异步加载，`Begin` 只负责实例化和绑定。开包碎片来源优先读取 `GameManager` 已缓存的 CardBag Prefab。
+
+### 任务
+
+- [x] 1. 实现 AudioCatalog 异步加载、启动音频预热、单曲后台准备与失败收敛。
+- [x] 2. 自动应用 BGM/SFX 的差异化 Unity AudioImporter 设置。
+- [x] 3. 将启动音频状态接入 LoadingScene，将选中游戏 BGM 接入 GameScene 预加载链。
+- [x] 4. 异步缓存拆包公共资源，并复用已预加载的 CardBag Prefab。
+- [ ] 5. 完成 Runtime/Editor 编译、Catalog/Importer 静态校验和 Unity Play Mode 敏感节点复验。
+
+### 实现与验证
+
+- `AudioManager` 启动时不再同步读取 Catalog；LoadingScene 并行预热首页 BGM 和 19 个短音效，并用 `10s` 有界等待保证失败时继续进入首页。直接启动 MainScene/GameScene 时仍可同步读取 Catalog 降级运行。
+- 6 首 BGM 已设置为 `Streaming + loadInBackground`；19 个 SFX 已设置为 `DecompressOnLoad + preloadAudioData + loadInBackground`。当前 SFX MP3 合计约 `562 KB`，适合启动期预热；全部 BGM 合计约 `31 MB`，不会整体解压常驻。
+- 选中卡包后提前确定并准备该卡包/系列固定 BGM；GameScene 复用暂存文件名，不在激活帧重复查询 SQLite。开包公共资源与现有 CardBag/GameScene 预加载并行，最多等待 `5s` 后恢复同步降级。
+- 拆包动画的资源、曲线、坐标和交接时间均未修改；仅把原本位于撕包手势之后的同步资源读取前移。开包碎片优先从 `GameManager` 已预载的 CardBag Prefab 提取。
+- `dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 已通过并连带生成 Runtime，结果 `0` 警告、`0` 错误；25 个 AudioImporter 静态检查为 BGM `6/6`、SFX `19/19` 符合规则；`git diff --check` 通过，仅有既有 LF/CRLF 提示。
+- 尚需从 LoadingScene 进行 Play Mode 复验：首次进入首页并点击卡包、首次触发撕包、首次进入 GameScene 分发碎片、首次拿取/放置 Piece；同时观察 `GameScene bootstrap completed in ...ms` 日志，确认不存在新增等待或动画时序变化。

@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -10,6 +11,7 @@ public sealed class AudioManager : MonoBehaviour
     private const string ManagerObjectName = "AudioManager";
     private const string CatalogResourcesPath = "AudioCatalog";
     private const string Mp3Extension = ".mp3";
+    private const float StartupPreloadTimeoutSeconds = 10f;
 
     private static AudioManager sInstance;
 
@@ -21,6 +23,9 @@ public sealed class AudioManager : MonoBehaviour
     private AudioSource _musicSource;
     private AudioSource _sfxSource;
     private string _currentMusicFileName;
+    private ResourceRequest _catalogLoadRequest;
+    private bool _catalogLoaded;
+    private bool _startupAudioReady;
 
     public static AudioManager Instance
     {
@@ -32,6 +37,7 @@ public sealed class AudioManager : MonoBehaviour
     }
 
     public string CurrentMusicFileName => _currentMusicFileName ?? string.Empty;
+    public bool IsStartupAudioReady => _startupAudioReady;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     private static void Bootstrap()
@@ -68,7 +74,6 @@ public sealed class AudioManager : MonoBehaviour
         sInstance = this;
         DontDestroyOnLoad(gameObject);
         CreateAudioSources();
-        LoadCatalog();
         ApplySavedVolumes();
     }
 
@@ -135,6 +140,94 @@ public sealed class AudioManager : MonoBehaviour
         _sfxSource.volume = Mathf.Clamp01(value);
     }
 
+    public IEnumerator PreloadStartupAudio()
+    {
+        if (_startupAudioReady)
+        {
+            yield break;
+        }
+
+        yield return LoadCatalogAsync();
+        if (!_catalogLoaded)
+        {
+            _startupAudioReady = true;
+            yield break;
+        }
+
+        var startupClips = new List<AudioClip>();
+        var uniqueClips = new HashSet<AudioClip>();
+        foreach (var pair in _clipsByFileName)
+        {
+            var clip = pair.Value;
+            if (clip == null
+                || !uniqueClips.Add(clip)
+                || (!clip.name.StartsWith("SFX_", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(
+                        clip.name,
+                        "BGM_MainMenu",
+                        StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            startupClips.Add(clip);
+            BeginLoadAudioData(clip);
+        }
+
+        var waitingForAudioData = true;
+        var preloadStartedAt = Time.realtimeSinceStartup;
+        while (waitingForAudioData
+               && Time.realtimeSinceStartup - preloadStartedAt
+               < StartupPreloadTimeoutSeconds)
+        {
+            waitingForAudioData = false;
+            for (var i = 0; i < startupClips.Count; i++)
+            {
+                if (startupClips[i] != null
+                    && startupClips[i].loadState == AudioDataLoadState.Loading)
+                {
+                    waitingForAudioData = true;
+                    break;
+                }
+            }
+
+            if (waitingForAudioData)
+            {
+                yield return null;
+            }
+        }
+
+        if (waitingForAudioData)
+        {
+            Debug.LogWarning(
+                $"AudioManager: startup audio preload exceeded "
+                + $"{StartupPreloadTimeoutSeconds:F0}s; continuing without blocking startup.");
+        }
+
+        for (var i = 0; i < startupClips.Count; i++)
+        {
+            var clip = startupClips[i];
+            if (clip != null && clip.loadState == AudioDataLoadState.Failed)
+            {
+                Debug.LogWarning(
+                    $"AudioManager: startup audio data failed to load: {ToFileName(clip)}");
+            }
+        }
+
+        _startupAudioReady = true;
+        Debug.Log($"AudioManager: startup audio ready. clips={startupClips.Count}");
+    }
+
+    public bool PreloadClip(string fileName)
+    {
+        if (!TryGetClip(fileName, out var clip))
+        {
+            return false;
+        }
+
+        return BeginLoadAudioData(clip);
+    }
+
     public static void ApplySettingsVolumes(float musicVolume, float effectVolume)
     {
         if (sInstance == null)
@@ -166,10 +259,40 @@ public sealed class AudioManager : MonoBehaviour
         return sourceObject.AddComponent<AudioSource>();
     }
 
-    private void LoadCatalog()
+    private IEnumerator LoadCatalogAsync()
+    {
+        if (_catalogLoaded)
+        {
+            yield break;
+        }
+
+        if (_catalogLoadRequest == null)
+        {
+            _catalogLoadRequest = Resources.LoadAsync<AudioCatalog>(CatalogResourcesPath);
+        }
+
+        yield return _catalogLoadRequest;
+        if (!_catalogLoaded)
+        {
+            RegisterCatalog(_catalogLoadRequest.asset as AudioCatalog);
+        }
+
+        _catalogLoadRequest = null;
+    }
+
+    private void LoadCatalogSynchronously()
+    {
+        if (_catalogLoaded)
+        {
+            return;
+        }
+
+        RegisterCatalog(Resources.Load<AudioCatalog>(CatalogResourcesPath));
+    }
+
+    private void RegisterCatalog(AudioCatalog catalog)
     {
         _clipsByFileName.Clear();
-        var catalog = Resources.Load<AudioCatalog>(CatalogResourcesPath);
         if (catalog == null)
         {
             Debug.LogError(
@@ -190,11 +313,18 @@ public sealed class AudioManager : MonoBehaviour
             _clipsByFileName[clip.name] = clip;
             _clipsByFileName[ToFileName(clip)] = clip;
         }
+
+        _catalogLoaded = true;
     }
 
     private bool TryGetClip(string fileName, out AudioClip clip)
     {
         clip = null;
+        if (!_catalogLoaded)
+        {
+            LoadCatalogSynchronously();
+        }
+
         if (string.IsNullOrWhiteSpace(fileName))
         {
             WarnMissingClip("<empty>");
@@ -225,6 +355,16 @@ public sealed class AudioManager : MonoBehaviour
 
         WarnMissingClip(fileName);
         return false;
+    }
+
+    private static bool BeginLoadAudioData(AudioClip clip)
+    {
+        if (clip == null || clip.loadState == AudioDataLoadState.Failed)
+        {
+            return false;
+        }
+
+        return clip.loadState != AudioDataLoadState.Unloaded || clip.LoadAudioData();
     }
 
     private void WarnMissingClip(string fileName)

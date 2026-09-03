@@ -48,6 +48,7 @@ public class LoadingScene : MonoBehaviour
 
         ApplyLoadingTextFont();
 
+        StartCoroutine(AudioManager.Instance.PreloadStartupAudio());
         StartCoroutine(MainScene.PreloadPackageListVisuals());
         mLoadingCoroutine = StartCoroutine(RunLoadingProgress());
     }
@@ -133,7 +134,8 @@ public class LoadingScene : MonoBehaviour
         var duration = GameDefine.LoadingDurationSeconds;
         while (elapsed < duration
                || loadOperation.progress < 0.9f
-               || !MainScene.ArePackageListVisualsPreloaded)
+               || !MainScene.ArePackageListVisualsPreloaded
+               || !AudioManager.Instance.IsStartupAudioReady)
         {
             elapsed += Time.unscaledDeltaTime;
             var timeProgress = Mathf.Clamp01(elapsed / duration);

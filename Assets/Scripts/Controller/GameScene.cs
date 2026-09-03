@@ -522,7 +522,7 @@ public class GameScene : MonoBehaviour
         InitializeScoringSession();
         var selectedBagId = GameManager.GetBagId();
         AudioManager.Instance.PlayMusic(
-            GameAudioPreferenceUtility.GetOrCreateGameplayMusicFileName(selectedBagId));
+            GameManager.GetPreparedGameplayMusicFileName(selectedBagId));
         var playEntranceAnimation = GameManager.ConsumeGameEntranceAnimation();
         var entrancePiecesAlreadyFanned =
             GameManager.ConsumeGameEntrancePiecesAlreadyFanned();
