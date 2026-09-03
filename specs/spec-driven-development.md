@@ -1525,3 +1525,18 @@
 - Editor 与 Development Build 在编译期关闭提交路径；短暂 Editor Play Mode 已成功创建空 `Assets/Resources/GameAnalytics/Settings.asset`，未出现 Steam 初始化和远端事件发送。
 - Runtime 与 Editor `dotnet build --no-restore` 均通过，结果为 `0` 警告、`0` 错误。
 - 2026-09-03 使用 Windows 非 Development Player 和 Steam Demo App ID `5034540` 完成真实环境验收：Player 日志确认 Steam 与 GameAnalytics 初始化成功，用户在 GameAnalytics Live events 确认 Session、Start、Complete、Fail 与 Replay 数据全部到账。GameAnalytics 自动错误采集同时展示了 Unity Warning，属于独立的日志上报，不代表业务事件发送失败。
+
+## 2026-09-03 - CardBag010 合并为单组
+
+### 需求
+
+1. WHEN 玩家进入 `CardBag010` THEN 系统 SHALL 在第一组一次给出该关全部 25 片 Piece。
+2. 本次调整 SHALL 只修改 `CardBag010` 的人工分组，不改变其他卡包的自动分组规则，也不改变 Piece 的 Sprite、坐标、尺寸、材质或层级引用。
+3. WHEN 分组调整完成 THEN 系统 SHALL 重新生成单组描边并移除旧第二组输出。
+
+### 实现与验证
+
+- 将原 `Piece0201~Piece0212` 顺延为 `Piece0114~Piece0125`；连同原 `Piece0101~Piece0113`，25 个正式节点连续覆盖 `Piece0101~Piece0125`，唯一分组号为 `01`。
+- 通过当前 Unity Editor 对 `CardBag010` 单关执行现有描边烘焙器；更新 `Group01` 默认、关卡和贴纸描边，自动删除旧 `Group02` 三类输出及其 `.meta`，未重烘焙其他卡包。
+- 静态检查结果为 `PieceCount=25`、`UniqueCount=25`、`Groups=01`；输出目录仅保留三张 `Group01` 图片及原有 `.meta`。默认描边目视为完整棋盘外边框，符合全部方形 Piece 合并为单组后的边界。
+- [ ] 在 Play Mode 重玩 `CardBag010`，确认一次发出 25 片、托盘横向滑动正常、拼完后直接结算且三种描边显示正确。

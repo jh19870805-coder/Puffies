@@ -1,5 +1,13 @@
 # 当前任务
 
+## 2026-09-03 CardBag010 合并为单组
+
+- 状态：已完成 Prefab 分组调整和单关描边重烘焙，等待 Play Mode 实际发牌验收。
+- 修改：仅将 `CardBag010.prefab` 原第二组 `Piece0201~Piece0212` 顺延为第一组 `Piece0114~Piece0125`；原第一组 `Piece0101~Piece0113` 不变，全部 25 片现在统一属于 `01` 组。Sprite、坐标、尺寸、材质和层级引用均未改变。
+- 描边：只重烘焙 `CardBag010`；`Group01` 默认、关卡和贴纸描边已更新，旧 `Group02` 三张输出及其 `.meta` 已自动删除。合并后的默认描边为完整棋盘外边框，符合该关方形 Piece 全部组成单组的结果。
+- 验证：静态扫描为 `PieceCount=25`、`UniqueCount=25`、`Groups=01`，命名连续覆盖 `Piece0101~Piece0125`；输出目录只剩 `Group01.png`、`Group01_Level.png`、`Group01_Stickers.png` 及原有 `.meta`。一次性 Editor 执行器已自动删除，没有留下工具代码。
+- 下一步：在 Play Mode 进入或重玩 `CardBag010`，确认首次发牌一次给出全部 25 片、托盘可横向滑动、完成后直接结算且描边显示正确。已有进行中存档仍含旧第二组 Piece 编号时，测试前应通过重玩流程建立空会话。
+
 ## 2026-09-03 Steam 与 GameAnalytics 运营统计接入
 
 - 状态：已完成。两个 SDK、统一 Manager 和 GameScene 事件调用已接入，Runtime/Editor 编译、Editor 隔离及 Windows 非 Development Demo Player 实际到数均已验收。

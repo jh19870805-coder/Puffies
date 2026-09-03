@@ -353,7 +353,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 - 批量生成逐个隔离失败并汇总结果，负责创建带正式自动分组的 Prefab，但不自动烘焙描边；生成时会删除该包可能残留的旧描边。完成生成后执行 **Bake CardBag Outlines**。
 - 同一窗口的 **Update Existing Piece Layouts** 用于切图更新后的局部校准。它复用 Preview/GameBoard 定位算法，通过现有 Piece 的 Sprite 资源路径映射节点，只更新 `RectTransform.anchoredPosition` 与 `sizeDelta`；不重建层级、不改变手工分组、Image 参数、影子、旋转缩放或描边资源，也不会自动烘焙描边。更新采用整包事务：源 PNG 与现有 Piece 数量或引用不一致、定位不唯一，或两张有效面积相近的切图在目标位置的高 Alpha 区域重叠达到 `65%` 时，该 Prefab 在保存前失败，避免重复切图覆盖正确布局；面积明显较小且位于大切图内部的独立配件允许更新。
 - `Piece001` 到 `Piece999` 的三位顺序名仅作为旧 Prefab 的制作中间状态，不属于正式命名；当前生成器不会再从标准切图创建这类名称。Prefab 中只要仍有任一三位节点，描边烘焙器仍会跳过整包，避免 `Piece100` 等顺序节点被误判为正式分组；卡包没有正式分组时删除对应旧描边目录。
-- 当前 CardBag017 为 `1316 x 1316`、38 片，已完成正式 `PieceGGII` 命名并分为 6 组；对应 6 组描边资源已重新生成。CardBag022 当前为 `1300 x 1231`、34 片，按当前 Prefab 的正式命名分为 3 组；旧 `Group04~14` 输出已作为过期资源清理。运行时只按 Sprite 原生尺寸同步 Piece 槽位，不得用受 TextureImporter 降采样影响的 `sprite.rect.size` 覆盖 GameBoard 的 Prefab 设计尺寸。
+- 当前 CardBag010 的 25 片统一命名为 `Piece0101~Piece0125`，只包含第一组，进入关卡时一次给出全部 Piece；对应输出只保留 `Group01` 默认、关卡和贴纸描边。CardBag017 为 `1316 x 1316`、38 片，已完成正式 `PieceGGII` 命名并分为 6 组；对应 6 组描边资源已重新生成。CardBag022 当前为 `1300 x 1231`、34 片，按当前 Prefab 的正式命名分为 3 组；旧 `Group04~14` 输出已作为过期资源清理。运行时只按 Sprite 原生尺寸同步 Piece 槽位，不得用受 TextureImporter 降采样影响的 `sprite.rect.size` 覆盖 GameBoard 的 Prefab 设计尺寸。
 
 ### 拼图描边渲染
 
