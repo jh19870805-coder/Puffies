@@ -4403,6 +4403,11 @@ public class GameScene : MonoBehaviour
                 StartCoroutine(PlayPieceSnapAnimation(member, groovePositions[i]));
             }
 
+            if (IsCurrentPuzzleComplete())
+            {
+                AudioManager.Instance.PlaySfx("SFX_PuzzleComplete.mp3");
+            }
+
             ClearActiveDragMembers();
             return;
         }
@@ -7207,12 +7212,9 @@ public class GameScene : MonoBehaviour
 
     private bool TryAdvanceGroup()
     {
-        for (var i = 0; i < _drag.CurrentGroupDraggables.Count; i++)
+        if (!IsCurrentGroupComplete())
         {
-            if (!_drag.CurrentGroupDraggables[i].IsPlaced)
-            {
-                return false;
-            }
+            return false;
         }
 
         var nextGroupIndex = _drag.CurrentGroupIndex + 1;
@@ -7223,8 +7225,33 @@ public class GameScene : MonoBehaviour
             return true;
         }
 
-        AudioManager.Instance.PlaySfx("SFX_PuzzleComplete.mp3");
         ShowRewardPanel();
+        return true;
+    }
+
+    private bool IsCurrentPuzzleComplete()
+    {
+        return _board.GrooveImagesByGroup != null
+            && _board.GrooveImagesByGroup.Count > 0
+            && _drag.CurrentGroupIndex == _board.GrooveImagesByGroup.Count - 1
+            && IsCurrentGroupComplete();
+    }
+
+    private bool IsCurrentGroupComplete()
+    {
+        if (_drag.CurrentGroupDraggables.Count == 0)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < _drag.CurrentGroupDraggables.Count; i++)
+        {
+            if (!_drag.CurrentGroupDraggables[i].IsPlaced)
+            {
+                return false;
+            }
+        }
+
         return true;
     }
 

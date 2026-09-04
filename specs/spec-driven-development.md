@@ -1720,3 +1720,22 @@
 - 首次分发与后续组切换分别维护长度为实际 `pieceCount` 的一次性触发状态；仅有效 `PieceRenderer` 达到对应 `pieceDelay` 时播放。
 - 全工程 `SFX_PieceDeal.mp3` 只保留两个逐片动画循环内的调用，原整批单次播放已删除。
 - `dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 成功并连带编译 Runtime，结果 `0` 警告、`0` 错误；`git diff --check` 通过，仅有仓库既有 LF/CRLF 提示。
+
+## 2026-09-04 - 拼图完成音效触发时机
+
+### 需求与实现
+
+1. WHEN 玩家放下整关最后一块拼图且系统确认放置正确 THEN 系统 SHALL 立即播放 `SFX_PuzzleComplete.mp3`。
+2. 完成音效 SHALL 在本次正确 Piece 全部标记为 `IsPlaced` 后触发，不得等待吸附动画、绿色效果或结算面板。
+3. 普通组完成 SHALL NOT 播放整关完成音效；后续组推进和结算入口 SHALL NOT 重复播放。
+4. 本次修改 SHALL NOT 改变正确放置、吸附、绿色滑光、组切换、存档或结算时序。
+
+- [x] 提取当前组完成与整关完成判断，并把音效移到正确落子状态确认后。
+- [x] 移除 `TryAdvanceGroup` 中原有的延后播放调用。
+- [x] 编译 Runtime/Editor 并检查完成音效调用点。
+- [ ] 在 Play Mode 放下整关最后一块，确认音效立即且只播放一次。
+
+### 验证
+
+- 全工程 `SFX_PuzzleComplete.mp3` 只保留正确落子状态确认后的一个调用，`TryAdvanceGroup` 不再播放。
+- `dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 成功并连带编译 Runtime，结果 `0` 警告、`0` 错误；`git diff --check` 通过，仅有仓库既有 LF/CRLF 提示。
