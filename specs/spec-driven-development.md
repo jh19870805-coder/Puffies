@@ -1457,7 +1457,7 @@
 ### 需求
 
 1. WHEN 游戏从 LoadingScene 启动 THEN 系统 SHALL 在进入 MainScene 前完成首页 BGM 与全部短音效的音频数据预热，避免首页首次点击、首次开包和首次拼图操作在播放音效时同步解码。
-2. 短音效 SHALL 使用适合一次性常驻的小体积解压加载方式；背景音乐 SHALL 使用 Streaming，不得把 6 首、约 31 MB 的 MP3 全部解压进内存。
+2. 短音效 SHALL 使用适合一次性常驻的小体积解压加载方式；背景音乐 SHALL 使用 Streaming，不得把 6 首 BGM 全部解压进内存。
 3. WHEN 用户选择卡包并进入放大等待操作阶段 THEN 系统 SHALL 在后台准备该卡包固定使用的游戏 BGM、GameScene、CardBag Prefab 和公共拆包资源；用户触发撕包时不得再次同步读取已经预加载完成的资源。
 4. WHEN LoadingScene 或预热资源缺失、加载失败 THEN 系统 SHALL 输出明确警告并继续现有降级流程，不得永久卡在加载页。
 5. 本轮优化 SHALL NOT 修改拆包动画曲线、播放起点、场景交接时间、卡包位置、拼图布局或玩法判定。
@@ -1480,7 +1480,7 @@
 ### 实现与验证
 
 - `AudioManager` 启动时不再同步读取 Catalog；LoadingScene 并行预热首页 BGM 和 19 个短音效，并用 `10s` 有界等待保证失败时继续进入首页。直接启动 MainScene/GameScene 时仍可同步读取 Catalog 降级运行。
-- 6 首 BGM 已设置为 `Streaming + loadInBackground`；19 个 SFX 已设置为 `DecompressOnLoad + preloadAudioData + loadInBackground`。当前 SFX MP3 合计约 `562 KB`，适合启动期预热；全部 BGM 合计约 `31 MB`，不会整体解压常驻。
+- 6 首 BGM 已设置为 `Streaming + loadInBackground`；19 个 SFX 已设置为 `DecompressOnLoad + preloadAudioData + loadInBackground`。当前 SFX MP3 合计约 `562 KB`，适合启动期预热；压缩更新后的全部 BGM 合计约 `10.51 MiB`，不会整体解压常驻。
 - 选中卡包后提前确定并准备该卡包/系列固定 BGM；GameScene 复用暂存文件名，不在激活帧重复查询 SQLite。开包公共资源与现有 CardBag/GameScene 预加载并行，最多等待 `5s` 后恢复同步降级。
 - 拆包动画的资源、曲线、坐标和交接时间均未修改；仅把原本位于撕包手势之后的同步资源读取前移。开包碎片优先从 `GameManager` 已预载的 CardBag Prefab 提取。
 - `dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 已通过并连带生成 Runtime，结果 `0` 警告、`0` 错误；25 个 AudioImporter 静态检查为 BGM `6/6`、SFX `19/19` 符合规则；`git diff --check` 通过，仅有既有 LF/CRLF 提示。
@@ -1633,3 +1633,20 @@
 - 场景静态检查确认 `BtnExit` 位于 `PanelMenu`，`PanelConfirm` 为 Canvas 根级独立面板，文案为“确认退出游戏？”，确认与取消按钮现命名为 `BtnYes`、`BtnNo`，并保留 `BtnClose`；原 `PanelReplay` 仍独立存在。
 - `BtnDelete` 已改为打开确认弹窗，不再直接删除；确认行为锁定点击时的槽位，删除成功后复用现有保存页刷新逻辑。
 - 通用删除确认接入后，`dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 成功并连带编译 Runtime，结果 `0` 警告、`0` 错误；`git diff --check` 通过，仅有仓库既有 LF/CRLF 提示。
+
+## 2026-09-04 - 背景音乐压缩资源更新
+
+### 需求与实现
+
+1. WHEN 美术提供 `Bg01~05.mp3` 和主界面背景音乐压缩版本 THEN 系统 SHALL 按项目既有 `BGM_Gameplay_01~05.mp3`、`BGM_MainMenu.mp3` 名称覆盖资源。
+2. 更新 SHALL 保留目标 `.meta`、GUID、AudioCatalog 引用、业务调用名和各存档已持久化的音乐选择，不引入数据迁移。
+3. BGM 导入策略 SHALL 继续使用 `Streaming + loadInBackground`。
+
+- [x] 将 6 个压缩 MP3 一一覆盖到 `Assets/Audios` 的规范名称。
+- [x] 对照来源与目标 SHA-256，并确认仅 6 个 MP3 发生 Git 修改。
+- [ ] Unity 自动导入完成后试听首页及多首游戏 BGM，确认音质、循环与切换正常。
+
+### 验证
+
+- 6 组来源与目标 SHA-256 全部相同，目标 `.meta` 和 `Assets/Resources/AudioCatalog.asset` 均未修改。
+- BGM 总文件体积由 `31.24 MiB` 降至 `10.51 MiB`，减少约 `66.3%`。

@@ -1,5 +1,14 @@
 # 当前任务
 
+## 2026-09-04 背景音乐压缩资源更新
+
+- 状态：资源替换和静态校验完成，等待 Unity 导入及 Play Mode 听感验收。
+- 用户意图：将 `美术切图/音效/压缩` 内的最新音频更新到项目。
+- 实现：`Bg01~05.mp3` 分别覆盖 `Assets/Audios/BGM_Gameplay_01~05.mp3`，`主界面背景音乐.mp3` 覆盖 `BGM_MainMenu.mp3`；保留目标文件名及全部原 `.meta`/GUID，不改代码调用、AudioCatalog 引用或卡包已保存的 BGM 名称。
+- 容量：6 首 BGM 从约 `31.24 MiB` 降至 `10.51 MiB`，减少约 `66.3%`。
+- 验证：6 组来源与目标 SHA-256 逐一相同；Git 仅识别 6 个目标 MP3 发生修改，未修改 `.meta` 和 `AudioCatalog.asset`。
+- 下一步：等待 Unity 完成自动导入后，从 LoadingScene 进入首页并任选多个卡包试听主界面及游戏 BGM，确认音质、循环和切换正常。
+
 ## 2026-09-03 MainScene 通用确认弹窗
 
 - 状态：代码实现和编译验证完成，等待 Play Mode 验收。
@@ -66,7 +75,7 @@
 
 - 状态：代码、音频导入设置与跨场景预加载链已优化，Runtime/Editor 编译及静态校验通过；等待 Unity Play Mode 体感与耗时复验。
 - 启动音频：`AudioManager` 不再在首个 Scene 前同步加载 Catalog。LoadingScene 现在并行异步读取 Catalog，预热 `BGM_MainMenu` 和全部 19 个短音效，并在这些资源就绪后才进入 MainScene；等待上限为 `10s`，失败不会永久卡住加载页。
-- 内存策略：6 首 BGM 合计约 `31 MB`，统一使用 `Streaming + loadInBackground`，不整体解压常驻；19 个 SFX 的 MP3 合计约 `562 KB`，使用 `DecompressOnLoad + preloadAudioData + loadInBackground`。Editor 自动同步器会为后续新增的 `BGM_`/`SFX_` 资源继续应用相同规则。
+- 内存策略：6 首 BGM 更新压缩资源后合计约 `10.51 MiB`，统一使用 `Streaming + loadInBackground`，不整体解压常驻；19 个 SFX 的 MP3 合计约 `562 KB`，使用 `DecompressOnLoad + preloadAudioData + loadInBackground`。Editor 自动同步器会为后续新增的 `BGM_`/`SFX_` 资源继续应用相同规则。
 - 游戏转场：用户进入卡包放大等待页时，现有 CardBag Prefab 和 GameScene 预加载继续执行，同时后台准备该卡包/系列已固定的 BGM，以及 6 个开包模型、AnimatorController、Timeline 和相关材质。GameScene 激活时复用已确定的 BGM 文件名，不重复查询 SQLite。
 - 开包节点：撕包动画的曲线、坐标、播放起点和场景交接时间未修改。开包所需碎片优先从已预载的 CardBag Prefab 读取，公共特效资源在玩家可以点击/滑动之前准备完成；开包资源等待上限 `5s`，失败时保留原同步降级。
 - 审计结论：进入游戏链原本已经异步预载 CardBag Prefab 和 GameScene 到 `0.9`，该设计保留；本轮移除了音频首次解码、开包公共资源同步读取、开包阶段重复 CardBag 加载和 GameScene 激活帧重复 BGM SQLite 查询。GameScene 激活后的 Prefab 实例化、布局与 Piece 创建属于下一步需用 Profiler/现有 bootstrap 日志定量判断的部分，本轮未在无数据情况下改写玩法初始化。
