@@ -1,5 +1,43 @@
 # 当前任务
 
+## 2026-09-04 碎片分发音效按片播放
+
+- 状态：代码修改和编译验证完成，等待 Play Mode 试听。
+- 用户意图：实际分发多少片拼图，就播放多少次原“分发碎片.mp3”对应的 `SFX_PieceDeal.mp3`。
+- 修改：首次进入关卡的发牌动画和完成一组后的下一组飞入动画，均在每个有效 Piece 第一次达到自身错峰起飞时间时播放一次；使用逐片状态避免后续帧重复播放。移除了首次发牌整批开始前只播放一次的旧逻辑。
+- 保留：碎片数量、顺序、起点、终点、缩放、飞行时间和错峰间隔均未修改；无有效 Renderer 的条目不发声。
+- 修改文件：`Assets/Scripts/Controller/GameScene.cs`、统一 spec、任务记录与项目上下文。
+- 验证：两个动画循环各有独立逐片触发标记；全工程 `SFX_PieceDeal.mp3` 只存在这两个逐片调用。Runtime/Editor 编译通过，`0` 警告、`0` 错误；`git diff --check` 通过。
+- 下一步：在 Play Mode 测试不同碎片数的首组与后续组，确认每片起飞时播放一次且听感不会因大量碎片过密。
+
+## 2026-09-04 卡包进入木纹背景音效
+
+- 状态：调用时机修改和编译验证完成，等待 Play Mode 试听。
+- 用户意图：卡包放大后，从选择页切换到木纹 `BgGame` 页面时播放原“卡包到二次确认界面.mp3”。
+- 修改：将规范名 `SFX_CardPackReplayConfirm.mp3` 从 `ShowReplayConfirmation` 移到公共 `PlayMainToGameBackgroundHandoff` 开始处；完整卡包、进行中卡包及完成卡包重玩都会在木纹背景开始渐入时播放一次。
+- 保留：按钮点击音效、首页卡包点击音效、背景转场时长和开包动画均未修改。
+- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、统一 spec、任务记录与项目上下文。
+- 验证：全工程该音效只剩木纹背景转场入口一处调用；Runtime/Editor 编译通过，`0` 警告、`0` 错误；`git diff --check` 通过。
+- 下一步：在 Play Mode 分别测试完整卡包、彩色撕开继续游戏及灰色撕开重玩，确认木纹背景开始出现时各播放一次该音效。
+
+## 2026-09-04 MainScene 卡包 ClickCard 音效
+
+- 状态：调用位置修复和编译验证完成，等待 Play Mode 试听。
+- 用户意图：首页点击卡包只播放 `SFX_CardPackClick.mp3`，不播放 `SFX_PopupTransition.mp3`。
+- 修改：`HandlePackageGesture` 通过输入和解锁校验后只播放 `SFX_CardPackClick.mp3`；`ShowPackageSelection`、`ShowBagVolumeSelection` 内也不播放弹窗转场音效。菜单和其他弹窗继续保留各自的 `SFX_PopupTransition.mp3`。卡包动画、状态与输入规则不变。
+- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、统一 spec、任务记录与项目上下文。
+- 验证：AudioCatalog 包含 `SFX_CardPackClick.mp3`；卡包点击链仅保留这一条播放调用。Runtime/Editor 编译通过，`0` 警告、`0` 错误；调用点检查和 `git diff --check` 通过。
+- 下一步：在 MainScene Play Mode 分别点击普通卡包与系列卡包，确认只播放一次 `SFX_CardPackClick.mp3`，拖动列表不触发。
+
+## 2026-09-04 MainScene 菜单按钮点击音效
+
+- 状态：代码修改和编译验证完成，等待 Play Mode 试听。
+- 根因：`BtnMenu` 绑定正常，原逻辑只播放 `SFX_PopupTransition.mp3`，没有同时调用通用点击音效。第一版错误地用点击音效替换了弹窗音效，已纠正。
+- 修改：成功打开 `PanelMenu` 前依次播放 `SFX_ButtonClick.mp3` 和原有 `SFX_PopupTransition.mp3`；菜单显隐、动画拦截及其他按钮音效保持不变。
+- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、统一 spec 和任务记录。
+- 验证：Runtime/Editor 编译通过，`0` 警告、`0` 错误；`git diff --check` 通过。
+- 下一步：在 MainScene Play Mode 点击首页 `BtnMenu`，确认通用点击音效和弹窗打开音效均正常且各播放一次。
+
 ## 2026-09-04 背景音乐压缩资源更新
 
 - 状态：资源替换和静态校验完成，等待 Unity 导入及 Play Mode 听感验收。

@@ -1156,13 +1156,9 @@ public class GameScene : MonoBehaviour
             }
         }
 
-        if (pieceCount > 0)
-        {
-            AudioManager.Instance.PlaySfx("SFX_PieceDeal.mp3");
-        }
-
         var totalDuration = Mathf.Max(0, pieceCount - 1) * pieceStagger
                             + pieceSettleDuration;
+        var pieceDealSoundPlayed = new bool[pieceCount];
         var elapsed = 0f;
         while (elapsed < totalDuration)
         {
@@ -1176,6 +1172,12 @@ public class GameScene : MonoBehaviour
                 }
 
                 var pieceDelay = i * pieceStagger;
+                if (!pieceDealSoundPlayed[i] && elapsed >= pieceDelay)
+                {
+                    pieceDealSoundPlayed[i] = true;
+                    AudioManager.Instance.PlaySfx("SFX_PieceDeal.mp3");
+                }
+
                 var flightT = Mathf.Clamp01(
                     (elapsed - pieceDelay)
                     / pieceSettleDuration);
@@ -7411,6 +7413,7 @@ public class GameScene : MonoBehaviour
         elapsed = 0f;
         var pieceAnimationDuration = GroupTransitionPieceDuration
             + Mathf.Max(0, pieceCount - 1) * GroupTransitionPieceStagger;
+        var pieceDealSoundPlayed = new bool[pieceCount];
         while (elapsed < pieceAnimationDuration)
         {
             elapsed += Mathf.Min(Time.unscaledDeltaTime, GameEntranceMaxFrameDelta);
@@ -7422,8 +7425,15 @@ public class GameScene : MonoBehaviour
                     continue;
                 }
 
+                var pieceDelay = i * GroupTransitionPieceStagger;
+                if (!pieceDealSoundPlayed[i] && elapsed >= pieceDelay)
+                {
+                    pieceDealSoundPlayed[i] = true;
+                    AudioManager.Instance.PlaySfx("SFX_PieceDeal.mp3");
+                }
+
                 var progress = SmootherStep01(
-                    (elapsed - i * GroupTransitionPieceStagger) / GroupTransitionPieceDuration);
+                    (elapsed - pieceDelay) / GroupTransitionPieceDuration);
                 renderer.transform.position = Vector3.LerpUnclamped(
                     pieceStarts[i],
                     pieceTargets[i],

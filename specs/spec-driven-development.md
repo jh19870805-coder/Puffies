@@ -1650,3 +1650,73 @@
 
 - 6 组来源与目标 SHA-256 全部相同，目标 `.meta` 和 `Assets/Resources/AudioCatalog.asset` 均未修改。
 - BGM 总文件体积由 `31.24 MiB` 降至 `10.51 MiB`，减少约 `66.3%`。
+
+## 2026-09-04 - MainScene 菜单按钮点击音效
+
+### 需求与实现
+
+1. WHEN 玩家点击 MainScene 的 `BtnMenu` 并成功打开 `PanelMenu` THEN 系统 SHALL 播放通用点击音效 `SFX_ButtonClick.mp3`，并保留原有弹窗打开音效 `SFX_PopupTransition.mp3`。
+2. 本次修改 SHALL 只调整 `BtnMenu` 的音效，不改变菜单显隐、输入拦截或其他按钮的音效。
+
+- [x] 在 `OnMenuButtonClicked` 保留弹窗转场音效并补充通用点击音效。
+- [x] 编译 Runtime/Editor，并执行静态差异检查。
+- [ ] 在 Play Mode 点击首页菜单按钮试听确认。
+
+### 验证
+
+- 第一版误将原弹窗转场音效替换为通用点击音效；现已纠正为依次播放 `SFX_ButtonClick.mp3` 和 `SFX_PopupTransition.mp3`，其他音效调用未调整。
+- `dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 成功并连带编译 Runtime，结果 `0` 警告、`0` 错误；`git diff --check` 通过，仅有仓库既有 LF/CRLF 提示。
+
+## 2026-09-04 - MainScene 卡包 ClickCard 音效触发
+
+### 需求与实现
+
+1. WHEN 玩家在首页完成一次有效卡包点击 THEN 系统 SHALL 只播放卡包点击音效 `SFX_CardPackClick.mp3`。
+2. 卡包点击和普通/系列卡包展开协程 SHALL NOT 播放 `SFX_PopupTransition.mp3`。
+3. 普通卡包、系列卡包及系列异常回退路径 SHALL 对同一次有效点击只播放一次 `SFX_CardPackClick.mp3`，且不改变现有动画或交互分支。
+
+- [x] 仅在 `HandlePackageGesture` 播放 `SFX_CardPackClick.mp3`，并移除卡包流程中的 `SFX_PopupTransition.mp3`。
+- [x] 编译 Runtime/Editor，并检查卡包音效调用点。
+- [ ] 在 Play Mode 分别点击普通卡包与系列卡包试听。
+
+### 验证
+
+- 有效卡包点击点只调用 `SFX_CardPackClick.mp3`；普通/系列展开协程内无 `SFX_PopupTransition.mp3` 调用，菜单和其他弹窗音效未改。
+- `dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 成功并连带编译 Runtime，结果 `0` 警告、`0` 错误；`git diff --check` 通过，仅有仓库既有 LF/CRLF 提示。
+
+## 2026-09-04 - 卡包进入木纹背景音效
+
+### 需求与实现
+
+1. WHEN 放大的选中卡包开始从选择页切换到木纹 `BgGame` 背景 THEN 系统 SHALL 播放原“卡包到二次确认界面.mp3”对应的 `SFX_CardPackReplayConfirm.mp3`。
+2. 该音效 SHALL 绑定到普通、系列及重玩流程共用的 `PlayMainToGameBackgroundHandoff`，每次木纹背景切换只播放一次。
+3. 重玩确认弹窗显示时 SHALL NOT 播放该音效；本次修改不得改变按钮点击音效、背景转场或开包动画。
+
+- [x] 将 `SFX_CardPackReplayConfirm.mp3` 从重玩确认弹窗移动到木纹背景切换入口。
+- [x] 编译 Runtime/Editor 并检查调用点。
+- [ ] 在 Play Mode 验证完整卡包、进行中卡包和完成卡包重玩三条路径。
+
+### 验证
+
+- `SFX_CardPackReplayConfirm.mp3` 全工程只在 `PlayMainToGameBackgroundHandoff` 开始处调用一次，`ShowReplayConfirmation` 已不再播放。
+- `dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 成功并连带编译 Runtime，结果 `0` 警告、`0` 错误；`git diff --check` 通过，仅有仓库既有 LF/CRLF 提示。
+
+## 2026-09-04 - 碎片分发音效按片播放
+
+### 需求与实现
+
+1. WHEN 游戏实际分发 N 片有效拼图碎片 THEN 系统 SHALL 播放 N 次原“分发碎片.mp3”对应的 `SFX_PieceDeal.mp3`。
+2. 每次音效 SHALL 在对应碎片第一次达到错峰起飞时间时播放，单片在后续动画帧不得重复触发。
+3. 首次进入关卡和完成一组后的下一组分发 SHALL 使用同一规则；无有效 Renderer 的条目不得产生声音。
+4. 本次修改 SHALL NOT 改变碎片数量、顺序、起点、终点、缩放、飞行时长或错峰间隔。
+
+- [x] 将首次分发的整批单次音效改为逐片起飞触发。
+- [x] 为后续组逐片飞入补充相同音效规则。
+- [x] 编译 Runtime/Editor 并检查所有 `SFX_PieceDeal.mp3` 调用。
+- [ ] 在 Play Mode 使用不同碎片数的分组试听次数和同步节奏。
+
+### 验证
+
+- 首次分发与后续组切换分别维护长度为实际 `pieceCount` 的一次性触发状态；仅有效 `PieceRenderer` 达到对应 `pieceDelay` 时播放。
+- 全工程 `SFX_PieceDeal.mp3` 只保留两个逐片动画循环内的调用，原整批单次播放已删除。
+- `dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 成功并连带编译 Runtime，结果 `0` 警告、`0` 错误；`git diff --check` 通过，仅有仓库既有 LF/CRLF 提示。

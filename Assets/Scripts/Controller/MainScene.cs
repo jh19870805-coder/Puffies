@@ -2164,7 +2164,6 @@ public class MainScene : MonoBehaviour
 
     private void ShowReplayConfirmation()
     {
-        AudioManager.Instance.PlaySfx("SFX_CardPackReplayConfirm.mp3");
         mIsReplayConfirmationVisible = true;
         SetBagSelectButtonsInteractable(false);
         SetUnselectedPackageVisualsVisible(false);
@@ -4211,6 +4210,7 @@ public class MainScene : MonoBehaviour
             return;
         }
 
+        AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
         AudioManager.Instance.PlaySfx("SFX_PopupTransition.mp3");
         SetPanelVisible(mMenuPanelRoot, true);
     }
@@ -5279,7 +5279,6 @@ public class MainScene : MonoBehaviour
             yield break;
         }
 
-        AudioManager.Instance.PlaySfx("SFX_PopupTransition.mp3");
         mIsPlayingAnimation = true;
         mIsBagVolumeSelectionActive = true;
         mBagVolumeSourceEntry = sourceEntry;
@@ -5986,7 +5985,6 @@ public class MainScene : MonoBehaviour
 
     private IEnumerator ShowPackageSelection(int bagId, PackageEntry entry)
     {
-        AudioManager.Instance.PlaySfx("SFX_PopupTransition.mp3");
         mIsPlayingAnimation = true;
         mSelectedPackageEntry = entry;
         mSelectedBagId = bagId;
@@ -6422,6 +6420,7 @@ public class MainScene : MonoBehaviour
 
     private IEnumerator PlayMainToGameBackgroundHandoff()
     {
+        AudioManager.Instance.PlaySfx("SFX_CardPackReplayConfirm.mp3");
         var gameBackgroundCenter = Vector3.zero;
         if (mOpeningStageBackgroundRoot != null)
         {
