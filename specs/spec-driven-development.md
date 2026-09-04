@@ -1739,3 +1739,64 @@
 
 - 全工程 `SFX_PuzzleComplete.mp3` 只保留正确落子状态确认后的一个调用，`TryAdvanceGroup` 不再播放。
 - `dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 成功并连带编译 Runtime，结果 `0` 警告、`0` 错误；`git diff --check` 通过，仅有仓库既有 LF/CRLF 提示。
+
+## 2026-09-04 - 事件音效前导静音
+
+### 需求与实现
+
+1. WHEN 事件代码已在正确帧调用音效但听感仍明显滞后 THEN 系统 SHALL 先检查音频源文件的前导静音，不得先通过提前触发代码补偿素材延迟。
+2. 短事件音效 SHOULD 仅保留避免切断起音所需的极短安全余量，不得保留可感知的数百毫秒前导静音。
+3. 本轮仅修正 `SFX_PieceWrongReturn.mp3`，保持文件名、`.meta` GUID、播放调用点和 Unity 导入设置不变。
+
+- [x] 确认两个错误回弹调用均位于回弹动画开始前。
+- [x] 裁掉约 `316 ms` 前导静音并保留约 `5 ms` 起音余量。
+- [ ] Unity 重新导入后，在 Play Mode 试听错误判定与回弹起音同步。
+
+### 验证
+
+- `SFX_PieceWrongReturn.mp3` 的可检测前导静音由约 `321 ms` 降至约 `5 ms`，时长由约 `1.10s` 降至约 `0.78s`。
+- 本轮未修改 `GameScene.cs`、音频 `.meta`、`AudioCatalog.asset`、DSP Buffer 或其他 SFX。
+
+## 2026-09-04 - 首页卡包回位持续音效
+
+### 需求与实现
+
+1. WHEN 结算返回 MainScene 且其余非奖励卡包开始从屏幕下方回到列表槽位 THEN 系统 SHALL 循环播放 `SFX_CardPackAppear.mp3`。
+2. WHILE 至少一个上述卡包仍在回位动画区间 THEN 音效 SHALL 持续播放；WHEN 最后一张卡包到位或动画被取消 THEN 音效 SHALL 立即停止。
+3. IF 没有其余卡包需要回位 THEN 系统 SHALL NOT 播放该音效。
+4. 持续音效 SHALL 使用独立 AudioSource，停止时不得打断普通并发 SFX，并跟随现有音效音量设置。
+5. 结算页奖励底板开始入场时 SHALL NOT 播放 `SFX_CardPackAppear.mp3`；本次修改 SHALL NOT 改变卡包动画时长、错峰、位置或缓动。
+
+- [x] 增加独立循环 SFX 播放与停止接口。
+- [x] 将音效绑定到 `AnimateRemainingPackageRewardEntrance` 的实际运动区间及全部取消路径。
+- [x] 移除结算奖励底板入场时的旧单次调用。
+- [x] 编译 Runtime/Editor 并检查调用点。
+- [ ] 在 Play Mode 验证正常结束、无回位对象和中途取消三种路径。
+
+### 验证
+
+- `SFX_CardPackAppear.mp3` 只在 MainScene 的列表回位入口调用；清理入口统一停止循环声道，MainScene 销毁时使用不创建新实例的静态停止接口。
+- `dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 成功并连带编译 Runtime，结果 `0` 警告、`0` 错误；`git diff --check` 通过，仅有仓库既有换行提示。
+
+## 2026-09-04 - 全部短音效起音延迟统一优化
+
+### 需求与实现
+
+1. 全部 `SFX_*.mp3` SHALL 按各自实际波形起点移除可感知前导静音，不得用一个固定裁剪时长批量截取。
+2. 处理 SHALL 保留原文件名、`.meta` GUID、采样率、声道数和各自原始码率，不修改 BGM、AudioCatalog 引用或业务调用名。
+3. 项目 DSP Buffer SHALL 使用 `512`，在常见 `48 kHz` 输出下把单缓冲理论延迟控制在约 `11 ms`；未经跨设备试听和性能验证不得继续降至 `256`。
+4. 后续美术替换任何 SFX 后 SHALL 重新检查源文件前导静音，不能仅依赖代码调用时机判断延迟。
+
+- [x] 扫描全部 19 个 SFX 的原始前导静音和音频属性。
+- [x] 按文件波形裁剪 18 个其余 SFX，保留已处理的 `SFX_PieceWrongReturn.mp3`，避免二次有损重编码。
+- [x] 将 DSP Buffer 从 `1024` 调整为 `512`。
+- [x] 复测全部最终文件，并确认 `.meta` 与 `AudioCatalog.asset` 未修改。
+- [x] 编译 Runtime/Editor。
+- [ ] Unity 重新导入并重启 Editor 后，在 Play Mode 试听即时反馈与低性能设备稳定性。
+
+### 验证
+
+- 裁剪前 19 个 SFX 的前导静音约为 `5~398 ms`；最终 17 个检测为 `0 ms`，`SFX_PiecePlace.mp3` 约 `1.1 ms`，`SFX_PieceWrongReturn.mp3` 约 `5 ms`。
+- 所有最终文件与各自输入保持相同采样率、双声道和码率；18 个裁剪文件只发生一次 MP3 有损重编码，背景音乐未改。
+- Git 检查确认 19 个 MP3 和 `ProjectSettings/AudioManager.asset` 发生变化，所有音频 `.meta` 与 `Assets/Resources/AudioCatalog.asset` 均未变化。
+- `dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 成功并连带编译 Runtime，结果 `0` 警告、`0` 错误。

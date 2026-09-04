@@ -22,6 +22,7 @@ public sealed class AudioManager : MonoBehaviour
 
     private AudioSource _musicSource;
     private AudioSource _sfxSource;
+    private AudioSource _loopingSfxSource;
     private string _currentMusicFileName;
     private ResourceRequest _catalogLoadRequest;
     private bool _catalogLoaded;
@@ -123,6 +124,42 @@ public sealed class AudioManager : MonoBehaviour
         }
     }
 
+    public void PlayLoopingSfx(string fileName)
+    {
+        if (!TryGetClip(fileName, out var clip))
+        {
+            return;
+        }
+
+        if (_loopingSfxSource.clip == clip && _loopingSfxSource.isPlaying)
+        {
+            return;
+        }
+
+        _loopingSfxSource.Stop();
+        _loopingSfxSource.clip = clip;
+        _loopingSfxSource.Play();
+    }
+
+    public void StopLoopingSfx()
+    {
+        if (_loopingSfxSource == null)
+        {
+            return;
+        }
+
+        _loopingSfxSource.Stop();
+        _loopingSfxSource.clip = null;
+    }
+
+    public static void StopLoopingSfxIfActive()
+    {
+        if (sInstance != null)
+        {
+            sInstance.StopLoopingSfx();
+        }
+    }
+
     public void StopMusic()
     {
         _musicSource.Stop();
@@ -137,7 +174,9 @@ public sealed class AudioManager : MonoBehaviour
 
     public void SetSfxVolume(float value)
     {
-        _sfxSource.volume = Mathf.Clamp01(value);
+        var clampedValue = Mathf.Clamp01(value);
+        _sfxSource.volume = clampedValue;
+        _loopingSfxSource.volume = clampedValue;
     }
 
     public IEnumerator PreloadStartupAudio()
@@ -250,6 +289,11 @@ public sealed class AudioManager : MonoBehaviour
         _sfxSource.playOnAwake = false;
         _sfxSource.loop = false;
         _sfxSource.spatialBlend = 0f;
+
+        _loopingSfxSource = CreateAudioSource("Looping SFX Audio Source");
+        _loopingSfxSource.playOnAwake = false;
+        _loopingSfxSource.loop = true;
+        _loopingSfxSource.spatialBlend = 0f;
     }
 
     private AudioSource CreateAudioSource(string objectName)

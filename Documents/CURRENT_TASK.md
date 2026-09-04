@@ -1,5 +1,39 @@
 # 当前任务
 
+## 2026-09-04 全部短音效起音延迟统一优化
+
+- 状态：资源与项目设置修改、静态验证完成，等待 Unity 重新导入和 Play Mode 试听。
+- 用户反馈：首次裁剪后的放错回弹音效已有改善但仍稍慢，同时要求统一修正其他短音效。
+- 扫描结果：19 个 `SFX_*.mp3` 原始前导静音约为 `5~398 ms`；除已处理的 `SFX_PieceWrongReturn.mp3` 外，其他音效中有 12 个超过 `50 ms`，延迟主要来自素材开头静音。
+- 修改：按每个文件实际波形起点分别裁剪其他 18 个 SFX，未使用统一固定时长；最终复测 17 个为 `0 ms`、`SFX_PiecePlace.mp3` 为约 `1.1 ms`、`SFX_PieceWrongReturn.mp3` 保持约 `5 ms`。背景音乐未处理。
+- 低延迟设置：`ProjectSettings/AudioManager.asset` 的 DSP Buffer 从 `1024` 改为 `512`，常见 `48 kHz` 下理论缓冲由约 `21 ms` 降至约 `11 ms`，用于进一步改善放错回弹等即时反馈。没有改到更激进的 `256`，以降低低性能设备爆音风险。
+- 资源完整性：全部 SFX 保持原文件名、`.meta` GUID、采样率、双声道和各自原码率；`.meta` 与 `Assets/Resources/AudioCatalog.asset` 未修改。18 个新裁剪文件经过一次 MP3 有损重编码，已保持原编码参数。
+- 修改文件：19 个 `Assets/Audios/SFX_*.mp3`、`ProjectSettings/AudioManager.asset`、统一 spec、任务记录与项目上下文；临时候选文件已清理。
+- 验证：FFmpeg 对项目内最终 19 个文件逐一复测通过；Runtime/Editor 编译通过，`0` 警告、`0` 错误。
+- 下一步：等待 Unity 完成 19 个音效的自动重新导入并重启 Unity Editor，使新的 DSP Buffer 生效；从 LoadingScene 进入游戏，重点试听按钮、卡包点击、拿起、放下、正确吸附、错误回弹、提示、滚分和卡包回位。若仍有整体延迟，再用 Unity Profiler/Audio 调试确认设备实际 DSP 延迟，不继续盲目裁素材。
+
+## 2026-09-04 首页卡包回位持续音效
+
+- 状态：代码修改和编译验证完成，等待 Play Mode 试听。
+- 用户意图：原“卡包出现声音.mp3”对应的 `SFX_CardPackAppear.mp3` 只服务于结算返回首页后，列表卡包从屏幕下方陆续回到槽位的过程；只要仍有卡包在移动就持续播放，没有移动就立即掐断。
+- 修改：为 `AudioManager` 增加独立循环 SFX AudioSource，不与普通 `PlayOneShot` 共用声道；`AnimateRemainingPackageRewardEntrance` 有实际非奖励卡包需要回位时开始循环，最后一张到位时停止。列表状态清理、转场取消、列表重建和 MainScene 销毁也都会停止该声道；销毁阶段不会反向创建新的 `AudioManager`。
+- 调整：移除结算页 `ImgBagBg` 开始入场时对 `SFX_CardPackAppear.mp3` 的旧单次调用。奖励卡包飞入目标槽期间不播放该音效，等其余列表卡包开始陆续上滑时才播放。
+- 保留：卡包回位的 `0.44s` 单卡时长、`0.055s` 错峰、位置和缓动均未修改；循环声道跟随现有音效音量，停止时不打断其他按钮、奖励或特效音效。
+- 修改文件：`Assets/Scripts/Model/AudioManager.cs`、`Assets/Scripts/Controller/MainScene.cs`、`Assets/Scripts/Controller/GameScene.cs`、统一 spec、任务记录与项目上下文。
+- 验证：`SFX_CardPackAppear.mp3` 业务调用只保留首页卡包回位入口；Runtime/Editor 编译通过，`0` 警告、`0` 错误；`git diff --check` 通过，仅有仓库既有换行提示。
+- 下一步：在 Play Mode 完成一次有/无奖励卡包的结算返回，确认其余列表开始上滑即起音、最后一张停下即断音，并确认中途切场景不会残留循环声。
+
+## 2026-09-04 放错回弹音效前导静音修正
+
+- 状态：音频资源修改完成，等待 Unity 重新导入与 Play Mode 试听。
+- 用户反馈：多个事件音效听感晚于画面；本轮明确处理“放错，回来块.mp3”对应的 `SFX_PieceWrongReturn.mp3`。
+- 根因：两个放错分支都在回弹动画启动前调用 `PlaySfx`，LoadingScene 也已预热全部 SFX；实际延迟主要来自 MP3 自身约 `321 ms` 的前导静音，而不是代码调用晚。项目 DSP Buffer 为 `1024`，常见 `48 kHz` 下约增加 `21 ms`，但不是本次主要延迟。
+- 修改：裁掉 `SFX_PieceWrongReturn.mp3` 约 `316 ms` 的前导静音，保留约 `5 ms` 起音余量；文件名及 `.meta` GUID 保持不变，未修改代码、场景和导入设置。
+- 相关检测：`SFX_ScoreIncrease.mp3` 约有 `13 ms` 前导静音；`SFX_ButtonClick.mp3`、`SFX_CardPackClick.mp3`、`SFX_CardPackGain.mp3`、`SFX_FinalPieceHint.mp3`、`SFX_PieceCorrect.mp3`、`SFX_PiecePickup.mp3`、`SFX_PiecePlace.mp3` 约有 `139~398 ms` 不等的前导静音，因此多个音效均可能出现可感知滞后。
+- 修改文件：`Assets/Audios/SFX_PieceWrongReturn.mp3`、统一 spec、任务记录与项目上下文。
+- 验证：裁剪后该音效前导静音约 `5 ms`，文件时长由约 `1.10s` 缩短为约 `0.78s`；待 Unity 自动重新导入后在 Play Mode 验证松手判错与起音同步。
+- 下一步：先试听放错回弹；若确认需要统一处理其他音效，再经用户明确确认后逐个裁剪，避免未经确认批量有损重编码全部 MP3。
+
 ## 2026-09-04 拼图完成音效提前到最后一块落下
 
 - 状态：代码修改和编译验证完成，等待 Play Mode 试听。

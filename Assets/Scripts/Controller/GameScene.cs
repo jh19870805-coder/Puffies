@@ -8037,7 +8037,6 @@ public class GameScene : MonoBehaviour
         }
 
         PrepareSettlementRewardSlots();
-        AudioManager.Instance.PlaySfx("SFX_CardPackAppear.mp3");
         _settlementRewardBagRect.gameObject.SetActive(true);
         _settlementRewardBagRect.anchoredPosition = CalculateSettlementOffscreenPosition(
             _settlementRewardBagRect,

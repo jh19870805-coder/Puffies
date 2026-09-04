@@ -32,6 +32,7 @@ public class MainScene : MonoBehaviour
     private const float RewardListEntranceDuration = 0.44f;
     private const float RewardListEntranceStagger = 0.055f;
     private const float RewardListOffscreenPadding = 80f;
+    private const string RewardListEntranceSfx = "SFX_CardPackAppear.mp3";
     private const float PackagePageSnapDuration = 0.26f;
     private const float DefaultPackagePageWidth = 1625f;
     private const float DefaultPackagePageHeight = 950f;
@@ -614,6 +615,7 @@ public class MainScene : MonoBehaviour
 
     private void OnDestroy()
     {
+        AudioManager.StopLoopingSfxIfActive();
         StopPackagePageSnap();
         StopOpeningHintAnimation();
         if (mSelectedPackageOverlayCanvas != null)
@@ -1125,9 +1127,17 @@ public class MainScene : MonoBehaviour
             }
         }
 
+        if (animatedStates.Count == 0)
+        {
+            ClearPackageRewardEntranceState(restorePositions: true);
+            mIsPlayingAnimation = false;
+            yield break;
+        }
+
         var totalDuration = RewardListEntranceDuration
                             + RewardListEntranceStagger * Mathf.Max(0, animatedStates.Count - 1);
         var elapsed = 0f;
+        AudioManager.Instance.PlayLoopingSfx(RewardListEntranceSfx);
         while (elapsed < totalDuration)
         {
             elapsed += Time.unscaledDeltaTime;
@@ -3731,6 +3741,7 @@ public class MainScene : MonoBehaviour
 
     private void ClearPackageRewardEntranceState(bool restorePositions)
     {
+        AudioManager.Instance.StopLoopingSfx();
         if (restorePositions)
         {
             for (var i = 0; i < mPackageRewardEntranceStates.Count; i++)
