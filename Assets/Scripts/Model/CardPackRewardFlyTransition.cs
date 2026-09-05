@@ -58,8 +58,11 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
     private RectTransform mRewardBackdropRect;
     private Image mInputBlocker;
     private MainScene mPreparedMainScene;
+    private bool mIsControllingMainSceneEntrance;
 
     public static bool IsActive => sInstance != null;
+    public static bool IsControllingMainSceneEntrance =>
+        sInstance != null && sInstance.mIsControllingMainSceneEntrance;
 
     public static void CancelPending()
     {
@@ -347,6 +350,7 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
 
     private IEnumerator PlayTransition()
     {
+        mIsControllingMainSceneEntrance = true;
         GameManager.EnterMainScene();
         yield return null;
 
@@ -374,6 +378,7 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
 
         if (mPreparedMainScene == null)
         {
+            mIsControllingMainSceneEntrance = false;
             mainScene?.CancelPackageRewardEntrance();
             Debug.LogWarning(
                 "CardPackRewardFlyTransition: MainScene package list was not ready before timeout.");
@@ -395,6 +400,7 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
             {
                 Debug.LogWarning(
                     $"CardPackRewardFlyTransition: target slot missing. packId={mIcons[i].PackId}");
+                mIsControllingMainSceneEntrance = false;
                 mPreparedMainScene.CancelPackageRewardEntrance();
                 Destroy(gameObject);
                 yield break;
@@ -408,6 +414,7 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
 
         yield return mPreparedMainScene.AnimateRemainingPackageRewardEntrance();
         mPreparedMainScene = null;
+        mIsControllingMainSceneEntrance = false;
         if (mInputBlocker != null)
         {
             mInputBlocker.raycastTarget = false;
@@ -913,6 +920,7 @@ public sealed class CardPackRewardFlyTransition : MonoBehaviour
 
     private void OnDestroy()
     {
+        mIsControllingMainSceneEntrance = false;
         for (var i = 0; i < mIcons.Count; i++)
         {
             StopAndClearParticleSystems(mIcons[i].RevealParticleSystems);

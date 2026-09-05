@@ -2359,6 +2359,7 @@ public class MainScene : MonoBehaviour
         if (mPackagePageTemplate == null)
         {
             Debug.LogWarning($"MainScene: package page not found. Expected {PackageFirstPageObjectName} under Content.");
+            RestorePackageRewardListVisibility();
             return false;
         }
 
@@ -2367,6 +2368,7 @@ public class MainScene : MonoBehaviour
         {
             Debug.LogWarning(
                 "MainScene: PackItem prefab is not assigned. Configure mPackageItemPrefab in MainScene.");
+            RestorePackageRewardListVisibility();
             return false;
         }
 
@@ -2380,8 +2382,7 @@ public class MainScene : MonoBehaviour
 
     private void PreHidePackageRewardList()
     {
-        if (!CardPackRewardFlyTransition.IsActive
-            || mPackageContentRoot == null
+        if (mPackageContentRoot == null
             || mIsPackageRewardListPreHidden)
         {
             return;
@@ -2532,12 +2533,14 @@ public class MainScene : MonoBehaviour
         mIsPackageListRefreshComplete = false;
         if (mPackageContentRoot == null || mPackageItemTemplate == null)
         {
+            RestorePackageRewardListVisibility();
             yield break;
         }
 
         if (!CardPackDataUtility.Initialize())
         {
             Debug.LogWarning("MainScene: CardPackDataUtility is not ready, package list refresh skipped.");
+            RestorePackageRewardListVisibility();
             yield break;
         }
 
@@ -2581,6 +2584,18 @@ public class MainScene : MonoBehaviour
             $"MainScene: package list refreshed. unlocked={unlockedPackIds.Count}, "
             + $"slots={packageDisplays.Count}, "
             + $"elapsed={(Time.realtimeSinceStartup - startedAt) * 1000f:F1}ms");
+
+        if (!CardPackRewardFlyTransition.IsControllingMainSceneEntrance)
+        {
+            if (TryPreparePackageRewardEntrance(Array.Empty<int>()))
+            {
+                yield return AnimateRemainingPackageRewardEntrance();
+            }
+            else
+            {
+                RestorePackageRewardListVisibility();
+            }
+        }
     }
 
     private static List<PackageListDisplay> BuildPackageListDisplays(

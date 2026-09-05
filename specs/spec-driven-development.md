@@ -1799,6 +1799,28 @@
 - `SFX_CardPackAppear.mp3` 只在 MainScene 的列表回位入口调用；清理入口统一停止循环声道，MainScene 销毁时使用不创建新实例的静态停止接口。
 - `dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 成功并连带编译 Runtime，结果 `0` 警告、`0` 错误；`git diff --check` 通过，仅有仓库既有换行提示。
 
+## 2026-09-05 - 首页卡包列表统一进场
+
+### 需求与实现
+
+1. WHEN 任意页面重新加载 MainScene THEN 首页卡包列表 SHALL 播放从屏幕下方依次上滑到目标槽位的进场动画，不得因来源是 LoadingScene、GameScene、RankScene、AchieveScene 或切档流程而直接显示。
+2. MainScene SHALL 在列表分批创建、排序、分页布局和离屏布置期间预隐藏 Content；WHEN 离屏位置准备完成 THEN SHALL 以完整透明度直接显示并开始上滑，不得增加透明度渐变或首帧闪现。
+3. 普通入口 SHALL 对全部列表槽位复用单卡 `0.44s`、错峰 `0.055s` 的现有动画。结算奖励入口 SHALL 保持奖励卡先飞入目标槽、其余卡包随后上滑的顺序，不得重复启动普通入口动画。
+4. 奖励转场是否接管当前 MainScene SHALL 使用明确的进场控制状态；仅剩 `FX_ui_jieSuo_w` 长尾粒子但已完成列表进场时，不得再以 `IsActive` 阻止下一次首页动画。
+5. WHEN 列表配置缺失、数据初始化失败或没有可动画槽位 THEN 系统 SHALL 恢复 Content、GridLayout、ScrollRect 和输入状态，不得永久隐藏列表。
+
+- [x] 将普通 MainScene 入口接入现有列表离屏布置和上滑动画。
+- [x] 保留结算奖励转场对特殊进场顺序的唯一接管。
+- [x] 增加奖励转场精确进场控制状态，排除长尾实例误判。
+- [x] 为列表解析和数据初始化失败补充显示恢复。
+- [x] 编译 Runtime/Editor 并核对各页面返回首页入口。
+- [ ] Play Mode 验证 Loading、GameScene、RankScene、AchieveScene 和结算奖励返回路径。
+
+### 验证
+
+- RankScene、AchieveScene、LoadingScene 及 GameScene 的返回入口最终都重新加载 MainScene，普通入口由 `RefreshPackageList` 启动整列动画，奖励入口由 `CardPackRewardFlyTransition` 启动既有分段动画。
+- `dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 成功并连带编译 Runtime，结果 `0` 警告、`0` 错误。
+
 ## 2026-09-05 - 结算分数增长提速
 
 ### 需求与实现

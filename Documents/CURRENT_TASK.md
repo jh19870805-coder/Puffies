@@ -1,5 +1,16 @@
 # 当前任务
 
+## 2026-09-05 首页卡包列表统一进场
+
+- 状态：代码修改和编译验证完成，等待 Play Mode 逐入口验收。
+- 用户意图：每次真正进入首页时都播放卡包列表进场动画，不因来源页面不同而直接显示列表。
+- 修改：MainScene 解析到列表 Content 后统一预隐藏；列表排序、分页和槽位全部创建完成后，将全部卡包布置到屏幕下方并复用现有单卡 `0.44s`、错峰 `0.055s` 的依次上滑动画。Loading、游戏中直接返回、排行榜返回、成就页返回和切换存档后进入均走普通整列上滑；结算奖励返回仍由 `CardPackRewardFlyTransition` 接管，保持“奖励卡先落位、其余卡包后上滑”的既有顺序。
+- 边界修复：奖励特效长尾期间 `CardPackRewardFlyTransition.IsActive` 仍可能为真，因此新增 `IsControllingMainSceneEntrance` 精确区分“正在接管首页进场”和“仅剩长尾粒子”。从其他页面再次进入首页时不会因旧长尾误跳过动画或永久隐藏列表。列表配置或数据初始化失败时恢复 Content 显示状态。
+- 保留：列表排序、分页位置、卡包尺寸、系列折叠、奖励飞行动画、卡包上滑参数和输入恢复逻辑不变；列表没有透明度渐变，只在构建期间隐藏并在离屏布置后直接恢复完整透明度。
+- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Assets/Scripts/Model/CardPackRewardFlyTransition.cs`、任务记录、项目上下文和统一 spec。
+- 验证：RankScene、AchieveScene 和 LoadingScene 均通过 `GameManager.EnterMainScene` 重新加载 MainScene；普通入口和奖励入口已分别绑定唯一进场执行方；`Assembly-CSharp-Editor` 连带 Runtime 编译通过，`0` 警告、`0` 错误。
+- 下一步：在 Play Mode 分别从 Loading、GameScene 直接返回、结算完成、RankScene 和 AchieveScene 进入首页，确认每次列表均从屏幕下方依次上滑且没有首帧闪现。
+
 ## 2026-09-05 结算分数增长提速
 
 - 状态：代码修改和编译验证完成，等待 Play Mode 试听。
