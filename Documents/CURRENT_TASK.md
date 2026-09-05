@@ -1,5 +1,14 @@
 # 当前任务
 
+## 2026-09-05 相机快门音效
+
+- 状态：音频生成、功能接入和编译验证完成，等待 Play Mode 试听。
+- 用户意图：制作一版可试听的相机快门声音，放入现有音效目录，并在拍照功能的正确时机播放。
+- 修改：新增 `Assets/Audios/SFX_CameraShutter.mp3`，使用两段短促机械开合、低频机身响应和轻微回弹尾音合成；音频为 `48 kHz` 双声道、`192 kbps`、约 `0.28s`。新增并固定 `.meta` GUID，将 AudioClip 按现有排序加入 `AudioCatalog.asset`。MainScene 与 GameScene 共用的 `CardPackPhoto.PlayPhotoFlash` 在白色闪光完成首帧准备、开始淡入的同一帧播放快门音效；点击按钮、保存失败或预览出现时不会重复播放。
+- 修改文件：`Assets/Audios/SFX_CameraShutter.mp3`、对应 `.meta`、`Assets/Resources/AudioCatalog.asset`、`Assets/Scripts/Model/CardPackPhoto.cs`、任务记录、项目上下文和统一 spec。
+- 验证：最终音频峰值约 `-7.0 dB`、平均约 `-31.4 dB`，开头立即存在第一段机械点击，没有前导静音；GUID 在项目中唯一且 AudioCatalog 引用一次；`Assembly-CSharp-Editor` 连带 Runtime 编译通过，`0` 警告、`0` 错误。
+- 下一步：分别在 MainScene 选中卡包拍照和 GameScene 结算拍照，确认快门声与闪白同步、响度合适且每次只播放一次。
+
 ## 2026-09-05 全局弹窗打开音效
 
 - 状态：代码修改和编译验证完成，等待 Play Mode 逐弹窗试听。

@@ -366,6 +366,7 @@ public sealed class CardPackPhoto : MonoBehaviour
         mFlashCanvasGroup.alpha = 0f;
         Canvas.ForceUpdateCanvases();
         yield return null;
+        AudioManager.Instance.PlaySfx("SFX_CameraShutter.mp3");
         yield return FadeCanvasGroup(
             mFlashCanvasGroup,
             0f,

@@ -1821,6 +1821,28 @@
 - RankScene、AchieveScene、LoadingScene 及 GameScene 的返回入口最终都重新加载 MainScene，普通入口由 `RefreshPackageList` 启动整列动画，奖励入口由 `CardPackRewardFlyTransition` 启动既有分段动画。
 - `dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 成功并连带编译 Runtime，结果 `0` 警告、`0` 错误。
 
+## 2026-09-05 - 相机快门音效
+
+### 需求与实现
+
+1. WHEN MainScene 卡包拍照或 GameScene 结算拍照的白色闪光开始淡入 THEN 系统 SHALL 播放一次 `SFX_CameraShutter.mp3`。
+2. 快门音效 SHALL 在共用 `CardPackPhoto.PlayPhotoFlash` 中触发，使两处拍照使用完全相同的播放时机；点击按钮、照片保存结束和预览弹窗出现不得重复播放。
+3. IF 闪光 Canvas 无法创建或拍照流程未实际启动 THEN 系统 SHALL NOT 播放快门音效。
+4. 音频 SHALL 位于现有 `Assets/Audios` 平铺目录，使用稳定 ASCII 名称、独立 `.meta` GUID，并登记到 `AudioCatalog.asset`。
+
+- [x] 合成短促机械快门开合及回弹音效。
+- [x] 检查时长、响度和前导静音。
+- [x] 创建 Unity `.meta` 并更新 AudioCatalog。
+- [x] 将播放点绑定到白色闪光开始淡入的准确时机。
+- [x] 编译 Runtime/Editor。
+- [ ] 在 MainScene 和 GameScene 分别拍照试听同步与响度。
+
+### 验证
+
+- `SFX_CameraShutter.mp3` 为 `48 kHz` 双声道、`192 kbps`、约 `0.28s`，峰值约 `-7.0 dB`，开头直接存在第一段机械点击。
+- `.meta` GUID `24eb1b2c98914d31b27907410a45633e` 在项目中唯一，并在 `AudioCatalog.asset` 中引用一次。
+- `dotnet build Assembly-CSharp-Editor.csproj --no-restore` 成功并连带编译 Runtime，结果 `0` 警告、`0` 错误。
+
 ## 2026-09-05 - 全局弹窗打开音效
 
 ### 需求与实现
