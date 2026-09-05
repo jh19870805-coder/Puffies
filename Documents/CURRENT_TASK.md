@@ -1,5 +1,18 @@
 # 当前任务
 
+## 2026-09-05 MainScene 语言选择滚动列表
+
+- 状态：编辑器 UI 结构、语言项 Prefab、29 项内容和视觉检查已完成；本轮未接入语言切换与文本翻译逻辑。
+- 用户意图：MainScene 的 `PanelLanguage` 需要容纳 29 种语言；沿用场景内 `LanName1` 选中样式和 `LanName2` 常规样式，建立可滚动语言列表，并把单项拆成可复用 `LanNameItem.prefab`。
+- 编辑器结构：在 `PanelLanguage` 中新增 `LanguageScrollView/Viewport/Content`。ScrollRect 仅允许纵向滚动，不显示滚动条；Viewport 使用 `RectMask2D`；Content 使用顶部锚定的 `GridLayoutGroup + ContentSizeFitter`，固定每行 2 项。用户后续调整的 Scroll View 位置 `(0, 90)` 和尺寸 `492 x 850` 保持不变；列表位于标题下、分割线上，不遮挡标题、关闭、分割线或返回按钮。
+- Prefab：新增 `Assets/Prefabs/LanNameItem.prefab`，根节点包含透明点击 Image、Button 和 `LayoutElement`，单元尺寸 `234 x 70`；子节点 `LanName1`、`LanName2` 从用户在 MainScene 中设置的模板复制，默认普通样式显示、选中样式隐藏。两个 TMP 完整沿用原始字体、材质、颜色、字号上限 `34`、Bold 和对齐；为保证长语言名仍为单行，关闭换行并启用 `16-34` Auto Size，列表布局不得覆盖其余视觉配置。
+- 列表内容：Content 中按 `LocalizationFontManifest.json` 顺序放置 29 个 Prefab 实例，名称使用 `LanNameItem_<language-code>`；显示各语言原生名称。默认 `en-US` 使用 `LanName1`，其余使用 `LanName2`。
+- 字体：`LanName1/2` 均保持用户原始的 `NotoSansSC-Regular SDF` 字体和该字体内嵌材质；不在 Prefab 或 29 个场景实例上强制替换字体或材质。原字体仅新增 `NotoSans LGC SDF` fallback，由其现有 `SC -> JP -> TC -> KR -> Thai` 链补齐韩文、泰文和拉丁扩展字符。此前误加的场景 Override、5 个静态字体材质 Scale Ratio 以及旧中文字体动态 Atlas/Glyph 写回均已撤销。
+- fallback 材质统一：`NotoSans LGC/SC/JP/TC/KR/Thai SDF` 的内嵌材质统一沿用原 `NotoSansSC-Regular SDF` 的 `TMP SDF Mobile` Shader、`OUTLINE_ON + UNDERLAY_ON` 关键字及描边/阴影视觉参数；每套字体继续使用自己的 Atlas、纹理宽高、Gradient Scale 和字重数据。该同步通过一次性 Unity Editor 脚本执行，完成后脚本及 `.meta` 已自动删除，不增加运行时代码。
+- 层级：Scroll View、Viewport、Content、Prefab 根和文字节点全部使用 `UI` Layer。原先直接挂在 `PanelLanguage` 下的两个模板对象已由滚动列表替代。
+- 验证：Unity Editor 一次性脚本执行成功并自行删除；场景内恰好 29 个语言项，Grid 固定 2 列、共 15 行，Content 计算高度 `1170` 大于 Viewport `850`，垂直滚动成立；Prefab 两套 TMP 保持原字体 GUID `07169799dbf3be7428d02d725795d190` 和共享材质 fileID `381051975239993251`。Unity 画面复核后，韩文、泰文和捷克文缺字方框已消失，`Español - España` 与 `Português - Portugal` 均完整单行显示，后者会自动缩小到可容纳字号；原字体描边和材质视觉保持不变。原字体资产只新增 fallback，不改 Atlas、Glyph 或内嵌材质；6 套 fallback 字体的差异仅位于各自内嵌 Material 段，6 个 `_MainTex` fileID 均保持各自原值。Runtime/Editor 编译均为 `0` 警告、`0` 错误。Console 中现有缺字警告是修复前遗留记录。
+- 下一步：接入本地化数据和语言选择控制时，给 29 个根 Button 绑定语言代码，点击后只切换当前项/前一项的 `LanName1/2`，持久化当前语言并刷新所有本地化文本。
+
 ## 2026-09-05 多语言 TMP 字体资源导入
 
 - 状态：字体资源复制和静态引用验证完成，等待 Unity Editor 自动导入确认。

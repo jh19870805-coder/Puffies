@@ -210,8 +210,10 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 
 新的 `CanvasScaler` 值由 `CanvasDesignResolutionEditor.cs` 写入。代码中使用 `GameFontUtility`，不要硬编码字体路径。
 
-- 多语言字体资源位于 `Assets/TextMesh Pro/Resources/Fonts & Materials/`。推荐主字体为静态 `NotoSans LGC SDF`，覆盖拉丁、拉丁扩展、越南文、希腊文和斯拉夫文；其资源内 fallback 顺序固定为 `NotoSans SC SDF -> NotoSans JP SDF -> NotoSans TC SDF -> NotoSans KR SDF -> NotoSans Thai SDF`，覆盖简中、日文、繁中、韩文和泰文。6 个 SDF 均包含内嵌 Atlas，并引用同目录已有的对应 Noto TTF。
-- 当前导入只准备字体资源，尚未修改 `Assets/TextMesh Pro/Resources/TMP Settings.asset`、场景、Prefab 或运行时代码。现有 `NotoSansSC-Regular SDF` 和 `Puffies -> Setup Default Chinese Font` 流程继续保留；手动搭建多语言 TMP UI 时使用 `NotoSans LGC SDF` 作为字体即可通过其内置 fallback 链补齐 29 种已规划语言的字形。
+- 多语言字体资源位于 `Assets/TextMesh Pro/Resources/Fonts & Materials/`。推荐主字体为静态 `NotoSans LGC SDF`，覆盖拉丁、拉丁扩展、越南文、希腊文和斯拉夫文；其资源内 fallback 顺序固定为 `NotoSans SC SDF -> NotoSans JP SDF -> NotoSans TC SDF -> NotoSans KR SDF -> NotoSans Thai SDF`，覆盖简中、日文、繁中、韩文和泰文。6 个 SDF 均包含内嵌 Atlas，并引用同目录已有的对应 Noto TTF。现有 `NotoSansSC-Regular SDF` 通过一条 `NotoSans LGC SDF` fallback 复用该完整链，以补齐语言选择列表所需字符，不修改其内嵌材质、Atlas 或 Glyph 数据。
+- 6 套 fallback SDF 的内嵌材质必须与现有 `NotoSansSC-Regular SDF` 视觉样式一致：统一使用 `TMP SDF Mobile`、白色描边和 Underlay 参数，但每套字体必须保留自己的 `_MainTex`、`_TextureWidth/Height`、`_GradientScale` 和 `_WeightNormal/Bold`。不得把中文字体 Atlas 直接赋给其他语言字体。
+- `Assets/Scenes/MainScene.unity/PanelLanguage` 使用编辑器内固定结构 `LanguageScrollView/Viewport/Content` 承载 29 种语言；ScrollRect 仅纵向滚动且无可见滚动条，Viewport 使用 `RectMask2D`，Content 使用固定 2 列的 `GridLayoutGroup + ContentSizeFitter`。当前 Scroll View 尺寸为 `492 x 850`，Grid 单元尺寸为 `234 x 70`、横向间距 `24`、纵向间距 `8`。列表项统一引用 `Assets/Prefabs/LanNameItem.prefab`，根 Button 名称格式为 `LanNameItem_<language-code>`，子节点 `LanName1` 是选中样式、`LanName2` 是常规样式。默认英语选中；当前只完成静态页面，尚未接入点击切换、语言持久化或全局文本翻译。
+- `LanNameItem.prefab` 的 `LanName1/2` 必须完整沿用用户在 MainScene 模板中设置的 TMP 字体、共享材质、颜色、字重和对齐；构建列表和后续选择逻辑不得覆盖这些视觉属性。当前两者继续使用 `NotoSansSC-Regular SDF` 及其原共享材质，字号上限为 `34`，关闭换行并启用 `16-34` Auto Size，保证长语言名完整单行显示；29 个场景实例不单独覆盖字体或材质。导入的 6 组多语言字体资源与 `TMP Settings.asset` 保持独立，后续需要替换语言字体时须另行确认视觉材质方案。
 
 ---
 
