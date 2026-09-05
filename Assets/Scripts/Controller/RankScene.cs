@@ -21,9 +21,11 @@ public class RankScene : MonoBehaviour
     private const string RankNameObjectName = "RankName";
     private const string RankScoreObjectName = "RankScore";
     private const string RankBagNumObjectName = "RankBagNum";
+    private const string TotalPlayerTextObjectName = "TextPlayerTotal";
     private const string RankBackgroundSpritePathPrefix = "Assets/UI/RankScene/RankCellBg_";
     private const string RankNumSpritePathPrefix = "Assets/UI/RankScene/RankNum_";
     private const int MockRankCount = 10;
+    private const int MockTotalPlayerCount = 2543368;
     private static bool sHookedSceneLoaded;
     private RectTransform mContentRoot;
     private GameObject mRankItemPrefab;
@@ -53,6 +55,7 @@ public class RankScene : MonoBehaviour
 
         ConfigureReturnButton();
         ConfigureMockRankItems();
+        RefreshLocalizedSummary();
     }
 
     private void Update()
@@ -122,6 +125,22 @@ public class RankScene : MonoBehaviour
         }
 
         Debug.Log($"RankScene: mock rank items created. total={rankItems.Count}");
+    }
+
+    private static void RefreshLocalizedSummary()
+    {
+        var totalPlayerObject = GameCommonUtility.FindSceneObject(TotalPlayerTextObjectName);
+        var totalPlayerText = totalPlayerObject != null
+            ? totalPlayerObject.GetComponent<TMP_Text>()
+            : null;
+        if (totalPlayerText != null)
+        {
+            totalPlayerText.text = GameLocalization.Format(
+                "rank.total_players",
+                MockTotalPlayerCount);
+        }
+
+        GameLocalization.RefreshSceneTexts();
     }
 
     private bool TryResolveRankUi()

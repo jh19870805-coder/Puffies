@@ -66,8 +66,8 @@ MonoBehaviour:
   m_Version: 1.1.0
   m_SourceFontFileGUID: a9dcfd58369cdd347b2ac3b0fec8edae
   m_SourceFontFile_EditorRef: {fileID: 12800000, guid: a9dcfd58369cdd347b2ac3b0fec8edae, type: 3}
-  m_SourceFontFile: {fileID: 0}
-  m_AtlasPopulationMode: 0
+  m_SourceFontFile: {fileID: 12800000, guid: a9dcfd58369cdd347b2ac3b0fec8edae, type: 3}
+  m_AtlasPopulationMode: 1
   m_FaceInfo:
     m_FaceIndex: 0
     m_FamilyName: Noto Sans SemiCondensed
@@ -5035,7 +5035,7 @@ MonoBehaviour:
   m_AtlasTextures:
   - {fileID: -4529989947241566674}
   m_AtlasTextureIndex: 0
-  m_IsMultiAtlasTexturesEnabled: 0
+  m_IsMultiAtlasTexturesEnabled: 1
   m_ClearDynamicDataOnBuild: 0
   m_UsedGlyphRects:
   - m_X: 0

@@ -145,9 +145,9 @@ public class GameScene : MonoBehaviour
     private const string TutorialHintArrowObjectName = "Arrow";
     private const string TutorialArrowPath = GameDefine.UiRoot + "/GameScene/GuideArrow1.png";
     private const string TutorialTipBackgroundPath = GameDefine.UiRoot + "/GameScene/GuideTipBg.png";
-    private const string TutorialStrongInstruction = "从托盘中选出匹配的贴纸，贴在板子的正确位置上。";
-    private const string TutorialPracticeInstruction = "将两个贴纸贴在板子的合适位置上，完成关卡。";
-    private const string TutorialHintInstruction = "攻克这一关！如果遇到困难，请使用“提示”按钮。";
+    private const string TutorialStrongInstructionKey = "game.tutorial.place";
+    private const string TutorialPracticeInstructionKey = "game.tutorial.two";
+    private const string TutorialHintInstructionKey = "game.tutorial.hint";
     private const string BootstrapObjectName = "GameSceneBootstrap";
     private const string PieceBgFillObjectName = "PieceBgFill";
     private const string PieceBgObjectName = "PieceBg";
@@ -209,7 +209,7 @@ public class GameScene : MonoBehaviour
     private const string PieceHintOutlineObjectName = "PieceHintOutline";
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
     private const string TestCompleteButtonObjectName = "BtnCompleteAllTest";
-    private const string TestCompleteButtonText = "一键完成";
+    private const string TestCompleteButtonTextKey = "game.test_complete";
 #endif
     private static readonly Color PieceHintOutlineColor = new Color32(112, 151, 75, 255);
     private static readonly Color HighContrastPieceHintOutlineColor = new Color32(0xb1, 0xd7, 0x02, 0xff);
@@ -9893,10 +9893,10 @@ public class GameScene : MonoBehaviour
     private static string GetTutorialInstruction(TutorialStage stage)
     {
         return stage == TutorialStage.StrongPlacement
-            ? TutorialStrongInstruction
+            ? GameLocalization.Get(TutorialStrongInstructionKey)
             : stage == TutorialStage.TwoPiecePractice
-                ? TutorialPracticeInstruction
-                : TutorialHintInstruction;
+                ? GameLocalization.Get(TutorialPracticeInstructionKey)
+                : GameLocalization.Get(TutorialHintInstructionKey);
     }
 
     private void CreateTutorialArrow(
@@ -10342,7 +10342,7 @@ public class GameScene : MonoBehaviour
         text.rectTransform.anchorMax = Vector2.one;
         text.rectTransform.offsetMin = new Vector2(10f, 4f);
         text.rectTransform.offsetMax = new Vector2(-10f, -4f);
-        text.text = TestCompleteButtonText;
+        text.text = GameLocalization.Get(TestCompleteButtonTextKey);
         text.fontSize = 28f;
         text.fontStyle = FontStyles.Bold;
         text.color = Color.white;
@@ -11323,7 +11323,7 @@ public class GameScene : MonoBehaviour
                 currentScore,
                 targetScore,
                 syncTaskWithScore,
-                "未使用提示",
+                GameLocalization.Get("game.bonus.no_hint"),
                 targetScore - currentScore,
                 animateTaskProgressHere,
                 progressAfterSettlement);
@@ -11348,7 +11348,7 @@ public class GameScene : MonoBehaviour
                 currentScore,
                 targetScore,
                 syncTaskWithScore,
-                "关闭关卡描边",
+                GameLocalization.Get("game.bonus.no_level_outline"),
                 targetScore - currentScore,
                 animateTaskProgressHere,
                 progressAfterSettlement);
@@ -11372,7 +11372,7 @@ public class GameScene : MonoBehaviour
                 currentScore,
                 targetScore,
                 syncTaskWithScore,
-                "关闭贴纸描边",
+                GameLocalization.Get("game.bonus.no_sticker_outline"),
                 targetScore - currentScore,
                 animateTaskProgressHere,
                 progressAfterSettlement);
@@ -11395,7 +11395,7 @@ public class GameScene : MonoBehaviour
                 currentScore,
                 targetScore,
                 syncTaskWithScore,
-                "快速完成",
+                GameLocalization.Get("game.bonus.fast"),
                 targetScore - currentScore,
                 animateTaskProgressHere,
                 progressAfterSettlement);
@@ -11619,7 +11619,9 @@ public class GameScene : MonoBehaviour
 
         if (_settlementBonusScoreText != null)
         {
-            _settlementBonusScoreText.text = $"+{Mathf.Max(0, bonusScore)}分";
+            _settlementBonusScoreText.text = GameLocalization.Format(
+                "game.bonus.points",
+                Mathf.Max(0, bonusScore));
             _settlementBonusScoreText.gameObject.SetActive(true);
         }
     }

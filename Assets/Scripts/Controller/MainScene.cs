@@ -115,8 +115,8 @@ public class MainScene : MonoBehaviour
     private const string ConfirmationPanelObjectName = "PanelConfirm";
     private const string ConfirmationButtonObjectName = "BtnYes";
     private const string ConfirmationContentObjectName = "TextContent";
-    private const string ExitConfirmationText = "确认退出游戏？";
-    private const string DeleteSaveConfirmationText = "确认删除进度存储？";
+    private const string ExitConfirmationLocalizationKey = "main.confirm_exit";
+    private const string DeleteSaveConfirmationLocalizationKey = "main.confirm_delete_save";
     private const string SettingsPanelObjectName = "PanelSet";
     private const string SettingsButtonObjectName = "BtnSet";
     private const string MusicSliderObjectName = "SliderMusic";
@@ -141,7 +141,13 @@ public class MainScene : MonoBehaviour
     private const string SaveSlotContentObjectName = "TextContent";
     private const string SaveContinueButtonObjectName = "BtnContinue";
     private const string SaveDeleteButtonObjectName = "BtnDelete";
-    private const string EmptySaveSlotText = "新游戏";
+    private const string LanguagePanelObjectName = "PanelLanguage";
+    private const string LanguageButtonObjectName = "BtnLanguage";
+    private const string LanguageListObjectName = "LanguageList";
+    private const string LanguageContentObjectName = "Content";
+    private const string LanguageSelectedTextObjectName = "LanName1";
+    private const string LanguageNormalTextObjectName = "LanName2";
+    private const string LanguageItemPrefix = "LanNameItem_";
     private const string BagSelectPanelObjectName = "PanelBagSelect";
     private const string BagSelectCanvasObjectName = "PanelBagSelectCanvas";
     private const string BagSelectBackdropObjectName = "PanelBagSelectBlurredBackdrop";
@@ -179,8 +185,6 @@ public class MainScene : MonoBehaviour
     private const string ReplayReturnButtonObjectName = "BtnReturn";
     private const string ReplayCloseButtonObjectName = "BtnClose";
     private const string PackPhotoItemObjectName = "PackPhotoItem";
-    private const string BagSelectNewPackActionText = "玩";
-    private const string BagSelectReplayActionText = "重玩";
     private const string TaskItemObjectName = "TaskItem";
     private static readonly Dictionary<int, Sprite> sPackageCoverSpriteCache =
         new Dictionary<int, Sprite>();
@@ -225,6 +229,7 @@ public class MainScene : MonoBehaviour
     private GameObject mSettingsPanelRoot;
     private GameObject mUsablePanelRoot;
     private GameObject mSavePanelRoot;
+    private GameObject mLanguagePanelRoot;
     private Button mSaveDeleteButton;
     private int mSelectedSaveSlotId = 1;
     private Color mSaveSelectedTitleColor;
@@ -615,6 +620,7 @@ public class MainScene : MonoBehaviour
 
     private void OnDestroy()
     {
+        GameLocalization.LanguageChanged -= OnLanguageChanged;
         AudioManager.StopLoopingSfxIfActive();
         StopPackagePageSnap();
         StopOpeningHintAnimation();
@@ -775,11 +781,15 @@ public class MainScene : MonoBehaviour
         ConfigureReplayPanel();
         ConfigurePackPhotoItem();
         ConfigureMenuPanel();
+        ConfigureLanguagePanel();
         ConfigureConfirmationPanel();
         ConfigureSettingsPanel();
         ConfigureUsablePanel();
         ConfigureSavePanel();
         RefreshTaskProgressUI();
+        GameLocalization.LanguageChanged -= OnLanguageChanged;
+        GameLocalization.LanguageChanged += OnLanguageChanged;
+        GameLocalization.RefreshSceneTexts();
     }
 
     private static void ConfigureMainCanvas()
@@ -4292,7 +4302,9 @@ public class MainScene : MonoBehaviour
         }
 
         SetPanelVisible(mMenuPanelRoot, false);
-        ShowConfirmation(ConfirmationAction.ExitGame, ExitConfirmationText);
+        ShowConfirmation(
+            ConfirmationAction.ExitGame,
+            GameLocalization.Get(ExitConfirmationLocalizationKey));
     }
 
     private void ShowConfirmation(ConfirmationAction action, string content)
@@ -4473,6 +4485,180 @@ public class MainScene : MonoBehaviour
     {
         AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
         SetPanelVisible(mSettingsPanelRoot, false);
+    }
+
+    private void ConfigureLanguagePanel()
+    {
+        mLanguagePanelRoot = GameCommonUtility.FindSceneObject(LanguagePanelObjectName);
+        if (mLanguagePanelRoot == null)
+        {
+            Debug.LogWarning(
+                $"MainScene: language panel not found. Expected {LanguagePanelObjectName}.");
+            return;
+        }
+
+        var openButton = mMenuPanelRoot != null
+            ? FindChild(mMenuPanelRoot.transform, LanguageButtonObjectName)?.GetComponent<Button>()
+            : GameCommonUtility.FindSceneObject(LanguageButtonObjectName)?.GetComponent<Button>();
+        if (openButton != null)
+        {
+            openButton.onClick.RemoveListener(OnLanguageButtonClicked);
+            openButton.onClick.AddListener(OnLanguageButtonClicked);
+        }
+
+        var closeButton = FindChild(
+            mLanguagePanelRoot.transform,
+            MenuCloseButtonObjectName)?.GetComponent<Button>();
+        if (closeButton != null)
+        {
+            closeButton.onClick.RemoveListener(OnLanguageCloseButtonClicked);
+            closeButton.onClick.AddListener(OnLanguageCloseButtonClicked);
+        }
+
+        var returnButton = FindChild(
+            mLanguagePanelRoot.transform,
+            GameDefine.ReturnButtonObjectName)?.GetComponent<Button>();
+        if (returnButton != null)
+        {
+            returnButton.onClick.RemoveListener(OnLanguageCloseButtonClicked);
+            returnButton.onClick.AddListener(OnLanguageCloseButtonClicked);
+        }
+
+        var content = FindLanguageContent();
+        if (content == null)
+        {
+            Debug.LogWarning(
+                $"MainScene: language content not found under {LanguagePanelObjectName}/{LanguageListObjectName}.");
+        }
+        else
+        {
+            for (var i = 0; i < GameLocalization.LanguageCodes.Count; i++)
+            {
+                var languageCode = GameLocalization.LanguageCodes[i];
+                var item = FindChild(content, LanguageItemPrefix + languageCode);
+                var button = item != null ? item.GetComponent<Button>() : null;
+                if (button == null)
+                {
+                    Debug.LogWarning(
+                        $"MainScene: language item button missing for {languageCode}.");
+                    continue;
+                }
+
+                var capturedCode = languageCode;
+                button.onClick.AddListener(() => OnLanguageItemClicked(capturedCode));
+            }
+        }
+
+        RefreshLanguageSelection();
+        SetPanelVisible(mLanguagePanelRoot, false);
+    }
+
+    private Transform FindLanguageContent()
+    {
+        if (mLanguagePanelRoot == null)
+        {
+            return null;
+        }
+
+        var languageList = FindChild(mLanguagePanelRoot.transform, LanguageListObjectName);
+        return languageList != null
+            ? FindChild(languageList, LanguageContentObjectName)
+            : null;
+    }
+
+    private void OnLanguageButtonClicked()
+    {
+        if (mIsPlayingAnimation || mLanguagePanelRoot == null)
+        {
+            return;
+        }
+
+        AudioManager.Instance.PlaySfx("SFX_PopupTransition.mp3");
+        SetPanelVisible(mMenuPanelRoot, false);
+        RefreshLanguageSelection();
+        SetPanelVisible(mLanguagePanelRoot, true);
+    }
+
+    private void OnLanguageCloseButtonClicked()
+    {
+        AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
+        SetPanelVisible(mLanguagePanelRoot, false);
+    }
+
+    private void OnLanguageItemClicked(string languageCode)
+    {
+        AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
+        GameLocalization.SetLanguage(languageCode);
+        RefreshLanguageSelection();
+    }
+
+    private void RefreshLanguageSelection()
+    {
+        var content = FindLanguageContent();
+        if (content == null)
+        {
+            return;
+        }
+
+        for (var i = 0; i < GameLocalization.LanguageCodes.Count; i++)
+        {
+            var languageCode = GameLocalization.LanguageCodes[i];
+            var item = FindChild(content, LanguageItemPrefix + languageCode);
+            if (item == null)
+            {
+                continue;
+            }
+
+            var isSelected = string.Equals(
+                languageCode,
+                GameLocalization.CurrentLanguageCode,
+                StringComparison.OrdinalIgnoreCase);
+            var selectedText = FindChild(item, LanguageSelectedTextObjectName);
+            var normalText = FindChild(item, LanguageNormalTextObjectName);
+            if (selectedText != null)
+            {
+                selectedText.gameObject.SetActive(isSelected);
+            }
+
+            if (normalText != null)
+            {
+                normalText.gameObject.SetActive(!isSelected);
+            }
+        }
+    }
+
+    private void OnLanguageChanged()
+    {
+        RefreshLanguageSelection();
+        RefreshTaskProgressUI();
+        if (mSavePanelRoot != null)
+        {
+            RefreshSavePanel();
+        }
+
+        if (mSelectedBagId > 0)
+        {
+            RefreshBagSelectPackState(mSelectedBagId);
+        }
+
+        if (mIsBagVolumeSelectionActive)
+        {
+            RefreshBagVolumeSelectionState();
+        }
+
+        if (mConfirmationContentText != null)
+        {
+            if (mConfirmationAction == ConfirmationAction.ExitGame)
+            {
+                mConfirmationContentText.text = GameLocalization.Get(
+                    ExitConfirmationLocalizationKey);
+            }
+            else if (mConfirmationAction == ConfirmationAction.DeleteSaveSlot)
+            {
+                mConfirmationContentText.text = GameLocalization.Get(
+                    DeleteSaveConfirmationLocalizationKey);
+            }
+        }
     }
 
     private void OnMusicVolumeChanged(float value)
@@ -4857,7 +5043,7 @@ public class MainScene : MonoBehaviour
         view.ContentText.color = isSelected ? mSaveSelectedContentColor : mSaveUnselectedContentColor;
         if (!summary.HasData)
         {
-            view.ContentText.text = EmptySaveSlotText;
+            view.ContentText.text = GameLocalization.Get("main.new_game");
             view.ContentText.alignment = TextAlignmentOptions.Center;
             view.ContentRect.anchorMin = view.ContentAnchorMin;
             view.ContentRect.anchorMax = view.ContentAnchorMax;
@@ -4874,8 +5060,10 @@ public class MainScene : MonoBehaviour
         var lastUpdatedText = summary.LastUpdatedTime > DateTime.MinValue
             ? summary.LastUpdatedTime.ToString("dd/MM/yyyy HH:mm")
             : string.Empty;
-        view.ContentText.text =
-            $"已解锁的拼图包：{summary.UnlockedPackCount}\n{lastUpdatedText}";
+        view.ContentText.text = GameLocalization.Format(
+            "main.save_summary",
+            summary.UnlockedPackCount,
+            lastUpdatedText);
     }
 
     private void OnSaveContinueButtonClicked()
@@ -4902,7 +5090,7 @@ public class MainScene : MonoBehaviour
         mPendingDeleteSaveSlotId = mSelectedSaveSlotId;
         ShowConfirmation(
             ConfirmationAction.DeleteSaveSlot,
-            DeleteSaveConfirmationText);
+            GameLocalization.Get(DeleteSaveConfirmationLocalizationKey));
     }
 
     private void OnSaveCloseButtonClicked()
@@ -5778,8 +5966,8 @@ public class MainScene : MonoBehaviour
         if (mBagVolumePlayLabel != null)
         {
             mBagVolumePlayLabel.text = shouldConfirmReplay
-                ? BagSelectReplayActionText
-                : BagSelectNewPackActionText;
+                ? GameLocalization.Get("main.replay")
+                : GameLocalization.Get("main.play");
         }
 
         if (mBagVolumeCameraButton != null)
@@ -6817,8 +7005,8 @@ public class MainScene : MonoBehaviour
         if (mBagSelectPlayLabel != null)
         {
             mBagSelectPlayLabel.text = shouldConfirmReplay
-                ? BagSelectReplayActionText
-                : BagSelectNewPackActionText;
+                ? GameLocalization.Get("main.replay")
+                : GameLocalization.Get("main.play");
         }
 
         if (mBagSelectCameraButtonRoot != null)

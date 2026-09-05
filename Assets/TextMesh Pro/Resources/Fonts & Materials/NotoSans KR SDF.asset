@@ -66,8 +66,8 @@ MonoBehaviour:
   m_Version: 1.1.0
   m_SourceFontFileGUID: 3c1a8f0c01a4cea499e08f71a5f9bd77
   m_SourceFontFile_EditorRef: {fileID: 12800000, guid: 3c1a8f0c01a4cea499e08f71a5f9bd77, type: 3}
-  m_SourceFontFile: {fileID: 0}
-  m_AtlasPopulationMode: 0
+  m_SourceFontFile: {fileID: 12800000, guid: 3c1a8f0c01a4cea499e08f71a5f9bd77, type: 3}
+  m_AtlasPopulationMode: 1
   m_FaceInfo:
     m_FaceIndex: 0
     m_FamilyName: Noto Sans KR
@@ -10811,7 +10811,7 @@ MonoBehaviour:
   m_AtlasTextures:
   - {fileID: -6797206116141719682}
   m_AtlasTextureIndex: 0
-  m_IsMultiAtlasTexturesEnabled: 0
+  m_IsMultiAtlasTexturesEnabled: 1
   m_ClearDynamicDataOnBuild: 0
   m_UsedGlyphRects:
   - m_X: 0
@@ -15261,7 +15261,7 @@ Material:
     - _PerspectiveFilter: 0.875
     - _ScaleRatioA: 0.8333333
     - _ScaleRatioB: 1
-    - _ScaleRatioC: 0.19533741
+    - _ScaleRatioC: 0.14749968
     - _ScaleX: 1
     - _ScaleY: 1
     - _ShaderFlags: 0

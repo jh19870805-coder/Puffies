@@ -155,7 +155,7 @@ public class LoadingScene : MonoBehaviour
 
     private void UpdateLoadingText(int percent)
     {
-        var text = string.Format(GameDefine.LoadingTextFormat, percent);
+        var text = GameLocalization.Format("loading.progress", percent);
         if (mLoadingTmpText != null)
         {
             mLoadingTmpText.text = text;

@@ -509,8 +509,8 @@ public class AchieveScene : MonoBehaviour
             var isUnlocked = i <= MockUnlockedAchievementCount;
             result.Add(new MockAchievementData
             {
-                Title = $"成就{i}",
-                Description = $"成就描述{i}",
+                Title = GameLocalization.Format("achievement.mock.title", i),
+                Description = GameLocalization.Format("achievement.mock.description", i),
                 IsUnlocked = isUnlocked,
                 ProgressPercent = isUnlocked ? 100 : random.Next(1, 100)
             });

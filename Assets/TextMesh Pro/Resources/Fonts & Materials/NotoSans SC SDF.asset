@@ -86,8 +86,8 @@ MonoBehaviour:
   m_Version: 1.1.0
   m_SourceFontFileGUID: 7e6b99eb33342564dbfc48d844e27e7a
   m_SourceFontFile_EditorRef: {fileID: 12800000, guid: 7e6b99eb33342564dbfc48d844e27e7a, type: 3}
-  m_SourceFontFile: {fileID: 0}
-  m_AtlasPopulationMode: 0
+  m_SourceFontFile: {fileID: 12800000, guid: 7e6b99eb33342564dbfc48d844e27e7a, type: 3}
+  m_AtlasPopulationMode: 1
   m_FaceInfo:
     m_FaceIndex: 0
     m_FamilyName: Noto Sans SC
@@ -10774,7 +10774,7 @@ MonoBehaviour:
   m_AtlasTextures:
   - {fileID: 2041205118409810669}
   m_AtlasTextureIndex: 0
-  m_IsMultiAtlasTexturesEnabled: 0
+  m_IsMultiAtlasTexturesEnabled: 1
   m_ClearDynamicDataOnBuild: 0
   m_UsedGlyphRects:
   - m_X: 0
