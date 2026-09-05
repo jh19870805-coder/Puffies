@@ -1,5 +1,26 @@
 # 当前任务
 
+## 2026-09-05 全局弹窗打开音效
+
+- 状态：代码修改和编译验证完成，等待 Play Mode 逐弹窗试听。
+- 用户意图：确认原 `ClickCard.mp3` 的正式资源名，并保证所有真正的弹窗在成功打开时播放该音效。
+- 资源确认：原 `ClickCard.mp3` 已改名为 `SFX_PopupTransition.mp3`；`SFX_CardPackClick.mp3` 对应的是原“点击卡包02.mp3”，两者用途不同。旧 `ClickCard.mp3` 及其 `.meta` 已不存在，`SFX_PopupTransition.mp3` 的 GUID 已正确收录在 AudioCatalog。
+- 扫描与修改：菜单、通用确认、设置、语言、可使用和存档弹窗原本已有播放；本轮为遗漏的 `PanelReplay` 重玩确认弹窗和 MainScene/GameScene 共用的 `PackPhotoItem` 拍照预览补上 `SFX_PopupTransition.mp3`。拍照音效在照片生成成功、预览实际显示前触发，不在闪光和保存失败时误播。
+- 边界：`PanelBagSelect`、`PanelBagVol` 属于卡包选择流程，继续遵循“有效卡包点击只播放 `SFX_CardPackClick.mp3`”的既有规则；`RewardPanel` 是关卡结算页面并使用拼图完成音效，不作为弹窗播放 `SFX_PopupTransition.mp3`。
+- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Assets/Scripts/Model/CardPackPhoto.cs`、任务记录、项目上下文和统一 spec。
+- 验证：8 类弹窗打开入口均已核对；`Assembly-CSharp-Editor` 连带 Runtime 编译通过，`0` 警告、`0` 错误；`git diff --check` 通过。
+- 下一步：在 Play Mode 逐个打开菜单、退出/删除确认、设置、语言、可使用、存档、重玩确认和两处拍照预览，确认每次成功显示时播放一次弹窗音效。
+
+## 2026-09-05 全局按钮点击音效
+
+- 状态：代码修改和编译验证完成，等待 Play Mode 全页面试听。
+- 用户意图：正式游戏所有页面、各级菜单和弹窗中的按钮都必须播放统一点击音效，并确认原“通用按钮.mp3”已经改名为 `SFX_ButtonClick.mp3`。
+- 修改：`AudioManager` 在场景加载时自动绑定当前场景全部 `UnityEngine.UI.Button`，包含未激活面板；场景初始化后一帧再次补绑，并以 `0.5s` 间隔覆盖后续动态创建的按钮。统一回调播放 `SFX_ButtonClick.mp3`；同一帧对该音效去重，兼容页面现存的手动播放调用而不产生双响。按钮自身事件、交互状态和已有特殊音效均未修改。
+- 扫描结果：正式 Build 的 5 个场景与 `LanNameItem.prefab`、`PackPhotoItem.prefab` 共计 45 个序列化 Button；代码中另有卡包选择、确认和测试等运行时创建/补加的 Button，均由同一运行时扫描覆盖。旧名音频和旧名代码引用均不存在；`SFX_ButtonClick.mp3` 的 GUID 已正确收录在 `Assets/Resources/AudioCatalog.asset`。
+- 修改文件：`Assets/Scripts/Model/AudioManager.cs`、任务记录、项目上下文和统一 spec。
+- 验证：`Assembly-CSharp-Editor` 连带 Runtime 编译通过，`0` 警告、`0` 错误；资源、`.meta`、AudioCatalog 引用与代码调用名一致。
+- 下一步：在 Play Mode 逐页点击 MainScene 一级入口、菜单二级页、确认弹窗、存档槽、语言项、卡包操作页、GameScene、结算拍照、RankScene 和 AchieveScene 按钮，确认每次有效点击只响一次。
+
 ## 2026-09-05 首页卡包列表统一进场
 
 - 状态：代码修改和编译验证完成，等待 Play Mode 逐入口验收。

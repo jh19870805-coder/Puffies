@@ -1821,6 +1821,50 @@
 - RankScene、AchieveScene、LoadingScene 及 GameScene 的返回入口最终都重新加载 MainScene，普通入口由 `RefreshPackageList` 启动整列动画，奖励入口由 `CardPackRewardFlyTransition` 启动既有分段动画。
 - `dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 成功并连带编译 Runtime，结果 `0` 警告、`0` 错误。
 
+## 2026-09-05 - 全局弹窗打开音效
+
+### 需求与实现
+
+1. WHEN MainScene 的菜单、通用确认、设置、语言、可使用、存档或重玩确认弹窗成功打开 THEN 系统 SHALL 播放一次 `SFX_PopupTransition.mp3`。
+2. WHEN MainScene 或 GameScene 的拍照成功且 `PackPhotoItem` 预览准备实际显示 THEN 系统 SHALL 播放一次 `SFX_PopupTransition.mp3`；拍照闪光开始或保存失败不得播放该弹窗音效。
+3. `PanelBagSelect` 和 `PanelBagVol` SHALL 保持卡包选择流程既有规则，只播放 `SFX_CardPackClick.mp3`；GameScene `RewardPanel` SHALL 继续作为结算页面使用既有完成音效，不按弹窗处理。
+4. 原 `ClickCard.mp3` 的正式资源名 SHALL 为 `SFX_PopupTransition.mp3`，不得与原“点击卡包02.mp3”对应的 `SFX_CardPackClick.mp3` 混用。
+
+- [x] 核对全部正式 Panel 及其打开入口并按弹窗、选择页、结算页分类。
+- [x] 为 `PanelReplay` 和 `PackPhotoItem` 预览补充弹窗打开音效。
+- [x] 核对音频文件、`.meta` GUID 和 AudioCatalog 引用。
+- [x] 编译 Runtime/Editor。
+- [ ] Play Mode 逐个打开 8 类弹窗试听。
+
+### 验证
+
+- 菜单、通用确认、设置、语言、可使用、存档、重玩确认和拍照预览均在各自成功显示入口调用 `SFX_PopupTransition.mp3`。
+- `Assets/Audios/ClickCard.mp3` 及其 `.meta` 均不存在，`SFX_PopupTransition.mp3` 的 GUID `783a01a1f2b862147a1a4bb0daea6424` 已收录在 `Assets/Resources/AudioCatalog.asset`。
+- `dotnet build Assembly-CSharp-Editor.csproj --no-restore` 成功并连带编译 Runtime，结果 `0` 警告、`0` 错误。
+
+## 2026-09-05 - 全局按钮点击音效
+
+### 需求与实现
+
+1. WHEN 玩家在正式游戏任意场景、一级页面、二级菜单、弹窗或动态 UI 中触发一个可交互的 `UnityEngine.UI.Button` THEN 系统 SHALL 播放一次 `SFX_ButtonClick.mp3`。
+2. 全局绑定 SHALL 覆盖场景加载时未激活的按钮，以及场景启动后动态创建或补加 `Button` 组件的对象，不要求业务页面逐个添加音效调用。
+3. IF 旧页面回调与全局监听在同一帧同时请求 `SFX_ButtonClick.mp3` THEN 系统 SHALL 只播放一次，不得产生叠音。
+4. 全局通用点击音效 SHALL NOT 替换或阻止按钮流程已有的弹窗、卡包、切换等特殊音效，也不得改变原按钮事件、交互状态或页面流程。
+5. 原“通用按钮.mp3”统一资源名 SHALL 为 `Assets/Audios/SFX_ButtonClick.mp3`；旧名资源和旧名代码引用不得残留，AudioCatalog 必须继续引用该文件现有 GUID。
+
+- [x] 扫描正式 Build 场景、按钮 Prefab、代码绑定点和动态 Button 创建点。
+- [x] 在常驻 `AudioManager` 中增加全场景及动态 Button 自动绑定。
+- [x] 为通用点击音效增加同帧去重，兼容现存手动调用。
+- [x] 核对音频文件、`.meta` GUID 和 AudioCatalog 引用。
+- [x] 编译 Runtime/Editor。
+- [ ] Play Mode 逐页面试听所有按钮并确认无漏播、双响。
+
+### 验证
+
+- 正式 Build 的 5 个场景与 2 个按钮 Prefab 共扫描到 45 个序列化 Button；运行时新增 Button 由初始化后一帧补绑和周期扫描覆盖。
+- `Assets/Audios/通用按钮.mp3` 及其 `.meta` 均不存在，`SFX_ButtonClick.mp3` 的 GUID `761a6e3fc41139049ae94e2a22f031cc` 已收录在 `Assets/Resources/AudioCatalog.asset`。
+- `dotnet build Assembly-CSharp-Editor.csproj --no-restore` 成功并连带编译 Runtime，结果 `0` 警告、`0` 错误。
+
 ## 2026-09-05 - 结算分数增长提速
 
 ### 需求与实现

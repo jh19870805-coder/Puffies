@@ -2188,6 +2188,7 @@ public class MainScene : MonoBehaviour
         SetBagSelectButtonsInteractable(false);
         SetUnselectedPackageVisualsVisible(false);
         SetSelectedPackageImageVisible(false);
+        AudioManager.Instance.PlaySfx("SFX_PopupTransition.mp3");
         SetPanelVisible(mReplayPanelRoot, true);
     }
 

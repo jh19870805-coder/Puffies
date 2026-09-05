@@ -207,6 +207,8 @@ public sealed class CardPackPhoto : MonoBehaviour
             mOkButton.gameObject.SetActive(false);
         }
 
+        AudioManager.Instance.PlaySfx("SFX_PopupTransition.mp3");
+
         if (mPreviewAnimator == null
             || mPreviewAnimator.runtimeAnimatorController == null
             || !mPreviewAnimator.HasState(0, PreviewAnimationStateId))

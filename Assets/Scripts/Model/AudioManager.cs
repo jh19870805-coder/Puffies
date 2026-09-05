@@ -2,6 +2,8 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 
 /// <summary>
 /// 用途：统一播放跨场景背景音乐与可并发短音效。
@@ -11,6 +13,8 @@ public sealed class AudioManager : MonoBehaviour
     private const string ManagerObjectName = "AudioManager";
     private const string CatalogResourcesPath = "AudioCatalog";
     private const string Mp3Extension = ".mp3";
+    private const string ButtonClickSfxFileName = "SFX_ButtonClick.mp3";
+    private const float ButtonScanIntervalSeconds = 0.5f;
     private const float StartupPreloadTimeoutSeconds = 10f;
 
     private static AudioManager sInstance;
@@ -19,6 +23,7 @@ public sealed class AudioManager : MonoBehaviour
         new Dictionary<string, AudioClip>(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _missingClipWarnings =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<Button> _buttonClickBindings = new HashSet<Button>();
 
     private AudioSource _musicSource;
     private AudioSource _sfxSource;
@@ -27,6 +32,8 @@ public sealed class AudioManager : MonoBehaviour
     private ResourceRequest _catalogLoadRequest;
     private bool _catalogLoaded;
     private bool _startupAudioReady;
+    private float _nextButtonScanTime;
+    private int _lastButtonClickSfxFrame = -1;
 
     public static AudioManager Instance
     {
@@ -76,12 +83,27 @@ public sealed class AudioManager : MonoBehaviour
         DontDestroyOnLoad(gameObject);
         CreateAudioSources();
         ApplySavedVolumes();
+        SceneManager.sceneLoaded += OnSceneLoaded;
+        RegisterButtonClickListeners();
+    }
+
+    private void Update()
+    {
+        if (Time.unscaledTime < _nextButtonScanTime)
+        {
+            return;
+        }
+
+        _nextButtonScanTime = Time.unscaledTime + ButtonScanIntervalSeconds;
+        RegisterButtonClickListeners();
     }
 
     private void OnDestroy()
     {
         if (sInstance == this)
         {
+            SceneManager.sceneLoaded -= OnSceneLoaded;
+            RemoveButtonClickListeners();
             sInstance = null;
         }
     }
@@ -120,8 +142,71 @@ public sealed class AudioManager : MonoBehaviour
     {
         if (TryGetClip(fileName, out var clip))
         {
+            if (string.Equals(
+                    ToFileName(clip),
+                    ButtonClickSfxFileName,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                if (_lastButtonClickSfxFrame == Time.frameCount)
+                {
+                    return;
+                }
+
+                _lastButtonClickSfxFrame = Time.frameCount;
+            }
+
             _sfxSource.PlayOneShot(clip);
         }
+    }
+
+    private void OnSceneLoaded(Scene scene, LoadSceneMode loadSceneMode)
+    {
+        _nextButtonScanTime = 0f;
+        RegisterButtonClickListeners();
+        StartCoroutine(RegisterButtonsAfterSceneSetup());
+    }
+
+    private IEnumerator RegisterButtonsAfterSceneSetup()
+    {
+        yield return null;
+        RegisterButtonClickListeners();
+    }
+
+    private void RegisterButtonClickListeners()
+    {
+        _buttonClickBindings.RemoveWhere(button => button == null);
+
+        var buttons = FindObjectsOfType<Button>(true);
+        for (var i = 0; i < buttons.Length; i++)
+        {
+            var button = buttons[i];
+            if (button == null
+                || !button.gameObject.scene.IsValid()
+                || !_buttonClickBindings.Add(button))
+            {
+                continue;
+            }
+
+            button.onClick.AddListener(PlayButtonClickSfx);
+        }
+    }
+
+    private void RemoveButtonClickListeners()
+    {
+        foreach (var button in _buttonClickBindings)
+        {
+            if (button != null)
+            {
+                button.onClick.RemoveListener(PlayButtonClickSfx);
+            }
+        }
+
+        _buttonClickBindings.Clear();
+    }
+
+    private void PlayButtonClickSfx()
+    {
+        PlaySfx(ButtonClickSfxFileName);
     }
 
     public void PlayLoopingSfx(string fileName)
