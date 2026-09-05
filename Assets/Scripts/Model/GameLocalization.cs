@@ -16,6 +16,7 @@ public static class GameLocalization
 
     private const string LanguagePreferenceKey = "Puffies.Language";
     private const string RuntimeObjectName = "GameLocalizationRuntime";
+    private const float AutomaticFontSizeMinimum = 10f;
 
     private static readonly string[] sLanguageCodes =
     {
@@ -151,6 +152,7 @@ public static class GameLocalization
             }
 
             RefreshLabel(label, label.text, value => label.text = value);
+            ConfigureTextToFit(label);
         }
 
         var legacyTexts = Resources.FindObjectsOfTypeAll<Text>();
@@ -171,6 +173,35 @@ public static class GameLocalization
         sRuntimeTextKeys.Clear();
         RefreshSceneTexts();
         EnsureRuntime()?.RefreshAfterSceneInitialization();
+    }
+
+    internal static void ConfigureTextToFit(TMP_Text label)
+    {
+        if (label == null || !IsLoadedSceneObject(label.gameObject))
+        {
+            return;
+        }
+
+        // Explicit newlines are preserved, but localized text must not create extra lines by itself.
+        if (label.enableWordWrapping)
+        {
+            label.enableWordWrapping = false;
+        }
+
+        if (label.enableAutoSizing)
+        {
+            return;
+        }
+
+        var configuredFontSize = label.fontSize;
+        if (configuredFontSize <= 0f)
+        {
+            return;
+        }
+
+        label.fontSizeMax = configuredFontSize;
+        label.fontSizeMin = Mathf.Min(AutomaticFontSizeMinimum, configuredFontSize);
+        label.enableAutoSizing = true;
     }
 
     private static void RefreshLabel(UnityEngine.Object label, string currentText, Action<string> setter)
@@ -305,16 +336,26 @@ internal sealed class GameLocalizationRuntime : MonoBehaviour
     private void OnEnable()
     {
         SceneManager.sceneLoaded += OnSceneLoaded;
+        TMPro_EventManager.TEXT_CHANGED_EVENT.Add(OnTextChanged);
     }
 
     private void OnDisable()
     {
         SceneManager.sceneLoaded -= OnSceneLoaded;
+        TMPro_EventManager.TEXT_CHANGED_EVENT.Remove(OnTextChanged);
     }
 
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
         GameLocalization.HandleSceneLoaded();
+    }
+
+    private static void OnTextChanged(UnityEngine.Object changedObject)
+    {
+        if (changedObject is TMP_Text label)
+        {
+            GameLocalization.ConfigureTextToFit(label);
+        }
     }
 
     public void RefreshAfterSceneInitialization()

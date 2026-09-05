@@ -2,14 +2,15 @@
 
 ## 2026-09-05 全项目 18 语言本地化
 
-- 状态：功能实现与静态验证完成，等待 Unity Editor 自动导入后的 Play Mode 画面验收。
+- 状态：功能实现、全局单行字号自适配与静态验证完成，等待 Unity Editor 自动导入后的 Play Mode 画面验收。
 - 用户意图：完成正式 18 种语言的全项目翻译；在 `MainScene/PanelLanguage` 点击语言后立即刷新当前页面、选中样式和后续所有场景，并跨场景、重启保持选择。
 - 本地化核心：新增 `Assets/Scripts/Model/GameLocalization.cs`，集中维护 18 种语言、63 个项目文案键、英语回退、格式化文本、固定 TMP/legacy Text 自动刷新、场景加载后补刷新和语言变更事件。语言使用独立 `PlayerPrefs/Puffies.Language` 保存，不随三份游戏进度存档切换或删除；首次没有设置时沿用语言页当前默认 `en-US`。
 - 页面联动：`MainScene` 已绑定 `BtnLanguage`、`PanelLanguage` 的关闭/返回按钮和 18 个 `LanNameItem_<language-code>` 根 Button。点击选项后当前项显示 `LanName1`、其他项显示 `LanName2`，同时刷新菜单、设置、可使用、确认弹窗、存档槽、任务和卡包“玩/重玩”等当前文案，不修改语言项字体、共享材质、颜色、字号或对齐。
 - 动态文本：任务的任意/指定尺寸三类描述和奖励完成文案、三步新手引导、一键完成、四种结算加成与加分单位、存档摘要和空槽、退出/删除确认、卡包操作按钮、Loading 进度、排行榜玩家总数、成就模拟标题/描述均已改为格式化语言键。场景和 Prefab 中的固定标题、按钮、说明、排行榜、成就数量与拍照提示由本地化核心按现有文本绑定刷新。
 - 字体：全量翻译相对现有静态 Atlas 新增 202 个字形；`NotoSans LGC/SC/JP/TC/KR/Thai SDF` 保留现有图集、fallback 顺序和全部材质参数，仅恢复各自源 TTF 运行时引用并改为 Dynamic + Multi Atlas，使缺失字符按需补入。6 个源 TTF 的联合字符表已验证完整覆盖全部翻译字符；KR 现有材质微调保持不变。
+- 文本自适配：`GameLocalization` 对所有已加载及后续动态变化的 TMP 文本统一关闭自动换行并启用 Auto Size；文案中明确写入的换行继续保留。已有 Auto Size 的控件保留编辑器配置的字号上下限；原来未启用的控件以编辑器当前字号为上限、`10` 为最低字号，从而让英文等长文案在现有文本框内缩小而不是新增行。该逻辑不修改字体、材质、颜色、对齐和 RectTransform。
 - 修改文件：新增 `GameLocalization.cs/.meta`；更新 `MainScene.cs`、`GameScene.cs`、`LoadingScene.cs`、`RankScene.cs`、`AchieveScene.cs`、`TaskProgressUIUtility.cs`，以及 6 个 fallback TMP Font Asset；保留工作区已有 `MainScene.unity` 语言页布局和 KR 材质改动。
-- 验证：63 个文案键均恰好包含 18 个语言值；所有语言的格式化占位符逐项一致；正式 5 个场景与相关 Prefab 的静态/动态用户文案已盘点；6 个源字体联合覆盖检查为 `missing=0`；临时注入新源码后的 `Assembly-CSharp` 完整编译为 `0` 警告、`0` 错误；临时工程文件已清理。Unity 当前未主动刷新外部脚本，尚未执行 Play Mode 的 18 语言逐页视觉检查。
+- 验证：63 个文案键均恰好包含 18 个语言值；所有语言的格式化占位符逐项一致；正式 5 个场景与相关 Prefab 的静态/动态用户文案已盘点；6 个源字体联合覆盖检查为 `missing=0`；`Assembly-CSharp` 完整编译为 `0` 警告、`0` 错误。Unity 当前尚未执行 Play Mode 的 18 语言逐页视觉检查。
 - 下一步：Unity 完成 Refresh 后，从 LoadingScene 进入 MainScene，依次抽查 `zh-CN/en-US/ru-RU/de-DE/ko-KR/ja-JP/th-TH` 的语言页、菜单、任务、游戏教程、结算、成就、排行榜和拍照提示；重点确认长文本 Auto Size、动态补字首帧和重启后的语言持久化。
 
 ## 2026-09-05 MainScene 语言选择固定列表

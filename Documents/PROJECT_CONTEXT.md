@@ -30,6 +30,7 @@ Unity **2022.3** / Built-in Render Pipeline 项目，使用 Linear 色彩空间�
 - `GameLocalization` 是唯一运行时本地化入口，翻译表集中维护在 `Assets/Scripts/Model/GameLocalization.cs`。静态场景/Prefab 文本由其刷新，业务生成的任务、教程、结算、存档、排行榜和成就文案必须使用 `Get/Format` 语言键，不能重新写死中文或英文。
 - 当前语言保存在独立的 `PlayerPrefs/Puffies.Language`，默认 `en-US`；该设置不属于三份游戏进度，不随切换或删除存档变化。语言切换必须立即更新 `LanName1/2` 选中显隐和当前场景内容，场景加载后继续使用已保存语言。
 - UI 本地化只能更新文字内容和必要的选中显隐，不得覆盖编辑器中设置的 TMP 字体、共享材质、颜色、字号、对齐和动画。`NotoSansSC-Regular SDF` 继续作为现有主字体，通过 LGC、SC、JP、TC、KR、Thai fallback 覆盖正式语言；fallback Font Asset 使用各自源 TTF 的 Dynamic + Multi Atlas 按需补字，现有 Atlas 与材质视觉参数保持不变。
+- 运行时 TMP 文本统一采用“保留明确换行、禁止自动新增换行、超宽时缩小字号”的适配规则。已有 Auto Size 的文本保留编辑器字号范围；未启用 Auto Size 的文本以当前编辑器字号为上限、`10` 为下限。动态创建或动态更新的 TMP 文本同样应用该规则，但不得借此改动字体、材质、颜色、对齐、RectTransform 或动画。
 
 ### 场景需求
 
