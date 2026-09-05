@@ -1,5 +1,18 @@
 # 当前任务
 
+## 2026-09-05 多语言 TMP 字体资源导入
+
+- 状态：字体资源复制和静态引用验证完成，等待 Unity Editor 自动导入确认。
+- 用户意图：参考 `HiddenCatsAndVanGogh/docs/LocalizationFontManifest.json` 的 29 语言字体方案，把 Puffies 后续手动搭建多语言界面需要的字体文件准备好；本轮不制作多语言 UI。
+- 清单结论：29 种语言由 6 组 Noto 字体覆盖，分别是 LGC（拉丁扩展、越南文、希腊文、斯拉夫文）、SC、JP、TC、KR 和 Thai。Arial Unicode MS 与 Liberation Sans 是参考工程的旧引用，不属于新内容推荐字体，因此未复制。
+- 复用：Puffies 已有的 6 个源 TTF 与参考工程 SHA-256 完全一致，不重复复制源字体。
+- 新增：从参考工程复制 `NotoSans LGC/SC/JP/TC/KR/Thai SDF.asset` 及各自 `.meta` 到 `Assets/TextMesh Pro/Resources/Fonts & Materials/`；每个资源均保留参考工程静态 SDF 图集和内嵌 Atlas。
+- 引用处理：仅把 6 个 SDF 内的源字体 GUID 重映射到 Puffies 现有同内容 TTF；主 `NotoSans LGC SDF` 原有 fallback 顺序 `SC -> JP -> TC -> KR -> Thai` 保持不变。6 个新 SDF GUID 在 Puffies 内均唯一，源字体和 fallback 引用全部可解析。
+- 保留：未修改 `TMP Settings.asset`、现有 `NotoSansSC-Regular SDF`、`DefaultChineseFontEditor`、场景、Prefab 或业务代码。当前全局默认字体和 fallback 配置保持原样，后续由用户手动搭建界面或另行确认全局接入。
+- 修改文件：新增 6 个 `Assets/TextMesh Pro/Resources/Fonts & Materials/NotoSans * SDF.asset` 及对应 6 个 `.meta`；更新任务记录与项目上下文。
+- 验证：复制后的内容除预期源字体 GUID 重映射外与参考工程逐字一致；6/6 源 TTF、5/5 fallback、TMP SDF Shader 引用均可解析；每份资源包含 1 个 TMP Font Asset 和 1 个内嵌 Atlas；Runtime/Editor 编译通过，`0` 警告、`0` 错误；`git diff --check` 通过。
+- 下一步：切回 Unity 等待自动 Refresh，在 Project 窗口确认 6 个字体显示为 TMP Font Asset；手动搭建语言界面时优先给文本使用 `NotoSans LGC SDF`，其余语言由内置 fallback 链补字。
+
 ## 2026-09-04 全部短音效起音延迟统一优化
 
 - 状态：资源与项目设置修改、静态验证完成，等待 Unity 重新导入和 Play Mode 试听。

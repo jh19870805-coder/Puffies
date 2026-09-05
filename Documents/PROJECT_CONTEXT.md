@@ -210,6 +210,9 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 
 新的 `CanvasScaler` 值由 `CanvasDesignResolutionEditor.cs` 写入。代码中使用 `GameFontUtility`，不要硬编码字体路径。
 
+- 多语言字体资源位于 `Assets/TextMesh Pro/Resources/Fonts & Materials/`。推荐主字体为静态 `NotoSans LGC SDF`，覆盖拉丁、拉丁扩展、越南文、希腊文和斯拉夫文；其资源内 fallback 顺序固定为 `NotoSans SC SDF -> NotoSans JP SDF -> NotoSans TC SDF -> NotoSans KR SDF -> NotoSans Thai SDF`，覆盖简中、日文、繁中、韩文和泰文。6 个 SDF 均包含内嵌 Atlas，并引用同目录已有的对应 Noto TTF。
+- 当前导入只准备字体资源，尚未修改 `Assets/TextMesh Pro/Resources/TMP Settings.asset`、场景、Prefab 或运行时代码。现有 `NotoSansSC-Regular SDF` 和 `Puffies -> Setup Default Chinese Font` 流程继续保留；手动搭建多语言 TMP UI 时使用 `NotoSans LGC SDF` 作为字体即可通过其内置 fallback 链补齐 29 种已规划语言的字形。
+
 ---
 
 ## 5. 数据与配置
