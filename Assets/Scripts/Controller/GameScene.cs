@@ -46,6 +46,7 @@ public class GameScene : MonoBehaviour
     private const float TaskProgressRollDuration = 0.8f;
     private const float SettlementBaseRollDuration = 1.2f;
     private const float SettlementBonusRollDuration = 1.08f;
+    private const float SettlementScoreRollSpeedMultiplier = 1.4f;
     private const float SettlementStagePauseDuration = 0.16f;
     private const float SettlementFinalPauseDuration = 0.45f;
     private const float SettlementHeaderDropDuration = 0.52f;
@@ -80,6 +81,8 @@ public class GameScene : MonoBehaviour
                                                    * GameDefine.NonDealTransitionDurationMultiplier;
     private const float GameEntrancePieceSettleDuration = 0.46f * GameTransitionDurationScale;
     private const float GameEntrancePieceStagger = 0.018f * GameTransitionDurationScale;
+    private const string PieceDealSfxFileName = "SFX_PieceDeal.mp3";
+    private const string ScoreIncreaseSfxFileName = "SFX_ScoreIncrease.mp3";
     private const float TornPackPieceSettleReduction = 0.3f;
     private const float TornPackPieceStagger = GameEntrancePieceStagger;
     private const float GameEntranceControlDelay = 0f;
@@ -610,6 +613,8 @@ public class GameScene : MonoBehaviour
 
     private void OnDestroy()
     {
+        AudioManager.StopLoopingSfxIfActive(PieceDealSfxFileName);
+        AudioManager.StopLoopingSfxIfActive(ScoreIncreaseSfxFileName);
         EndTrayScroll();
         StopLoosePieceReminderShake();
         StopTrayPieceReflow();
@@ -1158,48 +1163,57 @@ public class GameScene : MonoBehaviour
 
         var totalDuration = Mathf.Max(0, pieceCount - 1) * pieceStagger
                             + pieceSettleDuration;
-        var pieceDealSoundPlayed = new bool[pieceCount];
-        var elapsed = 0f;
-        while (elapsed < totalDuration)
+        var playPieceDealSound = HasRenderableCurrentGroupPiece();
+        if (playPieceDealSound)
         {
-            elapsed += Mathf.Min(Time.unscaledDeltaTime, GameEntranceMaxFrameDelta);
-            for (var i = 0; i < pieceCount; i++)
+            AudioManager.Instance.PlayLoopingSfx(PieceDealSfxFileName);
+        }
+
+        var elapsed = 0f;
+        try
+        {
+            while (elapsed < totalDuration)
             {
-                var renderer = _drag.CurrentGroupDraggables[i]?.PieceRenderer;
-                if (renderer == null)
+                elapsed += Mathf.Min(Time.unscaledDeltaTime, GameEntranceMaxFrameDelta);
+                for (var i = 0; i < pieceCount; i++)
                 {
-                    continue;
+                    var renderer = _drag.CurrentGroupDraggables[i]?.PieceRenderer;
+                    if (renderer == null)
+                    {
+                        continue;
+                    }
+
+                    var pieceDelay = i * pieceStagger;
+                    var flightT = Mathf.Clamp01(
+                        (elapsed - pieceDelay)
+                        / pieceSettleDuration);
+                    var flightEased = Mathf.SmoothStep(0f, 1f, flightT);
+                    renderer.transform.position = Vector3.LerpUnclamped(
+                        pieceStarts[i],
+                        pieceTargets[i],
+                        flightEased);
+                    renderer.transform.localScale = pieceTargetScales[i];
+                    renderer.transform.rotation = Quaternion.SlerpUnclamped(
+                        pieceStartRotations[i],
+                        pieceTargetRotations[i],
+                        flightEased);
+                    var color = pieceTargetColors[i];
+                    if (!waitForPackTransition && !startVisibleAtOpeningOrigin)
+                    {
+                        color.a *= Mathf.Clamp01(flightT * 2.5f);
+                    }
+                    renderer.color = color;
                 }
 
-                var pieceDelay = i * pieceStagger;
-                if (!pieceDealSoundPlayed[i] && elapsed >= pieceDelay)
-                {
-                    pieceDealSoundPlayed[i] = true;
-                    AudioManager.Instance.PlaySfx("SFX_PieceDeal.mp3");
-                }
-
-                var flightT = Mathf.Clamp01(
-                    (elapsed - pieceDelay)
-                    / pieceSettleDuration);
-                var flightEased = Mathf.SmoothStep(0f, 1f, flightT);
-                renderer.transform.position = Vector3.LerpUnclamped(
-                    pieceStarts[i],
-                    pieceTargets[i],
-                    flightEased);
-                renderer.transform.localScale = pieceTargetScales[i];
-                renderer.transform.rotation = Quaternion.SlerpUnclamped(
-                    pieceStartRotations[i],
-                    pieceTargetRotations[i],
-                    flightEased);
-                var color = pieceTargetColors[i];
-                if (!waitForPackTransition && !startVisibleAtOpeningOrigin)
-                {
-                    color.a *= Mathf.Clamp01(flightT * 2.5f);
-                }
-                renderer.color = color;
+                yield return null;
             }
-
-            yield return null;
+        }
+        finally
+        {
+            if (playPieceDealSound)
+            {
+                AudioManager.StopLoopingSfxIfActive(PieceDealSfxFileName);
+            }
         }
 
         for (var i = 0; i < pieceCount; i++)
@@ -7440,46 +7454,55 @@ public class GameScene : MonoBehaviour
         elapsed = 0f;
         var pieceAnimationDuration = GroupTransitionPieceDuration
             + Mathf.Max(0, pieceCount - 1) * GroupTransitionPieceStagger;
-        var pieceDealSoundPlayed = new bool[pieceCount];
-        while (elapsed < pieceAnimationDuration)
+        var playPieceDealSound = HasRenderableCurrentGroupPiece();
+        if (playPieceDealSound)
         {
-            elapsed += Mathf.Min(Time.unscaledDeltaTime, GameEntranceMaxFrameDelta);
-            for (var i = 0; i < pieceCount; i++)
+            AudioManager.Instance.PlayLoopingSfx(PieceDealSfxFileName);
+        }
+
+        try
+        {
+            while (elapsed < pieceAnimationDuration)
             {
-                var renderer = _drag.CurrentGroupDraggables[i]?.PieceRenderer;
-                if (renderer == null)
+                elapsed += Mathf.Min(Time.unscaledDeltaTime, GameEntranceMaxFrameDelta);
+                for (var i = 0; i < pieceCount; i++)
                 {
-                    continue;
+                    var renderer = _drag.CurrentGroupDraggables[i]?.PieceRenderer;
+                    if (renderer == null)
+                    {
+                        continue;
+                    }
+
+                    var pieceDelay = i * GroupTransitionPieceStagger;
+                    var progress = SmootherStep01(
+                        (elapsed - pieceDelay) / GroupTransitionPieceDuration);
+                    renderer.transform.position = Vector3.LerpUnclamped(
+                        pieceStarts[i],
+                        pieceTargets[i],
+                        progress);
+                    renderer.transform.localScale = pieceTargetScales[i];
+                    renderer.transform.rotation = Quaternion.SlerpUnclamped(
+                        Quaternion.Euler(0f, 0f, Mathf.Sin(i * 137.5f * Mathf.Deg2Rad) * 12f),
+                        pieceTargetRotations[i],
+                        progress);
+                    var color = pieceTargetColors[i];
+                    color.a *= progress;
+                    renderer.color = color;
+                    if (progress >= 1f)
+                    {
+                        EnsureDraggablePieceLight(_drag.CurrentGroupDraggables[i]);
+                    }
                 }
 
-                var pieceDelay = i * GroupTransitionPieceStagger;
-                if (!pieceDealSoundPlayed[i] && elapsed >= pieceDelay)
-                {
-                    pieceDealSoundPlayed[i] = true;
-                    AudioManager.Instance.PlaySfx("SFX_PieceDeal.mp3");
-                }
-
-                var progress = SmootherStep01(
-                    (elapsed - pieceDelay) / GroupTransitionPieceDuration);
-                renderer.transform.position = Vector3.LerpUnclamped(
-                    pieceStarts[i],
-                    pieceTargets[i],
-                    progress);
-                renderer.transform.localScale = pieceTargetScales[i];
-                renderer.transform.rotation = Quaternion.SlerpUnclamped(
-                    Quaternion.Euler(0f, 0f, Mathf.Sin(i * 137.5f * Mathf.Deg2Rad) * 12f),
-                    pieceTargetRotations[i],
-                    progress);
-                var color = pieceTargetColors[i];
-                color.a *= progress;
-                renderer.color = color;
-                if (progress >= 1f)
-                {
-                    EnsureDraggablePieceLight(_drag.CurrentGroupDraggables[i]);
-                }
+                yield return null;
             }
-
-            yield return null;
+        }
+        finally
+        {
+            if (playPieceDealSound)
+            {
+                AudioManager.StopLoopingSfxIfActive(PieceDealSfxFileName);
+            }
         }
 
         for (var i = 0; i < pieceCount; i++)
@@ -7516,6 +7539,19 @@ public class GameScene : MonoBehaviour
     {
         var t = Mathf.Clamp01(value);
         return t * t * t * (t * (t * 6f - 15f) + 10f);
+    }
+
+    private bool HasRenderableCurrentGroupPiece()
+    {
+        for (var i = 0; i < _drag.CurrentGroupDraggables.Count; i++)
+        {
+            if (_drag.CurrentGroupDraggables[i]?.PieceRenderer != null)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void MarkCurrentPackInProgress()
@@ -11276,6 +11312,7 @@ public class GameScene : MonoBehaviour
         bool syncTaskWithScore,
         GameScoreResult scoreResult)
     {
+        AudioManager.StopLoopingSfxIfActive(ScoreIncreaseSfxFileName);
         SetSettlementTaskProgress(taskItem, task, progressBeforeSettlement);
         SetSettlementScore(0);
         HideSettlementTitles();
@@ -11420,6 +11457,7 @@ public class GameScene : MonoBehaviour
             didAnimateIndependentTaskProgress |= animateTaskProgressHere;
         }
 
+        AudioManager.StopLoopingSfxIfActive(ScoreIncreaseSfxFileName);
         SetSettlementScore(scoreResult.FinalScore);
         ShowSettlementBagCountTitle();
         if (animateIndependentTaskProgress && !didAnimateIndependentTaskProgress)
@@ -11473,6 +11511,7 @@ public class GameScene : MonoBehaviour
         bool animateIndependentTaskProgress = false,
         int independentTaskProgressTo = 0)
     {
+        duration /= SettlementScoreRollSpeedMultiplier;
         if (duration <= 0f)
         {
             SetSettlementScore(toScore);
@@ -11493,44 +11532,61 @@ public class GameScene : MonoBehaviour
             yield break;
         }
 
-        if (toScore != fromScore)
+        var playScoreIncreaseSound = toScore != fromScore;
+        if (playScoreIncreaseSound)
         {
-            AudioManager.Instance.PlaySfx("SFX_ScoreIncrease.mp3");
+            AudioManager.Instance.PlayLoopingSfx(ScoreIncreaseSfxFileName);
         }
 
         var elapsed = 0f;
-        while (elapsed < duration)
+        try
         {
-            elapsed += Time.unscaledDeltaTime;
-            var normalizedTime = Mathf.Clamp01(elapsed / duration);
-            var easedTime = Mathf.SmoothStep(0f, 1f, normalizedTime);
-            var animatedScore = Mathf.RoundToInt(Mathf.Lerp(fromScore, toScore, easedTime));
-            var animatedTaskProgress = progressBeforeSettlement + animatedScore;
+            while (elapsed < duration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                var normalizedTime = Mathf.Clamp01(elapsed / duration);
+                var easedTime = Mathf.SmoothStep(0f, 1f, normalizedTime);
+                var animatedScore = Mathf.RoundToInt(Mathf.Lerp(fromScore, toScore, easedTime));
+                var animatedTaskProgress = progressBeforeSettlement + animatedScore;
 
-            SetSettlementScore(animatedScore);
-            if (syncTaskWithScore)
-            {
-                SetSettlementTaskProgress(taskItem, task, animatedTaskProgress);
+                SetSettlementScore(animatedScore);
+                if (syncTaskWithScore)
+                {
+                    SetSettlementTaskProgress(taskItem, task, animatedTaskProgress);
+                }
+                else if (animateIndependentTaskProgress)
+                {
+                    var taskProgressTime = Mathf.InverseLerp(
+                        0.25f,
+                        1f,
+                        normalizedTime);
+                    var easedTaskProgressTime = Mathf.SmoothStep(
+                        0f,
+                        1f,
+                        taskProgressTime);
+                    SetSettlementTaskProgress(
+                        taskItem,
+                        task,
+                        Mathf.RoundToInt(Mathf.Lerp(
+                            progressBeforeSettlement,
+                            independentTaskProgressTo,
+                            easedTaskProgressTime)));
+                }
+
+                if (normalizedTime >= 1f)
+                {
+                    break;
+                }
+
+                yield return null;
             }
-            else if (animateIndependentTaskProgress)
+        }
+        finally
+        {
+            if (playScoreIncreaseSound)
             {
-                var taskProgressTime = Mathf.InverseLerp(
-                    0.25f,
-                    1f,
-                    normalizedTime);
-                var easedTaskProgressTime = Mathf.SmoothStep(
-                    0f,
-                    1f,
-                    taskProgressTime);
-                SetSettlementTaskProgress(
-                    taskItem,
-                    task,
-                    Mathf.RoundToInt(Mathf.Lerp(
-                        progressBeforeSettlement,
-                        independentTaskProgressTo,
-                        easedTaskProgressTime)));
+                AudioManager.PauseLoopingSfxIfActive(ScoreIncreaseSfxFileName);
             }
-            yield return null;
         }
 
         SetSettlementScore(toScore);

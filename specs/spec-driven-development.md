@@ -1701,7 +1701,7 @@
 - `SFX_CardPackReplayConfirm.mp3` 全工程只在 `PlayMainToGameBackgroundHandoff` 开始处调用一次，`ShowReplayConfirmation` 已不再播放。
 - `dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 成功并连带编译 Runtime，结果 `0` 警告、`0` 错误；`git diff --check` 通过，仅有仓库既有 LF/CRLF 提示。
 
-## 2026-09-04 - 碎片分发音效按片播放
+## 2026-09-04 - 碎片分发音效按片播放（历史方案，已被整段循环规则取代）
 
 ### 需求与实现
 
@@ -1719,6 +1719,27 @@
 
 - 首次分发与后续组切换分别维护长度为实际 `pieceCount` 的一次性触发状态；仅有效 `PieceRenderer` 达到对应 `pieceDelay` 时播放。
 - 全工程 `SFX_PieceDeal.mp3` 只保留两个逐片动画循环内的调用，原整批单次播放已删除。
+- `dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 成功并连带编译 Runtime，结果 `0` 警告、`0` 错误；`git diff --check` 通过，仅有仓库既有 LF/CRLF 提示。
+
+## 2026-09-05 - 拼图发牌音效整段循环
+
+### 需求与实现
+
+1. WHEN 一轮存在有效 Piece 的发牌动画开始 THEN 系统 SHALL 只启动一次 `SFX_PieceDeal.mp3`，并循环播放该音效。
+2. WHILE 首片开始起飞至最后一片飞行结束 THEN 循环音效 SHALL 持续播放；WHEN 整组发牌结束 THEN 系统 SHALL 立即停止该音效。
+3. 首次进入关卡和完成一组后的下一组分发 SHALL 使用同一规则；没有有效 Piece Renderer 时不得播放。
+4. WHEN 发牌协程中止或 GameScene 销毁 THEN 系统 SHALL 清理正在播放的发牌循环；停止发牌音效不得误停后来替换到循环通道上的其他音效。
+5. 本次修改 SHALL NOT 改变碎片数量、顺序、起点、终点、缩放、飞行时长或错峰间隔。
+
+- [x] 将首次发牌和后续组发牌的逐片 `PlaySfx` 改为整段循环开始/停止。
+- [x] 给 `AudioManager` 增加按文件匹配停止循环音效的接口。
+- [x] 为协程中止和 GameScene 销毁补充清理。
+- [x] 编译 Runtime/Editor 并检查所有 `SFX_PieceDeal.mp3` 调用。
+- [ ] 在 Play Mode 试听首次发牌和后续组发牌的起止时机。
+
+### 验证
+
+- 全工程不再存在 `SFX_PieceDeal.mp3` 的逐片 `PlaySfx`；两条发牌流程各只保留一组 `PlayLoopingSfx` 和匹配停止调用。
 - `dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 成功并连带编译 Runtime，结果 `0` 警告、`0` 错误；`git diff --check` 通过，仅有仓库既有 LF/CRLF 提示。
 
 ## 2026-09-04 - 拼图完成音效触发时机
@@ -1777,6 +1798,26 @@
 
 - `SFX_CardPackAppear.mp3` 只在 MainScene 的列表回位入口调用；清理入口统一停止循环声道，MainScene 销毁时使用不创建新实例的静态停止接口。
 - `dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 成功并连带编译 Runtime，结果 `0` 警告、`0` 错误；`git diff --check` 通过，仅有仓库既有换行提示。
+
+## 2026-09-05 - 结算分数增长提速
+
+### 需求与实现
+
+1. WHEN 结算页面存在实际分数增长 THEN 个位数及整体分数翻滚速度 SHALL 在原节奏基础上提高 `40%`，用于匹配 `SFX_ScoreIncrease.mp3`。
+2. 速度提高 `40%` SHALL 按“原滚动时长除以 `1.4`”计算，不得误写为原时长乘以 `0.6`。
+3. 基础分、每条加成分和最终补差分 SHALL 使用同一速度倍率；没有分数变化时仍不得播放滚分音效。
+4. 本次调整 SHALL NOT 改变最终分数、计分公式、加成文案提前停顿、最终停留、音效触发次数或独立任务进度动画时长。
+5. `SFX_ScoreIncrease.mp3` SHALL 只在数字实际上涨期间播放；WHEN 某段滚分结束并进入加成文案停顿 THEN 音效 SHALL 暂停，WHEN 下一段滚分开始 THEN 音效 SHALL 从暂停位置恢复，WHEN 全部计分结束或 GameScene 销毁 THEN 音效 SHALL 彻底停止。
+
+- [x] 在统一结算分数滚动入口应用 `1.4x` 速度倍率。
+- [x] 将滚分音效改为按每段滚分边界播放、暂停和恢复，并补充最终清理。
+- [x] 编译 Runtime/Editor。
+- [ ] Play Mode 试听基础分和加成分滚动与音效的同步效果。
+
+### 验证
+
+- 基础分实际滚动时长由 `1.20s` 调整为约 `0.86s`，单条加成滚分由 `1.08s` 调整为约 `0.77s`。
+- `dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 成功并连带编译 Runtime，结果 `0` 警告、`0` 错误。
 
 ## 2026-09-04 - 全部短音效起音延迟统一优化
 

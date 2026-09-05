@@ -131,8 +131,13 @@ public sealed class AudioManager : MonoBehaviour
             return;
         }
 
-        if (_loopingSfxSource.clip == clip && _loopingSfxSource.isPlaying)
+        if (_loopingSfxSource.clip == clip)
         {
+            if (!_loopingSfxSource.isPlaying)
+            {
+                _loopingSfxSource.UnPause();
+            }
+
             return;
         }
 
@@ -152,11 +157,54 @@ public sealed class AudioManager : MonoBehaviour
         _loopingSfxSource.clip = null;
     }
 
+    public void StopLoopingSfx(string fileName)
+    {
+        if (_loopingSfxSource == null
+            || _loopingSfxSource.clip == null
+            || !TryGetClip(fileName, out var clip)
+            || _loopingSfxSource.clip != clip)
+        {
+            return;
+        }
+
+        StopLoopingSfx();
+    }
+
+    public void PauseLoopingSfx(string fileName)
+    {
+        if (_loopingSfxSource == null
+            || !_loopingSfxSource.isPlaying
+            || _loopingSfxSource.clip == null
+            || !TryGetClip(fileName, out var clip)
+            || _loopingSfxSource.clip != clip)
+        {
+            return;
+        }
+
+        _loopingSfxSource.Pause();
+    }
+
     public static void StopLoopingSfxIfActive()
     {
         if (sInstance != null)
         {
             sInstance.StopLoopingSfx();
+        }
+    }
+
+    public static void StopLoopingSfxIfActive(string fileName)
+    {
+        if (sInstance != null)
+        {
+            sInstance.StopLoopingSfx(fileName);
+        }
+    }
+
+    public static void PauseLoopingSfxIfActive(string fileName)
+    {
+        if (sInstance != null)
+        {
+            sInstance.PauseLoopingSfx(fileName);
         }
     }
 
