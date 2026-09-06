@@ -1147,11 +1147,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6212621844449214295, guid: a80bfdce0eeeb6c4388db1b9ef0350f1, type: 3}
       propertyPath: m_text
-      value: "Portugu\xEAs - Brasil"
+      value: "Portugu\xEAs (BR)"
       objectReference: {fileID: 0}
     - target: {fileID: 6617583107813661669, guid: a80bfdce0eeeb6c4388db1b9ef0350f1, type: 3}
       propertyPath: m_text
-      value: "Portugu\xEAs - Brasil"
+      value: "Portugu\xEAs (BR)"
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -5785,11 +5785,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6212621844449214295, guid: a80bfdce0eeeb6c4388db1b9ef0350f1, type: 3}
       propertyPath: m_text
-      value: "Espa\xF1ol - Espa\xF1a"
+      value: "Espa\xF1ol (ES)"
       objectReference: {fileID: 0}
     - target: {fileID: 6617583107813661669, guid: a80bfdce0eeeb6c4388db1b9ef0350f1, type: 3}
       propertyPath: m_text
-      value: "Espa\xF1ol - Espa\xF1a"
+      value: "Espa\xF1ol (ES)"
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -6238,11 +6238,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6212621844449214295, guid: a80bfdce0eeeb6c4388db1b9ef0350f1, type: 3}
       propertyPath: m_text
-      value: "Espa\xF1ol - Latinoam\xE9rica"
+      value: "Espa\xF1ol (LATAM)"
       objectReference: {fileID: 0}
     - target: {fileID: 6617583107813661669, guid: a80bfdce0eeeb6c4388db1b9ef0350f1, type: 3}
       propertyPath: m_text
-      value: "Espa\xF1ol - Latinoam\xE9rica"
+      value: "Espa\xF1ol (LATAM)"
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -18241,11 +18241,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6212621844449214295, guid: a80bfdce0eeeb6c4388db1b9ef0350f1, type: 3}
       propertyPath: m_text
-      value: "Portugu\xEAs - Portugal"
+      value: "Portugu\xEAs (PT)"
       objectReference: {fileID: 0}
     - target: {fileID: 6617583107813661669, guid: a80bfdce0eeeb6c4388db1b9ef0350f1, type: 3}
       propertyPath: m_text
-      value: "Portugu\xEAs - Portugal"
+      value: "Portugu\xEAs (PT)"
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

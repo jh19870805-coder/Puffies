@@ -1915,7 +1915,8 @@
 2. WHEN 真正弹窗中不属于 Button 的 `TextContent*` 正文，或 `PackPhotoItem/TaskContent` 拍照提示超过宽度 THEN 系统 SHALL 保持编辑器设计字号不变并自动换行，不得通过 Auto Size 缩小正文。
 3. 文案中明确写入的换行 SHALL 保留；存档槽 `TextContent` 虽位于弹窗内，但属于 Button 内容，继续按按钮规则处理并保留既有两行数据格式。
 4. 动态创建文本、运行时更新文案和语言切换 SHALL 自动重新应用同一分类规则；Unity 在同一场景复用 InstanceId 时不得错误继承已销毁文本的字号配置。
-5. 本次适配 SHALL NOT 修改字体资产、共享材质、颜色、对齐、RectTransform、动画、场景或 Prefab 序列化配置。
+5. 语言选择页中的西班牙语和葡萄牙语地区版本 SHALL 使用 `Español (ES)`、`Español (LATAM)`、`Português (BR)`、`Português (PT)`，不得只显示会丢失语言信息的地区名称；编辑器场景、打开语言页和切换语言后的选中/未选中文本 SHALL 保持一致。
+6. 本次适配 SHALL NOT 修改字体资产、共享材质、颜色、对齐、RectTransform、动画、场景或 Prefab 序列化配置。
 
 - [x] 核对正式场景和 Prefab 中的按钮、标题、语言项与弹窗正文命名及层级。
 - [x] 将 `GameLocalization.ConfigureTextToFit` 拆分为单行缩字和弹窗正文换行两套规则。

@@ -4619,6 +4619,9 @@ public class MainScene : MonoBehaviour
         for (var i = 0; i < GameLocalization.LanguageCodes.Count; i++)
         {
             var languageCode = GameLocalization.LanguageCodes[i];
+            var displayName = i < GameLocalization.NativeLanguageNames.Count
+                ? GameLocalization.NativeLanguageNames[i]
+                : languageCode;
             var item = FindChild(content, LanguageItemPrefix + languageCode);
             if (item == null)
             {
@@ -4633,11 +4636,23 @@ public class MainScene : MonoBehaviour
             var normalText = FindChild(item, LanguageNormalTextObjectName);
             if (selectedText != null)
             {
+                var label = selectedText.GetComponent<TMP_Text>();
+                if (label != null)
+                {
+                    label.text = displayName;
+                }
+
                 selectedText.gameObject.SetActive(isSelected);
             }
 
             if (normalText != null)
             {
+                var label = normalText.GetComponent<TMP_Text>();
+                if (label != null)
+                {
+                    label.text = displayName;
+                }
+
                 normalText.gameObject.SetActive(!isSelected);
             }
         }

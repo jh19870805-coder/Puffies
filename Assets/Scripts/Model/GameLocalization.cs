@@ -30,8 +30,8 @@ public static class GameLocalization
 
     private static readonly string[] sNativeLanguageNames =
     {
-        "简体中文", "English", "Русский", "Español (España)", "Español (Latinoamérica)",
-        "Português (Brasil)", "Português (Portugal)", "Deutsch", "한국어", "Français", "日本語",
+        "简体中文", "English", "Русский", "Español (ES)", "Español (LATAM)",
+        "Português (BR)", "Português (PT)", "Deutsch", "한국어", "Français", "日本語",
         "Türkçe", "繁體中文", "Polski", "Italiano", "Українська", "Tiếng Việt", "ไทย"
     };
 
