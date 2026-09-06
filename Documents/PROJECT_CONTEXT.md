@@ -30,7 +30,7 @@ Unity **2022.3** / Built-in Render Pipeline 项目，使用 Linear 色彩空间�
 - `GameLocalization` 是唯一运行时本地化入口，翻译表集中维护在 `Assets/Scripts/Model/GameLocalization.cs`。静态场景/Prefab 文本由其刷新，业务生成的任务、教程、结算、存档、排行榜和成就文案必须使用 `Get/Format` 语言键，不能重新写死中文或英文。
 - 当前语言保存在独立的 `PlayerPrefs/Puffies.Language`，默认 `en-US`；该设置不属于三份游戏进度，不随切换或删除存档变化。语言切换必须立即更新 `LanName1/2` 选中显隐和当前场景内容，场景加载后继续使用已保存语言。
 - UI 本地化只能更新文字内容和必要的选中显隐，不得在运行时覆盖编辑器中设置的 TMP 字体、共享材质、颜色、字号、对齐和动画。`NotoSansSC-Regular SDF` 继续作为现有主字体，通过 LGC、SC、JP、TC、KR、Thai fallback 覆盖正式语言；fallback Font Asset 使用各自源 TTF 的 Dynamic + Multi Atlas 按需补字。除各字体必须独立保留的 Atlas 纹理及尺寸外，语言页全部 fallback 的字面、描边、粗体、阴影和比例材质参数与简体中文主字体一致；普通态使用统一深蓝色，只有选中态保持独立绿色。
-- 运行时 TMP 文本采用分类适配规则：按钮文字、语言项、标题及其他普通 UI 文本保留明确写入的换行，但禁止根据宽度自动新增换行，超宽时在原设计字号以下使用 Auto Size；弹窗内不属于 Button 的 `TextContent*` 正文和 `PackPhotoItem/TaskContent` 拍照提示恢复编辑器设计字号、关闭 Auto Size，并在超宽时自动换行。共享 `TaskItem/TaskContent` 任务描述使用独立的最多两行规则：先按编辑器设计字号自动换行，实际排版超过两行时再缩小到能容纳两行的最大字号，不得直接按单行压缩。存档槽 `TextContent` 属于 Button 内容，继续按按钮规则处理并保留数据格式明确写入的两行。结算和新手引导继续使用各自既有单行或专用最多两行规则。动态创建、运行时更新和语言切换统一由 `GameLocalization` 应用该分类，不得改动字体、材质、颜色、对齐、RectTransform 或动画。
+- 运行时 TMP 文本采用分类适配规则：按钮文字、语言项、标题及其他普通 UI 文本保留明确写入的换行，但禁止根据宽度自动新增换行，超宽时在原设计字号以下使用 Auto Size；弹窗内不属于 Button 的 `TextContent*` 正文和 `PackPhotoItem/TaskContent` 拍照提示恢复编辑器设计字号、关闭 Auto Size，并在超宽时自动换行。共享 `TaskItem/TaskContent` 任务描述使用独立的最多两行规则：先按编辑器设计字号自动换行，实际排版超过两行时再缩小到能容纳两行的最大字号，不得直接按单行压缩。存档槽 `TextContent` 属于 Button 内容，继续按按钮规则处理并保留数据格式明确写入的两行。结算和新手引导继续使用各自既有单行或专用最多两行规则。动态创建、运行时更新和语言切换统一由 `GameLocalization` 应用该分类，不得改动字体、材质、颜色、对齐、RectTransform 或动画。文字区域横向铺满按钮的标准命令按钮必须在编辑器资源中保留左右各 `20px` TMP Margin，开启 Auto Size、关闭自动换行且最小字号为 `18`；已有独立窄文本框、语言项、存档内容、愿望单、排行榜数据和纯图标按钮继续沿用各自布局，不得重复缩窄。
 
 ### 场景需求
 

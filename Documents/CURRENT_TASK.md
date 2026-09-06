@@ -1,5 +1,25 @@
 # 当前任务
 
+## 2026-09-06 全项目按钮文本安全区审计
+
+- 状态：正式场景与共享 Prefab 审计、配置修改和编译验证完成，等待 Play Mode 多语言视觉验收。
+- 用户意图：检查整个项目所有带文本的按钮，对接近按钮边缘的文字统一优化，保证长语言文本能够自动缩小并留出合理边距。
+- 审计：扫描正式 Build 场景、共享 `PackPhotoItem.prefab`、`LanNameItem.prefab` 及运行时按钮创建代码；项目正式资源共包含 `45` 个序列化 Button，其中带文本的按钮按用途分为标准命令按钮、语言选项、存档内容、愿望单、排行榜数据和图标按钮。固定 `300px` 文本框相对 `336px` 按钮已自带约 `18px` 左右安全区；存档、愿望单、排行榜和语言项已有更大的专用区域或独立适配规则；图标按钮没有文本。非 Build 的 `EffectScene001` 制作方参考场景保持不变。
+- 修改：对文字区域横向铺满按钮的 `15` 个标准命令按钮统一设置左右各 `20px` TMP Margin、开启 Auto Size、关闭自动换行并保留 `18` 的最小字号。范围包含 MainScene 的玩/重玩、继续、确认、返回和删除等 `13` 个文本，GameScene 的结算完成文本，以及共享拍照弹窗的 OK 文本。原设计最大字号、颜色、字体、材质、对齐、按钮尺寸和业务逻辑均未修改；明确写入的换行仍由 TMP 保留。
+- 修改文件：`Assets/Scenes/MainScene.unity`、`Assets/Scenes/GameScene.unity`、`Assets/Prefabs/PackPhotoItem.prefab`、任务记录、项目上下文和统一 spec。
+- 验证：按组件 ID 复查 `15/15` 个目标 TMP，全部满足 `Auto Size=1`、`Word Wrapping=0`、`Font Size Min=18`、左右 Margin=`20`；场景差异仅包含目标配置字段；`Assembly-CSharp-Editor` 连带 Runtime 编译通过，`0` 警告、`0` 错误；`git diff --check` 通过。
+- 下一步：在 Play Mode 依次使用英语、俄语、德语、法语、波兰语和泰语检查首页各级弹窗、卡包操作页、结算完成按钮及拍照 OK，确认长文本位于按钮图形安全区内，短文本保持原设计字号。
+
+## 2026-09-06 结算完成按钮长文本自适配
+
+- 状态：场景配置修改和编译验证完成，等待 Play Mode 多语言视觉验收。
+- 用户意图：结算页面完成按钮中的 `Complete!` 等较长文本不能贴住或超出按钮圆角，需要保持单行并自动缩小一点。
+- 根因：`BtnFinish/BtnTitle` 的文本区域铺满整个 `306px` 按钮，英文在矩形区域内勉强可放下，因此没有为按钮圆角和白色描边预留视觉安全区。
+- 修改：直接在 `GameScene` 编辑器场景配置中开启 `BtnFinish/BtnTitle` 的 TMP Auto Size、关闭自动换行，并设置左右各 `20px` 的文字边距；最大字号仍为原设计值 `72`，短文本保持原字号，只有接近边缘的长文本才自动缩小。没有修改按钮尺寸、纹理、文本颜色、材质或运行时业务逻辑。
+- 修改文件：`Assets/Scenes/GameScene.unity`、任务记录。
+- 验证：已核对目标对象序列化配置为 `m_enableAutoSizing: 1`、`m_enableWordWrapping: 0`、左右边距 `20px`；`Assembly-CSharp-Editor` 连带 Runtime 编译通过，`0` 警告、`0` 错误；`git diff --check` 通过。
+- 下一步：在 GameScene Play Mode 切换英语、俄语、德语等较长按钮文案，确认完成按钮文字保持单行、位于按钮白边内且视觉字号合适。
+
 ## 2026-09-06 结算总分整体居中
 
 - 状态：代码修改和编译验证完成，等待 Play Mode 视觉验收。

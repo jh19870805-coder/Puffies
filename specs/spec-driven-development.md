@@ -1919,9 +1919,11 @@
 6. 语言选择页中的西班牙语和葡萄牙语地区版本 SHALL 使用 `Español (ES)`、`Español (LATAM)`、`Português (BR)`、`Português (PT)`，不得只显示会丢失语言信息的地区名称；编辑器场景、打开语言页和切换语言后的选中/未选中文本 SHALL 保持一致。
 7. 除语言选项自身的可用文字宽度和全局 fallback 材质预设继承设置外，本次适配 SHALL NOT 修改其他字体参数、共享材质引用、颜色、对齐、布局、动画或场景结构。
 8. 语言选择项的长名称 SHALL 优先使用完整单元格宽度和不超过 `10%` 的 TMP 字宽补偿，再按既有 Auto Size 缩小；`TMP Settings` SHALL 开启 `Match Material Preset`，LGC、SC、JP、TC、KR、Thai fallback 字形 SHALL 保留各自 Atlas 参数并继承当前 TMP 文本使用的简体中文材质预设。普通态、标题、按钮、描边与阴影 SHALL 随原文本样式一致，选中态绿色 SHALL 保持现有值不变，不得为韩语或泰语单独硬编码页面视觉参数。
+9. WHEN 标准命令按钮的 TMP 文本区域横向铺满按钮 THEN 编辑器资源 SHALL 为文本保留左右各 `20px` 安全边距，开启单行 Auto Size 并将最小字号保持为 `18`；WHEN 按钮已经使用独立窄文本框或承担语言选择、存档内容、愿望单、排行榜数据或纯图标功能 THEN 系统 SHALL 保留其专用布局，不得重复增加安全边距。
 
 - [x] 核对正式场景和 Prefab 中的按钮、标题、语言项与弹窗正文命名及层级。
 - [x] 将 `GameLocalization.ConfigureTextToFit` 拆分为单行缩字和弹窗正文换行两套规则。
+- [x] 审计正式场景、共享 Prefab 和运行时创建按钮，为满幅标准命令按钮补齐文字安全区。
 - [x] 缓存并恢复弹窗正文设计字号，增加 InstanceId 复用保护和场景切换清理。
 - [x] 编译 Runtime/Editor 并执行差异检查。
 - [ ] Play Mode 抽查长文本语言下的全部页面和弹窗。
