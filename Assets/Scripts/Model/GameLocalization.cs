@@ -17,6 +17,8 @@ public static class GameLocalization
     private const string LanguagePreferenceKey = "Puffies.Language";
     private const string RuntimeObjectName = "GameLocalizationRuntime";
     private const float AutomaticFontSizeMinimum = 10f;
+    private const int TaskDescriptionMaxLines = 2;
+    private const int TaskDescriptionFontSearchIterations = 8;
     private const string PopupPanelNamePrefix = "Panel";
     private const string PopupContentNamePrefix = "TextContent";
     private const string PhotoPanelObjectName = "PackPhotoItem";
@@ -44,6 +46,7 @@ public static class GameLocalization
         new Dictionary<int, string>();
     private static readonly Dictionary<int, TextFitDefaults> sTextFitDefaults =
         new Dictionary<int, TextFitDefaults>();
+    private static readonly HashSet<int> sTaskTextLayoutInProgress = new HashSet<int>();
 
     private static bool sInitialized;
     private static string sCurrentLanguageCode = DefaultLanguageCode;
@@ -81,6 +84,7 @@ public static class GameLocalization
         sKeysByDisplayedText.Clear();
         sRuntimeTextKeys.Clear();
         sTextFitDefaults.Clear();
+        sTaskTextLayoutInProgress.Clear();
         LanguageChanged = null;
     }
 
@@ -192,7 +196,13 @@ public static class GameLocalization
         }
 
         var defaults = GetTextFitDefaults(label);
-        if (IsPopupContent(label) || IsTaskDescription(label))
+        if (IsTaskDescription(label))
+        {
+            ConfigureTaskDescription(label, defaults);
+            return;
+        }
+
+        if (IsPopupContent(label))
         {
             ConfigureWrappedContent(label, defaults);
             return;
@@ -255,6 +265,58 @@ public static class GameLocalization
         label.fontSizeMin = defaults.FontSizeMin;
         label.fontSizeMax = defaults.FontSizeMax;
         label.enableWordWrapping = true;
+    }
+
+    private static void ConfigureTaskDescription(TMP_Text label, TextFitDefaults defaults)
+    {
+        var instanceId = label.GetInstanceID();
+        if (!sTaskTextLayoutInProgress.Add(instanceId))
+        {
+            return;
+        }
+
+        try
+        {
+            label.enableAutoSizing = false;
+            label.enableWordWrapping = true;
+            label.maxVisibleLines = TaskDescriptionMaxLines;
+
+            var maximumFontSize = defaults.FontSize > 0f ? defaults.FontSize : label.fontSize;
+            label.fontSize = maximumFontSize;
+            if (GetRenderedLineCount(label) <= TaskDescriptionMaxLines)
+            {
+                return;
+            }
+
+            var minimumFontSize = Mathf.Min(AutomaticFontSizeMinimum, maximumFontSize);
+            var fittingFontSize = minimumFontSize;
+            var overflowingFontSize = maximumFontSize;
+            for (var i = 0; i < TaskDescriptionFontSearchIterations; i++)
+            {
+                var candidateFontSize = (fittingFontSize + overflowingFontSize) * 0.5f;
+                label.fontSize = candidateFontSize;
+                if (GetRenderedLineCount(label) <= TaskDescriptionMaxLines)
+                {
+                    fittingFontSize = candidateFontSize;
+                }
+                else
+                {
+                    overflowingFontSize = candidateFontSize;
+                }
+            }
+
+            label.fontSize = Mathf.Floor(fittingFontSize * 20f) / 20f;
+        }
+        finally
+        {
+            sTaskTextLayoutInProgress.Remove(instanceId);
+        }
+    }
+
+    private static int GetRenderedLineCount(TMP_Text label)
+    {
+        var textInfo = label.GetTextInfo(label.text);
+        return textInfo != null ? textInfo.lineCount : 0;
     }
 
     private static bool IsPopupContent(TMP_Text label)

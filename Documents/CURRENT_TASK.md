@@ -12,11 +12,11 @@
 ## 2026-09-06 任务描述保持字号并自动换行
 
 - 状态：代码修改和编译验证完成，等待 Play Mode 多语言视觉验收。
-- 用户意图：共享任务条中的任务内容不能为了保持单行而缩成很小的字号；内容超宽时应自动换行，并保持原本设计字号。
+- 用户意图：共享任务条中的任务内容不能为了保持单行而缩成很小的字号；内容超宽时应自动换行，最多显示两行，只有超过两行时才适当缩小。
 - 根因：`TaskItem/TaskContent` Prefab 已配置为 `36` 号、关闭 Auto Size、开启 Word Wrapping，但 `GameLocalization.ConfigureTextToFit` 把普通任务描述归入全局单行规则，运行时重新关闭换行并允许字号最低缩到 `10`，导致韩语等长文案被压成很小的一行。
-- 修改：将祖先为 `TaskItem` 的 `TaskContent` 纳入多行原字号规则，恢复首次读取到的编辑器字号、关闭 Auto Size 并开启 Word Wrapping；`TaskProgressUIUtility` 每次生成普通任务或任务完成文案后立即应用该规则。拍照预览同名 `TaskContent` 的既有规则不变，任务进度数字、标题、按钮、结算和新手引导文本不受影响。
+- 修改：将祖先为 `TaskItem` 的 `TaskContent` 纳入独立的最多两行规则，先恢复首次读取到的编辑器字号并开启 Word Wrapping；使用 TMP 的实际排版结果检查行数，超过两行时通过二分查找缩小到能够完整显示为两行的最大字号，并设置 `maxVisibleLines = 2`。`TaskProgressUIUtility` 每次生成普通任务或任务完成文案后立即应用该规则。拍照预览同名 `TaskContent` 的既有原字号换行规则不变，任务进度数字、标题、按钮、结算和新手引导文本不受影响。
 - 修改文件：`Assets/Scripts/Model/GameLocalization.cs`、`Assets/Scripts/View/TaskProgressUIUtility.cs`、任务记录、项目上下文和统一 spec。
-- 验证：共享 `TaskItem.prefab` 的 `TaskContent` 设计值已核对为字号 `36`、`m_enableAutoSizing: 0`、`m_enableWordWrapping: 1`；新分类按对象祖先精确限定为 `TaskItem`；`Assembly-CSharp-Editor` 连带 Runtime 编译通过，`0` 警告、`0` 错误。
+- 验证：共享 `TaskItem.prefab` 的 `TaskContent` 设计值已核对为字号 `36`、`m_enableAutoSizing: 0`、`m_enableWordWrapping: 1`；新分类按对象祖先精确限定为 `TaskItem`，字号查找以 TMP 返回的实际 `lineCount` 为准并带重入保护；`Assembly-CSharp-Editor` 连带 Runtime 编译通过，`0` 警告、`0` 错误。
 - 下一步：在 Play Mode 切换韩语、泰语及其他长文本语言，确认首页和游戏内任务条按宽度换行，字号保持设计值且不遮挡进度条与奖励图标。
 
 ## 2026-09-06 韩语与泰语全局字体效果统一
