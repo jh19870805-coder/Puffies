@@ -1,5 +1,24 @@
 # 当前任务
 
+## 2026-09-06 愿望单使用 Steam 内置浏览器
+
+- 状态：代码修改和静态验证完成，等待 Steam Player 验收。
+- 用户意图：首页“添加愿望单”按钮优先通过 Steam Overlay 内置浏览器打开商店链接；Steam 或 Overlay 不可用时继续使用原有系统浏览器方式保底。
+- 修改：`AnalyticsManager` 新增统一的 `TryOpenSteamOverlayWebPage` 入口，仅在 Steamworks 已初始化且 `SteamUtils.IsOverlayEnabled()` 返回可用时调用 `SteamFriends.ActivateGameOverlayToWebPage`；调用异常返回失败并记录警告。`MainScene` 愿望单按钮先调用该入口，返回失败时执行原有 `Application.OpenURL`。Discord 和 QQ 链接逻辑不变。
+- 修改文件：`Assets/Scripts/Model/AnalyticsManager.cs`、`Assets/Scripts/Controller/MainScene.cs`、任务记录和项目上下文。
+- 验证：`dotnet build Assembly-CSharp-Editor.csproj --no-restore` 通过，确认当前 Steamworks.NET `2025.164.1` 支持 `SteamUtils.IsOverlayEnabled()` 与 `SteamFriends.ActivateGameOverlayToWebPage(string)`，编译结果为 `0` 警告、`0` 错误；`git diff --check` 通过。仍需从 Steam 客户端启动非 Development Windows Player，确认 Overlay 内置浏览器打开，以及禁用 Overlay 时系统浏览器保底。
+- 下一步：在 Steam Player 中分别验证 Overlay 开启和关闭两种情况。
+
+## 2026-09-06 设置页简体中文字号保持编辑器配置
+
+- 状态：代码修改和静态验证完成，等待 Play Mode 验收。
+- 用户意图：简体中文下打开设置页面时，标题和选项文字必须保持 Unity 编辑器中设置的字号，不得被多语言运行时代码无条件改变；其他语言只有文字实际超框时才允许向下缩小。
+- 根因：`GameLocalization.ConfigureSingleLineText` 会为所有普通 TMP 强制开启 Auto Size；编辑器未开启 Auto Size 的设置页文字因此也在运行时参与 TMP 自动排版，编辑器已开启 Auto Size 的文字还可能沿用高于当前显示字号的 `fontSizeMax`。
+- 修改：普通单行文本先恢复首次读取到的编辑器当前字号并关闭 Auto Size，以该字号作为运行时最大值；根据 TMP 在该字号下的实际首选宽度与文本框扣除左右 Margin 后的可用宽度判断，只有横向超框时才开启 Auto Size 向下缩小。未修改 MainScene 场景中的字号、字体、材质、颜色、对齐或 RectTransform；愿望单三行、任务描述两行和弹窗正文规则不变。
+- 修改文件：`Assets/Scripts/Model/GameLocalization.cs`、任务记录和项目上下文。
+- 验证：已核对 MainScene 设置页序列化参数：标题为 `52`，音乐、音效和窗口化等普通标签为 `46`，这些文本在编辑器中均关闭 Auto Size；修复后普通单行分支以该当前字号作为固定初值和最大值，只在首选宽度超出可用宽度时开启 Auto Size。`dotnet build Assembly-CSharp-Editor.csproj --no-restore` 通过，`0` 警告、`0` 错误；`git diff --check` 通过。仍需在 MainScene Play Mode 做画面验收。
+- 下一步：在 Unity Play Mode 使用简体中文打开设置页核对标题 `52`、音乐/音效/窗口化等标签 `46`，并切换至少一种长文本语言确认超框时仍会向下缩小。
+
 ## 2026-09-06 Windows 窗口尺寸记忆
 
 - 状态：代码和静态验证完成，等待 Windows Player 验收。

@@ -57,6 +57,33 @@ public sealed class AnalyticsManager : MonoBehaviour
     public bool IsSteamInitialized => _steamInitialized;
     public bool IsGameAnalyticsInitialized => _gameAnalyticsInitialized;
 
+    public bool TryOpenSteamOverlayWebPage(string url)
+    {
+        if (!_steamInitialized || string.IsNullOrWhiteSpace(url))
+        {
+            return false;
+        }
+
+        try
+        {
+            if (!SteamUtils.IsOverlayEnabled())
+            {
+                return false;
+            }
+
+            SteamFriends.ActivateGameOverlayToWebPage(url);
+            return true;
+        }
+        catch (Exception exception)
+        {
+            Debug.LogWarning(
+                "AnalyticsManager: failed to open Steam Overlay web page; "
+                + "falling back to the system browser. "
+                + exception.Message);
+            return false;
+        }
+    }
+
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     private static void Bootstrap()
     {

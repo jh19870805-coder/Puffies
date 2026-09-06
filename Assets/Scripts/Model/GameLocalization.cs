@@ -246,24 +246,33 @@ public static class GameLocalization
             label.enableWordWrapping = false;
         }
 
-        if (defaults.EnableAutoSizing)
-        {
-            label.fontSizeMin = defaults.FontSizeMin;
-            label.fontSizeMax = defaults.FontSizeMax;
-            label.enableAutoSizing = true;
-            return;
-        }
-
         var configuredFontSize = defaults.FontSize;
         if (configuredFontSize <= 0f)
         {
             return;
         }
 
+        label.enableAutoSizing = false;
         label.fontSize = configuredFontSize;
         label.fontSizeMax = configuredFontSize;
-        label.fontSizeMin = Mathf.Min(AutomaticFontSizeMinimum, configuredFontSize);
-        label.enableAutoSizing = true;
+        label.fontSizeMin = defaults.EnableAutoSizing
+            ? Mathf.Min(defaults.FontSizeMin, configuredFontSize)
+            : Mathf.Min(AutomaticFontSizeMinimum, configuredFontSize);
+
+        var margin = label.margin;
+        var availableWidth = label.rectTransform.rect.width
+            - Mathf.Max(0f, margin.x)
+            - Mathf.Max(0f, margin.z);
+        if (availableWidth <= 0f)
+        {
+            return;
+        }
+
+        var preferredWidth = label.GetPreferredValues(
+            label.text,
+            Mathf.Infinity,
+            Mathf.Infinity).x;
+        label.enableAutoSizing = preferredWidth > availableWidth + 0.01f;
     }
 
     private static void ConfigureWrappedContent(TMP_Text label, TextFitDefaults defaults)

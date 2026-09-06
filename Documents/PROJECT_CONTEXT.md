@@ -30,7 +30,7 @@ Unity **2022.3** / Built-in Render Pipeline 项目，使用 Linear 色彩空间�
 - `GameLocalization` 是唯一运行时本地化入口，翻译表集中维护在 `Assets/Scripts/Model/GameLocalization.cs`。静态场景/Prefab 文本由其刷新，业务生成的任务、教程、结算、存档、排行榜和成就文案必须使用 `Get/Format` 语言键，不能重新写死中文或英文。
 - 当前语言保存在独立的 `PlayerPrefs/Puffies.Language`，默认 `en-US`；该设置不属于三份游戏进度，不随切换或删除存档变化。语言切换必须立即更新 `LanName1/2` 选中显隐和当前场景内容，场景加载后继续使用已保存语言。
 - UI 本地化只能更新文字内容和必要的选中显隐，不得在运行时覆盖编辑器中设置的 TMP 字体、共享材质、颜色、字号、对齐和动画。`NotoSansSC-Regular SDF` 继续作为现有主字体，通过 LGC、SC、JP、TC、KR、Thai fallback 覆盖正式语言；fallback Font Asset 使用各自源 TTF 的 Dynamic + Multi Atlas 按需补字。除各字体必须独立保留的 Atlas 纹理及尺寸外，语言页全部 fallback 的字面、描边、粗体、阴影和比例材质参数与简体中文主字体一致；普通态使用统一深蓝色，只有选中态保持独立绿色。
-- 运行时 TMP 文本采用分类适配规则：按钮文字、语言项、标题及其他普通 UI 文本保留明确写入的换行，但禁止根据宽度自动新增换行，超宽时在原设计字号以下使用 Auto Size；弹窗内不属于 Button 的 `TextContent*` 正文和 `PackPhotoItem/TaskContent` 拍照提示恢复编辑器设计字号、关闭 Auto Size，并在超宽时自动换行。共享 `TaskItem/TaskContent` 任务描述使用独立的最多两行规则：先按编辑器设计字号自动换行，实际排版超过两行时再缩小到能容纳两行的最大字号，不得直接按单行压缩。存档槽 `TextContent` 属于 Button 内容，继续按按钮规则处理并保留数据格式明确写入的两行。首页 `BtnWishList/TextTitle` 是异形按钮专用例外：编辑器文字安全区固定为蓝色主体内的 `200 x 126`，运行时保留原 `35` 号上限并在 `18~35` 之间自动缩放，允许自动换行但最多显示三行。结算和新手引导继续使用各自既有单行或专用最多两行规则。动态创建、运行时更新和语言切换统一由 `GameLocalization` 应用该分类，不得改动字体、材质、颜色、对齐、RectTransform 或动画。文字区域横向铺满按钮的标准命令按钮必须在编辑器资源中保留左右各 `20px` TMP Margin，开启 Auto Size、关闭自动换行且最小字号为 `18`；已有独立窄文本框、语言项、存档内容、愿望单、排行榜数据和纯图标按钮继续沿用各自布局，不得重复缩窄。
+- 运行时 TMP 文本采用分类适配规则：按钮文字、语言项、标题及其他普通 UI 文本保留明确写入的换行，但禁止根据宽度自动新增换行；先保持编辑器当前显示字号且不启用 Auto Size，只有该字号下的实际文字宽度超过扣除左右 Margin 后的文本框宽度时，才以编辑器当前字号为上限开启 Auto Size 向下缩小，运行时不得把短文本放大或无条件缩小。弹窗内不属于 Button 的 `TextContent*` 正文和 `PackPhotoItem/TaskContent` 拍照提示恢复编辑器设计字号、关闭 Auto Size，并在超宽时自动换行。共享 `TaskItem/TaskContent` 任务描述使用独立的最多两行规则：先按编辑器设计字号自动换行，实际排版超过两行时再缩小到能容纳两行的最大字号，不得直接按单行压缩。存档槽 `TextContent` 属于 Button 内容，继续按按钮规则处理并保留数据格式明确写入的两行。首页 `BtnWishList/TextTitle` 是异形按钮专用例外：编辑器文字安全区固定为蓝色主体内的 `200 x 126`，运行时保留原 `35` 号上限并在 `18~35` 之间自动缩放，允许自动换行但最多显示三行。结算和新手引导继续使用各自既有单行或专用最多两行规则。动态创建、运行时更新和语言切换统一由 `GameLocalization` 应用该分类，不得改动字体、材质、颜色、对齐、RectTransform 或动画。文字区域横向铺满按钮的标准命令按钮必须在编辑器资源中保留左右各 `20px` TMP Margin，开启 Auto Size、关闭自动换行且最小字号为 `18`；已有独立窄文本框、语言项、存档内容、愿望单、排行榜数据和纯图标按钮继续沿用各自布局，不得重复缩窄。
 
 ### 场景需求
 
@@ -450,6 +450,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 ### Steam 与运营统计
 
 - Windows Steam 接入使用 OpenUPM 固定依赖 `Steamworks.NET 2025.164.1` 与 `GameAnalytics 8.2.0`；包版本由 `Packages/manifest.json` 和 `packages-lock.json` 管理，不把 SDK 源码复制进 `Assets`。
+- MainScene 首页愿望单按钮使用正式版商店 URL `https://store.steampowered.com/app/4906510/?utm_source=InGame`。点击时优先由 `AnalyticsManager` 在 Steam 已初始化且 Overlay 可用的情况下调用 `SteamFriends.ActivateGameOverlayToWebPage`，使网页在 Steam 内置浏览器打开；Editor、Development Build、Steam 初始化失败、Overlay 被禁用或调用异常时，必须回退到 `Application.OpenURL`。Discord 和 QQ 链接继续直接使用系统浏览器。
 - Steam Demo App ID 为 `5034540`，正式版 App ID 为 `4906510`。`AnalyticsManager.ConfiguredSteamAppId` 默认返回 Demo ID；正式版构建通过 Standalone 编译符号 `PUFFIES_STEAM_RELEASE` 切换。根目录 `steam_appid.txt` 仅用于本地 Editor/独立运行辅助，固定为 Demo ID，不是发布包的 App ID 来源。
 - `AnalyticsManager` 是 `DontDestroyOnLoad` 常驻单例和第三方统计的唯一业务入口。Windows 非 Development Player 初始化 Steam，并将 SteamID 变换为 SHA-256 匿名 ID后再初始化 GameAnalytics；Editor、Development Build、Steam 初始化失败、未登录或 Key 缺失时不发送事件且不阻塞场景。
 - GameAnalytics Windows Key 保存于 `Assets/Resources/GameAnalytics/Settings.asset`，通过 `Window > GameAnalytics > Select Settings` 配置，不得写入业务代码、spec 或日志。未配置的空 Settings 资源可以提交；填入 Key 后应把该资源按私有客户端配置管理。

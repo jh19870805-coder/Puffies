@@ -4111,7 +4111,10 @@ public class MainScene : MonoBehaviour
     private static void OnWishListButtonClicked()
     {
         AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
-        Application.OpenURL(WishListUrl);
+        if (!AnalyticsManager.Instance.TryOpenSteamOverlayWebPage(WishListUrl))
+        {
+            Application.OpenURL(WishListUrl);
+        }
     }
 
     private void ConfigureDiscordButton()
