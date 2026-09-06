@@ -26,6 +26,11 @@ public static class GameLocalization
     private const string PhotoContentObjectName = "TaskContent";
     private const string TaskItemObjectName = "TaskItem";
     private const string WishListButtonObjectName = "BtnWishList";
+    private const string MainMenuPanelObjectName = "PanelMenu";
+    private const string MainMenuLanguageButtonObjectName = "BtnLanguage";
+    private const string MainMenuUsableButtonObjectName = "BtnUsable";
+    private const string MainMenuSettingsButtonObjectName = "BtnSet";
+    private const string MainMenuSaveButtonObjectName = "BtnData";
 
     private static readonly string[] sLanguageCodes =
     {
@@ -193,6 +198,11 @@ public static class GameLocalization
     internal static void ConfigureTextToFit(TMP_Text label)
     {
         if (label == null || !IsLoadedSceneObject(label.gameObject))
+        {
+            return;
+        }
+
+        if (IsGroupedMainMenuButtonText(label))
         {
             return;
         }
@@ -387,6 +397,29 @@ public static class GameLocalization
         var button = label.GetComponentInParent<Button>(true);
         return button != null
             && string.Equals(button.name, WishListButtonObjectName, StringComparison.Ordinal);
+    }
+
+    private static bool IsGroupedMainMenuButtonText(TMP_Text label)
+    {
+        var button = label.GetComponentInParent<Button>(true);
+        if (button == null
+            || (!string.Equals(button.name, MainMenuLanguageButtonObjectName, StringComparison.Ordinal)
+                && !string.Equals(button.name, MainMenuUsableButtonObjectName, StringComparison.Ordinal)
+                && !string.Equals(button.name, MainMenuSettingsButtonObjectName, StringComparison.Ordinal)
+                && !string.Equals(button.name, MainMenuSaveButtonObjectName, StringComparison.Ordinal)))
+        {
+            return false;
+        }
+
+        for (var current = button.transform.parent; current != null; current = current.parent)
+        {
+            if (string.Equals(current.name, MainMenuPanelObjectName, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool IsTaskDescription(TMP_Text label)
@@ -660,8 +693,6 @@ internal static class GameLocalizationCatalog
             E("game.bonus.no_level_outline", "关闭关卡描边", "Board Outline Off", "Контур поля отключён", "Contorno del tablero desactivado", "Contorno del tablero desactivado", "Contorno do tabuleiro desativado", "Contorno do tabuleiro desligado", "Brettumriss aus", "보드 윤곽선 끔", "Contour du plateau désactivé", "ボード輪郭オフ", "Tahta ana hattı kapalı", "關閉關卡描邊", "Obrys planszy wyłączony", "Contorno tavola disattivato", "Контур поля вимкнено", "Tắt viền bảng", "ปิดเส้นขอบกระดาน"),
             E("game.bonus.no_sticker_outline", "关闭贴纸描边", "Sticker Outlines Off", "Контуры наклеек отключены", "Contornos de pegatinas desactivados", "Contornos de stickers desactivados", "Contornos dos adesivos desativados", "Contornos dos autocolantes desligados", "Sticker-Umrisse aus", "스티커 윤곽선 끔", "Contours des autocollants désactivés", "ステッカー輪郭オフ", "Çıkartma ana hatları kapalı", "關閉貼紙描邊", "Obrysy naklejek wyłączone", "Contorni adesivi disattivati", "Контури наліпок вимкнено", "Tắt viền nhãn dán", "ปิดเส้นขอบสติกเกอร์"),
             E("game.bonus.fast", "快速完成", "Quick Completion", "Быстрое завершение", "Finalización rápida", "Finalización rápida", "Conclusão rápida", "Conclusão rápida", "Schnell abgeschlossen", "빠른 완료", "Terminé rapidement", "スピードクリア", "Hızlı tamamlama", "快速完成", "Szybkie ukończenie", "Completamento rapido", "Швидке завершення", "Hoàn thành nhanh", "ผ่านอย่างรวดเร็ว"),
-            E("game.bonus.points", "+{0}分", "+{0} points", "+{0} очков", "+{0} puntos", "+{0} puntos", "+{0} pontos", "+{0} pontos", "+{0} Punkte", "+{0}점", "+{0} points", "+{0}ポイント", "+{0} puan", "+{0}分", "+{0} pkt", "+{0} punti", "+{0} очок", "+{0} điểm", "+{0} คะแนน"),
-
             E("task.score.any", "完成任意拼图包，收集 {0} 分", "Complete any puzzle pack and collect {0} points", "Завершите любой набор и наберите {0} очков", "Completa cualquier paquete y consigue {0} puntos", "Completa cualquier paquete y consigue {0} puntos", "Conclua qualquer pacote e ganhe {0} pontos", "Conclui qualquer pacote e obtém {0} pontos", "Schließe ein beliebiges Pack ab und sammle {0} Punkte", "아무 퍼즐 팩이나 완료하고 {0}점을 모으세요", "Terminez un pack et gagnez {0} points", "任意のパックを完成させて{0}ポイント獲得", "Herhangi bir paketi tamamlayıp {0} puan topla", "完成任意拼圖包，收集 {0} 分", "Ukończ dowolną paczkę i zdobądź {0} pkt", "Completa un pacchetto e ottieni {0} punti", "Завершіть будь-який набір і наберіть {0} очок", "Hoàn thành gói bất kỳ và thu thập {0} điểm", "ทำแพ็กใดก็ได้ให้เสร็จและเก็บ {0} คะแนน"),
             E("task.score.size", "完成 {0} 尺寸拼图包，收集 {1} 分", "Complete a size {0} puzzle pack and collect {1} points", "Завершите набор размера {0} и наберите {1} очков", "Completa un paquete de tamaño {0} y consigue {1} puntos", "Completa un paquete de tamaño {0} y consigue {1} puntos", "Conclua um pacote tamanho {0} e ganhe {1} pontos", "Conclui um pacote de tamanho {0} e obtém {1} pontos", "Schließe ein Pack der Größe {0} ab und sammle {1} Punkte", "{0} 크기 퍼즐 팩을 완료하고 {1}점을 모으세요", "Terminez un pack de taille {0} et gagnez {1} points", "サイズ{0}のパックを完成させて{1}ポイント獲得", "{0} boyutunda bir paketi tamamlayıp {1} puan topla", "完成 {0} 尺寸拼圖包，收集 {1} 分", "Ukończ paczkę w rozmiarze {0} i zdobądź {1} pkt", "Completa un pacchetto di dimensione {0} e ottieni {1} punti", "Завершіть набір розміру {0} і наберіть {1} очок", "Hoàn thành gói cỡ {0} và thu thập {1} điểm", "ทำแพ็กขนาด {0} ให้เสร็จและเก็บ {1} คะแนน"),
             E("task.stickers.any", "从任意拼图包中收集 {0} 个贴纸", "Collect {0} stickers from any puzzle pack", "Соберите {0} наклеек из любых наборов", "Consigue {0} pegatinas de cualquier paquete", "Consigue {0} stickers de cualquier paquete", "Colete {0} adesivos de qualquer pacote", "Recolhe {0} autocolantes de qualquer pacote", "Sammle {0} Sticker aus beliebigen Packs", "아무 퍼즐 팩에서 스티커 {0}개를 모으세요", "Collectez {0} autocollants dans n'importe quel pack", "任意のパックからステッカーを{0}枚集める", "Herhangi bir paketten {0} çıkartma topla", "從任意拼圖包收集 {0} 張貼紙", "Zbierz {0} naklejek z dowolnych paczek", "Raccogli {0} adesivi da qualsiasi pacchetto", "Зберіть {0} наліпок із будь-яких наборів", "Thu thập {0} nhãn dán từ gói bất kỳ", "เก็บสติกเกอร์ {0} ชิ้นจากแพ็กใดก็ได้"),

@@ -1,5 +1,44 @@
 # 当前任务
 
+## 2026-09-06 主菜单四按钮统一字号
+
+- 状态：代码修改和静态验证完成，等待多语言 Play Mode 验收。
+- 用户意图：`PanelMenu` 中语言、可使用、设置和我的保存四个按钮，在任何语言下都必须使用一致字号，并共同适配四条文本中最长的一条。
+- 修改：缓存 `BtnLanguage/BtnUsable/BtnSet/BtnData` 的四个 `BtnTitle`，保留编辑器 `60` 号为上限和各自现有文本安全区；每次初始化、语言切换和菜单打开时，以当前语言的四条文本共同做宽度拟合，取全部能容纳的最大字号并统一应用。四项不再参与全局逐条 Auto Size，标题、退出游戏和返回按钮不受影响。
+- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Assets/Scripts/Model/GameLocalization.cs`、任务记录和项目上下文。
+- 验证：已确认四个按钮场景尺寸均为 `336×92`、文字区均为 `300×50`、编辑器字号均为 `60`；`dotnet build Assembly-CSharp-Editor.csproj --no-restore` 通过，`0` 警告、`0` 错误；`git diff --check` 通过。
+- 下一步：在 MainScene Play Mode 切换葡萄牙语、德语、俄语和中文，确认每种语言下四个按钮字号一致、保持单行且不超出按钮。
+
+## 2026-09-06 结算加成动态文本重叠
+
+- 状态：代码修改和静态验证完成，等待葡萄牙语 Play Mode 验收。
+- 用户意图：结算页较长的加成描述不能越过左侧区域，也不能与右侧 `+N` 分数重叠。
+- 根因：`TaskTitle21/22` 初始化时已经启用单行 Auto Size，但结算动画会在对象隐藏期间动态写入每条加成；葡萄牙语长描述写入后没有立即生成 TMP 文本布局，显示首帧仍按编辑器 `36` 号字绘制并越过文本区域。
+- 修改：每次写入并显示 `TaskTitle21/22` 后，立即复用全局单行适配并强制更新 TMP 网格。继续使用场景内左右独立文本区域及 `15px` 间隔，未修改字号上限、字体、材质、颜色、描边或位置。
+- 修改文件：`Assets/Scripts/Controller/GameScene.cs`、任务记录。
+- 验证：`dotnet build Assembly-CSharp-Editor.csproj --no-restore` 通过，`0` 警告、`0` 错误；`git diff --check` 通过。蓝色 `T` 已确认是 Unity 开启 Gizmos 时的 TMP 组件图标，不属于游戏 UI。
+- 下一步：关闭 Game 视图的 Gizmos 后，用葡萄牙语进入结算页，确认 `Contorno do tabuleiro desativado` 在左侧区域内单行缩小，右侧 `+N` 独立显示。
+
+## 2026-09-06 卡包展开页重玩文本溢出
+
+- 状态：代码修改和静态验证完成，等待葡萄牙语 Play Mode 验收。
+- 用户意图：首页卡包展开后的“玩/重玩”按钮在葡萄牙语等长文本语言下必须保持单行，并自动缩小到紫色按钮范围内。
+- 根因：`PanelBagSelect/BtnPlay` 和 `PanelBagVol/BtnPlay` 的文字会在卡包状态刷新时由 `MainScene` 动态从短文本“玩”改为“重玩”；该赋值发生在全局多语言刷新之后，并且面板当时可能仍处于隐藏状态，TMP 没有及时产生可供全局监听器处理的文本重建事件，因此沿用了短文本对应的大字号，出现 `Jogar de novo` 越过按钮边界。
+- 修改：新增统一的 `SetBagPlayLabel` 写入入口，在普通卡包和系列卡包的状态刷新中，写入 `main.play/main.replay` 后立即调用现有 `GameLocalization.ConfigureTextToFit`，并允许在隐藏状态下强制生成 TMP 布局。没有修改按钮尺寸、文本 RectTransform、字体、材质、颜色、描边或编辑器字号。
+- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、任务记录。
+- 验证：`dotnet build Assembly-CSharp-Editor.csproj --no-restore` 通过，`0` 警告、`0` 错误；`git diff --check` 通过。已静态确认两处动态赋值都经过统一适配入口。
+- 下一步：在 MainScene Play Mode 使用葡萄牙语分别打开普通已完成卡包和系列中的已完成卡包，确认 `Jogar de novo` 首帧即在按钮内单行显示。
+
+## 2026-09-06 结算加成文本分区与分数简化
+
+- 状态：场景、代码和静态验证完成，等待多语言 Play Mode 验收。
+- 用户意图：结算页逐条显示加成时，左侧描述不能覆盖右侧分数；右侧不再翻译“分/points”等单位，所有语言统一只显示 `+N`。
+- 根因：`TaskTitle21` 原矩形范围为 `x=-255..195`，`TaskTitle22` 为 `x=170..270`，两个文本框在编辑器数据中直接重叠 `25px`；右侧通过 `game.bonus.points` 输出各语言单位，长单位迫使 `100px` 文本框缩小字号。
+- 修改：在 GameScene 编辑器数据中保持左侧区域左边缘不变，将 `TaskTitle21` 从 `x=-30、宽450` 调整为 `x=-50、宽410`，其右边缘变为 `155`，与从 `170` 开始的 `TaskTitle22` 固定间隔 `15px`；运行时右侧改为直接输出 `+N`，并删除不再使用的 `game.bonus.points` 多语言条目。两侧字号、字体、材质、颜色、对齐、Y 位置及结算积分逻辑不变。
+- 修改文件：`Assets/Scenes/GameScene.unity`、`Assets/Scripts/Controller/GameScene.cs`、`Assets/Scripts/Model/GameLocalization.cs`、任务记录和项目上下文。
+- 验证：已确认 `game.bonus.points` 不再存在代码或翻译表引用；GameScene 中 `TaskTitle21` 实际范围为 `-255..155`，`TaskTitle22` 为 `170..270`，两者间隔 `15px`。`dotnet build Assembly-CSharp-Editor.csproj --no-restore` 通过，`0` 警告、`0` 错误；`git diff --check` 通过。仍需使用葡萄牙语、西班牙语、俄语、法语和德语进入结算，确认长描述只在左侧区域内自动缩小，右侧保持正常字号显示 `+N`。
+- 下一步：进行多语言结算画面验收。
+
 ## 2026-09-06 语言页首次打开字号刷新
 
 - 状态：代码修改和静态验证完成，等待 Play Mode 验收。

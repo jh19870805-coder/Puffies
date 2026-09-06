@@ -148,6 +148,13 @@ public class MainScene : MonoBehaviour
     private const string LanguageSelectedTextObjectName = "LanName1";
     private const string LanguageNormalTextObjectName = "LanName2";
     private const string LanguageItemPrefix = "LanNameItem_";
+    private static readonly string[] PrimaryMenuButtonObjectNames =
+    {
+        LanguageButtonObjectName,
+        UsableButtonObjectName,
+        SettingsButtonObjectName,
+        SaveButtonObjectName
+    };
     private const string BagSelectPanelObjectName = "PanelBagSelect";
     private const string BagSelectCanvasObjectName = "PanelBagSelectCanvas";
     private const string BagSelectBackdropObjectName = "PanelBagSelectBlurredBackdrop";
@@ -224,6 +231,9 @@ public class MainScene : MonoBehaviour
     private ScrollRect mPackageScrollRect;
     private Coroutine mPackagePageSnapCoroutine;
     private GameObject mMenuPanelRoot;
+    private TMP_Text[] mPrimaryMenuButtonLabels = Array.Empty<TMP_Text>();
+    private float mPrimaryMenuButtonMaximumFontSize;
+    private float mPrimaryMenuButtonMinimumFontSize;
     private GameObject mConfirmationPanelRoot;
     private TMP_Text mConfirmationContentText;
     private GameObject mSettingsPanelRoot;
@@ -790,6 +800,7 @@ public class MainScene : MonoBehaviour
         GameLocalization.LanguageChanged -= OnLanguageChanged;
         GameLocalization.LanguageChanged += OnLanguageChanged;
         GameLocalization.RefreshSceneTexts();
+        RefreshPrimaryMenuButtonFontSize();
     }
 
     private static void ConfigureMainCanvas()
@@ -4169,6 +4180,8 @@ public class MainScene : MonoBehaviour
             return;
         }
 
+        CachePrimaryMenuButtonLabels();
+
         SetPanelVisible(mMenuPanelRoot, false);
 
         var menuButton = GameCommonUtility.FindSceneObject(MenuButtonObjectName)?.GetComponent<Button>();
@@ -4242,6 +4255,111 @@ public class MainScene : MonoBehaviour
         AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
         AudioManager.Instance.PlaySfx("SFX_PopupTransition.mp3");
         SetPanelVisible(mMenuPanelRoot, true);
+        RefreshPrimaryMenuButtonFontSize();
+    }
+
+    private void CachePrimaryMenuButtonLabels()
+    {
+        var labels = new List<TMP_Text>(PrimaryMenuButtonObjectNames.Length);
+        mPrimaryMenuButtonMaximumFontSize = 0f;
+        mPrimaryMenuButtonMinimumFontSize = 0f;
+
+        for (var i = 0; i < PrimaryMenuButtonObjectNames.Length; i++)
+        {
+            var button = FindChild(
+                mMenuPanelRoot.transform,
+                PrimaryMenuButtonObjectNames[i])?.GetComponent<Button>();
+            var label = button != null
+                ? button.GetComponentInChildren<TMP_Text>(true)
+                : null;
+            if (label == null)
+            {
+                Debug.LogWarning(
+                    $"MainScene: primary menu label not found under {PrimaryMenuButtonObjectNames[i]}.");
+                continue;
+            }
+
+            labels.Add(label);
+            mPrimaryMenuButtonMaximumFontSize = Mathf.Max(
+                mPrimaryMenuButtonMaximumFontSize,
+                label.fontSize);
+            mPrimaryMenuButtonMinimumFontSize = Mathf.Max(
+                mPrimaryMenuButtonMinimumFontSize,
+                Mathf.Min(label.fontSizeMin, label.fontSize));
+        }
+
+        mPrimaryMenuButtonLabels = labels.ToArray();
+    }
+
+    private void RefreshPrimaryMenuButtonFontSize()
+    {
+        if (mPrimaryMenuButtonLabels.Length == 0
+            || mPrimaryMenuButtonMaximumFontSize <= 0f)
+        {
+            return;
+        }
+
+        Canvas.ForceUpdateCanvases();
+        var minimumFontSize = Mathf.Min(
+            mPrimaryMenuButtonMinimumFontSize,
+            mPrimaryMenuButtonMaximumFontSize);
+        var fittingFontSize = minimumFontSize;
+        var overflowingFontSize = mPrimaryMenuButtonMaximumFontSize;
+        if (DoPrimaryMenuLabelsFit(overflowingFontSize))
+        {
+            fittingFontSize = overflowingFontSize;
+        }
+        else
+        {
+            for (var i = 0; i < 10; i++)
+            {
+                var candidateFontSize = (fittingFontSize + overflowingFontSize) * 0.5f;
+                if (DoPrimaryMenuLabelsFit(candidateFontSize))
+                {
+                    fittingFontSize = candidateFontSize;
+                }
+                else
+                {
+                    overflowingFontSize = candidateFontSize;
+                }
+            }
+        }
+
+        fittingFontSize = Mathf.Floor(fittingFontSize * 20f) / 20f;
+        for (var i = 0; i < mPrimaryMenuButtonLabels.Length; i++)
+        {
+            var label = mPrimaryMenuButtonLabels[i];
+            label.enableWordWrapping = false;
+            label.enableAutoSizing = false;
+            label.fontSize = fittingFontSize;
+            label.ForceMeshUpdate(ignoreActiveState: true);
+        }
+    }
+
+    private bool DoPrimaryMenuLabelsFit(float fontSize)
+    {
+        for (var i = 0; i < mPrimaryMenuButtonLabels.Length; i++)
+        {
+            var label = mPrimaryMenuButtonLabels[i];
+            label.enableWordWrapping = false;
+            label.enableAutoSizing = false;
+            label.fontSize = fontSize;
+
+            var margin = label.margin;
+            var availableWidth = label.rectTransform.rect.width
+                - Mathf.Max(0f, margin.x)
+                - Mathf.Max(0f, margin.z);
+            var preferredWidth = label.GetPreferredValues(
+                label.text,
+                Mathf.Infinity,
+                Mathf.Infinity).x;
+            if (availableWidth <= 0f || preferredWidth > availableWidth + 0.01f)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private void OnMenuCloseButtonClicked()
@@ -4680,6 +4798,7 @@ public class MainScene : MonoBehaviour
     private void OnLanguageChanged()
     {
         RefreshLanguageSelection();
+        RefreshPrimaryMenuButtonFontSize();
         RefreshTaskProgressUI();
         if (mSavePanelRoot != null)
         {
@@ -6013,12 +6132,7 @@ public class MainScene : MonoBehaviour
 
         var shouldConfirmReplay = selectedCard.Entry.DisplayState
                                   == PackageDisplayState.TornCompleted;
-        if (mBagVolumePlayLabel != null)
-        {
-            mBagVolumePlayLabel.text = shouldConfirmReplay
-                ? GameLocalization.Get("main.replay")
-                : GameLocalization.Get("main.play");
-        }
+        SetBagPlayLabel(mBagVolumePlayLabel, shouldConfirmReplay);
 
         if (mBagVolumeCameraButton != null)
         {
@@ -7052,17 +7166,24 @@ public class MainScene : MonoBehaviour
         var isCompleted = CardPackDataUtility.IsPackCompleted(bagId);
         var shouldConfirmReplay = mSelectedPackageEntry != null
             && mSelectedPackageEntry.DisplayState == PackageDisplayState.TornCompleted;
-        if (mBagSelectPlayLabel != null)
-        {
-            mBagSelectPlayLabel.text = shouldConfirmReplay
-                ? GameLocalization.Get("main.replay")
-                : GameLocalization.Get("main.play");
-        }
+        SetBagPlayLabel(mBagSelectPlayLabel, shouldConfirmReplay);
 
         if (mBagSelectCameraButtonRoot != null)
         {
             mBagSelectCameraButtonRoot.SetActive(isCompleted);
         }
+    }
+
+    private static void SetBagPlayLabel(TMP_Text label, bool isReplay)
+    {
+        if (label == null)
+        {
+            return;
+        }
+
+        label.text = GameLocalization.Get(isReplay ? "main.replay" : "main.play");
+        GameLocalization.ConfigureTextToFit(label);
+        label.ForceMeshUpdate(ignoreActiveState: true);
     }
 
     private void SetBagSelectPanelVisible(bool visible)

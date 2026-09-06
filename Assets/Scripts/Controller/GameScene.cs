@@ -11682,15 +11682,21 @@ public class GameScene : MonoBehaviour
         {
             _settlementBonusTitleText.text = title;
             _settlementBonusTitleText.gameObject.SetActive(true);
+            RefreshSettlementDynamicTextLayout(_settlementBonusTitleText);
         }
 
         if (_settlementBonusScoreText != null)
         {
-            _settlementBonusScoreText.text = GameLocalization.Format(
-                "game.bonus.points",
-                Mathf.Max(0, bonusScore));
+            _settlementBonusScoreText.text = $"+{Mathf.Max(0, bonusScore)}";
             _settlementBonusScoreText.gameObject.SetActive(true);
+            RefreshSettlementDynamicTextLayout(_settlementBonusScoreText);
         }
+    }
+
+    private static void RefreshSettlementDynamicTextLayout(TMP_Text text)
+    {
+        GameLocalization.ConfigureTextToFit(text);
+        text.ForceMeshUpdate();
     }
 
     private void ShowSettlementBagCountTitle()
