@@ -3609,7 +3609,6 @@ public class MainScene : MonoBehaviour
         }
 
         var viewport = mPackageScrollRect != null ? mPackageScrollRect.viewport : null;
-        var panelsObscurePackages = IsAnyPackagePanelOpen();
         foreach (var pair in mPackageSlotsById)
         {
             var entry = pair.Value;
@@ -3621,7 +3620,6 @@ public class MainScene : MonoBehaviour
             var anchor = entry.Image.rectTransform;
             var shouldRender = !entry.SuppressDisplay
                 && entry != mSelectedPackageEntry
-                && !panelsObscurePackages
                 && entry.Root.activeInHierarchy
                 && IsRectVisibleInViewport(anchor, viewport);
             SetPackageCoverVisible(entry, shouldRender);
@@ -3630,15 +3628,6 @@ public class MainScene : MonoBehaviour
             SetPackageVolumeImageVisible(entry, shouldRender);
             SetPackageProgressPiecesVisible(entry, shouldRender);
         }
-    }
-
-    private bool IsAnyPackagePanelOpen()
-    {
-        return mMenuPanelRoot != null && mMenuPanelRoot.activeInHierarchy
-            || mConfirmationPanelRoot != null && mConfirmationPanelRoot.activeInHierarchy
-            || mSettingsPanelRoot != null && mSettingsPanelRoot.activeInHierarchy
-            || mUsablePanelRoot != null && mUsablePanelRoot.activeInHierarchy
-            || mSavePanelRoot != null && mSavePanelRoot.activeInHierarchy;
     }
 
     private static bool IsRectVisibleInViewport(RectTransform target, RectTransform viewport)

@@ -1,5 +1,15 @@
 # 当前任务
 
+## 2026-09-06 设置页保留底部卡包列表
+
+- 状态：代码修改完成，等待 Play Mode 视觉验收。
+- 用户意图：打开 MainScene 菜单、设置、可使用、我的保存或退出确认弹窗时，底部卡包列表都继续显示，并由页面现有半透明背景自然压暗。
+- 根因：`MainScene.UpdatePackageDisplays()` 每帧通过 `IsAnyPackagePanelOpen()` 控制卡包视觉；菜单及其子页面和确认弹窗曾被列为遮挡页面，打开后会关闭卡包封面、背景、尺寸标签、Vol 标签和进行中碎片。
+- 修改：完整移除“任意菜单或弹窗打开时隐藏卡包”的运行时判断；卡包显示现在只受槽位抑制、选中状态、对象激活状态和 Viewport 可见范围控制。未改动场景层级与页面背景参数。
+- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、任务记录。
+- 验证：`dotnet build Assembly-CSharp-Editor.csproj --no-restore` 通过，`0` 警告、`0` 错误；`git diff --check` 通过；已确认代码中不存在 `IsAnyPackagePanelOpen` 和 `panelsObscurePackages` 残留引用。Play Mode 中仍需确认所有菜单页和退出确认弹窗打开、关闭时卡包显示正常。
+- 下一步：在 MainScene Play Mode 依次打开菜单、设置、可使用、我的保存和退出确认弹窗，确认各页面中底部卡包均持续可见且位于页面半透明遮罩下方。
+
 ## 2026-09-06 全项目按钮文本安全区审计
 
 - 状态：正式场景与共享 Prefab 审计、配置修改和编译验证完成，等待 Play Mode 多语言视觉验收。
