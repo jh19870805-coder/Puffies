@@ -586,19 +586,19 @@ public static class GameScoreUtility
         switch (packSize)
         {
             case CardPackSize.XS:
-                return 60;
+                return 600;
             case CardPackSize.S:
-                return 80;
+                return 800;
             case CardPackSize.M:
-                return 100;
+                return 1000;
             case CardPackSize.L:
-                return 120;
+                return 1200;
             case CardPackSize.XL:
-                return 140;
+                return 1400;
             case CardPackSize.XXL:
-                return 160;
+                return 1600;
             case CardPackSize.XXXL:
-                return 200;
+                return 2000;
             default:
                 return 0;
         }
