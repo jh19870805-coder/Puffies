@@ -1912,12 +1912,12 @@
 ### 需求与实现
 
 1. WHEN 按钮文字、语言选项、标题或其他普通 TMP 文本超过现有 RectTransform 宽度 THEN 系统 SHALL 禁止自动换行，并通过 Auto Size 在原设计字号以下缩小以保持单行。
-2. WHEN 真正弹窗中不属于 Button 的 `TextContent*` 正文，或 `PackPhotoItem/TaskContent` 拍照提示超过宽度 THEN 系统 SHALL 保持编辑器设计字号不变并自动换行，不得通过 Auto Size 缩小正文。
+2. WHEN 真正弹窗中不属于 Button 的 `TextContent*` 正文、`PackPhotoItem/TaskContent` 拍照提示，或共享 `TaskItem/TaskContent` 任务描述超过宽度 THEN 系统 SHALL 保持编辑器设计字号不变并自动换行，不得通过 Auto Size 缩小正文。
 3. 文案中明确写入的换行 SHALL 保留；存档槽 `TextContent` 虽位于弹窗内，但属于 Button 内容，继续按按钮规则处理并保留既有两行数据格式。
 4. 动态创建文本、运行时更新文案和语言切换 SHALL 自动重新应用同一分类规则；Unity 在同一场景复用 InstanceId 时不得错误继承已销毁文本的字号配置。
 5. 语言选择页中的西班牙语和葡萄牙语地区版本 SHALL 使用 `Español (ES)`、`Español (LATAM)`、`Português (BR)`、`Português (PT)`，不得只显示会丢失语言信息的地区名称；编辑器场景、打开语言页和切换语言后的选中/未选中文本 SHALL 保持一致。
-6. 除语言选项自身的可用文字宽度，以及 fallback 的默认描边/韩语字面膨胀参数外，本次适配 SHALL NOT 修改其他字体参数、共享材质引用、颜色、对齐、布局、动画或场景结构。
-7. 语言选择项的长名称 SHALL 优先使用完整单元格宽度和不超过 `10%` 的 TMP 字宽补偿，再按既有 Auto Size 缩小；除 Atlas 纹理及尺寸外，LGC、SC、JP、TC、KR、Thai fallback 字体的字面、描边、粗体、阴影和比例材质参数 SHALL 与简体中文主字体保持一致。普通态字体颜色 SHALL 统一，选中态绿色 SHALL 保持现有值不变。
+6. 除语言选项自身的可用文字宽度和全局 fallback 材质预设继承设置外，本次适配 SHALL NOT 修改其他字体参数、共享材质引用、颜色、对齐、布局、动画或场景结构。
+7. 语言选择项的长名称 SHALL 优先使用完整单元格宽度和不超过 `10%` 的 TMP 字宽补偿，再按既有 Auto Size 缩小；`TMP Settings` SHALL 开启 `Match Material Preset`，LGC、SC、JP、TC、KR、Thai fallback 字形 SHALL 保留各自 Atlas 参数并继承当前 TMP 文本使用的简体中文材质预设。普通态、标题、按钮、描边与阴影 SHALL 随原文本样式一致，选中态绿色 SHALL 保持现有值不变，不得为韩语或泰语单独硬编码页面视觉参数。
 
 - [x] 核对正式场景和 Prefab 中的按钮、标题、语言项与弹窗正文命名及层级。
 - [x] 将 `GameLocalization.ConfigureTextToFit` 拆分为单行缩字和弹窗正文换行两套规则。
@@ -1927,7 +1927,7 @@
 
 ### 验证
 
-- 确认/重玩正文、可使用页面三段 `TextContent*` 说明和拍照预览 `TaskContent` 命中弹窗正文规则；存档槽内容因 Button 祖先保持按钮规则；普通任务 `TaskContent` 与结算内容不误判为弹窗正文。
+- 确认/重玩正文、可使用页面三段 `TextContent*` 说明、拍照预览 `TaskContent` 和共享任务 `TaskItem/TaskContent` 命中多行原字号规则；存档槽内容因 Button 祖先保持按钮规则；结算内容不误判为多行正文。
 - `dotnet build Assembly-CSharp-Editor.csproj --no-restore` 成功并连带编译 Runtime，结果 `0` 警告、`0` 错误；`git diff --check` 通过。
 
 ## 2026-09-04 - 全部短音效起音延迟统一优化

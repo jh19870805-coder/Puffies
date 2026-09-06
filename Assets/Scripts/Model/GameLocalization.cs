@@ -21,6 +21,7 @@ public static class GameLocalization
     private const string PopupContentNamePrefix = "TextContent";
     private const string PhotoPanelObjectName = "PackPhotoItem";
     private const string PhotoContentObjectName = "TaskContent";
+    private const string TaskItemObjectName = "TaskItem";
 
     private static readonly string[] sLanguageCodes =
     {
@@ -191,9 +192,9 @@ public static class GameLocalization
         }
 
         var defaults = GetTextFitDefaults(label);
-        if (IsPopupContent(label))
+        if (IsPopupContent(label) || IsTaskDescription(label))
         {
-            ConfigurePopupContent(label, defaults);
+            ConfigureWrappedContent(label, defaults);
             return;
         }
 
@@ -247,7 +248,7 @@ public static class GameLocalization
         label.enableAutoSizing = true;
     }
 
-    private static void ConfigurePopupContent(TMP_Text label, TextFitDefaults defaults)
+    private static void ConfigureWrappedContent(TMP_Text label, TextFitDefaults defaults)
     {
         label.enableAutoSizing = false;
         label.fontSize = defaults.FontSize;
@@ -278,6 +279,24 @@ public static class GameLocalization
                     current.name,
                     PhotoPanelObjectName,
                     StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsTaskDescription(TMP_Text label)
+    {
+        if (!string.Equals(label.name, PhotoContentObjectName, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        for (var current = label.transform.parent; current != null; current = current.parent)
+        {
+            if (string.Equals(current.name, TaskItemObjectName, StringComparison.Ordinal))
             {
                 return true;
             }

@@ -107,6 +107,7 @@ public static class DefaultChineseFontEditor
         serializedSettings.Update();
         serializedSettings.FindProperty("m_defaultFontAsset").objectReferenceValue = fontAsset;
         serializedSettings.FindProperty("m_fallbackFontAssets").arraySize = 0;
+        serializedSettings.FindProperty("m_matchMaterialPreset").boolValue = true;
         serializedSettings.ApplyModifiedPropertiesWithoutUndo();
         EditorUtility.SetDirty(settings);
     }

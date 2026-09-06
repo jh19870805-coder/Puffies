@@ -108,6 +108,7 @@ public static class TaskProgressUIUtility
         taskContent.text = showCompletedMessage
             ? GameLocalization.Format("task.reward", description)
             : description;
+        GameLocalization.ConfigureTextToFit(taskContent);
     }
 
     private static string BuildTaskDescription(TaskInstanceData task)

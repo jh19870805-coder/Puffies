@@ -1,5 +1,26 @@
 # 当前任务
 
+## 2026-09-06 任务描述保持字号并自动换行
+
+- 状态：代码修改和编译验证完成，等待 Play Mode 多语言视觉验收。
+- 用户意图：共享任务条中的任务内容不能为了保持单行而缩成很小的字号；内容超宽时应自动换行，并保持原本设计字号。
+- 根因：`TaskItem/TaskContent` Prefab 已配置为 `36` 号、关闭 Auto Size、开启 Word Wrapping，但 `GameLocalization.ConfigureTextToFit` 把普通任务描述归入全局单行规则，运行时重新关闭换行并允许字号最低缩到 `10`，导致韩语等长文案被压成很小的一行。
+- 修改：将祖先为 `TaskItem` 的 `TaskContent` 纳入多行原字号规则，恢复首次读取到的编辑器字号、关闭 Auto Size 并开启 Word Wrapping；`TaskProgressUIUtility` 每次生成普通任务或任务完成文案后立即应用该规则。拍照预览同名 `TaskContent` 的既有规则不变，任务进度数字、标题、按钮、结算和新手引导文本不受影响。
+- 修改文件：`Assets/Scripts/Model/GameLocalization.cs`、`Assets/Scripts/View/TaskProgressUIUtility.cs`、任务记录、项目上下文和统一 spec。
+- 验证：共享 `TaskItem.prefab` 的 `TaskContent` 设计值已核对为字号 `36`、`m_enableAutoSizing: 0`、`m_enableWordWrapping: 1`；新分类按对象祖先精确限定为 `TaskItem`；`Assembly-CSharp-Editor` 连带 Runtime 编译通过，`0` 警告、`0` 错误。
+- 下一步：在 Play Mode 切换韩语、泰语及其他长文本语言，确认首页和游戏内任务条按宽度换行，字号保持设计值且不遮挡进度条与奖励图标。
+
+## 2026-09-06 韩语与泰语全局字体效果统一
+
+- 状态：工程配置、工具同步和静态验证完成，等待 Play Mode 视觉验收。
+- 用户意图：红框中的韩语和泰语在游戏内所有页面都要参考简体中文的实际文本样式，统一字面颜色、描边、粗细和阴影；语言页选中态绿色保持不变。
+- 根因：项目所有正式 TMP 文本均使用 `NotoSansSC-Regular SDF` 主字体及其 fallback 链，但 `TMP Settings` 的 `Match Material Preset` 处于关闭状态。韩语和泰语字形进入 fallback 后改用了各自内嵌默认材质，没有继承当前中文文本正在使用的普通、标题、按钮或选中材质，因此逐个调整 fallback 默认参数也无法保证全页面一致。
+- 修改：开启 `TMP Settings/Match Material Preset`，由 TextMeshPro 在使用 KR、Thai 及其他 fallback Atlas 时保留目标字体的 Atlas 专属参数，同时复制当前中文文本材质预设的 Face、Outline、Underlay 和 Shader 关键字；`DefaultChineseFontEditor.UpdateTmpSettings` 同步固定该设置，后续重新执行字体初始化工具不会恢复旧行为。没有在运行时代码中逐文本替换字体、材质或颜色。
+- 范围：扫描正式场景和 Prefab 后，序列化 TMP 文本均引用同一 `NotoSansSC-Regular SDF` 主字体，动态文本也继续通过 `GameFontUtility` 使用该字体，因此该设置覆盖 MainScene、GameScene、LoadingScene、RankScene、AchieveScene、列表 Prefab 和弹窗。工作区原有的 `MainScene.unity` 布局改动与 `NotoSans Thai SDF.asset` 动态 Atlas 补字改动均保留，没有覆盖。
+- 修改文件：`Assets/TextMesh Pro/Resources/TMP Settings.asset`、`Assets/Scripts/Editor/DefaultChineseFontEditor.cs`、任务记录、项目上下文和统一 spec。
+- 验证：`TMP Settings` 已序列化为 `m_matchMaterialPreset: 1`；对照 TextMeshPro 3.0.7 源码确认 fallback 路径会调用 `TMP_MaterialManager.GetFallbackMaterial`，复制当前文本材质并保留 fallback Atlas 的纹理、Gradient Scale、纹理尺寸和 Weight 参数；全项目序列化 TMP 字体引用审计仅发现 `NotoSansSC-Regular SDF` 主字体；`Assembly-CSharp-Editor` 连带 Runtime 编译通过，`0` 警告、`0` 错误；`git diff --check` 通过。
+- 下一步：在 Play Mode 分别切换韩语和泰语，逐页核对普通按钮、标题、弹窗正文、语言页普通态与绿色选中态是否与简体中文对应对象一致。
+
 ## 2026-09-06 全局文本单行与弹窗正文换行
 
 - 状态：代码修改和编译验证完成，等待 Play Mode 多语言视觉验收。
