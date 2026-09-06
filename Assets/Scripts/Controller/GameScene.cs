@@ -187,7 +187,9 @@ public class GameScene : MonoBehaviour
     private const string TaskBagCountTitlePath = "TaskBg2/TaskTitle2";
     private const string TaskBonusTitlePath = "TaskBg2/TaskTitle21";
     private const string TaskBonusScorePath = "TaskBg2/TaskTitle22";
+    private const string TaskScoreTitlePath = "TaskBg2/TaskContent2";
     private const string TaskScorePath = "TaskBg2/TaskScore";
+    private const float SettlementScoreTextSpacing = 5f;
     private const string TaskBagCountPath = "TaskBg2/TaskBagNum";
     private const string TaskSummaryObjectName = "TaskBg2";
     private const string TaskRewardBagRootObjectName = "ImgBagBg";
@@ -387,6 +389,7 @@ public class GameScene : MonoBehaviour
     private TMP_Text _settlementBagCountTitleText;
     private TMP_Text _settlementBonusTitleText;
     private TMP_Text _settlementBonusScoreText;
+    private TMP_Text _settlementScoreTitleText;
     private TMP_Text _settlementScoreText;
     private TMP_Text _settlementBagCountText;
     private Image _taskRewardImage;
@@ -7627,6 +7630,7 @@ public class GameScene : MonoBehaviour
         _settlementBagCountTitleText = null;
         _settlementBonusTitleText = null;
         _settlementBonusScoreText = null;
+        _settlementScoreTitleText = null;
         _settlementScoreText = null;
         _settlementBagCountText = null;
         _taskRewardImage = null;
@@ -7663,6 +7667,7 @@ public class GameScene : MonoBehaviour
         _settlementBagCountTitleText = _rewardPanelRoot.transform.Find(TaskBagCountTitlePath)?.GetComponent<TMP_Text>();
         _settlementBonusTitleText = _rewardPanelRoot.transform.Find(TaskBonusTitlePath)?.GetComponent<TMP_Text>();
         _settlementBonusScoreText = _rewardPanelRoot.transform.Find(TaskBonusScorePath)?.GetComponent<TMP_Text>();
+        _settlementScoreTitleText = _rewardPanelRoot.transform.Find(TaskScoreTitlePath)?.GetComponent<TMP_Text>();
         _settlementScoreText = _rewardPanelRoot.transform.Find(TaskScorePath)?.GetComponent<TMP_Text>();
         _settlementBagCountText = _rewardPanelRoot.transform.Find(TaskBagCountPath)?.GetComponent<TMP_Text>();
         var rewardItemCanvas = _rewardPanelRoot.transform.Find(TaskRewardItemCanvasPath);
@@ -7746,6 +7751,11 @@ public class GameScene : MonoBehaviour
             Debug.LogWarning($"GameScene: task reward UI not found. Expected {TaskItemObjectName} under RewardPanel.");
         }
 
+        if (_settlementScoreTitleText == null)
+        {
+            Debug.LogWarning($"GameScene: settlement score title not found. Expected {TaskScoreTitlePath}.");
+        }
+
         if (_settlementScoreText == null)
         {
             Debug.LogWarning($"GameScene: settlement score text not found. Expected {TaskScorePath}.");
@@ -7753,6 +7763,7 @@ public class GameScene : MonoBehaviour
         else
         {
             GameFontUtility.ApplyDefaultFont(_settlementScoreText);
+            CenterSettlementTotalScore();
         }
 
         if (_settlementBagCountTitleText == null)
@@ -11723,6 +11734,33 @@ public class GameScene : MonoBehaviour
         }
 
         _settlementScoreText.text = Mathf.Max(0, score).ToString();
+        CenterSettlementTotalScore();
+    }
+
+    private void CenterSettlementTotalScore()
+    {
+        if (_settlementScoreTitleText == null || _settlementScoreText == null)
+        {
+            return;
+        }
+
+        var titleRect = _settlementScoreTitleText.rectTransform;
+        var scoreRect = _settlementScoreText.rectTransform;
+        var titleWidth = _settlementScoreTitleText.GetPreferredValues(
+            _settlementScoreTitleText.text).x;
+        var scoreWidth = _settlementScoreText.GetPreferredValues(
+            _settlementScoreText.text).x;
+        var combinedWidth = titleWidth + SettlementScoreTextSpacing + scoreWidth;
+        var left = -combinedWidth * 0.5f;
+
+        titleRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, titleWidth);
+        scoreRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, scoreWidth);
+        titleRect.anchoredPosition = new Vector2(
+            left + titleWidth * titleRect.pivot.x,
+            titleRect.anchoredPosition.y);
+        scoreRect.anchoredPosition = new Vector2(
+            left + titleWidth + SettlementScoreTextSpacing + scoreWidth * scoreRect.pivot.x,
+            scoreRect.anchoredPosition.y);
     }
 
     private void RefreshSettlementBagCount()
