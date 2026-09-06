@@ -758,7 +758,7 @@ public static class JsonLocalStore
 [Serializable]
 public sealed class GameSettingsData
 {
-    public float MusicVolume = 1f;
+    public float MusicVolume = 0.5f;
     public float EffectVolume = 1f;
     public bool IsWindowed;
     public bool UsableOption1;
@@ -990,7 +990,7 @@ public static class GameSettingsUtility
     {
         return new GameSettingsData
         {
-            MusicVolume = 1f,
+            MusicVolume = 0.5f,
             EffectVolume = 1f,
             IsWindowed = false,
             UsableOption1 = false,

@@ -1,5 +1,14 @@
 # 当前任务
 
+## 2026-09-06 音量初始默认值
+
+- 状态：代码修改与静态验证完成，等待 Play Mode 验收。
+- 用户意图：首次创建本地设置数据时，背景音乐默认音量为 `50%`，音效默认音量为 `100%`。
+- 修改：将 `GameSettingsData.MusicVolume` 字段初始值和 `GameSettingsUtility.CreateDefaultSettings()` 中的背景音乐默认值统一改为 `0.5f`；音效默认值保持 `1f`。已有设置记录继续读取其已保存音量，不执行覆盖或迁移。
+- 修改文件：`Assets/Scripts/Model/LocalDataStore.cs`、任务记录。
+- 验证：`GameSettingsData` 字段初始化和 `CreateDefaultSettings()` 已分别核对为音乐 `0.5f`、音效 `1f`；`dotnet build Assembly-CSharp-Editor.csproj --no-restore` 通过，`0` 警告、`0` 错误；`git diff --check` 通过。
+- 下一步：使用没有 `GameSettings/Runtime` 设置记录的新存档进入 MainScene，确认音乐滑条为 `50%`、音效滑条为 `100%`，并确认实际播放音量同步。
+
 ## 2026-09-06 设置页保留底部卡包列表
 
 - 状态：代码修改完成，等待 Play Mode 视觉验收。
