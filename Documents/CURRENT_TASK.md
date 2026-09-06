@@ -1,5 +1,16 @@
 # 当前任务
 
+## 2026-09-06 全局文本单行与弹窗正文换行
+
+- 状态：代码修改和编译验证完成，等待 Play Mode 多语言视觉验收。
+- 用户意图：按钮文字、语言选项、标题及其他普通 UI 文本都禁止自动换行，超宽时缩小字号保持单行；弹窗正文保持编辑器设计字号，超宽时自动换行。
+- 修改：`GameLocalization.ConfigureTextToFit` 从原先全局统一单行规则拆成两类。弹窗内不属于 Button 的 `TextContent*`，以及 `PackPhotoItem/TaskContent`，会记录并恢复首次读取到的编辑器字号、关闭 Auto Size、开启 Word Wrapping；其他 TMP 文本关闭自动换行并在原设计字号以下使用 Auto Size。动态生成、运行时改文案和语言切换继续由 `TEXT_CHANGED_EVENT` 自动套用相同规则。
+- 边界：存档槽的 `TextContent` 位于 Button 内，继续按按钮文本处理，并保留此前数据格式明确写入的两行换行；明确写入的换行不被删除。任务列表 `TaskContent`、结算内容和新手引导不是弹窗正文，继续使用各自现有单行或专用最多两行规则。未修改任何场景/Prefab、字体资产、共享材质、颜色、对齐、RectTransform 或动画。
+- 稳定性：缓存每个 TMP 实例首次读取到的设计字号与 Auto Size 范围，并校验对象引用，避免同一场景中 Unity 复用 InstanceId 后错误套用旧文本配置；场景切换时清理缓存。
+- 修改文件：`Assets/Scripts/Model/GameLocalization.cs`、任务记录、项目上下文和统一 spec。
+- 验证：正式场景/Prefab 的弹窗正文命名与层级已核对；`Assembly-CSharp-Editor` 连带 Runtime 编译通过，`0` 警告、`0` 错误；`git diff --check` 通过。
+- 下一步：在 Play Mode 切换英语、俄语、德语、法语和泰语，逐页检查按钮、语言项、标题保持单行，并检查确认、重玩、可使用和拍照预览正文保持设计字号后正常换行。
+
 ## 2026-09-05 相机快门音效
 
 - 状态：音频生成、功能接入和编译验证完成，等待 Play Mode 试听。

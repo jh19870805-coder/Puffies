@@ -17,6 +17,10 @@ public static class GameLocalization
     private const string LanguagePreferenceKey = "Puffies.Language";
     private const string RuntimeObjectName = "GameLocalizationRuntime";
     private const float AutomaticFontSizeMinimum = 10f;
+    private const string PopupPanelNamePrefix = "Panel";
+    private const string PopupContentNamePrefix = "TextContent";
+    private const string PhotoPanelObjectName = "PackPhotoItem";
+    private const string PhotoContentObjectName = "TaskContent";
 
     private static readonly string[] sLanguageCodes =
     {
@@ -37,6 +41,8 @@ public static class GameLocalization
         new Dictionary<string, string>(StringComparer.Ordinal);
     private static readonly Dictionary<int, string> sRuntimeTextKeys =
         new Dictionary<int, string>();
+    private static readonly Dictionary<int, TextFitDefaults> sTextFitDefaults =
+        new Dictionary<int, TextFitDefaults>();
 
     private static bool sInitialized;
     private static string sCurrentLanguageCode = DefaultLanguageCode;
@@ -73,6 +79,7 @@ public static class GameLocalization
         sEntriesByKey.Clear();
         sKeysByDisplayedText.Clear();
         sRuntimeTextKeys.Clear();
+        sTextFitDefaults.Clear();
         LanguageChanged = null;
     }
 
@@ -171,6 +178,7 @@ public static class GameLocalization
     internal static void HandleSceneLoaded()
     {
         sRuntimeTextKeys.Clear();
+        sTextFitDefaults.Clear();
         RefreshSceneTexts();
         EnsureRuntime()?.RefreshAfterSceneInitialization();
     }
@@ -182,26 +190,100 @@ public static class GameLocalization
             return;
         }
 
-        // Explicit newlines are preserved, but localized text must not create extra lines by itself.
+        var defaults = GetTextFitDefaults(label);
+        if (IsPopupContent(label))
+        {
+            ConfigurePopupContent(label, defaults);
+            return;
+        }
+
+        ConfigureSingleLineText(label, defaults);
+    }
+
+    private static TextFitDefaults GetTextFitDefaults(TMP_Text label)
+    {
+        var instanceId = label.GetInstanceID();
+        if (sTextFitDefaults.TryGetValue(instanceId, out var defaults)
+            && ReferenceEquals(defaults.Label, label))
+        {
+            return defaults;
+        }
+
+        defaults = new TextFitDefaults(
+            label,
+            label.fontSize,
+            label.enableAutoSizing,
+            label.fontSizeMin,
+            label.fontSizeMax);
+        sTextFitDefaults[instanceId] = defaults;
+        return defaults;
+    }
+
+    private static void ConfigureSingleLineText(TMP_Text label, TextFitDefaults defaults)
+    {
+        // Explicit newlines remain valid, but localization must not add lines automatically.
         if (label.enableWordWrapping)
         {
             label.enableWordWrapping = false;
         }
 
-        if (label.enableAutoSizing)
+        if (defaults.EnableAutoSizing)
         {
+            label.fontSizeMin = defaults.FontSizeMin;
+            label.fontSizeMax = defaults.FontSizeMax;
+            label.enableAutoSizing = true;
             return;
         }
 
-        var configuredFontSize = label.fontSize;
+        var configuredFontSize = defaults.FontSize;
         if (configuredFontSize <= 0f)
         {
             return;
         }
 
+        label.fontSize = configuredFontSize;
         label.fontSizeMax = configuredFontSize;
         label.fontSizeMin = Mathf.Min(AutomaticFontSizeMinimum, configuredFontSize);
         label.enableAutoSizing = true;
+    }
+
+    private static void ConfigurePopupContent(TMP_Text label, TextFitDefaults defaults)
+    {
+        label.enableAutoSizing = false;
+        label.fontSize = defaults.FontSize;
+        label.fontSizeMin = defaults.FontSizeMin;
+        label.fontSizeMax = defaults.FontSizeMax;
+        label.enableWordWrapping = true;
+    }
+
+    private static bool IsPopupContent(TMP_Text label)
+    {
+        var objectName = label.name;
+        var isContentName = objectName.StartsWith(
+                                PopupContentNamePrefix,
+                                StringComparison.Ordinal)
+                            || string.Equals(
+                                objectName,
+                                PhotoContentObjectName,
+                                StringComparison.Ordinal);
+        if (!isContentName || label.GetComponentInParent<Button>(true) != null)
+        {
+            return false;
+        }
+
+        for (var current = label.transform.parent; current != null; current = current.parent)
+        {
+            if (current.name.StartsWith(PopupPanelNamePrefix, StringComparison.Ordinal)
+                || string.Equals(
+                    current.name,
+                    PhotoPanelObjectName,
+                    StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void RefreshLabel(UnityEngine.Object label, string currentText, Action<string> setter)
@@ -325,6 +407,29 @@ public static class GameLocalization
         {
             Key = key;
             Values = values;
+        }
+    }
+
+    private readonly struct TextFitDefaults
+    {
+        public readonly TMP_Text Label;
+        public readonly float FontSize;
+        public readonly bool EnableAutoSizing;
+        public readonly float FontSizeMin;
+        public readonly float FontSizeMax;
+
+        public TextFitDefaults(
+            TMP_Text label,
+            float fontSize,
+            bool enableAutoSizing,
+            float fontSizeMin,
+            float fontSizeMax)
+        {
+            Label = label;
+            FontSize = fontSize;
+            EnableAutoSizing = enableAutoSizing;
+            FontSizeMin = fontSizeMin;
+            FontSizeMax = fontSizeMax;
         }
     }
 }

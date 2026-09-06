@@ -1907,6 +1907,27 @@
 - 基础分实际滚动时长由 `1.20s` 调整为约 `0.86s`，单条加成滚分由 `1.08s` 调整为约 `0.77s`。
 - `dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 成功并连带编译 Runtime，结果 `0` 警告、`0` 错误。
 
+## 2026-09-06 - 全局文本单行与弹窗正文换行
+
+### 需求与实现
+
+1. WHEN 按钮文字、语言选项、标题或其他普通 TMP 文本超过现有 RectTransform 宽度 THEN 系统 SHALL 禁止自动换行，并通过 Auto Size 在原设计字号以下缩小以保持单行。
+2. WHEN 真正弹窗中不属于 Button 的 `TextContent*` 正文，或 `PackPhotoItem/TaskContent` 拍照提示超过宽度 THEN 系统 SHALL 保持编辑器设计字号不变并自动换行，不得通过 Auto Size 缩小正文。
+3. 文案中明确写入的换行 SHALL 保留；存档槽 `TextContent` 虽位于弹窗内，但属于 Button 内容，继续按按钮规则处理并保留既有两行数据格式。
+4. 动态创建文本、运行时更新文案和语言切换 SHALL 自动重新应用同一分类规则；Unity 在同一场景复用 InstanceId 时不得错误继承已销毁文本的字号配置。
+5. 本次适配 SHALL NOT 修改字体资产、共享材质、颜色、对齐、RectTransform、动画、场景或 Prefab 序列化配置。
+
+- [x] 核对正式场景和 Prefab 中的按钮、标题、语言项与弹窗正文命名及层级。
+- [x] 将 `GameLocalization.ConfigureTextToFit` 拆分为单行缩字和弹窗正文换行两套规则。
+- [x] 缓存并恢复弹窗正文设计字号，增加 InstanceId 复用保护和场景切换清理。
+- [x] 编译 Runtime/Editor 并执行差异检查。
+- [ ] Play Mode 抽查长文本语言下的全部页面和弹窗。
+
+### 验证
+
+- 确认/重玩正文、可使用页面三段 `TextContent*` 说明和拍照预览 `TaskContent` 命中弹窗正文规则；存档槽内容因 Button 祖先保持按钮规则；普通任务 `TaskContent` 与结算内容不误判为弹窗正文。
+- `dotnet build Assembly-CSharp-Editor.csproj --no-restore` 成功并连带编译 Runtime，结果 `0` 警告、`0` 错误；`git diff --check` 通过。
+
 ## 2026-09-04 - 全部短音效起音延迟统一优化
 
 ### 需求与实现
