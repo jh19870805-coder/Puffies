@@ -1,5 +1,25 @@
 # 当前任务
 
+## 2026-09-06 语言页首次打开字号刷新
+
+- 状态：代码修改和静态验证完成，等待 Play Mode 验收。
+- 用户意图：语言选择页面第一次打开时，较长语言名必须在首帧完成自动缩小，不能等点击其他语言后才刷新。
+- 根因：`OnLanguageButtonClicked` 原顺序为先调用 `RefreshLanguageSelection`、再激活 `PanelLanguage`。隐藏状态下 `LanguageList/Content` 的 Grid 和拉伸子节点尚未完成布局，单行字号适配读取不到有效文本框宽度并保留默认字号；切换语言时面板已经显示，后续刷新才得到正确宽度。
+- 修改：语言按钮点击后先显示 `PanelLanguage`，再刷新选中状态和语言名称；刷新结束后强制更新 Canvas、重建 `Content` 布局，对其下全部 `LanName1/2` 重新执行 `GameLocalization.ConfigureTextToFit`，并在首帧显示前再次刷新 Canvas。语言切换继续复用同一入口。
+- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、任务记录和项目上下文。
+- 验证：已确认首次打开顺序为隐藏菜单、激活语言面板、写入语言名称、强制 Canvas 更新、重建 Content 布局、重新适配全部 TMP、再次强制 Canvas 更新；语言切换也会复用同一刷新。`dotnet build Assembly-CSharp-Editor.csproj --no-restore` 通过，`0` 警告、`0` 错误；`git diff --check` 通过。仍需重新进入 MainScene 后第一次打开语言页面，核对西班牙语、葡萄牙语、乌克兰语和越南语等长名称已经立即缩小且不相互覆盖。
+- 下一步：在 MainScene Play Mode 从未打开过语言页的状态进行首次打开验收。
+
+## 2026-09-06 语言选中态字号同步
+
+- 状态：Prefab 修改和静态验证完成，等待 Unity 视觉验收。
+- 用户意图：语言选择页每个语言项的选中态 `LanName1` 使用与同项普通态 `LanName2` 相同的默认字号。
+- 核对：MainScene 的 18 个 `LanNameItem_<language-code>` 均引用共享 `LanNameItem.prefab`，场景实例没有 `m_fontSize`、`m_fontSizeBase`、`m_fontSizeMin` 或 `m_fontSizeMax` 的单独 Override。Prefab 中 `LanName2` 当前字号为 `46`，`LanName1` 为 `34`；两者 Auto Size 范围已经同为 `16~46`。
+- 修改：仅将共享 Prefab 的 `LanName1.m_fontSize` 从 `34` 调整为 `46`，与 `LanName2` 一致；未修改字体、共享材质、颜色、描边、字重、对齐、RectTransform、Auto Size 范围或 18 个场景实例。
+- 修改文件：`Assets/Prefabs/LanNameItem.prefab`、任务记录和项目上下文。
+- 验证：已复查共享 Prefab 的 `LanName1/2` 当前字号均为 `46`，`m_fontSizeBase=34`、Auto Size 开启且范围均为 `16~46`；MainScene 恰好 18 个语言项且字号 Override 数量为 `0`。`dotnet build Assembly-CSharp-Editor.csproj --no-restore` 通过，`0` 警告、`0` 错误；`git diff --check` 通过。仍需在 MainScene Play Mode 打开语言页并切换选中项确认显示。
+- 下一步：在 Unity 中确认普通态与选中态切换时字号一致。
+
 ## 2026-09-06 愿望单使用 Steam 内置浏览器
 
 - 状态：代码修改和静态验证完成，等待 Steam Player 验收。

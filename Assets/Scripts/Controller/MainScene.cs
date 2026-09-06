@@ -4583,8 +4583,8 @@ public class MainScene : MonoBehaviour
 
         AudioManager.Instance.PlaySfx("SFX_PopupTransition.mp3");
         SetPanelVisible(mMenuPanelRoot, false);
-        RefreshLanguageSelection();
         SetPanelVisible(mLanguagePanelRoot, true);
+        RefreshLanguageSelection();
     }
 
     private void OnLanguageCloseButtonClicked()
@@ -4648,6 +4648,33 @@ public class MainScene : MonoBehaviour
                 normalText.gameObject.SetActive(!isSelected);
             }
         }
+
+        RefreshLanguageTextFitting(content);
+    }
+
+    private void RefreshLanguageTextFitting(Transform content)
+    {
+        if (content == null
+            || mLanguagePanelRoot == null
+            || !mLanguagePanelRoot.activeInHierarchy)
+        {
+            return;
+        }
+
+        Canvas.ForceUpdateCanvases();
+        if (content is RectTransform contentRect)
+        {
+            LayoutRebuilder.ForceRebuildLayoutImmediate(contentRect);
+        }
+
+        Canvas.ForceUpdateCanvases();
+        var labels = content.GetComponentsInChildren<TMP_Text>(true);
+        for (var i = 0; i < labels.Length; i++)
+        {
+            GameLocalization.ConfigureTextToFit(labels[i]);
+        }
+
+        Canvas.ForceUpdateCanvases();
     }
 
     private void OnLanguageChanged()
