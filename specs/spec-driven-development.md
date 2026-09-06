@@ -1916,7 +1916,8 @@
 3. 文案中明确写入的换行 SHALL 保留；存档槽 `TextContent` 虽位于弹窗内，但属于 Button 内容，继续按按钮规则处理并保留既有两行数据格式。
 4. 动态创建文本、运行时更新文案和语言切换 SHALL 自动重新应用同一分类规则；Unity 在同一场景复用 InstanceId 时不得错误继承已销毁文本的字号配置。
 5. 语言选择页中的西班牙语和葡萄牙语地区版本 SHALL 使用 `Español (ES)`、`Español (LATAM)`、`Português (BR)`、`Português (PT)`，不得只显示会丢失语言信息的地区名称；编辑器场景、打开语言页和切换语言后的选中/未选中文本 SHALL 保持一致。
-6. 本次适配 SHALL NOT 修改字体资产、共享材质、颜色、对齐、RectTransform、动画、场景或 Prefab 序列化配置。
+6. 除语言选项自身的可用文字宽度，以及 fallback 的默认描边/韩语字面膨胀参数外，本次适配 SHALL NOT 修改其他字体参数、共享材质引用、颜色、对齐、布局、动画或场景结构。
+7. 语言选择项的长名称 SHALL 优先使用完整单元格宽度和不超过 `10%` 的 TMP 字宽补偿，再按既有 Auto Size 缩小；除 Atlas 纹理及尺寸外，LGC、SC、JP、TC、KR、Thai fallback 字体的字面、描边、粗体、阴影和比例材质参数 SHALL 与简体中文主字体保持一致。普通态字体颜色 SHALL 统一，选中态绿色 SHALL 保持现有值不变。
 
 - [x] 核对正式场景和 Prefab 中的按钮、标题、语言项与弹窗正文命名及层级。
 - [x] 将 `GameLocalization.ConfigureTextToFit` 拆分为单行缩字和弹窗正文换行两套规则。
