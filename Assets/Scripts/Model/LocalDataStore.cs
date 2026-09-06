@@ -761,6 +761,8 @@ public sealed class GameSettingsData
     public float MusicVolume = 0.5f;
     public float EffectVolume = 1f;
     public bool IsWindowed;
+    public int WindowWidth = 1920;
+    public int WindowHeight = 1080;
     public bool UsableOption1;
     public bool UsableOption2;
     public bool UsableOption3;
@@ -781,11 +783,17 @@ public static class GameSettingsUtility
 
     private const string SettingsCollection = "GameSettings";
     private const string SettingsKey = "Runtime";
+    private const string WindowSizeMonitorObjectName = "GameSettingsWindowSizeMonitor";
+    private const int DefaultWindowWidth = 1920;
+    private const int DefaultWindowHeight = 1080;
+    private const float WindowResizeApplyGuardSeconds = 0.75f;
 
     private static GameSettingsData sSettings = CreateDefaultSettings();
     private static bool sHasLoaded;
     private static bool sHasAppliedDisplayMode;
     private static bool sAppliedWindowedState;
+    private static float sIgnoreObservedWindowSizeUntil;
+    private static GameSettingsWindowSizeMonitor sWindowSizeMonitor;
 
     public static bool Initialize()
     {
@@ -823,6 +831,7 @@ public static class GameSettingsUtility
         sSettings = CreateDefaultSettings();
         sHasLoaded = false;
         sHasAppliedDisplayMode = false;
+        sIgnoreObservedWindowSizeUntil = Time.realtimeSinceStartup + WindowResizeApplyGuardSeconds;
     }
 
     public static GameSettingsData GetSettings()
@@ -837,6 +846,8 @@ public static class GameSettingsUtility
             MusicVolume = sSettings.MusicVolume,
             EffectVolume = sSettings.EffectVolume,
             IsWindowed = sSettings.IsWindowed,
+            WindowWidth = sSettings.WindowWidth,
+            WindowHeight = sSettings.WindowHeight,
             UsableOption1 = sSettings.UsableOption1,
             UsableOption2 = sSettings.UsableOption2,
             UsableOption3 = sSettings.UsableOption3
@@ -862,6 +873,11 @@ public static class GameSettingsUtility
     public static void SetWindowed(bool isWindowed)
     {
         EnsureSettingsLoaded();
+        if (!isWindowed)
+        {
+            CaptureCurrentWindowSize();
+        }
+
         sSettings.IsWindowed = isWindowed;
         ApplyRuntimeSettings();
         Save();
@@ -906,6 +922,7 @@ public static class GameSettingsUtility
         Sanitize(sSettings);
         ApplyAudioSettings();
         ApplyDisplayMode();
+        EnsureWindowSizeMonitor();
     }
 
     private static void ApplyAudioSettings()
@@ -930,14 +947,27 @@ public static class GameSettingsUtility
 
         sHasAppliedDisplayMode = true;
         sAppliedWindowedState = isWindowed;
-        if (!isWindowed && Application.platform == RuntimePlatform.WindowsPlayer)
+        if (Application.platform == RuntimePlatform.WindowsPlayer)
         {
-            var nativeResolution = Screen.currentResolution;
-            Screen.SetResolution(
-                nativeResolution.width,
-                nativeResolution.height,
-                FullScreenMode.FullScreenWindow,
-                nativeResolution.refreshRateRatio);
+            sIgnoreObservedWindowSizeUntil =
+                Time.realtimeSinceStartup + WindowResizeApplyGuardSeconds;
+            if (isWindowed)
+            {
+                Screen.SetResolution(
+                    sSettings.WindowWidth,
+                    sSettings.WindowHeight,
+                    FullScreenMode.Windowed);
+            }
+            else
+            {
+                var nativeResolution = Screen.currentResolution;
+                Screen.SetResolution(
+                    nativeResolution.width,
+                    nativeResolution.height,
+                    FullScreenMode.FullScreenWindow,
+                    nativeResolution.refreshRateRatio);
+            }
+
             return;
         }
 
@@ -950,6 +980,50 @@ public static class GameSettingsUtility
         {
             Initialize();
         }
+    }
+
+    internal static void StoreObservedWindowSize(int width, int height)
+    {
+        if (!sHasLoaded
+            || Application.platform != RuntimePlatform.WindowsPlayer
+            || Screen.fullScreenMode != FullScreenMode.Windowed
+            || Time.realtimeSinceStartup < sIgnoreObservedWindowSizeUntil
+            || width <= 0
+            || height <= 0
+            || sSettings.WindowWidth == width && sSettings.WindowHeight == height)
+        {
+            return;
+        }
+
+        sSettings.WindowWidth = width;
+        sSettings.WindowHeight = height;
+        Save();
+    }
+
+    private static void CaptureCurrentWindowSize()
+    {
+        if (Application.platform != RuntimePlatform.WindowsPlayer
+            || Screen.fullScreenMode != FullScreenMode.Windowed
+            || Screen.width <= 0
+            || Screen.height <= 0)
+        {
+            return;
+        }
+
+        sSettings.WindowWidth = Screen.width;
+        sSettings.WindowHeight = Screen.height;
+    }
+
+    private static void EnsureWindowSizeMonitor()
+    {
+        if (Application.platform != RuntimePlatform.WindowsPlayer || sWindowSizeMonitor != null)
+        {
+            return;
+        }
+
+        var monitorObject = new GameObject(WindowSizeMonitorObjectName);
+        UnityEngine.Object.DontDestroyOnLoad(monitorObject);
+        sWindowSizeMonitor = monitorObject.AddComponent<GameSettingsWindowSizeMonitor>();
     }
 
     private static bool Save()
@@ -993,6 +1067,8 @@ public static class GameSettingsUtility
             MusicVolume = 0.5f,
             EffectVolume = 1f,
             IsWindowed = false,
+            WindowWidth = DefaultWindowWidth,
+            WindowHeight = DefaultWindowHeight,
             UsableOption1 = false,
             UsableOption2 = false,
             UsableOption3 = false
@@ -1009,5 +1085,64 @@ public static class GameSettingsUtility
 
         settings.MusicVolume = Mathf.Clamp01(settings.MusicVolume);
         settings.EffectVolume = Mathf.Clamp01(settings.EffectVolume);
+        if (settings.WindowWidth <= 0)
+        {
+            settings.WindowWidth = DefaultWindowWidth;
+        }
+
+        if (settings.WindowHeight <= 0)
+        {
+            settings.WindowHeight = DefaultWindowHeight;
+        }
+    }
+}
+
+internal sealed class GameSettingsWindowSizeMonitor : MonoBehaviour
+{
+    private const float StableDurationSeconds = 0.5f;
+
+    private int mObservedWidth = -1;
+    private int mObservedHeight = -1;
+    private float mLastSizeChangeTime;
+
+    private void Update()
+    {
+        if (Screen.fullScreenMode != FullScreenMode.Windowed)
+        {
+            ResetObservation();
+            return;
+        }
+
+        var width = Screen.width;
+        var height = Screen.height;
+        if (width <= 0 || height <= 0)
+        {
+            return;
+        }
+
+        if (width != mObservedWidth || height != mObservedHeight)
+        {
+            mObservedWidth = width;
+            mObservedHeight = height;
+            mLastSizeChangeTime = Time.realtimeSinceStartup;
+            return;
+        }
+
+        if (Time.realtimeSinceStartup - mLastSizeChangeTime >= StableDurationSeconds)
+        {
+            GameSettingsUtility.StoreObservedWindowSize(width, height);
+        }
+    }
+
+    private void OnApplicationQuit()
+    {
+        GameSettingsUtility.StoreObservedWindowSize(Screen.width, Screen.height);
+    }
+
+    private void ResetObservation()
+    {
+        mObservedWidth = -1;
+        mObservedHeight = -1;
+        mLastSizeChangeTime = 0f;
     }
 }

@@ -1,5 +1,26 @@
 # 当前任务
 
+## 2026-09-06 Windows 窗口尺寸记忆
+
+- 状态：代码和静态验证完成，等待 Windows Player 验收。
+- 用户意图：Windows 版本首次点击窗口化时默认显示 `1920 x 1080`；玩家手动调整过窗口尺寸后，后续窗口化和重启使用玩家最后调整的尺寸。
+- 修改：`GameSettingsData` 新增 `WindowWidth/WindowHeight`，默认 `1920/1080` 并随当前存档的 `GameSettings/Runtime` 保存；Windows Player 切到窗口化时明确调用保存尺寸，切回全屏前立即捕获当前客户区尺寸。新增常驻窗口尺寸监听，窗口化宽高稳定 `0.5s` 后才写入，避免拖动过程中逐帧写 SQLite；程序主动切换分辨率后的 `0.75s` 内忽略观察值，避免把过渡帧尺寸误存为玩家尺寸。
+- 平台边界：现有原生分辨率 `FullScreenWindow` 恢复逻辑不变；Unity Editor 和非 Windows Player 不创建监听器，也不强制 `1920 x 1080`。
+- 数据说明：只扩展 `GameSettings/Runtime` JSON 内容，不修改 SQLite 表结构，不需要删除本地数据；缺失或无效宽高自动使用 `1920 x 1080`。
+- 修改文件：`Assets/Scripts/Model/LocalDataStore.cs`、任务记录、项目上下文和统一 spec。
+- 验证：已核对默认字段、设置副本、创建默认值和无效值修正均包含 `WindowWidth=1920`、`WindowHeight=1080`；窗口化使用保存宽高调用 `Screen.SetResolution(..., Windowed)`，全屏继续使用显示器原生分辨率；监听器仅在 `WindowsPlayer` 创建，稳定 `0.5s` 后写入。`dotnet build Assembly-CSharp-Editor.csproj --no-restore` 通过，`0` 警告、`0` 错误；`git diff --check` 通过。尚未生成 Windows Player 进行运行时验收。
+- 下一步：构建 Windows Player，依次验证首次窗口化为 `1920 x 1080`、拖动到自定义尺寸后切全屏再切回可恢复、退出重启后仍恢复，以及全屏继续使用显示器原生分辨率。
+
+## 2026-09-06 愿望单异形按钮文本安全区
+
+- 状态：代码、场景配置和静态验证完成，等待多语言视觉验收。
+- 用户意图：首页“添加愿望清单”文字必须完整位于蓝色异形按钮区域内；两行无法合理容纳时允许显示三行。
+- 根因：`BtnWishList/TextTitle` 原文字区域为 `250 x 100`，右边界接近整张按钮图片边缘而非蓝色主体安全边界；全局普通文本规则还会关闭自动换行，使乌克兰语等较长文案只能在两行内横向缩放。
+- 修改：在 MainScene 编辑器数据中将愿望单文字区域调整为蓝色主体内的 `200 x 126`，位置由 `(50,20)` 调整为 `(40,12)`；保留原 `35` 号设计字号并启用 `18~35` Auto Size。`GameLocalization` 仅为 `BtnWishList` 文本启用自动换行和最多三行，其他按钮继续使用全局单行规则；翻译内容、字体、材质、颜色和按钮图形不变。
+- 修改文件：`Assets/Scenes/MainScene.unity`、`Assets/Scripts/Model/GameLocalization.cs`、任务记录、项目上下文。
+- 验证：已按组件范围核对 `BtnWishList/TextTitle` 为位置 `(40,12)`、尺寸 `200 x 126`、Auto Size 开启、字号 `18~35`、Word Wrapping 开启，且场景没有写入 TMP 不支持序列化的 `m_maxVisibleLines`；`dotnet build Assembly-CSharp-Editor.csproj --no-restore` 通过，`0` 警告、`0` 错误；`git diff --check` 通过。
+- 下一步：在 MainScene Play Mode 依次切换乌克兰语、葡萄牙语、越南语、俄语和德语，确认愿望单文字保持在蓝色区域内，且没有截断或超过三行。
+
 ## 2026-09-06 卡包基础分与积分任务十倍调整
 
 - 状态：代码、配置和静态验证完成，等待 Play Mode 验收。

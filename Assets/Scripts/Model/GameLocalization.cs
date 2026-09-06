@@ -18,12 +18,14 @@ public static class GameLocalization
     private const string RuntimeObjectName = "GameLocalizationRuntime";
     private const float AutomaticFontSizeMinimum = 10f;
     private const int TaskDescriptionMaxLines = 2;
+    private const int WishListTextMaxLines = 3;
     private const int TaskDescriptionFontSearchIterations = 8;
     private const string PopupPanelNamePrefix = "Panel";
     private const string PopupContentNamePrefix = "TextContent";
     private const string PhotoPanelObjectName = "PackPhotoItem";
     private const string PhotoContentObjectName = "TaskContent";
     private const string TaskItemObjectName = "TaskItem";
+    private const string WishListButtonObjectName = "BtnWishList";
 
     private static readonly string[] sLanguageCodes =
     {
@@ -196,6 +198,12 @@ public static class GameLocalization
         }
 
         var defaults = GetTextFitDefaults(label);
+        if (IsWishListButtonText(label))
+        {
+            ConfigureWishListButtonText(label, defaults);
+            return;
+        }
+
         if (IsTaskDescription(label))
         {
             ConfigureTaskDescription(label, defaults);
@@ -265,6 +273,22 @@ public static class GameLocalization
         label.fontSizeMin = defaults.FontSizeMin;
         label.fontSizeMax = defaults.FontSizeMax;
         label.enableWordWrapping = true;
+    }
+
+    private static void ConfigureWishListButtonText(TMP_Text label, TextFitDefaults defaults)
+    {
+        var maximumFontSize = defaults.FontSize > 0f ? defaults.FontSize : label.fontSize;
+        if (maximumFontSize <= 0f)
+        {
+            return;
+        }
+
+        label.fontSize = maximumFontSize;
+        label.fontSizeMin = Mathf.Min(18f, maximumFontSize);
+        label.fontSizeMax = maximumFontSize;
+        label.enableWordWrapping = true;
+        label.maxVisibleLines = WishListTextMaxLines;
+        label.enableAutoSizing = true;
     }
 
     private static void ConfigureTaskDescription(TMP_Text label, TextFitDefaults defaults)
@@ -347,6 +371,13 @@ public static class GameLocalization
         }
 
         return false;
+    }
+
+    private static bool IsWishListButtonText(TMP_Text label)
+    {
+        var button = label.GetComponentInParent<Button>(true);
+        return button != null
+            && string.Equals(button.name, WishListButtonObjectName, StringComparison.Ordinal);
     }
 
     private static bool IsTaskDescription(TMP_Text label)

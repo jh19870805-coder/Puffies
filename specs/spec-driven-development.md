@@ -1304,6 +1304,9 @@
 3. WHEN 用户关闭 `ToggleFrame` THEN 游戏 SHALL 立即切换为 `FullScreenMode.FullScreenWindow`，并持久化全屏状态。
 4. WHEN 已存在保存的 `GameSettings/Runtime` THEN 游戏 SHALL 尊重上次保存的窗口化选择，不得每次启动强制恢复默认全屏。
 5. 窗口模式 SHALL 继续允许用户自由拉伸；设计分辨率与 Canvas 缩放规则 SHALL 保持 `2560x1440` 和现有宽高各 `0.5` 的适配方式。
+6. WHEN Windows Player 首次切换到窗口化且没有已保存的窗口尺寸 THEN 游戏 SHALL 使用 `1920x1080` 客户区尺寸。
+7. WHEN 用户在窗口化状态手动调整窗口尺寸 THEN 游戏 SHALL 在尺寸稳定后保存客户区宽高；WHEN 后续再次切换到窗口化或以窗口化状态启动 THEN 游戏 SHALL 恢复该保存尺寸。
+8. 窗口宽高记录 SHALL 只在 Windows Player 生效，不得在 Unity Editor 或其他平台强制设置分辨率。
 
 ### 设计与任务
 
@@ -1312,6 +1315,7 @@
 - [x] 3. 使用明确的 `FullScreenMode.Windowed/FullScreenWindow` 应用并保存开关状态。
 - [x] 4. Runtime/Editor 编译通过，并确认 MainScene 场景中 `ToggleFrame` 初始值为关闭。
 - [ ] 5. 在 Windows Player 中分别使用无设置数据与已有设置数据，验证默认状态、即时切换、窗口拉伸和重启保持。
+- [x] 6. 将窗口化默认客户区设为 `1920x1080`，持久化用户稳定后的窗口宽高，并在重新窗口化时恢复。
 
 ## 2026-09-02 - Win32 窗口拉伸实时适配
 
