@@ -271,6 +271,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 - `TaskProgressUIUtility` 是两个 TaskItem 实例共用的运行时绑定。三类任务文案分别为“完成任意拼图包，收集 N 分”“从任意拼图包中收集 N 个贴纸”和“完成 N 个 S/M 尺寸的拼图包”；`TextProgress` 显示当前值与任务实例目标值，可见 `ProgressMask` 宽度使用两者比值并限制在有效范围。`BagIcon` 始终使用共享 Prefab 中配置的固定 Sprite，运行时不得按任务奖励或卡包编号替换。
 - MainScene 在 `Start` 时从持久化任务实例刷新 TaskItem。GameScene 结算使用不受 TimeScale 影响的时间：积分任务与结算分数同步滚动，贴纸和完成卡包任务在最终得分后单独滚动进度；任务奖励和下一任务生成在动画前持久化。
 - GameScene 结算摘要将 `TaskBg2/TaskScore` 绑定到当局结算分数，将 `TaskBg2/TaskBagNum` 绑定到 SQLite 中生命周期为 `Completed` 的卡包数量；未完成的已解锁卡包和进行中卡包不计入，重玩不会重复计数。
+- GameScene 结算在任务推进、待发任务奖励和首次完成自然奖励完成判定后，若当前构建可用卡包已经全部解锁，则在奖励动画开始前直接隐藏 `RewardPanel/TaskItem`；本轮刚发出最后一个卡包也适用，不删除保留的任务数据。
 - GameScene 进入时记录描边设置快照，点击 `BtnTips` 时记录提示使用，首个 Piece 成功放置时开始不受 TimeScale 影响的积分计时，RewardPanel 结算开始时冻结。
 - MainScene `PanelSet/SliderMusic` 和 `PanelSet/SliderEffect` 是手工拼装的仿 Slider：根 Image 背景加 `SliderFill`、`SliderHandle` 子节点。运行时使用 `FakeSettingsSliderInput` 处理指针拖动、刷新视觉并保存数值。
 - 不使用 `PlayerPrefs`。
