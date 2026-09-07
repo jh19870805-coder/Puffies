@@ -1582,6 +1582,27 @@
 ### 验证
 
 - `dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 成功并连带编译 Runtime，结果 `0` 警告、`0` 错误。
+
+## 2026-09-07 - Demo 卡包内容上限
+
+### 需求与实现
+
+1. WHEN 当前构建未定义 `PUFFIES_STEAM_RELEASE` THEN 系统 SHALL 只开放 `PackId 1~18`，不得在首页或实际结算奖励中出现 019 及后续卡包。
+2. WHEN 当前构建定义 `PUFFIES_STEAM_RELEASE` THEN 系统 SHALL 继续使用完整 `CardPacks.csv`，不得受 Demo 上限影响。
+3. Demo 中已有存档若包含 019+ 记录，系统 SHALL 保留原始 SQLite 数据，但从当前构建的卡包记录、完成数量、首页预加载和列表中排除；不得为此删除用户数据。
+4. 首次通关奖励与任务奖励 SHALL 只统计并选择当前构建可用的锁定卡包；没有 1~18 范围内候选时，任务权益按既有规则保持待发，但不得兑现为 019+。
+5. 本次修改 SHALL NOT 删除或修改 019+ 的配置、Prefab、封面或其他资源，以便正式版恢复。
+
+- [x] 在 `GameDefine` 建立统一的当前构建卡包可用性判断。
+- [x] 将卡包记录、完成数量、解锁入口和奖励算法接入统一判断。
+- [x] 编译默认 Demo，静态检查正式版条件及完整差异。
+- [ ] 在 Play Mode 验证 018 上限、019 旧存档隐藏和任务结算表现。
+
+### 验证
+
+- `CardPacks.csv` 当前包含 `001~018` 共 18 个 Demo 卡包和 `019~022` 共 4 个后续卡包；配置与对应资源均未修改。
+- 默认 Demo 的 `dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 成功并连带编译 Runtime，结果 `0` 警告、`0` 错误。
+- `PUFFIES_STEAM_RELEASE` 分支静态确认将最大可用 PackId 设为 `int.MaxValue`，其余数据和发包逻辑完全复用；`git diff --check` 通过，仅有仓库既有 LF/CRLF 提示。
 - 第一版 `Camera.pixelRect` 映射经用户按“拉窄 -> 拉宽”验证仍失败：托盘 Piece 被排到棋盘下沿附近。Editor 实际日志确认错误帧的根 Canvas Rect 为 `0x0`，而代码仍继续按无效父矩形布局。
 - 第二版移除窗口刷新阶段对完整 `ConfigureGameplayCanvas` 的重复调用，只刷新固定宽高比相机视口；布局前检查根 Canvas Rect，尺寸无效时逐帧延后。临时诊断代码已删除，Runtime/Editor 再次编译为 `0` 警告、`0` 错误。
 - [ ] 在 GameScene 连续切换 `16:9 -> 超宽 -> 偏高 -> 16:9`，确认棋盘不漂移、托盘 Piece 保持在可见托盘内且回收/滚动热区准确；同时覆盖桌面错误 Piece 与活动中新手引导。

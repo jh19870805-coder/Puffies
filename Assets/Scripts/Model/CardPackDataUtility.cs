@@ -154,7 +154,7 @@ public static class CardPackDataUtility
     }
 
     /// <summary>
-    /// 用途：获取全部卡包记录。返回：按 PackId 升序的列表。
+    /// 用途：获取当前构建可用的全部卡包记录。返回：按 PackId 升序的列表。
     /// </summary>
     public static List<CardPackRecord> GetAllPacks()
     {
@@ -166,6 +166,11 @@ public static class CardPackDataUtility
         var records = new List<CardPackRecord>(rows.Count);
         for (var i = 0; i < rows.Count; i++)
         {
+            if (!GameDefine.IsCardPackAvailableInCurrentBuild(rows[i].PackId))
+            {
+                continue;
+            }
+
             var record = ToRecord(rows[i]);
             TryNormalizeAndPersistTimes(ref record);
             records.Add(record);
@@ -183,8 +188,10 @@ public static class CardPackDataUtility
         return SqliteLocalStore.ExecuteScalar<int>(
             $@"SELECT COUNT(1)
                FROM {GameDefine.LocalSqliteCardPackTable}
-               WHERE LifecycleState = ?",
-            (int)CardPackLifecycleState.Completed);
+               WHERE LifecycleState = ?
+                 AND PackId <= ?",
+            (int)CardPackLifecycleState.Completed,
+            GameDefine.MaximumAvailableCardPackId);
     }
 
     public static List<int> GetMainSceneOrderedPackIds()
@@ -217,8 +224,10 @@ public static class CardPackDataUtility
     public static bool TryUnlockPack(int packId)
     {
         EnsureInitialized();
-        if (packId <= 0)
+        if (!GameDefine.IsCardPackAvailableInCurrentBuild(packId))
         {
+            Debug.LogWarning(
+                $"CardPackDataUtility.TryUnlockPack blocked by current build content limit. packId={packId}");
             return false;
         }
 
@@ -279,7 +288,9 @@ public static class CardPackDataUtility
     /// </summary>
     public static bool IsPackUnlocked(int packId)
     {
-        return TryGetPack(packId, out var record) && record.IsUnlocked;
+        return GameDefine.IsCardPackAvailableInCurrentBuild(packId)
+            && TryGetPack(packId, out var record)
+            && record.IsUnlocked;
     }
 
     public static bool TryMarkPackInProgress(int packId)
@@ -1003,7 +1014,7 @@ public static class CardPackDistributionUtility
 
     public static bool IsPackSeriesEligible(int packId)
     {
-        if (packId <= 0
+        if (!GameDefine.IsCardPackAvailableInCurrentBuild(packId)
             || !TryBuildState(
                 out _,
                 out var states,
@@ -1165,7 +1176,9 @@ public static class CardPackDistributionUtility
         for (var i = 0; i < configs.Count; i++)
         {
             var state = GetState(states, configs[i].PackId);
-            if (IsPlayable(state) && configs[i].ChapterId < playableChapter)
+            if (GameDefine.IsCardPackAvailableInCurrentBuild(configs[i].PackId)
+                && IsPlayable(state)
+                && configs[i].ChapterId < playableChapter)
             {
                 playableChapter = configs[i].ChapterId;
             }
@@ -1203,7 +1216,8 @@ public static class CardPackDistributionUtility
         for (var i = 0; i < configs.Count; i++)
         {
             var config = configs[i];
-            if (config.ChapterId < minimumChapter
+            if (!GameDefine.IsCardPackAvailableInCurrentBuild(config.PackId)
+                || config.ChapterId < minimumChapter
                 || config.ChapterId >= chapterId
                 || GetState(states, config.PackId) != CardPackLifecycleState.Locked)
             {
@@ -1227,7 +1241,8 @@ public static class CardPackDistributionUtility
         for (var i = 0; i < configs.Count; i++)
         {
             var config = configs[i];
-            if (config.ChapterId != chapterId
+            if (!GameDefine.IsCardPackAvailableInCurrentBuild(config.PackId)
+                || config.ChapterId != chapterId
                 || GetState(states, config.PackId) != CardPackLifecycleState.Locked
                 || !CardPackSeriesRules.ArePrerequisitesCompleted(
                     config.PackId,
@@ -1261,7 +1276,8 @@ public static class CardPackDistributionUtility
         var count = 0;
         for (var i = 0; i < configs.Count; i++)
         {
-            if (configs[i].ChapterId == chapterId
+            if (GameDefine.IsCardPackAvailableInCurrentBuild(configs[i].PackId)
+                && configs[i].ChapterId == chapterId
                 && GetState(states, configs[i].PackId) == targetState)
             {
                 count++;
@@ -1279,7 +1295,9 @@ public static class CardPackDistributionUtility
         var count = 0;
         for (var i = 0; i < configs.Count; i++)
         {
-            if (configs[i].ChapterId == chapterId && IsPlayable(GetState(states, configs[i].PackId)))
+            if (GameDefine.IsCardPackAvailableInCurrentBuild(configs[i].PackId)
+                && configs[i].ChapterId == chapterId
+                && IsPlayable(GetState(states, configs[i].PackId)))
             {
                 count++;
             }
@@ -1295,7 +1313,8 @@ public static class CardPackDistributionUtility
         var count = 0;
         for (var i = 0; i < configs.Count; i++)
         {
-            if (IsPlayable(GetState(states, configs[i].PackId)))
+            if (GameDefine.IsCardPackAvailableInCurrentBuild(configs[i].PackId)
+                && IsPlayable(GetState(states, configs[i].PackId)))
             {
                 count++;
             }

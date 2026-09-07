@@ -1,5 +1,15 @@
 # 当前任务
 
+## 2026-09-07 Demo 卡包内容上限
+
+- 状态：代码修改和静态验证完成，等待 Play Mode 验证。
+- 用户意图：当前 Demo 只提供 `CardBag001~018`；玩家获得 `CardBag018` 后，`CardBag019` 及后续卡包暂不在 Demo 中出现。
+- 修改：`GameDefine` 集中定义 Demo 最大 `PackId=18`，默认 Editor/Demo 构建生效，`PUFFIES_STEAM_RELEASE` 正式版构建解除上限；卡包数据列表、完成数量、直接解锁及首次通关/任务奖励的统计和候选均只处理当前构建可用卡包。已有存档中的 019+ 记录保留但在 Demo 隐藏，不删除配置、Prefab 或存档数据。
+- 保留：现有任务卡包权益仍按原规则持久化；Demo 没有 1~18 范围内的可发候选时保持待发，不会兑现为 019+，正式版解除上限后可继续处理。
+- 修改文件：`Assets/Scripts/Model/GameDefine.cs`、`Assets/Scripts/Model/CardPackDataUtility.cs`、统一 spec、任务记录和项目上下文。
+- 验证：配置核对为 Demo `001~018` 共 18 个、后续 `019~022` 共 4 个；默认 Demo Runtime/Editor 编译通过，`0` 警告、`0` 错误；正式版分支静态确认返回 `int.MaxValue` 并复用同一逻辑；奖励计数、章节查找和候选选择入口均接入统一判断；`git diff --check` 通过。`CardPacks.csv` 与 019+ 资源未修改。
+- 下一步：在 Demo Play Mode 使用接近上限的存档完成关卡，确认最多发到 018，首页不出现 019；再用含 019+ 旧记录的存档确认其被隐藏。
+
 ## 2026-09-07 CardBag018 手绘分组
 
 - 状态：Prefab 分组修改和静态验证完成，等待 Unity 单包描边重烘焙及 Play Mode 验收。

@@ -200,7 +200,25 @@ public static class GameDefine
 
     // Default runtime values
     public const int DefaultBagId = 1;
+    public const int DemoMaximumBagId = 18;
     public const int InvalidId = -1;
+
+    public static int MaximumAvailableCardPackId
+    {
+        get
+        {
+#if PUFFIES_STEAM_RELEASE
+            return int.MaxValue;
+#else
+            return DemoMaximumBagId;
+#endif
+        }
+    }
+
+    public static bool IsCardPackAvailableInCurrentBuild(int packId)
+    {
+        return packId > 0 && packId <= MaximumAvailableCardPackId;
+    }
 
     // Local persistence (runtime: persistentDataPath/SaveSlotN/LocalData.json & LocalData.db)
     public const string LocalDataBaseName = "LocalData";
