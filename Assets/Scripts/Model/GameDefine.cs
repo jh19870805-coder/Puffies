@@ -117,6 +117,8 @@ public static class GameDefine
     public const string LoadingTextObjectName = "TextLoading";
     public const string LoadingTextFormat = "Loading... {0}%";
     public const float LoadingDurationSeconds = 2.5f;
+    public const string WishListUrl =
+        "https://store.steampowered.com/app/4906510/?utm_source=InGame";
     public const string GameBoardFileName = "GameBoard.png";
     public const string GameBoardObjectName = "GameBoard";
     public const string BackgroundObjectName = "Background";

@@ -1,5 +1,14 @@
 # 当前任务
 
+## 2026-09-07 卡包 006/018 首次完成愿望单提示
+
+- 状态：代码修改和静态验证完成，等待 Play Mode 验收。
+- 用户意图：第一次完成 `CardBag006` 和第一次完成 `CardBag018` 时，在进入结算前显示 GameScene 新增的 `PanelWishList`；点击关闭或 `BtnAddList` 后隐藏弹窗并继续原结算，添加按钮复用首页愿望单跳转，同时补齐按钮与文本的 18 种语言。
+- 修改：GameScene 启动时按场景实际层级绑定 `PanelWishList/BtnClose` 和 `BtnAddList`；首次完成目标卡包时暂停 RewardPanel 启动，打开愿望单弹窗并播放弹窗音效。两个按钮均播放通用点击音效、按当前存档持久化对应卡包提示记录、关闭弹窗并恢复原结算流程；添加按钮使用 Steam Overlay 优先、系统浏览器保底的统一链接。新增弹窗正文和添加按钮 18 种语言，标题复用现有“提示”翻译，保留编辑器字体、材质和布局。首页与 GameScene 共用 `GameDefine.WishListUrl`。
+- 修改文件：`Assets/Scripts/Controller/GameScene.cs`、`Assets/Scripts/Controller/MainScene.cs`、`Assets/Scripts/Model/GameDefine.cs`、`Assets/Scripts/Model/GameLocalization.cs`、任务记录和项目上下文。用户已在 `Assets/Scenes/GameScene.unity` 添加面板，本轮不覆盖其布局。
+- 验证：`dotnet build Assembly-CSharp.csproj --no-restore` 与 `dotnet build Assembly-CSharp-Editor.csproj --no-restore` 均通过，`0` 警告、`0` 错误；愿望单正文与按钮词条均已逐项确认包含完整 18 种语言；本轮代码和文档的差异格式检查通过。全工作区 `git diff --check` 仅报告用户新建 `GameScene.unity` 序列化空字段自带的尾随空格，本轮未改写场景。
+- 下一步：分别用首次完成和重玩 `006/018` 的存档验证弹窗只出现一次；检查关闭与添加愿望单后 RewardPanel 正常继续，并在 Steam Player 验证 Overlay 与浏览器保底。
+
 ## 2026-09-07 结算页全卡包终态隐藏任务
 
 - 状态：代码修改和静态验证完成，等待 Play Mode 验收。

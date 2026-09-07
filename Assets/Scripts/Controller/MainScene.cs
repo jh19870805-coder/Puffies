@@ -99,8 +99,6 @@ public class MainScene : MonoBehaviour
     private const string PackNameTextObjectName = "NameText";
     private const string MenuButtonObjectName = "BtnMenu";
     private const string WishListButtonObjectName = "BtnWishList";
-    private const string WishListUrl =
-        "https://store.steampowered.com/app/4906510/?utm_source=InGame";
     private const string DiscordButtonObjectName = "BtnDiscord";
     private const string DiscordUrl = "https://discord.gg/sfmNFEF5ec";
     private const string QqButtonObjectName = "BtnQQ";
@@ -4130,9 +4128,9 @@ public class MainScene : MonoBehaviour
     private static void OnWishListButtonClicked()
     {
         AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
-        if (!AnalyticsManager.Instance.TryOpenSteamOverlayWebPage(WishListUrl))
+        if (!AnalyticsManager.Instance.TryOpenSteamOverlayWebPage(GameDefine.WishListUrl))
         {
-            Application.OpenURL(WishListUrl);
+            Application.OpenURL(GameDefine.WishListUrl);
         }
     }
 
