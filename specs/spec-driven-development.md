@@ -1611,7 +1611,7 @@
 1. WHEN 默认 Demo 的 `CardBag001~018` 均已获得，即生命周期均不是 `Locked` THEN 任务系统 SHALL 不再向业务提供活动任务，也不得继续向玩家展示新任务。
 2. 任务终止条件 SHALL 根据当前构建可用的全部卡包配置逐个核对，不得只判断是否获得 `CardBag018`，以免随机发包时遗漏 001~017。
 3. MainScene SHALL 继续复用其现有 `TaskItem` 实例；终态下隐藏整个 `ProgressBg`、整个 `BagBg`（包含卡包、`+1` 与绿色圆圈），只显示 `TaskContent`。
-4. 终态 `TaskContent` SHALL 在 TaskItem 内水平和垂直居中，并显示本地化的“已获得全部卡包”。
+4. 终态 `TaskContent` SHALL 在 TaskItem 内水平和垂直居中，并显示本地化的“当前阶段的卡包已收集完毕！”，该文案 SHALL 覆盖项目支持的 18 种语言。
 5. 本次修改 SHALL NOT 修改 `Assets/Prefabs/TaskItem.prefab`、GameScene 结算页 TaskItem、既有任务进度或待发任务奖励权益；原任务 JSON 数据保留，以便正式版解除内容上限后继续。
 
 - [x] 增加当前构建全部卡包是否已获得的统一判断。
