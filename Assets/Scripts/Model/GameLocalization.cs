@@ -24,6 +24,7 @@ public static class GameLocalization
     private const string PopupContentNamePrefix = "TextContent";
     private const string PhotoPanelObjectName = "PackPhotoItem";
     private const string PhotoContentObjectName = "TaskContent";
+    private const string AllPacksCollectedContentObjectName = "TaskContent2";
     private const string TaskItemObjectName = "TaskItem";
     private const string WishListButtonObjectName = "BtnWishList";
     private const string MainMenuPanelObjectName = "PanelMenu";
@@ -424,7 +425,11 @@ public static class GameLocalization
 
     private static bool IsTaskDescription(TMP_Text label)
     {
-        if (!string.Equals(label.name, PhotoContentObjectName, StringComparison.Ordinal))
+        if (!string.Equals(label.name, PhotoContentObjectName, StringComparison.Ordinal)
+            && !string.Equals(
+                label.name,
+                AllPacksCollectedContentObjectName,
+                StringComparison.Ordinal))
         {
             return false;
         }

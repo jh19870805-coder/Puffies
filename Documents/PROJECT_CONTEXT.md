@@ -77,7 +77,7 @@ MainScene 卡包选中页与 GameScene 结算页共用 `Assets/Prefabs/PackPhoto
 - MainScene 的 Canvas 根级 `PanelConfirm` 是退出与存档删除共用的确认弹窗。`PanelMenu/BtnExit` 打开时关闭菜单并显示“确认退出游戏？”，`BtnYes` 确认后 Windows Player 调用 `Application.Quit()`、Editor 停止 Play Mode。`PanelSave/BtnDelete` 打开时保留保存页并显示“确认删除进度存储？”，锁定当前选中槽位；`BtnYes` 调用 `LocalSaveSlotUtility.DeleteSlot` 后刷新保存页。两种用途下 `BtnNo`、`BtnClose` 及弹窗内其他 Button 都只关闭弹窗。该通用确认弹窗与卡包重玩使用的 `PanelReplay` 相互独立。
 - `PackItem/CardPackEffect/PackNode` 的列表视觉顺序为 `PackBg`、运行时可选的 `ProgressPieces`、`PackCover`、`PackSize`、`ImgLight`。`PackBg` 默认关闭，仅在撕开状态启用；运行时按封面从 Prefab 原始尺寸到列表尺寸的比例同步缩放，并与封面、尺寸图标和进行中贴纸统一执行可见区域及面板显隐。
 - 任务实例、当前进度、下一个实例号、积分目标循环游标、贴纸目标循环游标和待结转积分保存在 JSON 根对象 `TaskProgressData`。
-- 默认 Demo 的 `CardBag001~018` 全部进入 `Unlocked`、`InProgress` 或 `Completed` 后，任务系统对业务返回无活动任务，不再向玩家提供新任务；原 JSON 任务状态保留，定义 `PUFFIES_STEAM_RELEASE` 并出现新的可用锁定卡包后可继续。MainScene 仍复用自己的 `TaskItem` 实例，但隐藏整个 `ProgressBg`、`BagBg` 和正常任务文本 `TaskContent`，改为显示 `TaskContent2` 中本地化的“当前阶段的卡包已收集完毕！”。`TaskContent2` 保留 Prefab 的位置、尺寸、字号、颜色和对齐，按单行宽度检测在超框时自动缩小；恢复正常任务时必须隐藏 `TaskContent2` 并重新显示 `TaskContent`。该终态不得影响 GameScene 结算页实例。
+- 默认 Demo 的 `CardBag001~018` 全部进入 `Unlocked`、`InProgress` 或 `Completed` 后，任务系统对业务返回无活动任务，不再向玩家提供新任务；原 JSON 任务状态保留，定义 `PUFFIES_STEAM_RELEASE` 并出现新的可用锁定卡包后可继续。MainScene 仍复用自己的 `TaskItem` 实例，但隐藏整个 `ProgressBg`、`BagBg` 和正常任务文本 `TaskContent`，改为显示 `TaskContent2` 中本地化的“当前阶段的卡包已收集完毕！”。`TaskContent2` 保留 Prefab 的位置、尺寸、字号、颜色和对齐，允许自动换行且最多显示两行；先使用编辑器设计字号，当前语言超过两行时才向下缩小。恢复正常任务时必须隐藏 `TaskContent2` 并重新显示 `TaskContent`。该终态不得影响 GameScene 结算页实例。
 - 业务进度不得使用 `PlayerPrefs`。
 
 ### 内容扩展需求
