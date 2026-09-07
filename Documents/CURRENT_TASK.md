@@ -1,5 +1,15 @@
 # 当前任务
 
+## 2026-09-07 Demo 全卡包后的首页任务终态
+
+- 状态：代码修改和静态验证完成，等待 Play Mode 验证。
+- 用户意图：Demo 的 `CardBag001~018` 全部获得后，不再向用户提供新任务；首页继续复用现有 `TaskItem`，隐藏进度条和右侧卡包 `+1` 绿色奖励区域，只显示自动居中的内容文本。结算页本轮不修改，等待用户重新拼装。
+- 修改：`CardPackDataUtility.AreAllCurrentBuildCardPacksUnlocked` 按当前构建配置核对每个可用 PackId 是否已经进入非 `Locked` 状态；达到条件后 `GameTaskUtility.TryGetCurrentTask` 对业务返回无活动任务，但保留现有 JSON 任务数据，正式版扩展卡包后可继续。MainScene 单独调用 `RefreshAllPacksCollected`，隐藏 `ProgressBg` 和整个 `BagBg`，将 `TaskContent` 拉伸到 TaskItem 内边距并居中显示“已获得全部卡包”。
+- 保留：没有修改 `TaskItem.prefab`、GameScene 结算 TaskItem、任务进度、待发奖励权益或 019+ 正式版数据。
+- 修改文件：`Assets/Scripts/Model/CardPackDataUtility.cs`、`Assets/Scripts/Model/GameTaskUtility.cs`、`Assets/Scripts/Model/GameLocalization.cs`、`Assets/Scripts/View/TaskProgressUIUtility.cs`、`Assets/Scripts/Controller/MainScene.cs`、统一 spec、任务记录和项目上下文。
+- 验证：Runtime/Editor 编译通过，`0` 警告、`0` 错误；终态 UI 方法仅由 MainScene 调用，18 种语言文案齐全；`TaskItem.prefab` 和 GameScene 没有本需求差异；`git diff --check` 通过。
+- 下一步：在 Demo Play Mode 分别用未集齐和已集齐 001~018 的存档进入首页，确认正常任务与终态展示正确；结算页保持当前样式不变。
+
 ## 2026-09-07 Demo 卡包内容上限
 
 - 状态：代码修改和静态验证完成，等待 Play Mode 验证。

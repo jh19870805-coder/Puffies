@@ -262,6 +262,12 @@ public static class GameTaskUtility
     public static bool TryGetCurrentTask(out TaskInstanceData task)
     {
         EnsureInitialized();
+        if (CardPackDataUtility.AreAllCurrentBuildCardPacksUnlocked())
+        {
+            task = default;
+            return false;
+        }
+
         task = sProgress.CurrentTask;
         return IsTaskInstanceValid(task);
     }

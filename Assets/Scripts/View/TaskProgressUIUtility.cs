@@ -7,10 +7,14 @@ using UnityEngine;
 public static class TaskProgressUIUtility
 {
     private const string TaskContentPath = "TaskContent";
+    private const string ProgressBackgroundPath = "ProgressBg";
     private const string TextProgressPath = "ProgressBg/TextProgress";
     private const string ProgressMaskPath = "ProgressBg/ProgressMask";
     private const string ProgressFillPath = "ProgressBg/ProgressMask/Progress";
+    private const string RewardBackgroundPath = "BagBg";
     private const string RewardCountPath = "BagBg/TextAddNum";
+    private const float CompletedContentHorizontalInset = 48f;
+    private const float CompletedContentVerticalInset = 36f;
 
     /// <summary>
     /// 用途：刷新任务静态信息、奖励信息和当前进度。返回：必要进度节点是否完整。
@@ -31,6 +35,43 @@ public static class TaskProgressUIUtility
         RefreshTaskContent(taskItem, task, showCompletedMessage);
         RefreshReward(taskItem, task);
         return SetProgressInternal(taskItem, task, displayValue, true);
+    }
+
+    public static bool RefreshAllPacksCollected(Transform taskItem, string message)
+    {
+        if (taskItem == null)
+        {
+            Debug.LogWarning("TaskProgressUIUtility: TaskItem root is missing.");
+            return false;
+        }
+
+        taskItem.gameObject.SetActive(true);
+        SetChildVisible(taskItem, ProgressBackgroundPath, false);
+        SetChildVisible(taskItem, RewardBackgroundPath, false);
+
+        var taskContent = taskItem.Find(TaskContentPath)?.GetComponent<TMP_Text>();
+        if (taskContent == null)
+        {
+            Debug.LogWarning("TaskProgressUIUtility: shared TaskItem is missing TaskContent.");
+            return false;
+        }
+
+        var contentRect = taskContent.rectTransform;
+        contentRect.anchorMin = Vector2.zero;
+        contentRect.anchorMax = Vector2.one;
+        contentRect.pivot = new Vector2(0.5f, 0.5f);
+        contentRect.offsetMin = new Vector2(
+            CompletedContentHorizontalInset,
+            CompletedContentVerticalInset);
+        contentRect.offsetMax = new Vector2(
+            -CompletedContentHorizontalInset,
+            -CompletedContentVerticalInset);
+
+        GameFontUtility.ApplyDefaultFont(taskContent);
+        taskContent.alignment = TextAlignmentOptions.Center;
+        taskContent.text = message ?? string.Empty;
+        GameLocalization.ConfigureTextToFit(taskContent);
+        return true;
     }
 
     /// <summary>
@@ -150,6 +191,15 @@ public static class TaskProgressUIUtility
         {
             GameFontUtility.ApplyDefaultFont(rewardCountText);
             rewardCountText.text = $"+{rewardValue}";
+        }
+    }
+
+    private static void SetChildVisible(Transform root, string path, bool visible)
+    {
+        var child = root.Find(path);
+        if (child != null)
+        {
+            child.gameObject.SetActive(visible);
         }
     }
 }

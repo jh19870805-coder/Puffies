@@ -194,6 +194,43 @@ public static class CardPackDataUtility
             GameDefine.MaximumAvailableCardPackId);
     }
 
+    public static bool AreAllCurrentBuildCardPacksUnlocked()
+    {
+        EnsureInitialized();
+        if (!GameConfigRepository.TryGetCardPackConfigs(out var configs))
+        {
+            return false;
+        }
+
+        var records = GetAllPacks();
+        var unlockedPackIds = new HashSet<int>();
+        for (var i = 0; i < records.Count; i++)
+        {
+            if (records[i].IsUnlocked)
+            {
+                unlockedPackIds.Add(records[i].PackId);
+            }
+        }
+
+        var availablePackCount = 0;
+        for (var i = 0; i < configs.Count; i++)
+        {
+            var packId = configs[i].PackId;
+            if (!GameDefine.IsCardPackAvailableInCurrentBuild(packId))
+            {
+                continue;
+            }
+
+            availablePackCount++;
+            if (!unlockedPackIds.Contains(packId))
+            {
+                return false;
+            }
+        }
+
+        return availablePackCount > 0;
+    }
+
     public static List<int> GetMainSceneOrderedPackIds()
     {
         EnsureInitialized();

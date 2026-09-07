@@ -1603,6 +1603,28 @@
 - `CardPacks.csv` 当前包含 `001~018` 共 18 个 Demo 卡包和 `019~022` 共 4 个后续卡包；配置与对应资源均未修改。
 - 默认 Demo 的 `dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 成功并连带编译 Runtime，结果 `0` 警告、`0` 错误。
 - `PUFFIES_STEAM_RELEASE` 分支静态确认将最大可用 PackId 设为 `int.MaxValue`，其余数据和发包逻辑完全复用；`git diff --check` 通过，仅有仓库既有 LF/CRLF 提示。
+
+## 2026-09-07 - Demo 全卡包后的首页任务终态
+
+### 需求与实现
+
+1. WHEN 默认 Demo 的 `CardBag001~018` 均已获得，即生命周期均不是 `Locked` THEN 任务系统 SHALL 不再向业务提供活动任务，也不得继续向玩家展示新任务。
+2. 任务终止条件 SHALL 根据当前构建可用的全部卡包配置逐个核对，不得只判断是否获得 `CardBag018`，以免随机发包时遗漏 001~017。
+3. MainScene SHALL 继续复用其现有 `TaskItem` 实例；终态下隐藏整个 `ProgressBg`、整个 `BagBg`（包含卡包、`+1` 与绿色圆圈），只显示 `TaskContent`。
+4. 终态 `TaskContent` SHALL 在 TaskItem 内水平和垂直居中，并显示本地化的“已获得全部卡包”。
+5. 本次修改 SHALL NOT 修改 `Assets/Prefabs/TaskItem.prefab`、GameScene 结算页 TaskItem、既有任务进度或待发任务奖励权益；原任务 JSON 数据保留，以便正式版解除内容上限后继续。
+
+- [x] 增加当前构建全部卡包是否已获得的统一判断。
+- [x] 达到终态后让任务查询对业务返回无活动任务。
+- [x] 增加仅由 MainScene 调用的 TaskItem 终态展示和 18 语言文案。
+- [x] 编译 Runtime/Editor，检查调用范围与差异。
+- [ ] 在 Play Mode 分别验证未集齐和已集齐存档的首页 TaskItem。
+
+### 验证
+
+- `RefreshAllPacksCollected` 仅由 MainScene 的任务刷新入口调用；共享 `TaskItem.prefab` 和 GameScene 没有本需求差异。
+- 新增终态文案包含项目支持的全部 18 种语言；终态隐藏 `ProgressBg` 与整个 `BagBg`，`TaskContent` 使用四周安全内边距拉伸并居中。
+- `dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 成功并连带编译 Runtime，结果 `0` 警告、`0` 错误；`git diff --check` 通过，仅有仓库既有 LF/CRLF 提示。
 - 第一版 `Camera.pixelRect` 映射经用户按“拉窄 -> 拉宽”验证仍失败：托盘 Piece 被排到棋盘下沿附近。Editor 实际日志确认错误帧的根 Canvas Rect 为 `0x0`，而代码仍继续按无效父矩形布局。
 - 第二版移除窗口刷新阶段对完整 `ConfigureGameplayCanvas` 的重复调用，只刷新固定宽高比相机视口；布局前检查根 Canvas Rect，尺寸无效时逐帧延后。临时诊断代码已删除，Runtime/Editor 再次编译为 `0` 警告、`0` 错误。
 - [ ] 在 GameScene 连续切换 `16:9 -> 超宽 -> 偏高 -> 16:9`，确认棋盘不漂移、托盘 Piece 保持在可见托盘内且回收/滚动热区准确；同时覆盖桌面错误 Piece 与活动中新手引导。

@@ -879,6 +879,14 @@ public class MainScene : MonoBehaviour
             return;
         }
 
+        if (CardPackDataUtility.AreAllCurrentBuildCardPacksUnlocked())
+        {
+            TaskProgressUIUtility.RefreshAllPacksCollected(
+                taskItemObject.transform,
+                GameLocalization.Get("task.all_packs_collected"));
+            return;
+        }
+
         if (!GameTaskUtility.Initialize()
             || !GameTaskUtility.TryGetCurrentTask(out var task))
         {
