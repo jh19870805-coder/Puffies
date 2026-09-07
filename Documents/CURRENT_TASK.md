@@ -1,5 +1,14 @@
 # 当前任务
 
+## 2026-09-07 首页无任务状态改用 TaskContent2
+
+- 状态：代码修改和静态验证完成，等待多语言 Play Mode 验收。
+- 用户意图：首页没有可用任务时，`TaskItem` 隐藏正常任务文本 `TaskContent`，改为显示美术新增的 `TaskContent2`，且所有语言都不能超出文本框。
+- 修改：`TaskProgressUIUtility.RefreshAllPacksCollected` 不再改写 `TaskContent` 的 RectTransform、对齐和文字，改为切换显示 `TaskContent2` 并写入现有 18 语言终态文案；正常任务刷新时明确恢复 `TaskContent` 并隐藏 `TaskContent2`。终态完全保留 Prefab 中 `TaskContent2` 的位置、尺寸、字号、颜色和对齐，复用全局单行宽度检测，超宽时才自动缩小。
+- 修改文件：`Assets/Scripts/View/TaskProgressUIUtility.cs`、任务记录、项目上下文和统一规格；用户新增的 `Assets/Prefabs/TaskItem.prefab/TaskContent2` 不做代码侧布局覆盖。
+- 验证：`dotnet build Assembly-CSharp.csproj --no-restore` 与 `dotnet build Assembly-CSharp-Editor.csproj --no-restore` 均通过，`0` 警告、`0` 错误。
+- 下一步：使用已解锁全部 Demo 卡包的存档进入 MainScene，依次切换 18 种语言，确认只显示 `TaskContent2` 且长文本自动缩小不超框；再用仍有任务的存档确认恢复 `TaskContent`、进度和奖励区域。
+
 ## 2026-09-07 拍照弹窗移入主 Canvas 后的层级修复
 
 - 状态：代码、Prefab 配置和静态验证完成，等待 MainScene/GameScene Play Mode 验收。

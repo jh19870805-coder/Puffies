@@ -7,14 +7,13 @@ using UnityEngine;
 public static class TaskProgressUIUtility
 {
     private const string TaskContentPath = "TaskContent";
+    private const string EmptyTaskContentPath = "TaskContent2";
     private const string ProgressBackgroundPath = "ProgressBg";
     private const string TextProgressPath = "ProgressBg/TextProgress";
     private const string ProgressMaskPath = "ProgressBg/ProgressMask";
     private const string ProgressFillPath = "ProgressBg/ProgressMask/Progress";
     private const string RewardBackgroundPath = "BagBg";
     private const string RewardCountPath = "BagBg/TextAddNum";
-    private const float CompletedContentHorizontalInset = 48f;
-    private const float CompletedContentVerticalInset = 36f;
 
     /// <summary>
     /// 用途：刷新任务静态信息、奖励信息和当前进度。返回：必要进度节点是否完整。
@@ -32,6 +31,8 @@ public static class TaskProgressUIUtility
         }
 
         taskItem.gameObject.SetActive(true);
+        SetChildVisible(taskItem, TaskContentPath, true);
+        SetChildVisible(taskItem, EmptyTaskContentPath, false);
         RefreshTaskContent(taskItem, task, showCompletedMessage);
         RefreshReward(taskItem, task);
         return SetProgressInternal(taskItem, task, displayValue, true);
@@ -46,29 +47,19 @@ public static class TaskProgressUIUtility
         }
 
         taskItem.gameObject.SetActive(true);
+        SetChildVisible(taskItem, TaskContentPath, false);
+        SetChildVisible(taskItem, EmptyTaskContentPath, true);
         SetChildVisible(taskItem, ProgressBackgroundPath, false);
         SetChildVisible(taskItem, RewardBackgroundPath, false);
 
-        var taskContent = taskItem.Find(TaskContentPath)?.GetComponent<TMP_Text>();
+        var taskContent = taskItem.Find(EmptyTaskContentPath)?.GetComponent<TMP_Text>();
         if (taskContent == null)
         {
-            Debug.LogWarning("TaskProgressUIUtility: shared TaskItem is missing TaskContent.");
+            Debug.LogWarning("TaskProgressUIUtility: shared TaskItem is missing TaskContent2.");
             return false;
         }
 
-        var contentRect = taskContent.rectTransform;
-        contentRect.anchorMin = Vector2.zero;
-        contentRect.anchorMax = Vector2.one;
-        contentRect.pivot = new Vector2(0.5f, 0.5f);
-        contentRect.offsetMin = new Vector2(
-            CompletedContentHorizontalInset,
-            CompletedContentVerticalInset);
-        contentRect.offsetMax = new Vector2(
-            -CompletedContentHorizontalInset,
-            -CompletedContentVerticalInset);
-
         GameFontUtility.ApplyDefaultFont(taskContent);
-        taskContent.alignment = TextAlignmentOptions.Center;
         taskContent.text = message ?? string.Empty;
         GameLocalization.ConfigureTextToFit(taskContent);
         return true;

@@ -1610,9 +1610,9 @@
 
 1. WHEN 默认 Demo 的 `CardBag001~018` 均已获得，即生命周期均不是 `Locked` THEN 任务系统 SHALL 不再向业务提供活动任务，也不得继续向玩家展示新任务。
 2. 任务终止条件 SHALL 根据当前构建可用的全部卡包配置逐个核对，不得只判断是否获得 `CardBag018`，以免随机发包时遗漏 001~017。
-3. MainScene SHALL 继续复用其现有 `TaskItem` 实例；终态下隐藏整个 `ProgressBg`、整个 `BagBg`（包含卡包、`+1` 与绿色圆圈），只显示 `TaskContent`。
-4. 终态 `TaskContent` SHALL 在 TaskItem 内水平和垂直居中，并显示本地化的“当前阶段的卡包已收集完毕！”，该文案 SHALL 覆盖项目支持的 18 种语言。
-5. 本次修改 SHALL NOT 修改 `Assets/Prefabs/TaskItem.prefab`、GameScene 结算页 TaskItem、既有任务进度或待发任务奖励权益；原任务 JSON 数据保留，以便正式版解除内容上限后继续。
+3. MainScene SHALL 继续复用其现有 `TaskItem` 实例；终态下隐藏整个 `ProgressBg`、整个 `BagBg`（包含卡包、`+1` 与绿色圆圈）及正常任务文本 `TaskContent`，只显示 `TaskContent2`。
+4. 终态 `TaskContent2` SHALL 保留 Prefab 中的 RectTransform、字号、颜色和对齐，显示本地化的“当前阶段的卡包已收集完毕！”，该文案 SHALL 覆盖项目支持的 18 种语言；文字宽度超过文本框时 SHALL 自动缩小且不得超框。
+5. 恢复正常任务时 SHALL 隐藏 `TaskContent2` 并重新显示 `TaskContent`；本次修改 SHALL NOT 影响 GameScene 结算页 TaskItem、既有任务进度或待发任务奖励权益，原任务 JSON 数据保留，以便正式版解除内容上限后继续。
 
 - [x] 增加当前构建全部卡包是否已获得的统一判断。
 - [x] 达到终态后让任务查询对业务返回无活动任务。
@@ -1623,7 +1623,7 @@
 ### 验证
 
 - `RefreshAllPacksCollected` 仅由 MainScene 的任务刷新入口调用；共享 `TaskItem.prefab` 和 GameScene 没有本需求差异。
-- 新增终态文案包含项目支持的全部 18 种语言；终态隐藏 `ProgressBg` 与整个 `BagBg`，`TaskContent` 使用四周安全内边距拉伸并居中。
+- 新增终态文案包含项目支持的全部 18 种语言；终态隐藏 `ProgressBg`、整个 `BagBg` 与 `TaskContent`，使用 Prefab 中的 `TaskContent2` 并在超宽时自动缩小。
 - `dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 成功并连带编译 Runtime，结果 `0` 警告、`0` 错误；`git diff --check` 通过，仅有仓库既有 LF/CRLF 提示。
 - 第一版 `Camera.pixelRect` 映射经用户按“拉窄 -> 拉宽”验证仍失败：托盘 Piece 被排到棋盘下沿附近。Editor 实际日志确认错误帧的根 Canvas Rect 为 `0x0`，而代码仍继续按无效父矩形布局。
 - 第二版移除窗口刷新阶段对完整 `ConfigureGameplayCanvas` 的重复调用，只刷新固定宽高比相机视口；布局前检查根 Canvas Rect，尺寸无效时逐帧延后。临时诊断代码已删除，Runtime/Editor 再次编译为 `0` 警告、`0` 错误。
