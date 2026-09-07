@@ -99,6 +99,17 @@ public class MainScene : MonoBehaviour
     private const string PackNameTextObjectName = "NameText";
     private const string MenuButtonObjectName = "BtnMenu";
     private const string WishListButtonObjectName = "BtnWishList";
+    private const string WishListPromptCollection = "WishListPrompt";
+    private const string WishListPromptShownKeyPrefix = "FirstCompletionCardBag";
+    private const string WishListPromptPendingKeyPrefix = "PendingFirstCompletionCardBag";
+    private const string WishListPanelObjectName = "PanelWishList";
+    private const string WishListAddButtonObjectName = "BtnAddList";
+    private const string WishListCloseButtonObjectName = "BtnClose";
+    private const string WishListPromptTitleObjectName = "TextTitle";
+    private const string WishListPromptContentObjectName = "TextContent";
+    private const string WishListPromptAddTextPath = "BtnAddList/BtnTitle";
+    private const string WishListPromptContentKey = "game.wishlist_prompt.content";
+    private const string WishListPromptAddKey = "game.wishlist_prompt.add";
     private const string DiscordButtonObjectName = "BtnDiscord";
     private const string DiscordUrl = "https://discord.gg/sfmNFEF5ec";
     private const string QqButtonObjectName = "BtnQQ";
@@ -229,6 +240,10 @@ public class MainScene : MonoBehaviour
     private ScrollRect mPackageScrollRect;
     private Coroutine mPackagePageSnapCoroutine;
     private GameObject mMenuPanelRoot;
+    private GameObject mWishListPanelRoot;
+    private Button mWishListAddButton;
+    private Button mWishListCloseButton;
+    private int mActiveWishListPromptPackId;
     private TMP_Text[] mPrimaryMenuButtonLabels = Array.Empty<TMP_Text>();
     private float mPrimaryMenuButtonMaximumFontSize;
     private float mPrimaryMenuButtonMinimumFontSize;
@@ -782,6 +797,7 @@ public class MainScene : MonoBehaviour
         ConfigureRankButton();
         ConfigureAchieveButton();
         ConfigureWishListButton();
+        ConfigureWishListPanel();
         ConfigureDiscordButton();
         ConfigureQqButton();
         ConfigureBagSelectPanel();
@@ -1158,6 +1174,7 @@ public class MainScene : MonoBehaviour
         {
             ClearPackageRewardEntranceState(restorePositions: true);
             mIsPlayingAnimation = false;
+            TryShowPendingWishListPrompt();
             yield break;
         }
 
@@ -1185,6 +1202,7 @@ public class MainScene : MonoBehaviour
 
         ClearPackageRewardEntranceState(restorePositions: true);
         mIsPlayingAnimation = false;
+        TryShowPendingWishListPrompt();
     }
 
     public void CancelPackageRewardEntrance()
@@ -1192,6 +1210,7 @@ public class MainScene : MonoBehaviour
         ClearPackageRewardEntranceState(restorePositions: true);
         RestorePackageRewardListVisibility();
         mIsPlayingAnimation = false;
+        TryShowPendingWishListPrompt();
     }
 
     private void ConfigureBagVolumePanel()
@@ -2612,6 +2631,7 @@ public class MainScene : MonoBehaviour
             else
             {
                 RestorePackageRewardListVisibility();
+                TryShowPendingWishListPrompt();
             }
         }
     }
@@ -4128,9 +4148,154 @@ public class MainScene : MonoBehaviour
     private static void OnWishListButtonClicked()
     {
         AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
+        OpenWishListPage();
+    }
+
+    private static void OpenWishListPage()
+    {
         if (!AnalyticsManager.Instance.TryOpenSteamOverlayWebPage(GameDefine.WishListUrl))
         {
             Application.OpenURL(GameDefine.WishListUrl);
+        }
+    }
+
+    private void ConfigureWishListPanel()
+    {
+        mWishListPanelRoot = GameCommonUtility.FindSceneObject(WishListPanelObjectName);
+        if (mWishListPanelRoot == null)
+        {
+            Debug.LogWarning(
+                $"MainScene: wish list panel not found. Expected {WishListPanelObjectName}.");
+            return;
+        }
+
+        mWishListAddButton = mWishListPanelRoot.transform.Find(
+            WishListAddButtonObjectName)?.GetComponent<Button>();
+        mWishListCloseButton = mWishListPanelRoot.transform.Find(
+            WishListCloseButtonObjectName)?.GetComponent<Button>();
+        if (mWishListAddButton == null || mWishListCloseButton == null)
+        {
+            Debug.LogWarning(
+                $"MainScene: {WishListPanelObjectName} requires "
+                + $"{WishListAddButtonObjectName} and {WishListCloseButtonObjectName} buttons.");
+        }
+        else
+        {
+            mWishListAddButton.onClick.RemoveListener(OnWishListPromptAddButtonClicked);
+            mWishListAddButton.onClick.AddListener(OnWishListPromptAddButtonClicked);
+            mWishListCloseButton.onClick.RemoveListener(OnWishListPromptCloseButtonClicked);
+            mWishListCloseButton.onClick.AddListener(OnWishListPromptCloseButtonClicked);
+        }
+
+        RefreshWishListPromptTexts();
+        mWishListPanelRoot.SetActive(false);
+    }
+
+    private void RefreshWishListPromptTexts()
+    {
+        SetWishListPromptText(
+            WishListPromptTitleObjectName,
+            GameLocalization.Get("main.hint"));
+        SetWishListPromptText(
+            WishListPromptContentObjectName,
+            GameLocalization.Get(WishListPromptContentKey));
+        SetWishListPromptText(
+            WishListPromptAddTextPath,
+            GameLocalization.Get(WishListPromptAddKey));
+    }
+
+    private void SetWishListPromptText(string path, string value)
+    {
+        var label = mWishListPanelRoot != null
+            ? mWishListPanelRoot.transform.Find(path)?.GetComponent<TMP_Text>()
+            : null;
+        if (label == null)
+        {
+            return;
+        }
+
+        label.text = value;
+        GameLocalization.ConfigureTextToFit(label);
+    }
+
+    private void TryShowPendingWishListPrompt()
+    {
+        if (!isActiveAndEnabled
+            || !GameCommonUtility.IsSceneMatch(SceneManager.GetActiveScene(), GameDefine.SceneMain)
+            || mWishListPanelRoot == null
+            || mWishListAddButton == null
+            || mWishListCloseButton == null
+            || mActiveWishListPromptPackId > 0
+            || !SqliteLocalStore.Initialize())
+        {
+            return;
+        }
+
+        var promptPackIds = new[] { 6, 18 };
+        for (var i = 0; i < promptPackIds.Length; i++)
+        {
+            var packId = promptPackIds[i];
+            var shownKey = $"{WishListPromptShownKeyPrefix}{packId:D3}";
+            var pendingKey = $"{WishListPromptPendingKeyPrefix}{packId:D3}";
+            if (SqliteLocalStore.Exists(WishListPromptCollection, shownKey)
+                || !string.Equals(
+                    SqliteLocalStore.Read(WishListPromptCollection, pendingKey),
+                    "true",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            mActiveWishListPromptPackId = packId;
+            mWishListAddButton.interactable = true;
+            mWishListCloseButton.interactable = true;
+            RefreshWishListPromptTexts();
+            mWishListPanelRoot.SetActive(true);
+            mWishListPanelRoot.transform.SetAsLastSibling();
+            AudioManager.Instance.PlaySfx("SFX_PopupTransition.mp3");
+            return;
+        }
+    }
+
+    private void OnWishListPromptAddButtonClicked()
+    {
+        if (mActiveWishListPromptPackId <= 0)
+        {
+            return;
+        }
+
+        AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
+        OpenWishListPage();
+        CloseWishListPrompt();
+    }
+
+    private void OnWishListPromptCloseButtonClicked()
+    {
+        if (mActiveWishListPromptPackId <= 0)
+        {
+            return;
+        }
+
+        AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
+        CloseWishListPrompt();
+    }
+
+    private void CloseWishListPrompt()
+    {
+        var packId = mActiveWishListPromptPackId;
+        mActiveWishListPromptPackId = 0;
+        mWishListAddButton.interactable = false;
+        mWishListCloseButton.interactable = false;
+        mWishListPanelRoot.SetActive(false);
+
+        var shownKey = $"{WishListPromptShownKeyPrefix}{packId:D3}";
+        var pendingKey = $"{WishListPromptPendingKeyPrefix}{packId:D3}";
+        if (!SqliteLocalStore.Initialize()
+            || !SqliteLocalStore.Upsert(WishListPromptCollection, shownKey, "true")
+            || !SqliteLocalStore.Upsert(WishListPromptCollection, pendingKey, "false"))
+        {
+            Debug.LogWarning(
+                $"MainScene: failed to consume wish list prompt state. packId={packId}");
         }
     }
 
@@ -4806,6 +4971,7 @@ public class MainScene : MonoBehaviour
         RefreshLanguageSelection();
         RefreshPrimaryMenuButtonFontSize();
         RefreshTaskProgressUI();
+        RefreshWishListPromptTexts();
         if (mSavePanelRoot != null)
         {
             RefreshSavePanel();

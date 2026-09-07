@@ -140,14 +140,8 @@ public class GameScene : MonoBehaviour
     private const string TutorialCollection = "Tutorial";
     private const string PiecePlacementTutorialKey = "CardBag001TutorialCompleted";
     private const string WishListPromptCollection = "WishListPrompt";
-    private const string WishListPanelObjectName = "PanelWishList";
-    private const string WishListAddButtonObjectName = "BtnAddList";
-    private const string WishListCloseButtonObjectName = "BtnClose";
-    private const string WishListPromptTitleObjectName = "TextTitle";
-    private const string WishListPromptContentObjectName = "TextContent";
-    private const string WishListPromptAddTextPath = "BtnAddList/BtnTitle";
-    private const string WishListPromptContentKey = "game.wishlist_prompt.content";
-    private const string WishListPromptAddKey = "game.wishlist_prompt.add";
+    private const string WishListPromptShownKeyPrefix = "FirstCompletionCardBag";
+    private const string WishListPromptPendingKeyPrefix = "PendingFirstCompletionCardBag";
     private const string TutorialCanvasObjectName = "PiecePlacementTutorialCanvas";
     private const string TutorialPieceObjectName = "TutorialPiece";
     private const string TutorialArrowObjectName = "TutorialArrow";
@@ -384,11 +378,6 @@ public class GameScene : MonoBehaviour
     private float _gameplayStartRealtime;
     private float _completionTimeSeconds;
     private bool _wasSelectedPackCompletedOnEntry;
-    private GameObject _wishListPanelRoot;
-    private Button _wishListAddButton;
-    private Button _wishListCloseButton;
-    private bool _isWaitingForWishListPrompt;
-    private int _activeWishListPromptPackId;
     private bool _didAdvanceTaskDuringSettlement;
     private bool _didFailTaskAdvanceDuringSettlement;
     private bool _didSavePackCompletion;
@@ -588,7 +577,6 @@ public class GameScene : MonoBehaviour
         InitializeTaskTracking();
         ConfigureReturnButton();
         ConfigureHintButton();
-        ConfigureWishListPanel();
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         ConfigureTestCompleteButton();
 #endif
@@ -8607,15 +8595,10 @@ public class GameScene : MonoBehaviour
         StopGameplayTimer();
         EndDragging();
 
-        if (TryShowWishListBeforeSettlement())
-        {
-            return;
-        }
-
-        ContinueSettlementAfterWishList();
+        ContinueSettlement();
     }
 
-    private void ContinueSettlementAfterWishList()
+    private void ContinueSettlement()
     {
         using var settlementEntry = SettlementEntryMarker.Auto();
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
@@ -8662,157 +8645,6 @@ public class GameScene : MonoBehaviour
         LogSettlementPerformance("entry prepared", entryStartedAt);
 #endif
         Debug.Log("GameScene: puzzle completed, RewardPanel shown.");
-    }
-
-    private void ConfigureWishListPanel()
-    {
-        _wishListPanelRoot = GameCommonUtility.FindSceneObject(WishListPanelObjectName);
-        if (_wishListPanelRoot == null)
-        {
-            Debug.LogWarning(
-                $"GameScene: wish list panel not found. Expected {WishListPanelObjectName}.");
-            return;
-        }
-
-        _wishListAddButton = _wishListPanelRoot.transform.Find(
-            WishListAddButtonObjectName)?.GetComponent<Button>();
-        _wishListCloseButton = _wishListPanelRoot.transform.Find(
-            WishListCloseButtonObjectName)?.GetComponent<Button>();
-        if (_wishListAddButton == null || _wishListCloseButton == null)
-        {
-            Debug.LogWarning(
-                $"GameScene: {WishListPanelObjectName} requires "
-                + $"{WishListAddButtonObjectName} and {WishListCloseButtonObjectName} buttons.");
-        }
-        else
-        {
-            _wishListAddButton.onClick.RemoveListener(OnWishListAddButtonClicked);
-            _wishListAddButton.onClick.AddListener(OnWishListAddButtonClicked);
-            _wishListCloseButton.onClick.RemoveListener(OnWishListCloseButtonClicked);
-            _wishListCloseButton.onClick.AddListener(OnWishListCloseButtonClicked);
-        }
-
-        SetWishListPromptText(
-            WishListPromptTitleObjectName,
-            GameLocalization.Get("main.hint"));
-        SetWishListPromptText(
-            WishListPromptContentObjectName,
-            GameLocalization.Get(WishListPromptContentKey));
-        SetWishListPromptText(
-            WishListPromptAddTextPath,
-            GameLocalization.Get(WishListPromptAddKey));
-        _wishListPanelRoot.SetActive(false);
-    }
-
-    private void SetWishListPromptText(string path, string value)
-    {
-        var label = _wishListPanelRoot != null
-            ? _wishListPanelRoot.transform.Find(path)?.GetComponent<TMP_Text>()
-            : null;
-        if (label == null)
-        {
-            Debug.LogWarning(
-                $"GameScene: wish list text not found. Expected {WishListPanelObjectName}/{path}.");
-            return;
-        }
-
-        label.text = value;
-        GameLocalization.ConfigureTextToFit(label);
-    }
-
-    private bool TryShowWishListBeforeSettlement()
-    {
-        var packId = GameManager.GetBagId();
-        if (_wasSelectedPackCompletedOnEntry
-            || (packId != 6 && packId != 18)
-            || _wishListPanelRoot == null
-            || _wishListAddButton == null
-            || _wishListCloseButton == null)
-        {
-            return false;
-        }
-
-        var recordKey = GetWishListPromptRecordKey(packId);
-        if (SqliteLocalStore.Initialize()
-            && SqliteLocalStore.Exists(WishListPromptCollection, recordKey))
-        {
-            return false;
-        }
-
-        _activeWishListPromptPackId = packId;
-        _isWaitingForWishListPrompt = true;
-        _wishListAddButton.interactable = true;
-        _wishListCloseButton.interactable = true;
-        _wishListPanelRoot.SetActive(true);
-        _wishListPanelRoot.transform.SetAsLastSibling();
-        AudioManager.Instance.PlaySfx("SFX_PopupTransition.mp3");
-        return true;
-    }
-
-    private void OnWishListAddButtonClicked()
-    {
-        if (!_isWaitingForWishListPrompt)
-        {
-            return;
-        }
-
-        AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
-        if (!AnalyticsManager.Instance.TryOpenSteamOverlayWebPage(GameDefine.WishListUrl))
-        {
-            Application.OpenURL(GameDefine.WishListUrl);
-        }
-
-        CloseWishListAndContinueSettlement();
-    }
-
-    private void OnWishListCloseButtonClicked()
-    {
-        if (!_isWaitingForWishListPrompt)
-        {
-            return;
-        }
-
-        AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
-        CloseWishListAndContinueSettlement();
-    }
-
-    private void CloseWishListAndContinueSettlement()
-    {
-        _isWaitingForWishListPrompt = false;
-        if (_wishListAddButton != null)
-        {
-            _wishListAddButton.interactable = false;
-        }
-
-        if (_wishListCloseButton != null)
-        {
-            _wishListCloseButton.interactable = false;
-        }
-
-        var packId = _activeWishListPromptPackId;
-        _activeWishListPromptPackId = 0;
-        if (packId > 0
-            && (!SqliteLocalStore.Initialize()
-                || !SqliteLocalStore.Upsert(
-                    WishListPromptCollection,
-                    GetWishListPromptRecordKey(packId),
-                    "true")))
-        {
-            Debug.LogWarning(
-                $"GameScene: failed to persist wish list prompt state. packId={packId}");
-        }
-
-        if (_wishListPanelRoot != null)
-        {
-            _wishListPanelRoot.SetActive(false);
-        }
-
-        ContinueSettlementAfterWishList();
-    }
-
-    private static string GetWishListPromptRecordKey(int packId)
-    {
-        return $"FirstCompletionCardBag{packId:D3}";
     }
 
     private void PrepareBoardForRewardPanel()
@@ -11226,6 +11058,10 @@ public class GameScene : MonoBehaviour
                                            && !_wasSelectedPackCompletedOnEntry;
             _settlementBagCountAfterCompletion = _settlementBagCountBeforeCompletion
                                                  + (_isFirstCompletionSettlement ? 1 : 0);
+            if (_isFirstCompletionSettlement)
+            {
+                QueueWishListPromptForMainScene(GameManager.GetBagId());
+            }
         }
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         LogSettlementPerformance("completion persisted", persistenceStartedAt);
@@ -11281,6 +11117,34 @@ public class GameScene : MonoBehaviour
         _isSettlementReadyForFinish = true;
         SetSettlementInputLocked(false);
         SetSettlementActionButtonsInteractable(true);
+    }
+
+    private static void QueueWishListPromptForMainScene(int packId)
+    {
+        if (packId != 6 && packId != 18)
+        {
+            return;
+        }
+
+        var shownKey = $"{WishListPromptShownKeyPrefix}{packId:D3}";
+        var pendingKey = $"{WishListPromptPendingKeyPrefix}{packId:D3}";
+        if (!SqliteLocalStore.Initialize())
+        {
+            Debug.LogWarning(
+                $"GameScene: failed to initialize wish list prompt state. packId={packId}");
+            return;
+        }
+
+        if (SqliteLocalStore.Exists(WishListPromptCollection, shownKey))
+        {
+            return;
+        }
+
+        if (!SqliteLocalStore.Upsert(WishListPromptCollection, pendingKey, "true"))
+        {
+            Debug.LogWarning(
+                $"GameScene: failed to queue wish list prompt for MainScene. packId={packId}");
+        }
     }
 
     private void SetSettlementInputLocked(bool locked)

@@ -1,5 +1,14 @@
 # 当前任务
 
+## 2026-09-07 愿望单提示迁移到首页列表入场后
+
+- 状态：代码、场景迁移和静态验证完成，等待 MainScene/GameScene Play Mode 验收。
+- 用户意图：将 `GameScene/Canvas/PanelWishList` 移到 `MainScene/Canvas`；首次完成 `CardBag006` 或 `CardBag018` 时不再打断结算，正常返回桌面并等待卡包列表进场动画结束后再显示愿望单弹窗。
+- 修改：原样迁移 `PanelWishList` 整棵 UI 层级到 MainScene Canvas，保留 RectTransform、Sprite、字体、材质和按钮配置。GameScene 恢复直接启动原结算流程，并在首次完成状态成功保存后，按当前存档写入对应卡包的待展示记录。MainScene 在普通首页入场、奖励回场和回场取消恢复路径的卡包列表动画结束后检查记录，显示面板并置顶；`BtnClose` 与 `BtnAddList` 均关闭面板、消费待展示记录并持久化已展示状态，添加按钮继续使用 Steam Overlay 优先、系统浏览器保底的首页愿望单逻辑。语言切换时同步刷新标题、正文和按钮现有 18 种语言。
+- 修改文件：`Assets/Scenes/GameScene.unity`、`Assets/Scenes/MainScene.unity`、`Assets/Scripts/Controller/GameScene.cs`、`Assets/Scripts/Controller/MainScene.cs`、任务记录和项目上下文。
+- 验证：Runtime 与 Editor C# 工程串行编译通过，均为 `0` 警告、`0` 错误；确认愿望单 38 个序列化对象从 GameScene 全部移除并在 MainScene 唯一存在，根节点父级为 MainScene Canvas `1176275237`，默认隐藏且没有 fileID 冲突；迁移后的新增 YAML 无尾随空格。
+- 下一步：分别用首次完成 `006`、首次完成 `018`、重玩目标卡包和普通卡包测试；确认结算完整执行、返回首页后列表先完成进场再弹窗、两个按钮均只消费一次提示，并确认三个本地存档槽互不串记录。
+
 ## 2026-09-07 首页无任务状态改用 TaskContent2
 
 - 状态：代码修改和静态验证完成，等待多语言 Play Mode 验收。
