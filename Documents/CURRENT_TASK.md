@@ -1,5 +1,15 @@
 # 当前任务
 
+## 2026-09-07 CardBag018 手绘分组
+
+- 状态：Prefab 分组修改和静态验证完成，等待 Unity 单包描边重烘焙及 Play Mode 验收。
+- 用户意图：按照 `D:\360极速浏览器X下载\image.jpeg` 中手绘红线和编号，重新整理 `CardBag018` 的拼图分组。
+- 修改：将 196 张真实 Piece 按手绘图完整映射为 32 组，正式命名范围为 `Piece0101~Piece3210`；每组内部按棋盘中心从左到右排列，根节点下 Piece 层级同步按 `PieceGGII` 升序排列。只修改名称和层级顺序，保留 Sprite GUID、RectTransform、Image、材质、投影组件及其他序列化参数。
+- 修改文件：`Assets/Resources/CardBagPrefabs/CardBag018.prefab`、任务记录和项目上下文。
+- 验证：32 组共 196 片，唯一 Sprite 引用 196 个，`0` 重复、`0` 遗漏；正式名称 196 个且全部唯一；根节点 Piece 子级 196 个且名称升序无逆序；Prefab 差异中的 552 条增删行全部为 `m_Name` 或根 `m_Children` fileID 顺序，`git diff --check` 通过。
+- 描边：现有 `CardBag018/Group01~14` 是旧分组输出，已经过期。当前残留 Unity 进程没有活动窗口，也没有刷新新增 Editor 脚本，因此未冒险终止进程或启动同项目第二实例；一次性烘焙触发器已移除，工程没有残留辅助代码。
+- 下一步：重新打开有效的 Unity Editor，执行 **Puffies -> Bake CardBag Outlines**，确认 `CardBag018` 生成 `Group01~32` 的默认、`_Level` 和 `_Stickers` 三套描边；随后进入或重玩 018，逐组核对发牌区域和顺序。已有 018 进行中存档仍包含旧组号时，应通过重玩建立新会话。
+
 ## 2026-09-06 主菜单四按钮统一字号
 
 - 状态：代码修改和静态验证完成，等待多语言 Play Mode 验收。
