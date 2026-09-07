@@ -1596,11 +1596,11 @@
 - [x] 在 `GameDefine` 建立统一的当前构建卡包可用性判断。
 - [x] 将卡包记录、完成数量、解锁入口和奖励算法接入统一判断。
 - [x] 编译默认 Demo，静态检查正式版条件及完整差异。
-- [ ] 在 Play Mode 验证 018 上限、019 旧存档隐藏和任务结算表现。
+- [ ] 在 Play Mode 验证 022 上限、023 不进入业务和任务结算表现。
 
 ### 验证
 
-- `CardPacks.csv` 当前包含 `001~018` 共 18 个 Demo 卡包和 `019~022` 共 4 个后续卡包；配置与对应资源均未修改。
+- `CardPacks.csv` 当前包含 `001~022` 共 22 个默认 Editor/Demo 可用卡包；019~022 的配置与对应资源直接复用，`CardBag023` 因缺少配置不进入业务。
 - 默认 Demo 的 `dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 成功并连带编译 Runtime，结果 `0` 警告、`0` 错误。
 - `PUFFIES_STEAM_RELEASE` 分支静态确认将最大可用 PackId 设为 `int.MaxValue`，其余数据和发包逻辑完全复用；`git diff --check` 通过，仅有仓库既有 LF/CRLF 提示。
 
@@ -1608,7 +1608,7 @@
 
 ### 需求与实现
 
-1. WHEN 默认 Demo 的 `CardBag001~018` 均已获得，即生命周期均不是 `Locked` THEN 任务系统 SHALL 不再向业务提供活动任务，也不得继续向玩家展示新任务。
+1. WHEN 默认 Demo 的 `CardBag001~022` 均已获得，即生命周期均不是 `Locked` THEN 任务系统 SHALL 不再向业务提供活动任务，也不得继续向玩家展示新任务。
 2. 任务终止条件 SHALL 根据当前构建可用的全部卡包配置逐个核对，不得只判断是否获得 `CardBag018`，以免随机发包时遗漏 001~017。
 3. MainScene SHALL 继续复用其现有 `TaskItem` 实例；终态下隐藏整个 `ProgressBg`、整个 `BagBg`（包含卡包、`+1` 与绿色圆圈）及正常任务文本 `TaskContent`，只显示 `TaskContent2`。
 4. 终态 `TaskContent2` SHALL 保留 Prefab 中的 RectTransform、字号、颜色和对齐，显示本地化的“当前阶段的卡包已收集完毕！”，该文案 SHALL 覆盖项目支持的 18 种语言；文字宽度超过文本框时 SHALL 自动缩小且不得超框。
