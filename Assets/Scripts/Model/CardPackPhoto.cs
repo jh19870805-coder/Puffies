@@ -59,6 +59,7 @@ public sealed class CardPackPhoto : MonoBehaviour
 
         mPanelCanvas.overrideSorting = true;
         mPanelCanvas.sortingOrder = PanelSortingOrder;
+        SyncPanelSortingLayer();
 
         var scaler = GetComponent<CanvasScaler>();
         if (scaler == null)
@@ -136,11 +137,38 @@ public sealed class CardPackPhoto : MonoBehaviour
         mPreviewClosed = onPreviewClosed;
         mCaptureFailed = onCaptureFailed;
         StopPreviewAnimation();
+        BringPanelToFront();
         gameObject.SetActive(true);
         SetPreviewVisible(false);
         IsCapturing = true;
         StartCoroutine(CapturePhoto(bagId, onPreviewReady));
         return true;
+    }
+
+    private void BringPanelToFront()
+    {
+        if (mPanelCanvas != null)
+        {
+            mPanelCanvas.overrideSorting = true;
+            mPanelCanvas.sortingOrder = PanelSortingOrder;
+            SyncPanelSortingLayer();
+        }
+
+        transform.SetAsLastSibling();
+    }
+
+    private void SyncPanelSortingLayer()
+    {
+        if (mPanelCanvas == null || transform.parent == null)
+        {
+            return;
+        }
+
+        var parentCanvas = transform.parent.GetComponentInParent<Canvas>();
+        if (parentCanvas != null)
+        {
+            mPanelCanvas.sortingLayerID = parentCanvas.sortingLayerID;
+        }
     }
 
     private IEnumerator CapturePhoto(int bagId, Action<string> onPreviewReady)

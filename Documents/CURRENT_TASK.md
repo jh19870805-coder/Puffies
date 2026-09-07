@@ -1,5 +1,15 @@
 # 当前任务
 
+## 2026-09-07 拍照弹窗移入主 Canvas 后的层级修复
+
+- 状态：代码、Prefab 配置和静态验证完成，等待 MainScene/GameScene Play Mode 验收。
+- 用户意图：首页和游戏页共用的 `PackPhotoItem` 被移动到各自主 `Canvas` 下后，拍照预览仍必须显示在当前页面所有 UI 和运行时独立 Canvas 上方。
+- 根因：`PackPhotoItem.prefab` 的 Canvas 虽然保存了 `sortingOrder=32000`，但 `Override Sorting` 仍为关闭状态；成为主 Canvas 子节点后，编辑器状态会按父级/同级顺序绘制，且拍照开始前没有再次置顶和同步当前父 Canvas 的 Sorting Layer。
+- 修改：在 `PackPhotoItem.prefab` 正式开启 `Override Sorting`；`CardPackPhoto` 初始化和每次拍照开始时都恢复独立排序 `32000`，同步当前父 Canvas 的 Sorting Layer，并将弹窗移到最后一个同级。保留用户在两个 Scene 中设置的 Canvas 父节点、位置和尺寸，不修改拍照、闪光、保存及预览动画流程。
+- 修改文件：`Assets/Prefabs/PackPhotoItem.prefab`、`Assets/Scripts/Model/CardPackPhoto.cs`、任务记录和项目上下文。
+- 验证：`dotnet build Assembly-CSharp.csproj --no-restore` 与 `dotnet build Assembly-CSharp-Editor.csproj --no-restore` 均通过，`0` 警告、`0` 错误；本轮 Prefab/代码 `git diff --check` 通过。
+- 下一步：分别在 MainScene 卡包展开页和 GameScene 结算页拍照，确认白色闪光后预览完整覆盖选中卡包、结算内容及其他独立 Canvas，关闭后原页面交互恢复。
+
 ## 2026-09-07 卡包 006/018 首次完成愿望单提示
 
 - 状态：代码修改和静态验证完成，等待 Play Mode 验收。
