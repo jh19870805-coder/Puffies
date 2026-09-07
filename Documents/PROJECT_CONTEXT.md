@@ -269,9 +269,9 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 - MainScene 和 GameScene 引用相同 `TaskItem.prefab` GUID。场景 Override 只定位根节点（`MainScene`：`10,508`；`GameScene`：`-6,455`）；子节点布局和视觉必须在共享 Prefab 中修改。
 - 共享 TaskItem 子节点名称为 `TaskContent`、`TextProgress`、`ProgressMask`、`BagIcon` 和 `BagBg`。任务 UI 绑定代码应相对 TaskItem 实例解析这些名称，不得使用场景专属后缀。
 - `TaskProgressUIUtility` 是两个 TaskItem 实例共用的运行时绑定。三类任务文案分别为“完成任意拼图包，收集 N 分”“从任意拼图包中收集 N 个贴纸”和“完成 N 个 S/M 尺寸的拼图包”；`TextProgress` 显示当前值与任务实例目标值，可见 `ProgressMask` 宽度使用两者比值并限制在有效范围。`BagIcon` 始终使用共享 Prefab 中配置的固定 Sprite，运行时不得按任务奖励或卡包编号替换。
-- MainScene 在 `Start` 时从持久化任务实例刷新 TaskItem。GameScene 结算使用不受 TimeScale 影响的时间：积分任务与结算分数同步滚动，贴纸和完成卡包任务在最终得分后单独滚动进度；任务奖励和下一任务生成在动画前持久化。
+- MainScene 在卡包数据初始化成功后、列表创建与进场动画开始前，从最新持久化状态刷新 TaskItem，并在这里统一判定当前构建卡包是否已全部解锁。GameScene 结算使用不受 TimeScale 影响的时间：积分任务与结算分数同步滚动，贴纸和完成卡包任务在最终得分后单独滚动进度；任务奖励和下一任务生成在动画前持久化。
 - GameScene 结算摘要将 `TaskBg2/TaskScore` 绑定到当局结算分数，将 `TaskBg2/TaskBagNum` 绑定到 SQLite 中生命周期为 `Completed` 的卡包数量；未完成的已解锁卡包和进行中卡包不计入，重玩不会重复计数。
-- GameScene 结算在任务推进、待发任务奖励和首次完成自然奖励完成判定后，若当前构建可用卡包已经全部解锁，则在奖励动画开始前直接隐藏 `RewardPanel/TaskItem`；本轮刚发出最后一个卡包也适用，不删除保留的任务数据。
+- GameScene 结算不得在任务推进或奖励卡包发放后重新判定全卡包终态，也不得因本轮刚发出最后一个卡包而中途隐藏 `RewardPanel/TaskItem`；结算页维持本轮开始时确定的任务展示，最新全解锁终态由返回 MainScene 后、卡包列表进场前统一刷新。
 - `PanelWishList` 位于 `MainScene/Canvas`。当前存档第一次完成 `CardBag006` 或 `CardBag018` 并成功保存完成状态后，GameScene 只写入待展示记录，不中断 RewardPanel 和结算流程；返回 MainScene 后，普通首页或奖励回场的卡包列表进场动画完全结束才显示该面板。`BtnClose` 与 `BtnAddList` 都会消费待展示记录并持久化该卡包已展示状态；`BtnAddList` 与首页共用 `GameDefine.WishListUrl`，优先使用 Steam Overlay，失败时回退 `Application.OpenURL`。记录随当前本地存档槽隔离，重玩以及同一卡包后续完成不再显示。
 - GameScene 进入时记录描边设置快照，点击 `BtnTips` 时记录提示使用，首个 Piece 成功放置时开始不受 TimeScale 影响的积分计时，RewardPanel 结算开始时冻结。
 - MainScene `PanelSet/SliderMusic` 和 `PanelSet/SliderEffect` 是手工拼装的仿 Slider：根 Image 背景加 `SliderFill`、`SliderHandle` 子节点。运行时使用 `FakeSettingsSliderInput` 处理指针拖动、刷新视觉并保存数值。

@@ -810,7 +810,6 @@ public class MainScene : MonoBehaviour
         ConfigureSettingsPanel();
         ConfigureUsablePanel();
         ConfigureSavePanel();
-        RefreshTaskProgressUI();
         GameLocalization.LanguageChanged -= OnLanguageChanged;
         GameLocalization.LanguageChanged += OnLanguageChanged;
         GameLocalization.RefreshSceneTexts();
@@ -2580,6 +2579,9 @@ public class MainScene : MonoBehaviour
             RestorePackageRewardListVisibility();
             yield break;
         }
+
+        // Resolve the terminal task state before any package-list entrance frame is shown.
+        RefreshTaskProgressUI();
 
         var startedAt = Time.realtimeSinceStartup;
         var unlockedPackIds = CardPackDataUtility.GetMainSceneOrderedPackIds();

@@ -11091,10 +11091,6 @@ public class GameScene : MonoBehaviour
         }
 
         RebuildSettlementPackRewardIds();
-        if (CardPackDataUtility.AreAllCurrentBuildCardPacksUnlocked())
-        {
-            SetTaskRewardSectionVisible(false);
-        }
 
         if (_isFirstCompletionSettlement)
         {

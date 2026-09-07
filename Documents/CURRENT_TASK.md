@@ -1,5 +1,14 @@
 # 当前任务
 
+## 2026-09-07 全卡包终态判定前移到首页进场前
+
+- 状态：代码修改和静态验证完成，等待第 18 包奖励流程 Play Mode 验收。
+- 用户意图：结算页不再在奖励卡包出现后重新判定是否已全部解锁，避免获取第 18 包时 `TaskItem` 先显示又突然消失；返回首页后先判定全解锁终态，再执行卡包列表进场动画。
+- 修改：移除 `GameScene.ProcessTaskSettlement` 在任务推进和奖励发放后的全解锁二次判定，结算页从开始到结束维持本轮既定的任务展示。MainScene 不再从 `Start()` 独立刷新任务 UI，而是在卡包数据初始化成功后、列表创建和进场动画开始前读取最新解锁状态并刷新正常任务或全收集终态。保留任务系统“进入关卡前已经全解锁则不提供活动任务”的既有规则。
+- 修改文件：`Assets/Scripts/Controller/GameScene.cs`、`Assets/Scripts/Controller/MainScene.cs`、任务记录和项目上下文。
+- 验证：静态确认 `GameScene` 已无 `AreAllCurrentBuildCardPacksUnlocked` 调用；首页终态刷新发生在 `RefreshPackageList` 首次让帧和列表进场之前。Runtime 与 Editor C# 工程编译通过，均为 `0` 警告、`0` 错误；`git diff --check` 通过。
+- 下一步：用仅剩 `CardBag018` 未解锁的存档完成一局，确认结算页任务表全程不闪隐；点击完成返回首页，确认先切换成全卡包终态，再播放第 18 包奖励落位和其余列表进场动画。
+
 ## 2026-09-07 愿望单提示迁移到首页列表入场后
 
 - 状态：代码、场景迁移和静态验证完成，等待 MainScene/GameScene Play Mode 验收。
