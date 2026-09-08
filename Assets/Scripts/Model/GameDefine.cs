@@ -61,6 +61,7 @@ public static class GameDefine
     public const string SceneGame = "GameScene";
     public const string SceneRank = "RankScene";
     public const string SceneAchieve = "AchieveScene";
+    public const string SceneAdmin = "AdminScene";
 
     public static string FormatCardBagPrefabResourcesPath(int bagId)
     {
@@ -476,6 +477,11 @@ public static class GameManager
     public static void EnterAchieveScene()
     {
         SceneManager.LoadScene(GameDefine.SceneAchieve);
+    }
+
+    public static void EnterAdminScene()
+    {
+        SceneManager.LoadScene(GameDefine.SceneAdmin);
     }
 
     public static void EnterMainScene()

@@ -2002,3 +2002,36 @@
 - 所有最终文件与各自输入保持相同采样率、双声道和码率；18 个裁剪文件只发生一次 MP3 有损重编码，背景音乐未改。
 - Git 检查确认 19 个 MP3 和 `ProjectSettings/AudioManager.asset` 发生变化，所有音频 `.meta` 与 `Assets/Resources/AudioCatalog.asset` 均未变化。
 - `dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 成功并连带编译 Runtime，结果 `0` 警告、`0` 错误。
+
+## 2026-09-08 - AdminScene 隐藏调试入口
+
+### 需求
+
+1. WHEN 玩家在 MainScene 首页透明按钮 `BtnAdmin` 上于 `2s` 内连续点击 `5` 次 THEN 系统 SHALL 在第五次点击时切换到 `AdminScene`；前四次不得跳转。
+2. `BtnAdmin` 的 Image 可以保持 `Alpha=0`，但对象、Button 和 Graphic SHALL 启用，Button SHALL 可交互且 Graphic 的 `Raycast Target` SHALL 开启。
+3. MainScene 菜单的 `BtnSet` SHALL 恢复原有单击立即打开设置页，不再承担 Admin 连击入口或等待连击判定。
+4. WHEN 玩家点击 `AdminScene/BtnClose` THEN 系统 SHALL 返回 `MainScene`。
+5. `AdminScene` SHALL 加入 Player Build Settings，并沿用项目现有固定宽高比窗口适配与通用按钮音效。
+6. 本次修改 SHALL NOT 覆盖用户当前搭建的场景内容，两个按钮均通过运行时控制器按节点名绑定。
+7. AdminScene SHALL 仅使用左侧 `TextCode101~118` 作为最多 18 行的代码说明清单，每行沿用编辑器已有的 `代码 : 功能说明` 完整单行格式；已有定义按顺序显示，未使用的左侧行保持隐藏，运行时代码不得查找、写入或切换右侧 `TextCode201~218`。
+8. 首批代码定义 SHALL 为：`10001001=显示一键通关按钮`、`10001002=隐藏一键通关按钮`、`10002001=显示所有当前卡包`、`10002002=只显示Demo的前18个卡包`、`10002003=解锁当前所有可见卡包`。
+9. 代码、功能说明和排列顺序 SHALL 集中记录在 `AdminScene` 的统一定义表中，后续新增功能不得散落写入各个 Text 节点；本轮只负责清单展示与映射记录，不绑定 `InputField/BtnConfirm` 的命令执行。
+
+### 设计与任务
+
+- [x] 核对 `BtnAdmin` 的透明 Graphic、Raycast Target 和 Button 状态，并将两秒五连击 Admin 入口绑定到该按钮。
+- [x] 移除设置按钮五连击计数和延迟，恢复原设置页即时打开行为。
+- [x] 增加统一的 Admin 场景名与进入接口。
+- [x] 增加 AdminScene 运行时控制器，绑定 `BtnClose` 返回首页并刷新固定宽高比布局。
+- [x] 将 AdminScene 加入 Build Settings。
+- [x] 建立可扩展的 Admin 代码定义表，并将前五条完整的 `代码 : 功能说明` 单行内容写入左侧文本。
+- [x] 编译 Runtime/Editor 并执行静态结构与差异检查。
+- [ ] 在 Play Mode 验证透明 `BtnAdmin` 两秒五连击进入 Admin、普通设置即时打开和关闭返回路径。
+
+### 验证
+
+- `MainScene/BtnAdmin` 已激活并包含可交互 Button；其 Image 为 `Alpha=0` 且 `Raycast Target=1`，透明状态仍能接收点击。`AdminScene` 中存在唯一的 `BtnClose` Button；两个场景都使用运行时绑定，不写入序列化 OnClick。
+- 连击状态只属于 `BtnAdmin`：从第一次到第五次使用 `Time.unscaledTime` 检查 `<=2s`，超时后的当前点击自动成为新一轮第一次；`BtnSet` 不读取或修改该状态。
+- AdminScene 仅由运行时代码控制左侧 `TextCode101~118`：首批 5 条定义按 `101~105` 顺序显示完整的 `代码 : 功能说明` 单行内容，左侧剩余 13 行隐藏；右侧 `TextCode201~218` 保持编辑器状态，不受清单逻辑影响。
+- Unity 已将 `AdminScene.cs` 纳入生成的 Runtime 工程；`dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 连带编译 Runtime，结果 `0` 警告、`0` 错误。
+- 本次代码、Build Settings、spec 和记录文件没有行尾空格；全局 `git diff --check` 的现有报告仅来自用户新建的 `AdminScene.unity` 空 YAML 字段，本轮未修改该场景文件。

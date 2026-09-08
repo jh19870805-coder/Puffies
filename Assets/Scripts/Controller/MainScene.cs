@@ -128,6 +128,9 @@ public class MainScene : MonoBehaviour
     private const string DeleteSaveConfirmationLocalizationKey = "main.confirm_delete_save";
     private const string SettingsPanelObjectName = "PanelSet";
     private const string SettingsButtonObjectName = "BtnSet";
+    private const string AdminButtonObjectName = "BtnAdmin";
+    private const int AdminEntryClickCount = 5;
+    private const float AdminEntryClickWindowSeconds = 2f;
     private const string MusicSliderObjectName = "SliderMusic";
     private const string EffectSliderObjectName = "SliderEffect";
     private const string WindowedToggleObjectName = "ToggleFrame";
@@ -250,6 +253,8 @@ public class MainScene : MonoBehaviour
     private GameObject mConfirmationPanelRoot;
     private TMP_Text mConfirmationContentText;
     private GameObject mSettingsPanelRoot;
+    private int mAdminButtonClickCount;
+    private float mAdminButtonClickWindowStartTime;
     private GameObject mUsablePanelRoot;
     private GameObject mSavePanelRoot;
     private GameObject mLanguagePanelRoot;
@@ -796,6 +801,7 @@ public class MainScene : MonoBehaviour
 
         ConfigureRankButton();
         ConfigureAchieveButton();
+        ConfigureAdminButton();
         ConfigureWishListButton();
         ConfigureWishListPanel();
         ConfigureDiscordButton();
@@ -4137,6 +4143,50 @@ public class MainScene : MonoBehaviour
 
         AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
         GameManager.EnterAchieveScene();
+    }
+
+    private void ConfigureAdminButton()
+    {
+        var adminButtonObject = GameCommonUtility.FindSceneObject(AdminButtonObjectName);
+        var adminButton = adminButtonObject != null
+            ? adminButtonObject.GetComponent<Button>()
+            : null;
+        if (adminButton == null)
+        {
+            Debug.LogWarning(
+                $"MainScene: admin button not found or missing Button component. Expected {AdminButtonObjectName}.");
+            return;
+        }
+
+        adminButton.onClick.RemoveListener(OnAdminButtonClicked);
+        adminButton.onClick.AddListener(OnAdminButtonClicked);
+    }
+
+    private void OnAdminButtonClicked()
+    {
+        if (mIsPlayingAnimation)
+        {
+            return;
+        }
+
+        var clickTime = Time.unscaledTime;
+        if (mAdminButtonClickCount == 0
+            || clickTime - mAdminButtonClickWindowStartTime > AdminEntryClickWindowSeconds)
+        {
+            mAdminButtonClickCount = 0;
+            mAdminButtonClickWindowStartTime = clickTime;
+        }
+
+        mAdminButtonClickCount++;
+        if (mAdminButtonClickCount < AdminEntryClickCount)
+        {
+            return;
+        }
+
+        mAdminButtonClickCount = 0;
+        mAdminButtonClickWindowStartTime = 0f;
+        AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
+        GameManager.EnterAdminScene();
     }
 
     private void ConfigureWishListButton()

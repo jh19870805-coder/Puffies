@@ -1,5 +1,24 @@
 # 当前任务
 
+## 2026-09-08 AdminScene 隐藏调试入口
+
+- 状态：入口调整和静态验证完成，等待 Play Mode 验收。
+- 用户意图：Admin 入口改由 MainScene 新增的透明 `BtnAdmin` 承担，但仍须在 `2s` 内连续点击 `5` 次才进入 `AdminScene`；Admin 页点击 `BtnClose` 返回首页。
+- 修改：MainScene 启动时按名称查找并绑定 `BtnAdmin`，使用 `Time.unscaledTime` 独立记录从第一次到第五次点击的两秒窗口，第五次满足条件时调用统一 Admin 场景入口；已移除 `BtnSet` 原有的连击计数、协程和 `0.6s` 延迟，设置页保持单击即时打开。新增 `AdminScene` 运行时控制器按名称绑定现有 `BtnClose`，返回 MainScene，并复用窗口固定宽高比刷新；`AdminScene` 已加入 Build Settings。
+- 场景核对：`BtnAdmin` 已激活且带可交互 Button，Image 的 `Alpha=0`、`Raycast Target=1`，因此透明状态可以接收点击；它位于主 Canvas 下并排在卡包列表之后。没有改写用户当前编辑的 MainScene/AdminScene 布局、输入框或确认按钮功能。
+- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Assets/Scripts/Controller/AdminScene.cs` 及 `.meta`、`Assets/Scripts/Model/GameDefine.cs`、`ProjectSettings/EditorBuildSettings.asset`、统一 spec、任务记录和项目上下文。
+- 验证：静态确认只有 `BtnAdmin` 维护两秒五连击状态，`BtnSet` 已恢复即时打开；`BtnAdmin` 已激活，Button 可交互，透明 Image 启用且 `Raycast Target=1`。Admin 场景 `.meta` GUID 与 Build Settings 一致，场景内存在唯一带 Button 的 `BtnClose`；Runtime/Editor 标准编译通过，`0` 警告、`0` 错误，本轮文件 `git diff --check` 通过。
+- 下一步：在 MainScene 的透明 `BtnAdmin` 区域于两秒内快速点击五次，确认前四次不跳转、第五次进入 AdminScene；再点击 `BtnClose` 返回，并确认菜单中的 `BtnSet` 单击立即打开设置页。
+
+### Admin 代码清单
+
+- 状态：首批清单展示完成，等待 AdminScene Play Mode 视觉验收。
+- 修改：`AdminScene` 使用集中定义表维护代码与功能说明，启动时仅将完整的 `代码 : 功能说明` 单行文本按顺序写入并启用左侧 `TextCode101~105`，`TextCode106~118` 作为后续扩展行继续隐藏；不查找、不写入、不切换右侧 `TextCode201~218`。只更新左侧 Text 内容与显隐，保留场景中的位置、尺寸、字体、材质和颜色。
+- 首批映射：`10001001=显示一键通关按钮`、`10001002=隐藏一键通关按钮`、`10002001=显示所有当前卡包`、`10002002=只显示Demo的前18个卡包`、`10002003=解锁当前所有可见卡包`。
+- 范围：本轮只完成左侧代码说明清单和统一映射记录，未绑定 `InputField/BtnConfirm` 的命令执行；后续新增定义继续追加到同一表。
+- 验证：静态确认左侧首行运行时格式为 `10001001 : 显示一键通关按钮`，右侧 `TextCode201~218` 不受运行时代码影响；集中定义共 5 条且顺序正确。Runtime/Editor 编译通过，`0` 警告、`0` 错误，相关文件 `git diff --check` 通过。
+- 下一步：进入 AdminScene，确认前五行依次显示、未使用行不出现且文本没有溢出；之后再按用户指令接入输入代码执行。
+
 ## 2026-09-08 CardBag015 手绘分组与默认鸭子
 
 - 状态：Prefab 调整、描边重烘焙和静态验证完成，等待 Play Mode 验收。
