@@ -7837,8 +7837,7 @@ public class GameScene : MonoBehaviour
             TaskProgressUIUtility.RefreshTask(
                 _rewardTaskItem,
                 task,
-                GameTaskUtility.GetCurrentCompleteValue(),
-                GameTaskUtility.IsCurrentTaskCompleted());
+                GameTaskUtility.GetCurrentCompleteValue());
             RestoreTaskRewardSourceVisuals();
         }
 
@@ -11257,8 +11256,7 @@ public class GameScene : MonoBehaviour
         TaskProgressUIUtility.RefreshTask(
             taskItem,
             task,
-            progressBeforeSettlement,
-            isTaskCompleted);
+            progressBeforeSettlement);
 
         if (isTaskCompleted)
         {

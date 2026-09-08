@@ -2048,6 +2048,27 @@
 - Unity 已将 `AdminScene.cs` 纳入生成的 Runtime 工程；`dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 连带编译 Runtime，结果 `0` 警告、`0` 错误。
 - 本次代码、Build Settings、spec 和记录文件没有行尾空格；全局 `git diff --check` 的现有报告仅来自用户新建的 `AdminScene.unity` 空 YAML 字段，本轮未修改该场景文件。
 
+## 2026-09-08 - 任务完成态描述与进度封顶
+
+### 需求
+
+1. WHEN 当前任务达到或超过完成目标 THEN `TaskItem/TaskContent` SHALL 继续显示原任务描述，不得追加“获得卡包奖励”或其他完成描述。
+2. WHEN 任务实际进度超过目标 THEN `TaskItem/ProgressBg/TextProgress` 的当前值 SHALL 封顶为目标值，例如实际进度 `2751`、目标 `2000` 时显示 `2000/2000`。
+3. 进度条填充 SHALL 同样封顶到 `100%`；任务实际超额值及其后续积分任务结转规则 SHALL 保持不变。
+4. MainScene 与 GameScene 结算页共享上述规则，不得只修复其中一个页面。
+
+### 设计与任务
+
+- [x] 移除 `TaskProgressUIUtility` 的完成描述分支及不再使用的 `task.reward` 多语言条目。
+- [x] 在共享进度刷新入口将 UI 当前值限制在 `0..CompleteValue`，不修改持久化数据。
+- [x] 编译 Runtime/Editor 并检查全部调用点。
+
+### 验证
+
+- `RefreshTask` 的 MainScene 与 GameScene 三处调用均不再传入完成描述状态，`TaskContent` 始终直接使用 `BuildTaskDescription` 的原任务文案。
+- UI 显示值使用 `Mathf.Clamp(displayValue, 0, targetValue)`；文字和宽度使用同一个封顶值，数据层 `CurrentCompleteValue` 与 `PendingScoreCarryOver` 未修改。
+- 工程内不再存在 `showCompletedMessage` 或 `task.reward` 引用；Runtime/Editor 编译均为 `0` 警告、`0` 错误，`git diff --check` 通过。
+
 ## 2026-09-08 - 系列卡包圆点与选中尺寸统一
 
 ### 需求

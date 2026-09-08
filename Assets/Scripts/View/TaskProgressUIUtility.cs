@@ -21,8 +21,7 @@ public static class TaskProgressUIUtility
     public static bool RefreshTask(
         Transform taskItem,
         TaskInstanceData task,
-        int displayValue,
-        bool showCompletedMessage = false)
+        int displayValue)
     {
         if (taskItem == null)
         {
@@ -33,7 +32,7 @@ public static class TaskProgressUIUtility
         taskItem.gameObject.SetActive(true);
         SetChildVisible(taskItem, TaskContentPath, true);
         SetChildVisible(taskItem, EmptyTaskContentPath, false);
-        RefreshTaskContent(taskItem, task, showCompletedMessage);
+        RefreshTaskContent(taskItem, task);
         RefreshReward(taskItem, task);
         return SetProgressInternal(taskItem, task, displayValue, true);
     }
@@ -101,8 +100,8 @@ public static class TaskProgressUIUtility
             return false;
         }
 
-        var safeDisplayValue = Mathf.Max(0, displayValue);
         var targetValue = Mathf.Max(0, task.CompleteValue);
+        var safeDisplayValue = Mathf.Clamp(displayValue, 0, targetValue);
         if (initialize)
         {
             GameFontUtility.ApplyDefaultFont(progressText);
@@ -125,8 +124,7 @@ public static class TaskProgressUIUtility
 
     private static void RefreshTaskContent(
         Transform taskItem,
-        TaskInstanceData task,
-        bool showCompletedMessage)
+        TaskInstanceData task)
     {
         var taskContent = taskItem.Find(TaskContentPath)?.GetComponent<TMP_Text>();
         if (taskContent == null)
@@ -136,10 +134,7 @@ public static class TaskProgressUIUtility
         }
 
         GameFontUtility.ApplyDefaultFont(taskContent);
-        var description = BuildTaskDescription(task);
-        taskContent.text = showCompletedMessage
-            ? GameLocalization.Format("task.reward", description)
-            : description;
+        taskContent.text = BuildTaskDescription(task);
         GameLocalization.ConfigureTextToFit(taskContent);
     }
 

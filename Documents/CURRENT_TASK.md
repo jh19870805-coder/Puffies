@@ -1,5 +1,16 @@
 # 当前任务
 
+## 2026-09-08 任务完成态描述与进度封顶
+
+- 状态：代码修改和静态验证完成，等待 MainScene/GameScene Play Mode 验收。
+- 用户意图：任务完成后继续显示原任务描述，不追加完成奖励描述；实际进度超过目标时，进度文字和进度条都不得突破目标，例如 `2751/2000` 显示为 `2000/2000`。
+- 已定位：共享 `TaskProgressUIUtility` 通过 `showCompletedMessage` 和 `task.reward` 在完成时包装任务描述；进度条比例已有 `Clamp01`，但 `TextProgress` 直接显示未封顶的实际数据。
+- 修改：移除完成描述分支、全部调用参数和不再使用的 `task.reward` 多语言项；共享进度刷新先将界面值限制到 `0..CompleteValue`，再同步刷新文字和进度条宽度。
+- 数据边界：只限制 MainScene 与 GameScene 的 UI 显示；`GameTaskUtility` 仍保存真实超额值并按既有规则结转到后续积分任务。
+- 修改文件：`Assets/Scripts/View/TaskProgressUIUtility.cs`、`Assets/Scripts/Controller/GameScene.cs`、`Assets/Scripts/Model/GameLocalization.cs`、统一 spec、任务记录和项目上下文。
+- 验证：`RefreshTask` 三处调用已统一为三参数；工程内不再存在 `showCompletedMessage` 或 `task.reward` 引用。Runtime/Editor 编译均通过，`0` 警告、`0` 错误，`git diff --check` 通过。
+- 下一步：完成一项会产生超额进度的任务，确认结算页描述保持不变，文字显示 `目标/目标`、绿色进度条正好满格；返回首页后确认下一任务及超额结转仍正常。
+
 ## 2026-09-08 新手引导第一步英文精简
 
 - 状态：文案修改和静态验证完成，等待 GameScene 英文界面视觉验收。
