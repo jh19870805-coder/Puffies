@@ -1,5 +1,16 @@
 # 当前任务
 
+## 2026-09-08 CardBag015 固定 Piece 分组描边
+
+- 状态：烘焙器修复、资源重烘焙和静态验证完成，等待 CardBag015 Play Mode 目视验收。
+- 用户意图：CardBag015 使用新的固定 Piece 关卡结构后，七个玩法组仍须正确显示默认分组连接描边。
+- 根因：`PuzzleOutlineBakerEditor` 只把正式 `PieceGGII` 栅格化为玩法组，完全忽略 `BoardFixedPiece01`；逐组连接边因而错误地从空完成区开始。旧 `Group01.png` 是全透明图，`Group02~03` 也缺少与固定鸭子相接的边线；`_Level`、`_Stickers` 和运行时加载路径正常。
+- 修改：烘焙器独立识别并栅格化 `BoardFixedPieceNN`，把其 Alpha 加入完整拼图区域，并将其作为逐组 `completedMask` 的初始值；固定 Piece 仍不加入玩法分组，不生成额外 Group，也不影响发牌、拖拽、提示、完成计数或存档。无固定 Piece 的卡包继续使用原算法。
+- 资源：通过当前 Unity 一次性执行器完成全量烘焙后，只有 `CardBag015/Group01~03.png` 产生内容差异；执行器及 Meta 已自行删除。第一组默认连接描边由 `0` 恢复为 `512` 个有效 Alpha 像素，七组默认描边均非空。
+- 修改文件：`Assets/Scripts/Editor/PuzzleOutlineBakerEditor.cs`、`Assets/Resources/Generated/PuzzleOutlines/CardBag015/Group01~03.png`、统一 spec、任务记录和项目上下文。
+- 验证：Unity 日志确认 CardBag015 生成 7 组、`fixedPieces=1`、最终边界 `assigned=6066 / unassigned=0 / ambiguous=0`；七组默认连接描边分别包含 `512/1313/2785/8853/12388/13700/14624` 个有效 Alpha 像素。Runtime 与 Editor 编译均通过，`0` 警告、`0` 错误；`git diff --check` 通过，仅有仓库既有 LF/CRLF 提示。
+- 下一步：重玩 CardBag015，在关卡/贴纸描边均关闭的默认模式依次核对七组连接描边，重点确认第一组显示固定鸭子与首个玩法 Piece 之间的连接边；再分别开启关卡描边和贴纸描边确认原有两套输出不变。
+
 ## 2026-09-08 自动拼图调试按钮
 
 - 状态：代码修改和静态验证完成，等待 GameScene Play Mode 验收。

@@ -121,6 +121,8 @@ public static class PuzzleOutlineBakerEditor
                 return 0;
             }
 
+            var fixedPieces = CollectBoardFixedPieces(images);
+
             var boardPixels = LoadSpritePixels(boardImage.sprite, loadedTextures);
             var width = Mathf.RoundToInt(boardImage.sprite.rect.width);
             var height = Mathf.RoundToInt(boardImage.sprite.rect.height);
@@ -160,7 +162,20 @@ public static class PuzzleOutlineBakerEditor
                 stickerBoundaryMasks[pair.Key] = stickerBoundaryMask;
             }
 
+            var fixedPieceMask = new bool[width * height];
+            for (var i = 0; i < fixedPieces.Count; i++)
+            {
+                RasterizePieceAlpha(
+                    fixedPieces[i],
+                    boardImage.rectTransform,
+                    width,
+                    height,
+                    fixedPieceMask,
+                    loadedTextures);
+            }
+
             var pieceUnionMask = UnionMasks(groupMasks, width * height);
+            UnionMaskInto(pieceUnionMask, fixedPieceMask);
             var boardCutoutMask = BuildBoardCutoutMask(boardPixels, width, height);
             var finalMask = IsUsableBoardCutout(boardCutoutMask, pieceUnionMask)
                 ? boardCutoutMask
@@ -187,7 +202,7 @@ public static class PuzzleOutlineBakerEditor
             var outputFolder = $"{OutputRoot}/{GameDefine.CardBagPrefabPrefix}{bagId:D3}";
             Directory.CreateDirectory(outputFolder);
             DeleteObsoleteGroupOutputs(outputFolder, groupMasks.Keys);
-            var completedMask = new bool[width * height];
+            var completedMask = (bool[])fixedPieceMask.Clone();
             foreach (var pair in groupMasks)
             {
                 var currentOuterBoundary = ExtractOwnedBoundary(
@@ -275,6 +290,7 @@ public static class PuzzleOutlineBakerEditor
             Debug.Log(
                 $"Puzzle outline baker: {GameDefine.CardBagPrefabPrefix}{bagId:D3} " +
                 $"generated {groupMasks.Count} group mask(s) at {width}x{height}; " +
+                $"fixedPieces={fixedPieces.Count}, " +
                 $"final ownership assigned={finalOwnership.AssignedCount}, " +
                 $"unassigned={finalOwnership.UnassignedCount}, " +
                 $"ambiguous={finalOwnership.AmbiguousCount}, scale={parameters.Scale:0.###}.");
@@ -339,6 +355,28 @@ public static class PuzzleOutlineBakerEditor
         }
 
         return groups;
+    }
+
+    private static List<Image> CollectBoardFixedPieces(Image[] images)
+    {
+        var fixedPieces = new List<Image>();
+        for (var i = 0; i < images.Length; i++)
+        {
+            var image = images[i];
+            if (image != null
+                && image.sprite != null
+                && CardBagPrefabGeneratorEditor.IsBoardFixedPieceObjectName(
+                    image.gameObject.name))
+            {
+                fixedPieces.Add(image);
+            }
+        }
+
+        fixedPieces.Sort(
+            (left, right) => string.CompareOrdinal(
+                left.gameObject.name,
+                right.gameObject.name));
+        return fixedPieces;
     }
 
     private static bool IsSequentialPlaceholderName(string objectName)
@@ -499,6 +537,14 @@ public static class PuzzleOutlineBakerEditor
         }
 
         return union;
+    }
+
+    private static void UnionMaskInto(bool[] target, bool[] source)
+    {
+        for (var i = 0; i < target.Length && i < source.Length; i++)
+        {
+            target[i] |= source[i];
+        }
     }
 
     private static void UnionInto(
