@@ -4705,9 +4705,11 @@ public class GameScene : MonoBehaviour
         out List<Vector3> groovePositions)
     {
         groovePositions = new List<Vector3>(states.Count);
+        var camera = Camera.main;
         var bestDelta = Vector3.zero;
         var bestDistance = float.PositiveInfinity;
         DraggablePieceState closestState = null;
+        var hasCenterInsideOwnGroove = false;
         for (var i = 0; i < states.Count; i++)
         {
             var state = states[i];
@@ -4717,19 +4719,24 @@ public class GameScene : MonoBehaviour
                 return false;
             }
 
-            var groovePosition = GetGrooveSnapPosition(state.GrooveRect, Camera.main);
+            var groovePosition = GetGrooveSnapPosition(state.GrooveRect, camera);
             groovePositions.Add(groovePosition);
             UpdateGrooveOverlapProbe(state, groovePosition);
             var distance = Vector3.Distance(state.PieceRenderer.transform.position, groovePosition);
-            if (distance < bestDistance)
+            var centerInsideOwnGroove = IsPieceCenterInsideOwnGroove(state, camera);
+            if ((centerInsideOwnGroove && !hasCenterInsideOwnGroove)
+                || (centerInsideOwnGroove == hasCenterInsideOwnGroove && distance < bestDistance))
             {
                 bestDistance = distance;
                 bestDelta = groovePosition - state.PieceRenderer.transform.position;
                 closestState = state;
             }
+
+            hasCenterInsideOwnGroove |= centerInsideOwnGroove;
         }
 
-        if (closestState == null || bestDistance > CalculateSnapDistance(closestState))
+        if (closestState == null
+            || (!hasCenterInsideOwnGroove && bestDistance > CalculateSnapDistance(closestState)))
         {
             return false;
         }
@@ -4744,6 +4751,24 @@ public class GameScene : MonoBehaviour
         }
 
         return true;
+    }
+
+    private static bool IsPieceCenterInsideOwnGroove(
+        DraggablePieceState state,
+        Camera camera)
+    {
+        if (state?.PieceRenderer == null
+            || state.GrooveRect == null
+            || camera == null
+            || !TryGetRectTransformScreenRect(state.GrooveRect, out var grooveScreenRect))
+        {
+            return false;
+        }
+
+        var pieceCenterScreenPosition = RectTransformUtility.WorldToScreenPoint(
+            camera,
+            state.PieceRenderer.bounds.center);
+        return grooveScreenRect.Contains(pieceCenterScreenPosition);
     }
 
     private List<DraggablePieceState> CollectLoosePiecesOverlappingGrooves(
@@ -9506,14 +9531,16 @@ public class GameScene : MonoBehaviour
                     _tutorialPiece.PieceRenderer,
                     camera,
                     out var pieceScreenRect)
-                || !TryScreenRectToCanvasRect(canvasRect, pieceScreenRect, out var pieceCanvasRect)
+                || !TryScreenRectToCanvasRectUsingCanvasCamera(
+                    canvasRect,
+                    pieceScreenRect,
+                    out var pieceCanvasRect)
                 || !TryGetRectTransformScreenCenter(
                     _tutorialPiece.GrooveRect,
                     out var grooveScreenCenter)
-                || !RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                || !TryScreenPointToCanvasPositionUsingCanvasCamera(
                     canvasRect,
                     grooveScreenCenter,
-                    null,
                     out var grooveCanvasCenter))
             {
                 return false;
@@ -9532,7 +9559,10 @@ public class GameScene : MonoBehaviour
                 || state.IsPlaced
                 || state.PieceRenderer == null
                 || !TryGetRendererScreenRect(state.PieceRenderer, camera, out var pieceScreenRect)
-                || !TryScreenRectToCanvasRect(canvasRect, pieceScreenRect, out var pieceCanvasRect))
+                || !TryScreenRectToCanvasRectUsingCanvasCamera(
+                    canvasRect,
+                    pieceScreenRect,
+                    out var pieceCanvasRect))
             {
                 continue;
             }
@@ -10218,6 +10248,28 @@ public class GameScene : MonoBehaviour
             screenRect,
             eventCamera,
             out localRect);
+    }
+
+    private static bool TryScreenPointToCanvasPositionUsingCanvasCamera(
+        RectTransform canvasRect,
+        Vector2 screenPoint,
+        out Vector2 localPoint)
+    {
+        localPoint = default;
+        if (canvasRect == null)
+        {
+            return false;
+        }
+
+        var canvas = canvasRect.GetComponentInParent<Canvas>();
+        var eventCamera = canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay
+            ? canvas.worldCamera
+            : null;
+        return RectTransformUtility.ScreenPointToLocalPointInRectangle(
+            canvasRect,
+            screenPoint,
+            eventCamera,
+            out localPoint);
     }
 
     private static bool TryScreenRectToCanvasRect(

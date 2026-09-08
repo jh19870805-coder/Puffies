@@ -2094,3 +2094,47 @@
 - `BuildBagVolumeDots` 在卡包数小于等于 1 时不创建圆点并关闭 `PageIndicators`；侧卡进场和导航显隐也使用相同的 `Count > 1` 条件，不会在后续阶段重新显示。
 - 两处系列选中矩形回退尺寸均为 `PackageOpenWidth x PackageOpenHeight`，与普通卡包相同；Runtime/Editor 编译结果为 `0` 警告、`0` 错误，相关差异检查通过。
 - 普通卡包展开终点保留 `PanelBagSelect` 的 X 坐标，并将 Y 坐标同步为 `PackCenter` 的实际 Overlay 坐标；普通与系列入口不再各自维护纵向位置。
+
+## 2026-09-08 - 拼图中心进入自身凹槽即可吸附
+
+### 需求
+
+1. WHEN 玩家松开拼图且该拼图的可见渲染中心点已经进入它自己的凹槽矩形 THEN 系统 SHALL 自动将拼图吸附到正确位置，不再要求中心点必须靠近凹槽中心。
+2. WHEN 玩家松开临时组合且至少一个成员的可见渲染中心点进入其自身凹槽矩形 THEN 系统 SHALL 使用该成员对齐组合；组合内其他成员平移后仍须满足原有正确位置校验，避免错误组合整体吸附。
+3. WHEN 没有成员中心进入自身凹槽矩形 THEN 系统 SHALL 保留原有按尺寸自适应距离吸附的手感。
+4. 托盘相交优先回归、错误块回弹、棋盘边缘判定、自由放置、组合关系、吸附动画和特效 SHALL 保持不变；本规则适用于全部卡包，不为 `CardBag018` 增加资源或关卡特例。
+
+### 设计与任务
+
+- [x] 使用 `SpriteRenderer.bounds.center` 获取不受 Sprite Pivot 影响的 Piece 可见渲染中心，并转换到屏幕坐标。
+- [x] 使用现有 `TryGetRectTransformScreenRect` 获取自身 Groove 的屏幕矩形，将中心进入作为正确吸附的优先条件。
+- [x] 保留旧距离判定作为未进入矩形时的兼容路径，并保留组合成员平移后的完整校验。
+- [x] 编译 Runtime/Editor 并执行静态差异检查。
+- [ ] 在 `CardBag018` Play Mode 验收中心进入、旧近距离吸附和托盘优先回归。
+
+### 验证
+
+- `TryGetClusterBoardSnapTargets` 优先选择中心已经进入自身 Groove 屏幕矩形的成员作为组合吸附锚点；没有此类成员时，仍以最近成员和 `CalculateSnapDistance` 决定是否吸附。
+- 单 Piece 以自身为锚点平移后精确落到原 Groove 位置；临时组合继续逐成员检查平移后距离，没有放宽错误组合关系。
+- Runtime 与 Editor 工程编译均通过，结果为 `0` 警告、`0` 错误；`git diff --check` 通过。
+
+## 2026-09-08 - 新手引导第一步箭头恢复
+
+### 需求
+
+1. WHEN 新手引导进入第一步 THEN 系统 SHALL 显示从当前指定 Piece 指向其目标凹槽的移动箭头。
+2. 箭头、第一步 Piece 高亮副本与第二步 Piece 高亮副本 SHALL 按教程 `Screen Space - Camera` Canvas 的实际相机和固定宽高比视口换算位置，在 Unity Game 视图及窗口尺寸变化后均不得落到可视区域外。
+3. 本次修复 SHALL NOT 修改箭头素材、尺寸、移动节奏、提示框位置、第三步箭头或教程流程。
+
+### 设计与任务
+
+- [x] 将教程 Piece 屏幕矩形转换统一改为使用教程 Canvas 的 Event Camera。
+- [x] 将第一步目标凹槽屏幕中心转换统一改为使用教程 Canvas 的 Event Camera。
+- [x] 编译 Runtime/Editor 并执行静态差异检查。
+- [ ] 在 CardBag001 新手引导第一步和第二步进行 Play Mode 验收。
+
+### 验证
+
+- 根因确认：教程 Canvas 从 Overlay 改为 `Screen Space - Camera` 后，第一步箭头的 Piece 矩形和凹槽中心仍传空 Event Camera 进行本地坐标转换；同一页面的提示框已使用 Canvas 相机，因此只有箭头坐标异常。
+- `RebuildTutorialFocusPresentation` 的第一、二步 Piece 矩形已统一调用 `TryScreenRectToCanvasRectUsingCanvasCamera`；第一步凹槽中心已统一调用新增的 `TryScreenPointToCanvasPositionUsingCanvasCamera`。
+- Runtime 与 Editor 工程编译均通过，结果为 `0` 警告、`0` 错误。

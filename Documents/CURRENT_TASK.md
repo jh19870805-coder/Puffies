@@ -1,5 +1,26 @@
 # 当前任务
 
+## 2026-09-08 新手引导第一步箭头恢复
+
+- 状态：代码修改和静态验证完成，等待 CardBag001 Play Mode 验收。
+- 用户意图：恢复新手引导第一步从指定 Piece 指向正确凹槽的移动箭头。
+- 根因：教程 Canvas 已于 Win32 固定宽高比适配时改为 `Screen Space - Camera`，但第一步箭头仍用旧 Overlay 方式传入空 Event Camera 换算 Piece 与凹槽坐标；提示框已经使用正确的相机换算，所以提示框正常而箭头被计算到可视区域外。
+- 修改：第一、二步的 Piece 屏幕矩形和第一步凹槽中心统一通过教程 Canvas 当前绑定的 Event Camera 转换为 Canvas 本地坐标。箭头素材、`0.7` 尺寸、移动节奏、提示框位置、第三步箭头和教程流程均未修改。
+- 修改文件：`Assets/Scripts/Controller/GameScene.cs`、统一 spec 和任务记录。
+- 验证：Runtime 与 Editor 工程编译均通过，`0` 警告、`0` 错误；相关教程坐标入口已不再使用旧的空相机矩形转换。
+- 下一步：重进 CardBag001 新手引导第一步，确认箭头从左下目标 Piece 循环移动到其凹槽；进入第二步确认两个 Piece 高亮位置正确，并在改变 Game 视图尺寸后复测。
+
+## 2026-09-08 CardBag018 拼图中心进入凹槽吸附
+
+- 状态：代码修改和静态验证完成，等待 CardBag018 Play Mode 验收。
+- 用户意图：只要拼图的中心点进入自己的凹槽，就自动吸附；解决 CardBag018 大块或异形块已经进入凹槽却因距离凹槽中心过远而无法吸附的问题。
+- 已定位：`GameScene.TryGetClusterBoardSnapTargets` 原先只比较 Piece Transform 与凹槽中心的距离，并受 `CalculateSnapDistance` 上限限制，没有判断 Piece 中心是否已进入自身凹槽。
+- 修改：使用 `SpriteRenderer.bounds.center` 取得不受 Sprite Pivot 影响的可见渲染中心，转换到屏幕坐标并与自身 Groove 屏幕矩形比较；进入时优先作为吸附锚点，未进入时继续保留原距离吸附规则。临时组合仍校验其余成员平移后的正确位置。
+- 规则边界：这是全局吸附规则，不为 CardBag018 写特例；托盘相交优先回归、错误回弹、棋盘边缘、自由放置、组合关系、吸附动画和特效均未修改。
+- 修改文件：`Assets/Scripts/Controller/GameScene.cs`、统一 spec、任务记录和项目上下文。
+- 验证：Runtime 与 Editor 工程编译均通过，`0` 警告、`0` 错误；`git diff --check` 通过；代码路径确认托盘判定仍先于正确吸附，正确吸附仍先于自由放置和错误回弹。
+- 下一步：在 CardBag018 Play Mode 中把截图对应 Piece 的中心拖入自身凹槽但保持远离凹槽中心后松手，确认立即吸附；再验证中心尚未进入时旧近距离手感和托盘相交回归不变。
+
 ## 2026-09-08 任务完成态描述与进度封顶
 
 - 状态：代码修改和静态验证完成，等待 MainScene/GameScene Play Mode 验收。
