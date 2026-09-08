@@ -1,5 +1,78 @@
 # 当前任务
 
+## 2026-09-08 新手引导第一步箭头恢复
+
+- 状态：代码修改和静态验证完成，等待 CardBag001 Play Mode 验收。
+- 用户意图：恢复新手引导第一步从指定 Piece 指向正确凹槽的移动箭头。
+- 根因：教程 Canvas 已于 Win32 固定宽高比适配时改为 `Screen Space - Camera`，但第一步箭头仍用旧 Overlay 方式传入空 Event Camera 换算 Piece 与凹槽坐标；提示框已经使用正确的相机换算，所以提示框正常而箭头被计算到可视区域外。
+- 修改：第一、二步的 Piece 屏幕矩形和第一步凹槽中心统一通过教程 Canvas 当前绑定的 Event Camera 转换为 Canvas 本地坐标。箭头素材、`0.7` 尺寸、移动节奏、提示框位置、第三步箭头和教程流程均未修改。
+- 修改文件：`Assets/Scripts/Controller/GameScene.cs`、统一 spec 和任务记录。
+- 验证：Runtime 与 Editor 工程编译均通过，`0` 警告、`0` 错误；相关教程坐标入口已不再使用旧的空相机矩形转换。
+- 下一步：重进 CardBag001 新手引导第一步，确认箭头从左下目标 Piece 循环移动到其凹槽；进入第二步确认两个 Piece 高亮位置正确，并在改变 Game 视图尺寸后复测。
+
+## 2026-09-08 CardBag018 拼图中心进入凹槽吸附
+
+- 状态：代码修改和静态验证完成，等待 CardBag018 Play Mode 验收。
+- 用户意图：只要拼图的中心点进入自己的凹槽，就自动吸附；解决 CardBag018 大块或异形块已经进入凹槽却因距离凹槽中心过远而无法吸附的问题。
+- 已定位：`GameScene.TryGetClusterBoardSnapTargets` 原先只比较 Piece Transform 与凹槽中心的距离，并受 `CalculateSnapDistance` 上限限制，没有判断 Piece 中心是否已进入自身凹槽。
+- 修改：使用 `SpriteRenderer.bounds.center` 取得不受 Sprite Pivot 影响的可见渲染中心，转换到屏幕坐标并与自身 Groove 屏幕矩形比较；进入时优先作为吸附锚点，未进入时继续保留原距离吸附规则。临时组合仍校验其余成员平移后的正确位置。
+- 规则边界：这是全局吸附规则，不为 CardBag018 写特例；托盘相交优先回归、错误回弹、棋盘边缘、自由放置、组合关系、吸附动画和特效均未修改。
+- 修改文件：`Assets/Scripts/Controller/GameScene.cs`、统一 spec、任务记录和项目上下文。
+- 验证：Runtime 与 Editor 工程编译均通过，`0` 警告、`0` 错误；`git diff --check` 通过；代码路径确认托盘判定仍先于正确吸附，正确吸附仍先于自由放置和错误回弹。
+- 下一步：在 CardBag018 Play Mode 中把截图对应 Piece 的中心拖入自身凹槽但保持远离凹槽中心后松手，确认立即吸附；再验证中心尚未进入时旧近距离手感和托盘相交回归不变。
+
+## 2026-09-08 任务完成态描述与进度封顶
+
+- 状态：代码修改和静态验证完成，等待 MainScene/GameScene Play Mode 验收。
+- 用户意图：任务完成后继续显示原任务描述，不追加完成奖励描述；实际进度超过目标时，进度文字和进度条都不得突破目标，例如 `2751/2000` 显示为 `2000/2000`。
+- 已定位：共享 `TaskProgressUIUtility` 通过 `showCompletedMessage` 和 `task.reward` 在完成时包装任务描述；进度条比例已有 `Clamp01`，但 `TextProgress` 直接显示未封顶的实际数据。
+- 修改：移除完成描述分支、全部调用参数和不再使用的 `task.reward` 多语言项；共享进度刷新先将界面值限制到 `0..CompleteValue`，再同步刷新文字和进度条宽度。
+- 数据边界：只限制 MainScene 与 GameScene 的 UI 显示；`GameTaskUtility` 仍保存真实超额值并按既有规则结转到后续积分任务。
+- 修改文件：`Assets/Scripts/View/TaskProgressUIUtility.cs`、`Assets/Scripts/Controller/GameScene.cs`、`Assets/Scripts/Model/GameLocalization.cs`、统一 spec、任务记录和项目上下文。
+- 验证：`RefreshTask` 三处调用已统一为三参数；工程内不再存在 `showCompletedMessage` 或 `task.reward` 引用。Runtime/Editor 编译均通过，`0` 警告、`0` 错误，`git diff --check` 通过。
+- 下一步：完成一项会产生超额进度的任务，确认结算页描述保持不变，文字显示 `目标/目标`、绿色进度条正好满格；返回首页后确认下一任务及超额结转仍正常。
+
+## 2026-09-08 新手引导第一步英文精简
+
+- 状态：文案修改和静态验证完成，等待 GameScene 英文界面视觉验收。
+- 用户意图：缩短新手引导第一步的英文描述，避免提示框内文本过长；其他语言和引导流程不变。
+- 修改：`game.tutorial.place` 英文由 `Choose the matching sticker from the tray and place it in the correct spot on the board.` 精简为 `Place the matching sticker on the board.`。
+- 修改文件：`Assets/Scripts/Model/GameLocalization.cs`、`Documents/CURRENT_TASK.md`。
+- 验证：确认第一步仍由 `TutorialStrongInstructionKey` 读取 `game.tutorial.place`；仅英文文本发生变化。
+- 下一步：在英文环境进入新手引导第一步，确认文字完整显示且不遮挡提示框内容。
+
+## 2026-09-08 系列卡包圆点与选中尺寸统一
+
+- 状态：代码、场景配置和静态验证完成，等待 MainScene Play Mode 视觉验收。
+- 用户意图：系列当前只有一个卡包时不显示卡包点；有卡包点和没有卡包点的选择页中，点开后的中心卡包大小必须一致；普通卡包点开后的 Y 轴位置也与系列卡包统一。
+- 已定位：系列圆点当前按 `mBagVolumeCards.Count` 无条件创建，后续进场和导航也无条件激活 `PageIndicators`；普通卡包选择页固定为 `600 x 680`，系列页 `PackCenter` 虽为 `600 x 680`，但编辑器缩放为 `0.85`，实际只显示 `510 x 578`。
+- 约束：中心系列卡包统一为 `600 x 680`；左右侧卡包继续使用 `0.6`，不改动画时长、按钮和轮播间距。
+- 修改：`BuildBagVolumeDots` 仅在当前系列至少有 2 个卡包时创建并显示圆点；圆点进场与导航显隐使用相同条件，避免后续流程重新激活单卡圆点。将场景 `PanelBagVol/PackCarousel/PackCenter` 缩放从 `0.85` 改为 `1`，两个系列选中矩形获取失败的代码回退值同步从 `510 x 578` 改为 `600 x 680`。
+- 位置修正：中心卡从 `0.85` 放大到 `1` 后，封面与同材质绘制的投影下沿会向下扩展，原先只把 `PackCarousel` 从 `Y=20` 调到 `Y=60` 会被新增高度抵消，表现为封面上移但投影仍压住圆点。现将编辑器中的整个 `PackCarousel` 调到 `Y=140`，统一带动左、中、右卡及其投影上移；运行时继续读取模板位置，不增加代码偏移，不修改投影材质参数。
+- 普通卡包位置统一：`ShowPackageSelection` 保留普通选择面板的 X 轴目标，只把展开终点 Y 轴改为读取系列页 `PackCenter` 的实际编辑器坐标；普通卡包与单卡系列因而共用同一高度，后续调整系列模板位置时无需再维护第二套 Y 偏移。
+- 验证：MainScene 场景差异仅包含 `PackCenter` 缩放和 `PackCarousel` 的 Y 位置；代码中不再存在 `PackageOpenWidth/Height * 0.85`，三个圆点容器激活入口均校验卡包数大于 1。Runtime/Editor 编译通过，`0` 警告、`0` 错误，相关文件 `git diff --check` 通过。
+- 下一步：分别打开普通卡包、当前仅解锁 1 个 Vol 的系列和已解锁多个 Vol 的系列，确认普通卡包与系列卡包高度一致、前者无圆点、后者圆点正常，并对比中心卡包尺寸均为 `600 x 680`。
+
+## 2026-09-08 AdminScene 隐藏调试入口
+
+- 状态：入口调整和静态验证完成，等待 Play Mode 验收。
+- 用户意图：Admin 入口改由 MainScene 新增的透明 `BtnAdmin` 承担，但仍须在 `2s` 内连续点击 `5` 次才进入 `AdminScene`；Admin 页点击 `BtnClose` 返回首页。
+- 修改：MainScene 启动时按名称查找并绑定 `BtnAdmin`，使用 `Time.unscaledTime` 独立记录从第一次到第五次点击的两秒窗口，第五次满足条件时调用统一 Admin 场景入口；已移除 `BtnSet` 原有的连击计数、协程和 `0.6s` 延迟，设置页保持单击即时打开。新增 `AdminScene` 运行时控制器按名称绑定现有 `BtnClose`，返回 MainScene，并复用窗口固定宽高比刷新；`AdminScene` 已加入 Build Settings。
+- 场景核对：`BtnAdmin` 已激活且带可交互 Button，Image 的 `Alpha=0`、`Raycast Target=1`，因此透明状态可以接收点击；它位于主 Canvas 下并排在卡包列表之后。没有改写用户当前编辑的 MainScene/AdminScene 布局、输入框或确认按钮功能。
+- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Assets/Scripts/Controller/AdminScene.cs` 及 `.meta`、`Assets/Scripts/Model/GameDefine.cs`、`ProjectSettings/EditorBuildSettings.asset`、统一 spec、任务记录和项目上下文。
+- 验证：静态确认只有 `BtnAdmin` 维护两秒五连击状态，`BtnSet` 已恢复即时打开；`BtnAdmin` 已激活，Button 可交互，透明 Image 启用且 `Raycast Target=1`。Admin 场景 `.meta` GUID 与 Build Settings 一致，场景内存在唯一带 Button 的 `BtnClose`；Runtime/Editor 标准编译通过，`0` 警告、`0` 错误，本轮文件 `git diff --check` 通过。
+- 下一步：在 MainScene 的透明 `BtnAdmin` 区域于两秒内快速点击五次，确认前四次不跳转、第五次进入 AdminScene；再点击 `BtnClose` 返回，并确认菜单中的 `BtnSet` 单击立即打开设置页。
+
+### Admin 代码清单
+
+- 状态：首批清单和五条代码执行逻辑已完成，等待 AdminScene/GameScene Play Mode 验收。
+- 修改：`AdminScene` 使用集中定义表维护代码与功能说明，启动时仅将完整的 `代码 : 功能说明` 单行文本按顺序写入并启用左侧 `TextCode101~105`，`TextCode106~118` 作为后续扩展行继续隐藏；不查找、不写入、不切换右侧 `TextCode201~218`。只更新左侧 Text 内容与显隐，保留场景中的位置、尺寸、字体、材质和颜色。
+- 首批映射：`10001001=显示一键通关按钮`、`10001002=隐藏一键通关按钮`、`10002001=显示所有当前卡包`、`10002002=只显示Demo的前18个卡包`、`10002003=解锁当前所有可见卡包`。
+- 输入执行需求：沿用场景现有 `TMP_InputField` 的标准输入光标，限制为单行最多 8 位数字；`BtnConfirm` 只在匹配已登记代码并成功持久化数据后返回 MainScene，无效代码或保存失败时留在当前页。`10001001/10001002` 控制 GameScene 一键完成按钮；`10002001/10002002` 切换全部当前卡包或前 18 个卡包的可见范围但不解锁；`10002003` 解锁当前可见范围内的全部卡包并保留已有进行中/完成状态。
+- 实现：`AdminScene` 按名称绑定现有 `InputField/BtnConfirm`，统一定义表同时保存显示文字和命令枚举。Admin 运行设置写入当前存档 SQLite 的 `AdminSettings/Runtime`；GameScene 现有一键完成按钮改由该设置控制并支持正式构建，卡包有效上限从同一设置读取。`CardPackDataUtility.TryUnlockAllVisiblePacks` 绕过正常发包的系列前置条件，仅补齐当前可见的 Locked/缺失记录，不覆盖进行中、完成状态或拼图进度。
+- 验证：静态确认左侧首行运行时格式为 `10001001 : 显示一键通关按钮`，右侧 `TextCode201~218` 不受运行时代码影响；场景现有 TMP 输入组件、文字子节点和 EventSystem 完整；五条定义均映射到唯一命令。Runtime/Editor 编译通过，`0` 警告、`0` 错误，相关文件 `git diff --check` 通过。
+- 下一步：进入 Play Mode 逐条验证五个代码：确认输入光标、8 位数字输入、有效命令返回首页、无效代码留在 AdminScene；再进入 GameScene 核对一键完成显隐，并核对首页 18/全部范围与批量解锁结果。
+
 ## 2026-09-08 CardBag015 手绘分组与默认鸭子
 
 - 状态：Prefab 调整、描边重烘焙和静态验证完成，等待 Play Mode 验收。

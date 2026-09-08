@@ -215,10 +215,8 @@ public class GameScene : MonoBehaviour
     private const string PackPhotoItemObjectName = "PackPhotoItem";
     private const string HintButtonObjectName = "BtnTips";
     private const string PieceHintOutlineObjectName = "PieceHintOutline";
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
     private const string TestCompleteButtonObjectName = "BtnCompleteAllTest";
     private const string TestCompleteButtonTextKey = "game.test_complete";
-#endif
     private static readonly Color PieceHintOutlineColor = new Color32(112, 151, 75, 255);
     private static readonly Color HighContrastPieceHintOutlineColor = new Color32(0xb1, 0xd7, 0x02, 0xff);
     private static readonly Color TutorialTargetOutlineColor = new Color32(80, 139, 230, 255);
@@ -488,9 +486,7 @@ public class GameScene : MonoBehaviour
     private GameObject _pieceHintOutlineRoot;
     private bool _shouldCompleteRestoredPuzzle;
     private Button _hintButton;
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
     private Button _testCompleteButton;
-#endif
     private bool _isTutorialPending;
     private TutorialStage _tutorialStage;
     private DraggablePieceState _tutorialPiece;
@@ -577,9 +573,7 @@ public class GameScene : MonoBehaviour
         InitializeTaskTracking();
         ConfigureReturnButton();
         ConfigureHintButton();
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
         ConfigureTestCompleteButton();
-#endif
         ConfigureRewardPanel();
         if (_shouldCompleteRestoredPuzzle)
         {
@@ -856,12 +850,10 @@ public class GameScene : MonoBehaviour
         bool waitForPackTransition)
     {
         _isEntranceAnimating = true;
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
         if (_testCompleteButton != null)
         {
             _testCompleteButton.interactable = false;
         }
-#endif
         Canvas.ForceUpdateCanvases();
 
         var boardRect = _loadedCardBagRect;
@@ -1048,12 +1040,10 @@ public class GameScene : MonoBehaviour
         }
 
         _isEntranceAnimating = false;
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
         if (_testCompleteButton != null)
         {
             _testCompleteButton.interactable = !_isGameFinished;
         }
-#endif
         TryStartPiecePlacementTutorial();
     }
 
@@ -4715,9 +4705,11 @@ public class GameScene : MonoBehaviour
         out List<Vector3> groovePositions)
     {
         groovePositions = new List<Vector3>(states.Count);
+        var camera = Camera.main;
         var bestDelta = Vector3.zero;
         var bestDistance = float.PositiveInfinity;
         DraggablePieceState closestState = null;
+        var hasCenterInsideOwnGroove = false;
         for (var i = 0; i < states.Count; i++)
         {
             var state = states[i];
@@ -4727,19 +4719,24 @@ public class GameScene : MonoBehaviour
                 return false;
             }
 
-            var groovePosition = GetGrooveSnapPosition(state.GrooveRect, Camera.main);
+            var groovePosition = GetGrooveSnapPosition(state.GrooveRect, camera);
             groovePositions.Add(groovePosition);
             UpdateGrooveOverlapProbe(state, groovePosition);
             var distance = Vector3.Distance(state.PieceRenderer.transform.position, groovePosition);
-            if (distance < bestDistance)
+            var centerInsideOwnGroove = IsPieceCenterInsideOwnGroove(state, camera);
+            if ((centerInsideOwnGroove && !hasCenterInsideOwnGroove)
+                || (centerInsideOwnGroove == hasCenterInsideOwnGroove && distance < bestDistance))
             {
                 bestDistance = distance;
                 bestDelta = groovePosition - state.PieceRenderer.transform.position;
                 closestState = state;
             }
+
+            hasCenterInsideOwnGroove |= centerInsideOwnGroove;
         }
 
-        if (closestState == null || bestDistance > CalculateSnapDistance(closestState))
+        if (closestState == null
+            || (!hasCenterInsideOwnGroove && bestDistance > CalculateSnapDistance(closestState)))
         {
             return false;
         }
@@ -4754,6 +4751,24 @@ public class GameScene : MonoBehaviour
         }
 
         return true;
+    }
+
+    private static bool IsPieceCenterInsideOwnGroove(
+        DraggablePieceState state,
+        Camera camera)
+    {
+        if (state?.PieceRenderer == null
+            || state.GrooveRect == null
+            || camera == null
+            || !TryGetRectTransformScreenRect(state.GrooveRect, out var grooveScreenRect))
+        {
+            return false;
+        }
+
+        var pieceCenterScreenPosition = RectTransformUtility.WorldToScreenPoint(
+            camera,
+            state.PieceRenderer.bounds.center);
+        return grooveScreenRect.Contains(pieceCenterScreenPosition);
     }
 
     private List<DraggablePieceState> CollectLoosePiecesOverlappingGrooves(
@@ -7278,12 +7293,10 @@ public class GameScene : MonoBehaviour
     private IEnumerator PlayGroupTransition(int nextGroupIndex)
     {
         _isGroupTransitionAnimating = true;
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
         if (_testCompleteButton != null)
         {
             _testCompleteButton.interactable = false;
         }
-#endif
         var wasTutorialActive = IsTutorialActive;
         var transitionHoldDuration = _tutorialStage == TutorialStage.StrongPlacement
             ? GroupTransitionStrongHoldDuration
@@ -7533,12 +7546,10 @@ public class GameScene : MonoBehaviour
         }
 
         _isGroupTransitionAnimating = false;
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
         if (_testCompleteButton != null)
         {
             _testCompleteButton.interactable = !_isGameFinished;
         }
-#endif
     }
 
     private static float SmootherStep01(float value)
@@ -7851,8 +7862,7 @@ public class GameScene : MonoBehaviour
             TaskProgressUIUtility.RefreshTask(
                 _rewardTaskItem,
                 task,
-                GameTaskUtility.GetCurrentCompleteValue(),
-                GameTaskUtility.IsCurrentTaskCompleted());
+                GameTaskUtility.GetCurrentCompleteValue());
             RestoreTaskRewardSourceVisuals();
         }
 
@@ -8585,13 +8595,11 @@ public class GameScene : MonoBehaviour
             _hintButton.interactable = false;
             _hintButton.gameObject.SetActive(false);
         }
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
         if (_testCompleteButton != null)
         {
             _testCompleteButton.interactable = false;
             _testCompleteButton.gameObject.SetActive(false);
         }
-#endif
         StopGameplayTimer();
         EndDragging();
 
@@ -9523,14 +9531,16 @@ public class GameScene : MonoBehaviour
                     _tutorialPiece.PieceRenderer,
                     camera,
                     out var pieceScreenRect)
-                || !TryScreenRectToCanvasRect(canvasRect, pieceScreenRect, out var pieceCanvasRect)
+                || !TryScreenRectToCanvasRectUsingCanvasCamera(
+                    canvasRect,
+                    pieceScreenRect,
+                    out var pieceCanvasRect)
                 || !TryGetRectTransformScreenCenter(
                     _tutorialPiece.GrooveRect,
                     out var grooveScreenCenter)
-                || !RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                || !TryScreenPointToCanvasPositionUsingCanvasCamera(
                     canvasRect,
                     grooveScreenCenter,
-                    null,
                     out var grooveCanvasCenter))
             {
                 return false;
@@ -9549,7 +9559,10 @@ public class GameScene : MonoBehaviour
                 || state.IsPlaced
                 || state.PieceRenderer == null
                 || !TryGetRendererScreenRect(state.PieceRenderer, camera, out var pieceScreenRect)
-                || !TryScreenRectToCanvasRect(canvasRect, pieceScreenRect, out var pieceCanvasRect))
+                || !TryScreenRectToCanvasRectUsingCanvasCamera(
+                    canvasRect,
+                    pieceScreenRect,
+                    out var pieceCanvasRect))
             {
                 continue;
             }
@@ -10237,6 +10250,28 @@ public class GameScene : MonoBehaviour
             out localRect);
     }
 
+    private static bool TryScreenPointToCanvasPositionUsingCanvasCamera(
+        RectTransform canvasRect,
+        Vector2 screenPoint,
+        out Vector2 localPoint)
+    {
+        localPoint = default;
+        if (canvasRect == null)
+        {
+            return false;
+        }
+
+        var canvas = canvasRect.GetComponentInParent<Canvas>();
+        var eventCamera = canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay
+            ? canvas.worldCamera
+            : null;
+        return RectTransformUtility.ScreenPointToLocalPointInRectangle(
+            canvasRect,
+            screenPoint,
+            eventCamera,
+            out localPoint);
+    }
+
     private static bool TryScreenRectToCanvasRect(
         RectTransform canvasRect,
         Rect screenRect,
@@ -10288,10 +10323,20 @@ public class GameScene : MonoBehaviour
         SetHintButtonTutorialState();
     }
 
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
     private void ConfigureTestCompleteButton()
     {
         var buttonObject = GameCommonUtility.FindSceneObject(TestCompleteButtonObjectName);
+        if (!AdminRuntimeSettingsUtility.ShouldShowTestCompleteButton)
+        {
+            if (buttonObject != null)
+            {
+                buttonObject.SetActive(false);
+            }
+
+            _testCompleteButton = null;
+            return;
+        }
+
         if (buttonObject == null)
         {
             buttonObject = CreateTestCompleteButton();
@@ -10303,6 +10348,7 @@ public class GameScene : MonoBehaviour
             return;
         }
 
+        buttonObject.SetActive(true);
         _testCompleteButton = buttonObject.GetComponent<Button>();
         if (_testCompleteButton == null)
         {
@@ -10472,7 +10518,6 @@ public class GameScene : MonoBehaviour
             $"GameScene: test completion placed all Pieces and started settlement. "
             + $"packId={packId}, pieces={allPieceNumbers.Count}");
     }
-#endif
 
     private void OnHintButtonClicked()
     {
@@ -11263,8 +11308,7 @@ public class GameScene : MonoBehaviour
         TaskProgressUIUtility.RefreshTask(
             taskItem,
             task,
-            progressBeforeSettlement,
-            isTaskCompleted);
+            progressBeforeSettlement);
 
         if (isTaskCompleted)
         {

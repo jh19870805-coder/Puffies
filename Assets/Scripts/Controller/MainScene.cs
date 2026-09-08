@@ -128,6 +128,9 @@ public class MainScene : MonoBehaviour
     private const string DeleteSaveConfirmationLocalizationKey = "main.confirm_delete_save";
     private const string SettingsPanelObjectName = "PanelSet";
     private const string SettingsButtonObjectName = "BtnSet";
+    private const string AdminButtonObjectName = "BtnAdmin";
+    private const int AdminEntryClickCount = 5;
+    private const float AdminEntryClickWindowSeconds = 2f;
     private const string MusicSliderObjectName = "SliderMusic";
     private const string EffectSliderObjectName = "SliderEffect";
     private const string WindowedToggleObjectName = "ToggleFrame";
@@ -250,6 +253,8 @@ public class MainScene : MonoBehaviour
     private GameObject mConfirmationPanelRoot;
     private TMP_Text mConfirmationContentText;
     private GameObject mSettingsPanelRoot;
+    private int mAdminButtonClickCount;
+    private float mAdminButtonClickWindowStartTime;
     private GameObject mUsablePanelRoot;
     private GameObject mSavePanelRoot;
     private GameObject mLanguagePanelRoot;
@@ -796,6 +801,7 @@ public class MainScene : MonoBehaviour
 
         ConfigureRankButton();
         ConfigureAchieveButton();
+        ConfigureAdminButton();
         ConfigureWishListButton();
         ConfigureWishListPanel();
         ConfigureDiscordButton();
@@ -2125,8 +2131,8 @@ public class MainScene : MonoBehaviour
         {
             mSelectedPackageDisplayPosition = Vector2.zero;
             mSelectedPackageDisplaySize = new Vector2(
-                PackageOpenWidth * 0.85f,
-                PackageOpenHeight * 0.85f);
+                PackageOpenWidth,
+                PackageOpenHeight);
         }
 
         if (!CreateSelectedPackageVisual(selectedCard.Entry))
@@ -4139,6 +4145,50 @@ public class MainScene : MonoBehaviour
         GameManager.EnterAchieveScene();
     }
 
+    private void ConfigureAdminButton()
+    {
+        var adminButtonObject = GameCommonUtility.FindSceneObject(AdminButtonObjectName);
+        var adminButton = adminButtonObject != null
+            ? adminButtonObject.GetComponent<Button>()
+            : null;
+        if (adminButton == null)
+        {
+            Debug.LogWarning(
+                $"MainScene: admin button not found or missing Button component. Expected {AdminButtonObjectName}.");
+            return;
+        }
+
+        adminButton.onClick.RemoveListener(OnAdminButtonClicked);
+        adminButton.onClick.AddListener(OnAdminButtonClicked);
+    }
+
+    private void OnAdminButtonClicked()
+    {
+        if (mIsPlayingAnimation)
+        {
+            return;
+        }
+
+        var clickTime = Time.unscaledTime;
+        if (mAdminButtonClickCount == 0
+            || clickTime - mAdminButtonClickWindowStartTime > AdminEntryClickWindowSeconds)
+        {
+            mAdminButtonClickCount = 0;
+            mAdminButtonClickWindowStartTime = clickTime;
+        }
+
+        mAdminButtonClickCount++;
+        if (mAdminButtonClickCount < AdminEntryClickCount)
+        {
+            return;
+        }
+
+        mAdminButtonClickCount = 0;
+        mAdminButtonClickWindowStartTime = 0f;
+        AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
+        GameManager.EnterAdminScene();
+    }
+
     private void ConfigureWishListButton()
     {
         ConfigureExternalLinkButton(
@@ -5861,8 +5911,8 @@ public class MainScene : MonoBehaviour
         {
             mSelectedPackageDisplayPosition = Vector2.zero;
             mSelectedPackageDisplaySize = new Vector2(
-                PackageOpenWidth * 0.85f,
-                PackageOpenHeight * 0.85f);
+                PackageOpenWidth,
+                PackageOpenHeight);
         }
 
         var didCreateSelectedVisual = CreateSelectedPackageVisual(selectedCard.Entry);
@@ -6053,7 +6103,15 @@ public class MainScene : MonoBehaviour
     private void BuildBagVolumeDots()
     {
         ClearBagVolumeDots();
-        if (mBagVolumeDotTemplate == null || mBagVolumeIndicatorsRoot == null)
+        var shouldShowIndicators = mBagVolumeCards.Count > 1;
+        if (mBagVolumeIndicatorsRoot != null)
+        {
+            mBagVolumeIndicatorsRoot.gameObject.SetActive(shouldShowIndicators);
+        }
+
+        if (!shouldShowIndicators
+            || mBagVolumeDotTemplate == null
+            || mBagVolumeIndicatorsRoot == null)
         {
             return;
         }
@@ -6205,7 +6263,7 @@ public class MainScene : MonoBehaviour
         var rightScale = Mathf.Abs(mBagVolumeRightTemplate.localScale.x);
         if (mBagVolumeIndicatorsRoot != null)
         {
-            mBagVolumeIndicatorsRoot.gameObject.SetActive(true);
+            mBagVolumeIndicatorsRoot.gameObject.SetActive(mBagVolumeCards.Count > 1);
         }
 
         if (mBagVolumeIndicatorsCanvasGroup != null)
@@ -6273,7 +6331,8 @@ public class MainScene : MonoBehaviour
     {
         if (mBagVolumeIndicatorsRoot != null)
         {
-            mBagVolumeIndicatorsRoot.gameObject.SetActive(visible);
+            mBagVolumeIndicatorsRoot.gameObject.SetActive(
+                visible && mBagVolumeCards.Count > 1);
         }
 
         if (mBagVolumePreviousButton != null)
@@ -6542,6 +6601,14 @@ public class MainScene : MonoBehaviour
         if (!TryGetSelectedOverlayRect(panelRect, out mSelectedPackageDisplayPosition, out _))
         {
             mSelectedPackageDisplayPosition = Vector2.zero;
+        }
+
+        if (TryGetSelectedOverlayRect(
+                mBagVolumeCenterTemplate,
+                out var bagVolumeCenterPosition,
+                out _))
+        {
+            mSelectedPackageDisplayPosition.y = bagVolumeCenterPosition.y;
         }
 
         mSelectedPackageDisplaySize = new Vector2(PackageOpenWidth, PackageOpenHeight);

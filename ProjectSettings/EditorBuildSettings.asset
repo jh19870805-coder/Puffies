@@ -20,4 +20,7 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/AchieveScene.unity
     guid: 4d8951c4471849b40808ab3fde1ce4f9
+  - enabled: 1
+    path: Assets/Scenes/AdminScene.unity
+    guid: 8de78b5c45b6b62429949e02f733a29e
   m_configObjects: {}

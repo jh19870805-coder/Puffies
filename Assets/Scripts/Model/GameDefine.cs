@@ -61,6 +61,7 @@ public static class GameDefine
     public const string SceneGame = "GameScene";
     public const string SceneRank = "RankScene";
     public const string SceneAchieve = "AchieveScene";
+    public const string SceneAdmin = "AdminScene";
 
     public static string FormatCardBagPrefabResourcesPath(int bagId)
     {
@@ -210,10 +211,12 @@ public static class GameDefine
         get
         {
 #if PUFFIES_STEAM_RELEASE
-            return int.MaxValue;
+            const int buildMaximumCardPackId = int.MaxValue;
 #else
-            return DemoMaximumBagId;
+            const int buildMaximumCardPackId = DemoMaximumBagId;
 #endif
+            return AdminRuntimeSettingsUtility.GetMaximumVisibleCardPackId(
+                buildMaximumCardPackId);
         }
     }
 
@@ -476,6 +479,11 @@ public static class GameManager
     public static void EnterAchieveScene()
     {
         SceneManager.LoadScene(GameDefine.SceneAchieve);
+    }
+
+    public static void EnterAdminScene()
+    {
+        SceneManager.LoadScene(GameDefine.SceneAdmin);
     }
 
     public static void EnterMainScene()

@@ -42,6 +42,9 @@ Unity **2022.3** / Built-in Render Pipeline 项目，使用 Linear 色彩空间�
 | GameScene | 根据选中 PackId 加载 `CardBagNNN` Prefab，并读取 `CardPacks.csv/BoardScale` 缩放棋盘；按照 `PieceGGII` 四位数字命名组织拼图分组；从正常开包流程进入时播放棋盘、托盘和当前组 Piece 入场；每次正确放置 Piece 后立即持久化，重新进入时恢复已放置 Piece 并从首个未完成分组继续；全部完成后显示 RewardPanel；Editor 和 Development Build 在 `BtnTips` 左侧提供“一键完成”测试按钮 |
 | RankScene | 仅占位；首个 Demo 不包含排行榜后端功能。当前模拟列表前三名的 `RankBg` 分别使用原生 `1646 x 148` 的 `RankCellBg_1.png`、`RankCellBg_2.png`、`RankCellBg_3.png`，第四名以后使用 `1636 x 136` 的 `RankCellBg.png`；`RankItem` 根高度为 `148`，列表纵向间距为 `5`，条目中心步距为 `153` |
 | AchieveScene | 当前显示 20 条模拟成就，前 5 条已达成、后 15 条未达成；接入 Steam 后替换数据源。成就网格固定为 6 列，单元尺寸 `240 x 332`，横纵间距均为 `40` |
+| AdminScene | 正式版调试页面；MainScene 主 Canvas 下透明的 `BtnAdmin` 在 `2s` 内连续点击 `5` 次进入，`BtnClose` 返回 MainScene。`BtnAdmin` 保持 Image `Alpha=0`、Raycast Target 开启；页面控制器运行时自动挂载，不要求在场景中序列化脚本。菜单 `BtnSet` 只负责即时打开原设置页。 |
+
+AdminScene 左侧代码说明区使用 `TextCode101~118` 预留 18 行，每行沿用编辑器既有的 `代码 : 功能说明` 完整单行格式；运行时代码不得拆分内容，也不得查找、写入或切换右侧 `TextCode201~218`。代码、说明和命令类型由 `AdminScene.sCommandDefinitions` 集中维护，按定义顺序启用左侧已有行，左侧未使用行隐藏。首批记录为：`10001001=显示一键通关按钮`、`10001002=隐藏一键通关按钮`、`10002001=显示所有当前卡包`、`10002002=只显示Demo的前18个卡包`、`10002003=解锁当前所有可见卡包`。场景现有 `InputField` 使用标准 `TMP_InputField` 光标，运行时限制为单行最多 8 位数字；点击 `BtnConfirm` 后先执行并持久化匹配命令，成功才返回 MainScene，无效代码或保存失败时保留 AdminScene。Admin 显隐/范围设置存于当前存档 SQLite 的 `AdminSettings/Runtime`：一键完成按钮默认仅 Editor/Development 显示，但正式构建可由代码开启；卡包范围可在当前构建全部内容与前 18 个之间切换，范围切换不解锁卡包。批量解锁命令只补齐当前可见的 Locked/缺失记录，保留已有进行中、完成状态及拼图进度。
 
 MainScene 卡包选中页与 GameScene 结算页共用 `Assets/Prefabs/PackPhotoItem.prefab` 和 `CardPackPhoto`。两个场景都必须在各自主 `Canvas` 下保持一个名为 `PackPhotoItem` 的 Prefab 实例；该实例自身 Canvas 固定开启 `Override Sorting` 并使用 `sortingOrder=32000`，每次显示前同步父 Canvas 的 Sorting Layer、恢复独立排序并移到最后一个同级，确保覆盖首页选中卡包、游戏结算层和其他运行时 Canvas。拍照统一生成 `1024x1024` PNG，保存到桌面并命名为 `游戏名-YYYY-MM-DD-BagId.png`，随后在面板 `Photo` 中预览，点击 `BtnOK` 关闭。通用组件负责闪光、离屏渲染、保存、预览、根 Animator 时序和临时纹理释放，场景控制器只传入当前 PackId 并控制各自按钮状态，不得复制第二套拍照实现。离屏照片中的完整拼图不得显示 `GameBoard/BoardTitle` 的游戏内投影，拍照临时副本必须清除其投影材质、UI Shadow 和网格扩边组件，但不得修改关卡 Prefab、GameScene 棋盘或 Piece 投影。全屏白色闪光使用当前主相机下独立的固定 `16:9` Canvas，排序值不得超过 Unity 支持的 `32767`；每次播放前重新绑定当前相机，激活并强制刷新后至少等待一帧再开始透明度动画，确保 MainScene 和 GameScene 首次拍照均可见。闪光与图片生成期间根 Animator 必须停止；预览显示时从第 0 帧单次播放 `PackPhoto`，由美术动画控制 `TaskContent` 显示后消失以及 `BtnOK` 出现，代码只负责在动画完整结束前禁用按钮交互。
 
@@ -70,9 +73,10 @@ MainScene 卡包选中页与 GameScene 结算页共用 `Assets/Prefabs/PackPhoto
 - 已完成卡包确认重玩时，MainScene 清除上一局进度并创建新的空 `CardPackPuzzleProgress`，确保本次重玩从空棋盘开始。进入游戏后，每片正确拼入都会立即保存；无论第一组只完成部分、第一组已经完成，还是已进入后续组，返回首页都保留当前会话，再次进入时恢复全部已拼 Piece。首页表现只按第一组是否完整完成区分：未完成第一组显示完整彩色卡包，完成第一组显示彩色撕开和本关碎片。
 - MainScene 卡包排序分四层：第一层为本游戏进程新发放的卡包，按解锁时间倒序；新包从 `Unlocked` 进入 `InProgress` 但第一波未完成时仍保留第一层位置。第二层为非本次新发放、第一波已完整完成且整包未完成的 `InProgress`，按解锁时间升序。第三层为其他普通 `Unlocked` 与第一波未完成的旧 `InProgress`，统一按解锁时间升序，因此旧卡包开始游戏但未打完第一波不会改变位置。第四层为 `Completed`，按首次完成时间倒序，最新完成靠前、越早完成越靠后。PackId 是时间并列或无效时的确定性依据。本进程新发放标记不持久化且不会被列表读取消费，只在进程初始化时清空；整包完成后立即进入第四层。`Completed` 重玩不改变生命周期和首次完成时间，因此位置不变。系列折叠发生在真实 PackId 排序之后，新解锁 A02 会以 A02 的第一层优先级带动 A01+A02 整组置顶；每日挑战优先级暂缓实现。
 - 每次重新加载 MainScene 都必须播放卡包列表进场动画，不区分 Loading、GameScene、RankScene、AchieveScene 或切档后 Loading 等来源。Content 在分批创建、排序和离屏布置完成前预隐藏，随后以完整透明度显示，全部卡包按单卡 `0.44s`、错峰 `0.055s` 从屏幕下方依次上滑；不得增加列表透明度渐变。结算奖励返回继续由 `CardPackRewardFlyTransition` 先处理奖励卡飞入，再调用同一上滑动画处理其余卡包。是否由奖励转场接管必须读取 `IsControllingMainSceneEntrance`，不能仅凭可能包含长尾粒子的 `IsActive` 判断。
-- MainScene 对 `Series` 链执行系列槽位折叠：同系列全部已解锁成员只占一个网格位置，当前最高已解锁 Vol 是前层，上一已解锁 Vol 是后层。前后层必须分别实例化完整 `PackItem.prefab`，并分别按自己的 PackId 和进度刷新封面、`PackBg`、撕口蒙版、完成态材质、`PackSize`、`PackVol` 与进行中碎片；不得再把后层实现成前层内部的单张 `PackCover2` 图片。两张卡包统一使用普通列表的标准尺寸，根节点不允许额外缩放；后层只允许相对前层改变位置、Z 轴 `+7°/-7°` 旋转和更低层级，中心对齐时应由旋转自然露出上下左右各角，不读取 Shader `_PaddingY`，不修改 Pivot，不做尺寸补偿。系列槽的前后卡包不得各自播放呼吸动画：运行时必须关闭两个内部 Animator，并将两套完整视觉挂到唯一的 `SeriesAnimationRoot` 下，由父节点共用一个 Animator 播放 `PackAniBreath`，保证相对位置和旋转不变、整个槽位同步运动。Vol2 起显示对应 `PackVolN.png`。点击系列槽打开编辑器搭建的 `PanelBagVol`，按链顺序展示全部已解锁 Vol，初始居中最高已解锁 Vol；进场时主卡包先单独放大，底部操作按钮在放大后半段上滑，主卡包到位并短暂停顿后相邻 Vol 才从其背后展开，分页圆点随侧卡展开延迟淡入。拖动或左右按钮切换时使用 `PackLeft/PackCenter/PackRight` 的编辑器位置和缩放插值，松手在 `0.25s` 内吸附，分页圆点和操作按钮随当前 Vol 更新。展开后的所有轮播卡包继续播放 `PackItem.prefab` 自带的 `PackAniBreath`；程序不覆盖动画位移、缩放、速度或相位，只在末帧把卡包本体、`PackNode` 和封面的 Z 轴旋转归零。居中卡包继续复用现有开包、继续游戏、重玩确认、拍照和返回逻辑，普通卡包仍进入 `PanelBagSelect`。分页网格按完整六列宽度计算固定左右边距并从 `UpperLeft` 排列，因此满页居中且末页从相同第一列开始。
+- MainScene 对 `Series` 链执行系列槽位折叠：同系列全部已解锁成员只占一个网格位置，当前最高已解锁 Vol 是前层，上一已解锁 Vol 是后层。前后层必须分别实例化完整 `PackItem.prefab`，并分别按自己的 PackId 和进度刷新封面、`PackBg`、撕口蒙版、完成态材质、`PackSize`、`PackVol` 与进行中碎片；不得再把后层实现成前层内部的单张 `PackCover2` 图片。两张卡包统一使用普通列表的标准尺寸，根节点不允许额外缩放；后层只允许相对前层改变位置、Z 轴 `+7°/-7°` 旋转和更低层级，中心对齐时应由旋转自然露出上下左右各角，不读取 Shader `_PaddingY`，不修改 Pivot，不做尺寸补偿。系列槽的前后卡包不得各自播放呼吸动画：运行时必须关闭两个内部 Animator，并将两套完整视觉挂到唯一的 `SeriesAnimationRoot` 下，由父节点共用一个 Animator 播放 `PackAniBreath`，保证相对位置和旋转不变、整个槽位同步运动。Vol2 起显示对应 `PackVolN.png`。点击系列槽打开编辑器搭建的 `PanelBagVol`，按链顺序展示全部已解锁 Vol，初始居中最高已解锁 Vol；进场时主卡包先单独放大，底部操作按钮在放大后半段上滑，主卡包到位并短暂停顿后相邻 Vol 才从其背后展开。只有当前系列至少有 2 个可选卡包时才创建并显示分页圆点，只有 1 个时整个 `PageIndicators` 保持隐藏；圆点随侧卡展开延迟淡入。系列 `PackCenter` 与普通卡包选中页统一使用 `600 x 680` 和缩放 `1`，圆点有无不得改变中心卡包尺寸；左右侧卡继续使用编辑器 `0.6` 缩放。三张系列卡的整体纵向位置由编辑器 `PanelBagVol/PackCarousel` 统一控制，当前为 `Y=140`，运行时代码读取模板位置且不叠加额外偏移；该父节点统一带动卡包和 `PackCover` 材质绘制的投影，确保投影下沿不遮挡 `PageIndicators`。拖动或左右按钮切换时使用 `PackLeft/PackCenter/PackRight` 的编辑器位置和缩放插值，松手在 `0.25s` 内吸附，分页圆点和操作按钮随当前 Vol 更新。展开后的所有轮播卡包继续播放 `PackItem.prefab` 自带的 `PackAniBreath`；程序不覆盖动画位移、缩放、速度或相位，只在末帧把卡包本体、`PackNode` 和封面的 Z 轴旋转归零。居中卡包继续复用现有开包、继续游戏、重玩确认、拍照和返回逻辑，普通卡包仍进入 `PanelBagSelect`。分页网格按完整六列宽度计算固定左右边距并从 `UpperLeft` 排列，因此满页居中且末页从相同第一列开始。
 - 系列槽进入 `PanelBagVol` 时，主卡继续使用现有 `0.4s` 弹起放大。点击瞬间必须隐藏列表后层对应的真实 Vol 卡，并直接设置 Z 轴 `0°`、左侧卡位最终缩放和主卡最终中心位置；主卡展开期间不得显示后层卡的旋转、缩放或移动。主卡完全展开并经过现有 `0.15s` 停顿后，后层卡才从主卡背后显示，保持尺寸不变，只沿 X 轴从中心滑向左卡位；这是后层卡唯一的进场动画。
 - `PanelBagVol` 第一次使用前必须完成一次不可见预布局：临时激活面板，在同一帧强制重建 Panel 与 `PackCarousel` 的 Layout 后恢复隐藏；每次动态创建系列卡后再次执行，再读取 `PackLeft/PackCenter/PackRight` 世界矩形。用于复制选中卡包并执行展开/关闭插值的独立 `SelectedCardPackCanvas` 根节点必须持续激活，使 `CanvasScaler` 从初始化开始维持稳定坐标系；不可通过禁用整个 Canvas 隐藏选中卡包，只切换其 `SelectedCardPackImage` 子节点。不得依赖面板或选中 Canvas 曾经显示过一次才获得正确动画坐标。
+- 普通卡包展开时，X 轴继续使用 `PanelBagSelect` 的中心位置，Y 轴必须读取系列页 `PackCenter` 的同一世界矩形位置；普通卡包和系列卡包不得分别维护硬编码 Y 偏移，以保证两种选择页的卡包高度持续一致。
 - MainScene 所有生命周期状态均使用 `UI/PackImages/PackIconNNN.png` 静态封面。活动会话只有在对应 `CardBagNNN.prefab` 的全部 `Piece01II` 均已正确拼入后，才显示彩色撕开状态和最多 3 片本关贴纸；第一组完成前仍显示完整彩色卡包。没有活动会话的 `Completed` 显示撕开，并切换为美术配置的完成态封面及标签材质；`PackSize` 与 `PackVol` 共用尺寸标签的普通/完成态材质，完成后同步置灰，其余状态保持彩色。所有撕开状态都显示 `PackBg`，进行中贴纸位于 `PackBg` 上方、`PackCover` 下方。程序只切换材质引用，不覆盖美术材质中的灰度、颜色、亮度或对比度参数。选中放大页复制列表当前完整 `PackNode`，必须继承撕口、`PackBg`、完成态材质、尺寸标签和进行中贴纸；复制后还必须按真实 PackId 重新确认 `PackSize`，并按真实系列序号显示 Vol2 及以上的 `PackVolN`，不能因列表裁切或临时显隐状态漏掉完整新包的标签。
 - MainScene 的 Canvas 根级 `PanelConfirm` 是退出与存档删除共用的确认弹窗。`PanelMenu/BtnExit` 打开时关闭菜单并显示“确认退出游戏？”，`BtnYes` 确认后 Windows Player 调用 `Application.Quit()`、Editor 停止 Play Mode。`PanelSave/BtnDelete` 打开时保留保存页并显示“确认删除进度存储？”，锁定当前选中槽位；`BtnYes` 调用 `LocalSaveSlotUtility.DeleteSlot` 后刷新保存页。两种用途下 `BtnNo`、`BtnClose` 及弹窗内其他 Button 都只关闭弹窗。该通用确认弹窗与卡包重玩使用的 `PanelReplay` 相互独立。
 - `PackItem/CardPackEffect/PackNode` 的列表视觉顺序为 `PackBg`、运行时可选的 `ProgressPieces`、`PackCover`、`PackSize`、`ImgLight`。`PackBg` 默认关闭，仅在撕开状态启用；运行时按封面从 Prefab 原始尺寸到列表尺寸的比例同步缩放，并与封面、尺寸图标和进行中贴纸统一执行可见区域及面板显隐。
@@ -103,7 +107,7 @@ MainScene 卡包选中页与 GameScene 结算页共用 `Assets/Prefabs/PackPhoto
 
 ```text
 Assets/
-  Scenes/           LoadingScene（启动）、MainScene、GameScene、RankScene、AchieveScene
+  Scenes/           LoadingScene（启动）、MainScene、GameScene、RankScene、AchieveScene、AdminScene
   UI/               2D 源贴图（PackImages、CardBags/CardBagNNN、BasicUI...）
   Scripts/          MVC
     Model/          有意保持扁平：核心、配置、持久化、任务/卡包数据和运行时工具
@@ -158,6 +162,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 | MainScene | `MainScene.cs` | 卡包 UI；按解锁状态刷新；3D 开包或 2D 回退 |
 | GameScene | `GameScene.cs` | 拼图分组和 RewardPanel；保存卡包、累计结算积分任务进度并结算任务奖励 |
 | RankScene / AchieveScene | 场景脚本 | 返回 Main |
+| AdminScene | `AdminScene.cs` | 正式版调试页面；关闭按钮返回 Main |
 
 **Build Settings**：`LoadingScene` 必须为 Index **0**。
 
@@ -243,6 +248,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 - `GameConfigRepository` 加载并缓存任务和卡包配置。当前数据源为 `ResourcesGameConfigTextSource`，优先使用 `Resources.Load<TextAsset>`，失败时回退到编辑器磁盘路径。
 - `CsvTable` 是统一 CSV 解析器，支持表头访问、引号字段和空行过滤；业务代码不得直接 `Split(',')`。
 - `CardPacks.csv/BoardScale` 使用 invariant-culture 浮点数且必须大于零。GameScene 将其乘到当前 CardBag 根节点，使棋盘、槽位、描边和吸附坐标统一缩放。Piece 使用两类互不覆盖的 Scale：`DragScale/BoardScale` 通过运行时 SpriteRenderer 屏幕包围盒与对应凹槽屏幕矩形直接校准，包含配置后的棋盘比例，并在每次拿起时刷新；两者使用同一目标值，使拿起后立即恢复凹槽实际显示尺寸，正确吸附时只做位置缓动、不二次缩放。`TrayScale` 默认直接等于 `DragScale`；只有 Piece 在该 Scale 下的实际屏幕高度超过托盘实际屏幕高度 `90%` 时，才统一等比缩小到 `90%`。创建、拿起时重算、回收、错误回弹和托盘布局均使用该值。任何直接回收、错误回弹、被其他 Piece 顶回或失焦回收只要最终回到托盘，都必须恢复当前规则计算出的 `TrayScale`。未正确吸附的 Piece 使用 `DragScale`，并只允许完整渲染边界落在棋盘内且实际轮廓不与 Alpha 大于 0 的已拼 Piece 或自身凹槽相交、也未同时横跨灰色拼图区与 GameBoard 非灰色区域的位置，或完整落在棋盘左右两侧的桌面，或在棋盘左右边界之间完整落入棋盘底边与托盘原始顶部之间的桌面空间；Piece 完整位于灰色拼图区内部或完整位于灰区外的棋盘空位均允许。新增下方区域使用托盘缓存的原始屏幕顶部作为下边界，托盘收起后也不得侵入其原始高度。正确吸附判定继续优先；未达到吸附标准但与自身凹槽相交、横跨灰色拼图区边缘、横跨棋盘外框、位于棋盘正上方、侵入托盘原始区域或与已拼内容实际轮廓重叠的位置均回弹。成功吸附后立即用 Prefab 对应原始 `Image` 替代 SpriteRenderer，确保已放置 Piece 与棋盘在同一 Canvas 层级共同缩放。
+- 正确吸附新增 Piece 中心优先规则：松手时使用 `SpriteRenderer.bounds.center` 作为不受 Sprite Pivot 影响的可见渲染中心；中心点进入自身 Groove 的屏幕矩形后即可吸附，不再受“距离凹槽中心”阈值限制。临时组合至少一个成员满足中心进入条件时以该成员对齐，其余成员仍须通过平移后的原距离校验；没有成员满足时继续使用原尺寸自适应距离规则。该规则全卡包通用，且不改变托盘优先级、错误回弹、自由放置或吸附动画。
 - 上述自由放置规则中，Piece 与“自身凹槽相交”不再属于非法条件：正确吸附判定仍优先；未达到吸附标准时，只要 Piece 完整位于棋盘范围内、未与已拼区域或其他外部 Piece 冲突且没有触犯棋盘外框或托盘区域限制，即使实际轮廓与自身凹槽部分相交，也允许按未完成 Piece 留在当前位置。未与自身凹槽相交时，其他未填凹槽边界继续使用原判定。
 - `JsonLocalStore` 读写整个文件的单一根对象，目前用于任务进度。
 - `SqliteLocalStore` 在 `AppRecords` 中使用集合/键记录；卡包业务状态使用专用 `CardPacks` 表。
@@ -268,7 +274,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 - `UsableOption1` 是关卡描边开关，`UsableOption2` 是贴纸描边开关，两者新建设置时都默认关闭；`UsableOption3` 是高对比度并默认关闭。已持久化的用户选择优先。关卡描边关闭时 GameScene 保留现有当前阶段连接区域，打开时改为显示当前待拼组的完整合并外边界；贴纸描边关闭时不显示单块轮廓，打开时叠加当前组每块凹槽的独立轮廓。PanelUsable 的 `ImgContentBg` 按高对比度状态显示 `MainSetHigh1/2.png`；`ImgContentLine` 在描边全关、仅关卡描边、贴纸描边打开时分别显示 `MainSetLine1/2/3.png`，两项同时打开使用信息更完整的 `MainSetLine3.png`。GameScene 的 `BoardBgXX RawImage` 在高对比度关闭时统一使用 `UI/BasicUI/BgCardBoard1.png`，打开时统一替换为 `BgCardBoard2.png`；CardBag 根 `Image.sprite` 始终为空，运行时不改变背景块布局或 UV。烘焙棋盘描边通过 Alpha-only UGUI Shader 固定输出 `#3f423e`，不随高对比度切换颜色；提示按钮的绿色滚动虚线在高对比度时改用 `#b1d702`，新手引导专用蓝色虚线不变。
 - MainScene 和 GameScene 引用相同 `TaskItem.prefab` GUID。场景 Override 只定位根节点（`MainScene`：`10,508`；`GameScene`：`-6,455`）；子节点布局和视觉必须在共享 Prefab 中修改。
 - 共享 TaskItem 子节点名称为 `TaskContent`、`TextProgress`、`ProgressMask`、`BagIcon` 和 `BagBg`。任务 UI 绑定代码应相对 TaskItem 实例解析这些名称，不得使用场景专属后缀。
-- `TaskProgressUIUtility` 是两个 TaskItem 实例共用的运行时绑定。三类任务文案分别为“完成任意拼图包，收集 N 分”“从任意拼图包中收集 N 个贴纸”和“完成 N 个 S/M 尺寸的拼图包”；`TextProgress` 显示当前值与任务实例目标值，可见 `ProgressMask` 宽度使用两者比值并限制在有效范围。`BagIcon` 始终使用共享 Prefab 中配置的固定 Sprite，运行时不得按任务奖励或卡包编号替换。
+- `TaskProgressUIUtility` 是两个 TaskItem 实例共用的运行时绑定。三类任务文案分别为“完成任意拼图包，收集 N 分”“从任意拼图包中收集 N 个贴纸”和“完成 N 个 S/M 尺寸的拼图包”；任务完成后继续显示原描述，不追加奖励完成句。`TextProgress` 的当前值与可见 `ProgressMask` 宽度均封顶到任务实例目标值，例如真实进度 `2751/2000` 显示为 `2000/2000`；该限制只作用于 UI，数据层仍保存积分超额并按规则结转。`BagIcon` 始终使用共享 Prefab 中配置的固定 Sprite，运行时不得按任务奖励或卡包编号替换。
 - MainScene 在卡包数据初始化成功后、列表创建与进场动画开始前，从最新持久化状态刷新 TaskItem，并在这里统一判定当前构建卡包是否已全部解锁。GameScene 结算使用不受 TimeScale 影响的时间：积分任务与结算分数同步滚动，贴纸和完成卡包任务在最终得分后单独滚动进度；任务奖励和下一任务生成在动画前持久化。
 - GameScene 结算摘要将 `TaskBg2/TaskScore` 绑定到当局结算分数，将 `TaskBg2/TaskBagNum` 绑定到 SQLite 中生命周期为 `Completed` 的卡包数量；未完成的已解锁卡包和进行中卡包不计入，重玩不会重复计数。
 - GameScene 结算不得在任务推进或奖励卡包发放后重新判定全卡包终态，也不得因本轮刚发出最后一个卡包而中途隐藏 `RewardPanel/TaskItem`；结算页维持本轮开始时确定的任务展示，最新全解锁终态由返回 MainScene 后、卡包列表进场前统一刷新。
@@ -446,7 +452,7 @@ LoadingScene（2.5s，TextLoading 0% -> 100%）
 
 构建前执行 **Puffies -> Sync Build Resources**。该命令将 `PackImages`、`BasicUI`、`MainScene`、`GameScene`、`AchieveScene` 和 `RankScene` 复制到 `StreamingAssets/UI`；CardBag 源贴图通过游戏 Prefab 的 Sprite 引用进入构建，因此不复制。
 
-建议 Build Settings 顺序：LoadingScene -> MainScene -> GameScene -> RankScene -> AchieveScene。
+建议 Build Settings 顺序：LoadingScene -> MainScene -> GameScene -> RankScene -> AchieveScene -> AdminScene。
 
 ### 开发工作站
 

@@ -2002,3 +2002,139 @@
 - 所有最终文件与各自输入保持相同采样率、双声道和码率；18 个裁剪文件只发生一次 MP3 有损重编码，背景音乐未改。
 - Git 检查确认 19 个 MP3 和 `ProjectSettings/AudioManager.asset` 发生变化，所有音频 `.meta` 与 `Assets/Resources/AudioCatalog.asset` 均未变化。
 - `dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 成功并连带编译 Runtime，结果 `0` 警告、`0` 错误。
+
+## 2026-09-08 - AdminScene 隐藏调试入口
+
+### 需求
+
+1. WHEN 玩家在 MainScene 首页透明按钮 `BtnAdmin` 上于 `2s` 内连续点击 `5` 次 THEN 系统 SHALL 在第五次点击时切换到 `AdminScene`；前四次不得跳转。
+2. `BtnAdmin` 的 Image 可以保持 `Alpha=0`，但对象、Button 和 Graphic SHALL 启用，Button SHALL 可交互且 Graphic 的 `Raycast Target` SHALL 开启。
+3. MainScene 菜单的 `BtnSet` SHALL 恢复原有单击立即打开设置页，不再承担 Admin 连击入口或等待连击判定。
+4. WHEN 玩家点击 `AdminScene/BtnClose` THEN 系统 SHALL 返回 `MainScene`。
+5. `AdminScene` SHALL 加入 Player Build Settings，并沿用项目现有固定宽高比窗口适配与通用按钮音效。
+6. 本次修改 SHALL NOT 覆盖用户当前搭建的场景内容，两个按钮均通过运行时控制器按节点名绑定。
+7. AdminScene SHALL 仅使用左侧 `TextCode101~118` 作为最多 18 行的代码说明清单，每行沿用编辑器已有的 `代码 : 功能说明` 完整单行格式；已有定义按顺序显示，未使用的左侧行保持隐藏，运行时代码不得查找、写入或切换右侧 `TextCode201~218`。
+8. 首批代码定义 SHALL 为：`10001001=显示一键通关按钮`、`10001002=隐藏一键通关按钮`、`10002001=显示所有当前卡包`、`10002002=只显示Demo的前18个卡包`、`10002003=解锁当前所有可见卡包`。
+9. 代码、功能说明、排列顺序和对应命令类型 SHALL 集中记录在 `AdminScene` 的统一定义表中，后续新增功能不得散落写入各个 Text 节点或按钮分支。
+10. `AdminScene/InputField` SHALL 沿用编辑器已有 `TMP_InputField`，点击后显示并闪烁标准输入光标，输入时由 TMP 刷新文字和光标；运行时只限制为单行、最多 8 位数字，不改写其 RectTransform、字体、材质、颜色或背景。
+11. WHEN 用户输入已登记的 8 位代码并点击 `BtnConfirm` THEN 系统 SHALL 先执行并持久化对应数据，成功后再关闭 AdminScene 并加载 MainScene；代码无效或保存失败时 SHALL 留在 AdminScene，不得带着未成功的数据切换场景。
+12. `10001001/10001002` SHALL 分别持久化显示或隐藏 GameScene 的一键完成按钮；该按钮在正式构建中也由这一设置控制，默认行为继续保持 Editor/Development Build 显示、正式构建隐藏。
+13. `10002001/10002002` SHALL 分别持久化使用当前构建的全部卡包范围或仅允许前 18 个卡包；范围切换本身不得改变卡包解锁状态。
+14. `10002003` SHALL 解锁当前可见范围内所有已配置卡包，跳过已解锁、进行中或已完成的记录，不得覆盖其进度和完成状态；该管理命令不受正常系列前置条件限制。
+
+### 设计与任务
+
+- [x] 核对 `BtnAdmin` 的透明 Graphic、Raycast Target 和 Button 状态，并将两秒五连击 Admin 入口绑定到该按钮。
+- [x] 移除设置按钮五连击计数和延迟，恢复原设置页即时打开行为。
+- [x] 增加统一的 Admin 场景名与进入接口。
+- [x] 增加 AdminScene 运行时控制器，绑定 `BtnClose` 返回首页并刷新固定宽高比布局。
+- [x] 将 AdminScene 加入 Build Settings。
+- [x] 建立可扩展的 Admin 代码定义表，并将前五条完整的 `代码 : 功能说明` 单行内容写入左侧文本。
+- [x] 绑定现有 `TMP_InputField` 和 `BtnConfirm`，校验 8 位代码并在数据成功刷新后返回 MainScene。
+- [x] 持久化一键完成按钮与卡包可见范围设置，并让 GameScene/GameDefine 使用该设置。
+- [x] 增加管理端批量解锁当前可见卡包的数据接口，保留已有生命周期与拼图进度。
+- [x] 编译 Runtime/Editor 并执行静态结构与差异检查。
+- [ ] 在 Play Mode 验证透明 `BtnAdmin` 两秒五连击进入 Admin、普通设置即时打开和关闭返回路径。
+
+### 验证
+
+- `MainScene/BtnAdmin` 已激活并包含可交互 Button；其 Image 为 `Alpha=0` 且 `Raycast Target=1`，透明状态仍能接收点击。`AdminScene` 中存在唯一的 `BtnClose` Button；两个场景都使用运行时绑定，不写入序列化 OnClick。
+- 连击状态只属于 `BtnAdmin`：从第一次到第五次使用 `Time.unscaledTime` 检查 `<=2s`，超时后的当前点击自动成为新一轮第一次；`BtnSet` 不读取或修改该状态。
+- AdminScene 仅由运行时代码控制左侧 `TextCode101~118`：首批 5 条定义按 `101~105` 顺序显示完整的 `代码 : 功能说明` 单行内容，左侧剩余 13 行隐藏；右侧 `TextCode201~218` 保持编辑器状态，不受清单逻辑影响。
+- 场景现有 `InputField` 已确认包含标准 `TMP_InputField`、Text Area、Text、Placeholder，AdminScene 也包含 EventSystem；运行时绑定只设置单行、数字输入和 8 位上限，并使用 TMP 自带光标与标签刷新。
+- `BtnConfirm` 按节点名运行时绑定。五条代码统一映射到命令枚举；有效命令只有在 SQLite 设置写入或批量卡包解锁成功后才加载 MainScene，无效代码与保存失败均保留当前场景并重新激活输入框。
+- Admin 设置保存在当前存档 SQLite 的 `AdminSettings/Runtime` 记录中；切换存档时清空运行时缓存并从目标存档重新读取。GameScene 的一键完成按钮已取消仅 Editor/Development 编译限制，改为读取持久化开关；默认仍为 Editor/Development 显示、正式构建隐藏。
+- 卡包范围开关仅改变 `GameDefine.MaximumAvailableCardPackId` 的有效上限：全部模式沿用当前构建上限，Demo 模式限制为前 18 个。批量解锁遍历当前可见配置，跳过已有已解锁/进行中/完成记录，只将 Locked 或不存在的记录写为 Unlocked，不清理拼图进度。
+- Unity 已将 `AdminScene.cs` 纳入生成的 Runtime 工程；`dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 连带编译 Runtime，结果 `0` 警告、`0` 错误。
+- 本次代码、Build Settings、spec 和记录文件没有行尾空格；全局 `git diff --check` 的现有报告仅来自用户新建的 `AdminScene.unity` 空 YAML 字段，本轮未修改该场景文件。
+
+## 2026-09-08 - 任务完成态描述与进度封顶
+
+### 需求
+
+1. WHEN 当前任务达到或超过完成目标 THEN `TaskItem/TaskContent` SHALL 继续显示原任务描述，不得追加“获得卡包奖励”或其他完成描述。
+2. WHEN 任务实际进度超过目标 THEN `TaskItem/ProgressBg/TextProgress` 的当前值 SHALL 封顶为目标值，例如实际进度 `2751`、目标 `2000` 时显示 `2000/2000`。
+3. 进度条填充 SHALL 同样封顶到 `100%`；任务实际超额值及其后续积分任务结转规则 SHALL 保持不变。
+4. MainScene 与 GameScene 结算页共享上述规则，不得只修复其中一个页面。
+
+### 设计与任务
+
+- [x] 移除 `TaskProgressUIUtility` 的完成描述分支及不再使用的 `task.reward` 多语言条目。
+- [x] 在共享进度刷新入口将 UI 当前值限制在 `0..CompleteValue`，不修改持久化数据。
+- [x] 编译 Runtime/Editor 并检查全部调用点。
+
+### 验证
+
+- `RefreshTask` 的 MainScene 与 GameScene 三处调用均不再传入完成描述状态，`TaskContent` 始终直接使用 `BuildTaskDescription` 的原任务文案。
+- UI 显示值使用 `Mathf.Clamp(displayValue, 0, targetValue)`；文字和宽度使用同一个封顶值，数据层 `CurrentCompleteValue` 与 `PendingScoreCarryOver` 未修改。
+- 工程内不再存在 `showCompletedMessage` 或 `task.reward` 引用；Runtime/Editor 编译均为 `0` 警告、`0` 错误，`git diff --check` 通过。
+
+## 2026-09-08 - 系列卡包圆点与选中尺寸统一
+
+### 需求
+
+1. WHEN 系列卡包当前只有 1 个可选择卡包 THEN 系统 SHALL 隐藏 `PanelBagVol/PageIndicators`，不得显示单独一个无意义的卡包圆点。
+2. WHEN 系列卡包当前至少有 2 个可选择卡包 THEN 系统 SHALL 保持现有分页圆点显示和选中状态刷新。
+3. WHEN 玩家从首页点开普通卡包或系列卡包 THEN 中心选中卡包 SHALL 使用相同的 `600 x 680` 显示尺寸；圆点是否存在不得改变卡包尺寸。
+4. 左右侧系列卡包继续使用现有 `0.6` 缩放，本次不得修改卡包动画时长、按钮、轮播间距或其他首页列表行为。
+5. 系列卡包与圆点需要留出明确间距；位置 SHALL 由编辑器 `PanelBagVol/PackCarousel` 的 RectTransform 统一控制，运行时代码继续读取该位置，不得增加额外硬编码 Y 偏移。
+6. WHEN 玩家点开普通卡包 THEN 普通卡包展开后的 Y 轴位置 SHALL 读取系列页 `PackCenter` 的同一编辑器位置，使普通卡包与只有一个成员的系列卡包保持相同高度；不得为两种入口分别维护数值偏移。
+
+### 设计与任务
+
+- [x] 圆点构建、进场和导航显隐统一增加“卡包数量大于 1”条件。
+- [x] 将 `MainScene/PanelBagVol/PackCarousel/PackCenter` 从 `0.85` 调整为 `1`，并同步修正代码回退尺寸。
+- [x] 在编辑器中将整个 `PackCarousel` 从 `Y=20` 上移到 `Y=140`；位置包含中心卡从 `0.85` 放大到 `1` 后增加的投影下沿补偿，让封面和同材质投影一起避开 `PageIndicators`。
+- [x] 将普通卡包展开目标位置改为复用系列页 `PackCenter` 的编辑器 Y 坐标，并验证两种入口共用同一高度来源。
+- [x] 编译 Runtime/Editor，执行差异检查并等待 Play Mode 视觉验收。
+
+### 验证
+
+- `MainScene.unity` 将 `PackCenter` 的本地缩放从 `0.85` 改为 `1`，并将三张卡共同父节点 `PackCarousel` 从 `Y=20` 上移到 `Y=140`；新增位移补偿放大后向下扩展的卡包投影，卡包 `600 x 680` RectTransform、左右卡 `0.6` 缩放、相对位置和层级均未修改。
+- `BuildBagVolumeDots` 在卡包数小于等于 1 时不创建圆点并关闭 `PageIndicators`；侧卡进场和导航显隐也使用相同的 `Count > 1` 条件，不会在后续阶段重新显示。
+- 两处系列选中矩形回退尺寸均为 `PackageOpenWidth x PackageOpenHeight`，与普通卡包相同；Runtime/Editor 编译结果为 `0` 警告、`0` 错误，相关差异检查通过。
+- 普通卡包展开终点保留 `PanelBagSelect` 的 X 坐标，并将 Y 坐标同步为 `PackCenter` 的实际 Overlay 坐标；普通与系列入口不再各自维护纵向位置。
+
+## 2026-09-08 - 拼图中心进入自身凹槽即可吸附
+
+### 需求
+
+1. WHEN 玩家松开拼图且该拼图的可见渲染中心点已经进入它自己的凹槽矩形 THEN 系统 SHALL 自动将拼图吸附到正确位置，不再要求中心点必须靠近凹槽中心。
+2. WHEN 玩家松开临时组合且至少一个成员的可见渲染中心点进入其自身凹槽矩形 THEN 系统 SHALL 使用该成员对齐组合；组合内其他成员平移后仍须满足原有正确位置校验，避免错误组合整体吸附。
+3. WHEN 没有成员中心进入自身凹槽矩形 THEN 系统 SHALL 保留原有按尺寸自适应距离吸附的手感。
+4. 托盘相交优先回归、错误块回弹、棋盘边缘判定、自由放置、组合关系、吸附动画和特效 SHALL 保持不变；本规则适用于全部卡包，不为 `CardBag018` 增加资源或关卡特例。
+
+### 设计与任务
+
+- [x] 使用 `SpriteRenderer.bounds.center` 获取不受 Sprite Pivot 影响的 Piece 可见渲染中心，并转换到屏幕坐标。
+- [x] 使用现有 `TryGetRectTransformScreenRect` 获取自身 Groove 的屏幕矩形，将中心进入作为正确吸附的优先条件。
+- [x] 保留旧距离判定作为未进入矩形时的兼容路径，并保留组合成员平移后的完整校验。
+- [x] 编译 Runtime/Editor 并执行静态差异检查。
+- [ ] 在 `CardBag018` Play Mode 验收中心进入、旧近距离吸附和托盘优先回归。
+
+### 验证
+
+- `TryGetClusterBoardSnapTargets` 优先选择中心已经进入自身 Groove 屏幕矩形的成员作为组合吸附锚点；没有此类成员时，仍以最近成员和 `CalculateSnapDistance` 决定是否吸附。
+- 单 Piece 以自身为锚点平移后精确落到原 Groove 位置；临时组合继续逐成员检查平移后距离，没有放宽错误组合关系。
+- Runtime 与 Editor 工程编译均通过，结果为 `0` 警告、`0` 错误；`git diff --check` 通过。
+
+## 2026-09-08 - 新手引导第一步箭头恢复
+
+### 需求
+
+1. WHEN 新手引导进入第一步 THEN 系统 SHALL 显示从当前指定 Piece 指向其目标凹槽的移动箭头。
+2. 箭头、第一步 Piece 高亮副本与第二步 Piece 高亮副本 SHALL 按教程 `Screen Space - Camera` Canvas 的实际相机和固定宽高比视口换算位置，在 Unity Game 视图及窗口尺寸变化后均不得落到可视区域外。
+3. 本次修复 SHALL NOT 修改箭头素材、尺寸、移动节奏、提示框位置、第三步箭头或教程流程。
+
+### 设计与任务
+
+- [x] 将教程 Piece 屏幕矩形转换统一改为使用教程 Canvas 的 Event Camera。
+- [x] 将第一步目标凹槽屏幕中心转换统一改为使用教程 Canvas 的 Event Camera。
+- [x] 编译 Runtime/Editor 并执行静态差异检查。
+- [ ] 在 CardBag001 新手引导第一步和第二步进行 Play Mode 验收。
+
+### 验证
+
+- 根因确认：教程 Canvas 从 Overlay 改为 `Screen Space - Camera` 后，第一步箭头的 Piece 矩形和凹槽中心仍传空 Event Camera 进行本地坐标转换；同一页面的提示框已使用 Canvas 相机，因此只有箭头坐标异常。
+- `RebuildTutorialFocusPresentation` 的第一、二步 Piece 矩形已统一调用 `TryScreenRectToCanvasRectUsingCanvasCamera`；第一步凹槽中心已统一调用新增的 `TryScreenPointToCanvasPositionUsingCanvasCamera`。
+- Runtime 与 Editor 工程编译均通过，结果为 `0` 警告、`0` 错误。
