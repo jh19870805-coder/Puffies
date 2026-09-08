@@ -1,5 +1,14 @@
 # 当前任务
 
+## 2026-09-08 新手引导第一步英文精简
+
+- 状态：文案修改和静态验证完成，等待 GameScene 英文界面视觉验收。
+- 用户意图：缩短新手引导第一步的英文描述，避免提示框内文本过长；其他语言和引导流程不变。
+- 修改：`game.tutorial.place` 英文由 `Choose the matching sticker from the tray and place it in the correct spot on the board.` 精简为 `Place the matching sticker on the board.`。
+- 修改文件：`Assets/Scripts/Model/GameLocalization.cs`、`Documents/CURRENT_TASK.md`。
+- 验证：确认第一步仍由 `TutorialStrongInstructionKey` 读取 `game.tutorial.place`；仅英文文本发生变化。
+- 下一步：在英文环境进入新手引导第一步，确认文字完整显示且不遮挡提示框内容。
+
 ## 2026-09-08 系列卡包圆点与选中尺寸统一
 
 - 状态：代码、场景配置和静态验证完成，等待 MainScene Play Mode 视觉验收。
