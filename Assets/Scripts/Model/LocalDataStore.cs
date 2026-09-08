@@ -270,6 +270,7 @@ public static class LocalSaveSlotUtility
 
     private static void ResetRuntimeState()
     {
+        AdminRuntimeSettingsUtility.ResetForSaveSlotChange();
         GameSettingsUtility.ResetForSaveSlotChange();
         GameTaskUtility.ResetForSaveSlotChange();
         CardPackDataUtility.ResetForSaveSlotChange();
@@ -752,6 +753,135 @@ public static class JsonLocalStore
             Debug.LogError($"JsonLocalStore persist failed: {sFilePath}\n{exception}");
             return false;
         }
+    }
+}
+
+[Serializable]
+public sealed class AdminRuntimeSettingsData
+{
+    public bool ShowTestCompleteButton;
+    public bool LimitVisibleCardPacksToDemo;
+}
+
+public static class AdminRuntimeSettingsUtility
+{
+    private const string SettingsCollection = "AdminSettings";
+    private const string SettingsKey = "Runtime";
+    private const int DemoVisibleCardPackLimit = 18;
+
+    private static AdminRuntimeSettingsData sSettings = CreateDefaultSettings();
+    private static bool sHasLoaded;
+
+    public static bool ShouldShowTestCompleteButton
+    {
+        get
+        {
+            EnsureLoaded();
+            return sSettings.ShowTestCompleteButton;
+        }
+    }
+
+    public static int GetMaximumVisibleCardPackId(int buildMaximumCardPackId)
+    {
+        EnsureLoaded();
+        return sSettings.LimitVisibleCardPacksToDemo
+            ? Math.Min(DemoVisibleCardPackLimit, buildMaximumCardPackId)
+            : buildMaximumCardPackId;
+    }
+
+    public static bool SetTestCompleteButtonVisible(bool visible)
+    {
+        if (!EnsureLoaded())
+        {
+            return false;
+        }
+
+        var previousValue = sSettings.ShowTestCompleteButton;
+        sSettings.ShowTestCompleteButton = visible;
+        if (Save())
+        {
+            return true;
+        }
+
+        sSettings.ShowTestCompleteButton = previousValue;
+        return false;
+    }
+
+    public static bool SetDemoCardPackLimitEnabled(bool enabled)
+    {
+        if (!EnsureLoaded())
+        {
+            return false;
+        }
+
+        var previousValue = sSettings.LimitVisibleCardPacksToDemo;
+        sSettings.LimitVisibleCardPacksToDemo = enabled;
+        if (Save())
+        {
+            return true;
+        }
+
+        sSettings.LimitVisibleCardPacksToDemo = previousValue;
+        return false;
+    }
+
+    internal static void ResetForSaveSlotChange()
+    {
+        sSettings = CreateDefaultSettings();
+        sHasLoaded = false;
+    }
+
+    private static bool EnsureLoaded()
+    {
+        if (sHasLoaded)
+        {
+            return true;
+        }
+
+        sSettings = CreateDefaultSettings();
+        if (!SqliteLocalStore.Initialize())
+        {
+            return false;
+        }
+
+        if (SqliteLocalStore.TryRead(
+                SettingsCollection,
+                SettingsKey,
+                out AdminRuntimeSettingsData loadedSettings)
+            && loadedSettings != null)
+        {
+            sSettings = loadedSettings;
+        }
+        else if (!Save())
+        {
+            return false;
+        }
+
+        sHasLoaded = true;
+        return true;
+    }
+
+    private static bool Save()
+    {
+        if (!SqliteLocalStore.Initialize())
+        {
+            return false;
+        }
+
+        return SqliteLocalStore.Upsert(SettingsCollection, SettingsKey, sSettings);
+    }
+
+    private static AdminRuntimeSettingsData CreateDefaultSettings()
+    {
+        return new AdminRuntimeSettingsData
+        {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            ShowTestCompleteButton = true,
+#else
+            ShowTestCompleteButton = false,
+#endif
+            LimitVisibleCardPacksToDemo = false
+        };
     }
 }
 

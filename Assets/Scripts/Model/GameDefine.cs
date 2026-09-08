@@ -211,10 +211,12 @@ public static class GameDefine
         get
         {
 #if PUFFIES_STEAM_RELEASE
-            return int.MaxValue;
+            const int buildMaximumCardPackId = int.MaxValue;
 #else
-            return DemoMaximumBagId;
+            const int buildMaximumCardPackId = DemoMaximumBagId;
 #endif
+            return AdminRuntimeSettingsUtility.GetMaximumVisibleCardPackId(
+                buildMaximumCardPackId);
         }
     }
 

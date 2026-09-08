@@ -215,10 +215,8 @@ public class GameScene : MonoBehaviour
     private const string PackPhotoItemObjectName = "PackPhotoItem";
     private const string HintButtonObjectName = "BtnTips";
     private const string PieceHintOutlineObjectName = "PieceHintOutline";
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
     private const string TestCompleteButtonObjectName = "BtnCompleteAllTest";
     private const string TestCompleteButtonTextKey = "game.test_complete";
-#endif
     private static readonly Color PieceHintOutlineColor = new Color32(112, 151, 75, 255);
     private static readonly Color HighContrastPieceHintOutlineColor = new Color32(0xb1, 0xd7, 0x02, 0xff);
     private static readonly Color TutorialTargetOutlineColor = new Color32(80, 139, 230, 255);
@@ -488,9 +486,7 @@ public class GameScene : MonoBehaviour
     private GameObject _pieceHintOutlineRoot;
     private bool _shouldCompleteRestoredPuzzle;
     private Button _hintButton;
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
     private Button _testCompleteButton;
-#endif
     private bool _isTutorialPending;
     private TutorialStage _tutorialStage;
     private DraggablePieceState _tutorialPiece;
@@ -577,9 +573,7 @@ public class GameScene : MonoBehaviour
         InitializeTaskTracking();
         ConfigureReturnButton();
         ConfigureHintButton();
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
         ConfigureTestCompleteButton();
-#endif
         ConfigureRewardPanel();
         if (_shouldCompleteRestoredPuzzle)
         {
@@ -856,12 +850,10 @@ public class GameScene : MonoBehaviour
         bool waitForPackTransition)
     {
         _isEntranceAnimating = true;
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
         if (_testCompleteButton != null)
         {
             _testCompleteButton.interactable = false;
         }
-#endif
         Canvas.ForceUpdateCanvases();
 
         var boardRect = _loadedCardBagRect;
@@ -1048,12 +1040,10 @@ public class GameScene : MonoBehaviour
         }
 
         _isEntranceAnimating = false;
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
         if (_testCompleteButton != null)
         {
             _testCompleteButton.interactable = !_isGameFinished;
         }
-#endif
         TryStartPiecePlacementTutorial();
     }
 
@@ -7278,12 +7268,10 @@ public class GameScene : MonoBehaviour
     private IEnumerator PlayGroupTransition(int nextGroupIndex)
     {
         _isGroupTransitionAnimating = true;
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
         if (_testCompleteButton != null)
         {
             _testCompleteButton.interactable = false;
         }
-#endif
         var wasTutorialActive = IsTutorialActive;
         var transitionHoldDuration = _tutorialStage == TutorialStage.StrongPlacement
             ? GroupTransitionStrongHoldDuration
@@ -7533,12 +7521,10 @@ public class GameScene : MonoBehaviour
         }
 
         _isGroupTransitionAnimating = false;
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
         if (_testCompleteButton != null)
         {
             _testCompleteButton.interactable = !_isGameFinished;
         }
-#endif
     }
 
     private static float SmootherStep01(float value)
@@ -8585,13 +8571,11 @@ public class GameScene : MonoBehaviour
             _hintButton.interactable = false;
             _hintButton.gameObject.SetActive(false);
         }
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
         if (_testCompleteButton != null)
         {
             _testCompleteButton.interactable = false;
             _testCompleteButton.gameObject.SetActive(false);
         }
-#endif
         StopGameplayTimer();
         EndDragging();
 
@@ -10288,10 +10272,20 @@ public class GameScene : MonoBehaviour
         SetHintButtonTutorialState();
     }
 
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
     private void ConfigureTestCompleteButton()
     {
         var buttonObject = GameCommonUtility.FindSceneObject(TestCompleteButtonObjectName);
+        if (!AdminRuntimeSettingsUtility.ShouldShowTestCompleteButton)
+        {
+            if (buttonObject != null)
+            {
+                buttonObject.SetActive(false);
+            }
+
+            _testCompleteButton = null;
+            return;
+        }
+
         if (buttonObject == null)
         {
             buttonObject = CreateTestCompleteButton();
@@ -10303,6 +10297,7 @@ public class GameScene : MonoBehaviour
             return;
         }
 
+        buttonObject.SetActive(true);
         _testCompleteButton = buttonObject.GetComponent<Button>();
         if (_testCompleteButton == null)
         {
@@ -10472,7 +10467,6 @@ public class GameScene : MonoBehaviour
             $"GameScene: test completion placed all Pieces and started settlement. "
             + $"packId={packId}, pieces={allPieceNumbers.Count}");
     }
-#endif
 
     private void OnHintButtonClicked()
     {

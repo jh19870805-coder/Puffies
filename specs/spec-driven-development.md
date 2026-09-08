@@ -2015,7 +2015,12 @@
 6. 本次修改 SHALL NOT 覆盖用户当前搭建的场景内容，两个按钮均通过运行时控制器按节点名绑定。
 7. AdminScene SHALL 仅使用左侧 `TextCode101~118` 作为最多 18 行的代码说明清单，每行沿用编辑器已有的 `代码 : 功能说明` 完整单行格式；已有定义按顺序显示，未使用的左侧行保持隐藏，运行时代码不得查找、写入或切换右侧 `TextCode201~218`。
 8. 首批代码定义 SHALL 为：`10001001=显示一键通关按钮`、`10001002=隐藏一键通关按钮`、`10002001=显示所有当前卡包`、`10002002=只显示Demo的前18个卡包`、`10002003=解锁当前所有可见卡包`。
-9. 代码、功能说明和排列顺序 SHALL 集中记录在 `AdminScene` 的统一定义表中，后续新增功能不得散落写入各个 Text 节点；本轮只负责清单展示与映射记录，不绑定 `InputField/BtnConfirm` 的命令执行。
+9. 代码、功能说明、排列顺序和对应命令类型 SHALL 集中记录在 `AdminScene` 的统一定义表中，后续新增功能不得散落写入各个 Text 节点或按钮分支。
+10. `AdminScene/InputField` SHALL 沿用编辑器已有 `TMP_InputField`，点击后显示并闪烁标准输入光标，输入时由 TMP 刷新文字和光标；运行时只限制为单行、最多 8 位数字，不改写其 RectTransform、字体、材质、颜色或背景。
+11. WHEN 用户输入已登记的 8 位代码并点击 `BtnConfirm` THEN 系统 SHALL 先执行并持久化对应数据，成功后再关闭 AdminScene 并加载 MainScene；代码无效或保存失败时 SHALL 留在 AdminScene，不得带着未成功的数据切换场景。
+12. `10001001/10001002` SHALL 分别持久化显示或隐藏 GameScene 的一键完成按钮；该按钮在正式构建中也由这一设置控制，默认行为继续保持 Editor/Development Build 显示、正式构建隐藏。
+13. `10002001/10002002` SHALL 分别持久化使用当前构建的全部卡包范围或仅允许前 18 个卡包；范围切换本身不得改变卡包解锁状态。
+14. `10002003` SHALL 解锁当前可见范围内所有已配置卡包，跳过已解锁、进行中或已完成的记录，不得覆盖其进度和完成状态；该管理命令不受正常系列前置条件限制。
 
 ### 设计与任务
 
@@ -2025,6 +2030,9 @@
 - [x] 增加 AdminScene 运行时控制器，绑定 `BtnClose` 返回首页并刷新固定宽高比布局。
 - [x] 将 AdminScene 加入 Build Settings。
 - [x] 建立可扩展的 Admin 代码定义表，并将前五条完整的 `代码 : 功能说明` 单行内容写入左侧文本。
+- [x] 绑定现有 `TMP_InputField` 和 `BtnConfirm`，校验 8 位代码并在数据成功刷新后返回 MainScene。
+- [x] 持久化一键完成按钮与卡包可见范围设置，并让 GameScene/GameDefine 使用该设置。
+- [x] 增加管理端批量解锁当前可见卡包的数据接口，保留已有生命周期与拼图进度。
 - [x] 编译 Runtime/Editor 并执行静态结构与差异检查。
 - [ ] 在 Play Mode 验证透明 `BtnAdmin` 两秒五连击进入 Admin、普通设置即时打开和关闭返回路径。
 
@@ -2033,5 +2041,9 @@
 - `MainScene/BtnAdmin` 已激活并包含可交互 Button；其 Image 为 `Alpha=0` 且 `Raycast Target=1`，透明状态仍能接收点击。`AdminScene` 中存在唯一的 `BtnClose` Button；两个场景都使用运行时绑定，不写入序列化 OnClick。
 - 连击状态只属于 `BtnAdmin`：从第一次到第五次使用 `Time.unscaledTime` 检查 `<=2s`，超时后的当前点击自动成为新一轮第一次；`BtnSet` 不读取或修改该状态。
 - AdminScene 仅由运行时代码控制左侧 `TextCode101~118`：首批 5 条定义按 `101~105` 顺序显示完整的 `代码 : 功能说明` 单行内容，左侧剩余 13 行隐藏；右侧 `TextCode201~218` 保持编辑器状态，不受清单逻辑影响。
+- 场景现有 `InputField` 已确认包含标准 `TMP_InputField`、Text Area、Text、Placeholder，AdminScene 也包含 EventSystem；运行时绑定只设置单行、数字输入和 8 位上限，并使用 TMP 自带光标与标签刷新。
+- `BtnConfirm` 按节点名运行时绑定。五条代码统一映射到命令枚举；有效命令只有在 SQLite 设置写入或批量卡包解锁成功后才加载 MainScene，无效代码与保存失败均保留当前场景并重新激活输入框。
+- Admin 设置保存在当前存档 SQLite 的 `AdminSettings/Runtime` 记录中；切换存档时清空运行时缓存并从目标存档重新读取。GameScene 的一键完成按钮已取消仅 Editor/Development 编译限制，改为读取持久化开关；默认仍为 Editor/Development 显示、正式构建隐藏。
+- 卡包范围开关仅改变 `GameDefine.MaximumAvailableCardPackId` 的有效上限：全部模式沿用当前构建上限，Demo 模式限制为前 18 个。批量解锁遍历当前可见配置，跳过已有已解锁/进行中/完成记录，只将 Locked 或不存在的记录写为 Unlocked，不清理拼图进度。
 - Unity 已将 `AdminScene.cs` 纳入生成的 Runtime 工程；`dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 连带编译 Runtime，结果 `0` 警告、`0` 错误。
 - 本次代码、Build Settings、spec 和记录文件没有行尾空格；全局 `git diff --check` 的现有报告仅来自用户新建的 `AdminScene.unity` 空 YAML 字段，本轮未修改该场景文件。

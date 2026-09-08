@@ -311,6 +311,51 @@ public static class CardPackDataUtility
         return saved;
     }
 
+    public static bool TryUnlockAllVisiblePacks(out int unlockedPackCount)
+    {
+        EnsureInitialized();
+        unlockedPackCount = 0;
+        if (!GameConfigRepository.TryGetCardPackConfigs(out var configs))
+        {
+            Debug.LogWarning("CardPackDataUtility: card pack configs could not be loaded for admin unlock.");
+            return false;
+        }
+
+        for (var i = 0; i < configs.Count; i++)
+        {
+            var config = configs[i];
+            if (!GameDefine.IsCardPackAvailableInCurrentBuild(config.PackId))
+            {
+                continue;
+            }
+
+            if (TryGetPack(config.PackId, out var record) && record.IsUnlocked)
+            {
+                continue;
+            }
+
+            record = new CardPackRecord
+            {
+                PackId = config.PackId,
+                PackSize = config.PackSize,
+                LifecycleState = CardPackLifecycleState.Unlocked,
+                UnlockTime = FormatUnlockTime(DateTime.Now),
+                CompletionTime = string.Empty
+            };
+            if (!UpsertPack(record))
+            {
+                Debug.LogWarning(
+                    $"CardPackDataUtility: admin unlock failed for PackId {config.PackId:D3}.");
+                return false;
+            }
+
+            sNewlyUnlockedPackIds.Add(config.PackId);
+            unlockedPackCount++;
+        }
+
+        return true;
+    }
+
     /// <summary>
     /// 用途：写入或覆盖卡包记录。返回：是否保存成功。
     /// </summary>
