@@ -2138,3 +2138,30 @@
 - 根因确认：教程 Canvas 从 Overlay 改为 `Screen Space - Camera` 后，第一步箭头的 Piece 矩形和凹槽中心仍传空 Event Camera 进行本地坐标转换；同一页面的提示框已使用 Canvas 相机，因此只有箭头坐标异常。
 - `RebuildTutorialFocusPresentation` 的第一、二步 Piece 矩形已统一调用 `TryScreenRectToCanvasRectUsingCanvasCamera`；第一步凹槽中心已统一调用新增的 `TryScreenPointToCanvasPositionUsingCanvasCamera`。
 - Runtime 与 Editor 工程编译均通过，结果为 `0` 警告、`0` 错误。
+
+## 2026-09-08 - 自动拼图调试按钮
+
+### 需求
+
+1. WHEN 一键通关调试按钮显示 THEN GameScene SHALL 在其左侧同时显示“自动拼图”按钮；WHEN 一键通关按钮因 Admin 设置或结算状态隐藏 THEN 自动拼图按钮 SHALL 同步隐藏。
+2. WHEN 玩家点击“自动拼图”且当前流程允许操作 THEN 系统 SHALL 从当前托盘选择一片尚未完成的 Piece，并用短暂可见的飞行动画把它放入自己的正确凹槽；每次有效点击只处理一片。
+3. 自动放置 SHALL 复用正常正确放置后的存档、正确音效、完成音效、棋盘 Image 提交、绿色反馈、切组和结算逻辑；若目标凹槽被错误 Piece 占用，仍按既有规则把错误 Piece 顶回托盘。
+4. WHEN 新手引导第一步仍在进行 THEN 自动拼图 SHALL 优先选择教程指定 Piece，避免绕过强引导目标；后续教程推进规则保持不变。
+5. WHEN 当前没有托盘 Piece、正在入场/切组/放置动画、正在拖拽或滚动托盘、正在托盘重排、或游戏已经结束 THEN 点击 SHALL 不启动新的自动放置。
+6. “自动拼图” SHALL 接入现有 18 种语言；按钮样式与一键通关一致，长文本须保持单行并自动缩小，不得与一键通关或提示按钮重叠。
+
+### 设计与任务
+
+- [x] 将一键通关按钮创建整理为可复用的测试操作按钮构建逻辑，并在其左侧创建自动拼图按钮。
+- [x] 让两个测试按钮共用 Admin 显隐设置以及入场、切组、结算时的交互状态。
+- [x] 实现单片托盘 Piece 的自动正确放置与独立飞入时长，复用正常放置后续流程。
+- [x] 增加 `game.test_auto_puzzle` 的 18 种语言文本和单行自适应。
+- [x] 编译 Runtime/Editor、执行差异检查并等待 Play Mode 验收。
+
+### 验证
+
+- “自动拼图”运行时复用“一键完成”的样式，在其左侧按按钮宽度加 `20px` 间距排列；两个按钮由同一个 Admin 显隐设置控制，并统一响应入场、拖拽、托盘滚动/补位、Piece 落位、切组和结算状态。
+- 每次有效点击按当前托盘顺序选择一片 Piece；新手引导第一阶段优先指定 Piece。Piece 使用 `0.36s` 缓动飞入正确凹槽，随后继续现有绿色反馈、棋盘提交、切组或结算流程。
+- 目标凹槽被错误 Piece 占用时继续复用既有顶回托盘逻辑；自动 Piece 离开托盘后继续执行原有补位，并在最后一片离开时收起托盘。
+- `game.test_auto_puzzle` 已补齐现有 18 种语言，按钮文字为单行 `14~28` 自动字号。
+- Runtime 与 Editor 工程编译均通过，结果为 `0` 警告、`0` 错误；`git diff --check` 通过，仅有 LF/CRLF 工作区提示。仍需在 Unity Play Mode 验收按钮位置、飞入手感及完整流程。

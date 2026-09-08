@@ -99,6 +99,7 @@ public class GameScene : MonoBehaviour
     private const float GroupTransitionDefaultHoldDuration = 0.1f;
     private const float ActiveGroupOutlineFadeDuration = 0.5f;
     private const float PieceSnapDuration = 0.12f;
+    private const float AutoPuzzleFlyDuration = 0.36f;
     private const float PiecePlacementShineDuration = 0.52f;
     private const float PiecePlacementShineBandWidth = 0.045f;
     private const float PiecePlacementLightPushPhaseRatio = 0.22f;
@@ -217,6 +218,8 @@ public class GameScene : MonoBehaviour
     private const string PieceHintOutlineObjectName = "PieceHintOutline";
     private const string TestCompleteButtonObjectName = "BtnCompleteAllTest";
     private const string TestCompleteButtonTextKey = "game.test_complete";
+    private const string TestAutoPuzzleButtonObjectName = "BtnAutoPuzzleTest";
+    private const string TestAutoPuzzleButtonTextKey = "game.test_auto_puzzle";
     private static readonly Color PieceHintOutlineColor = new Color32(112, 151, 75, 255);
     private static readonly Color HighContrastPieceHintOutlineColor = new Color32(0xb1, 0xd7, 0x02, 0xff);
     private static readonly Color TutorialTargetOutlineColor = new Color32(80, 139, 230, 255);
@@ -487,6 +490,7 @@ public class GameScene : MonoBehaviour
     private bool _shouldCompleteRestoredPuzzle;
     private Button _hintButton;
     private Button _testCompleteButton;
+    private Button _testAutoPuzzleButton;
     private bool _isTutorialPending;
     private TutorialStage _tutorialStage;
     private DraggablePieceState _tutorialPiece;
@@ -573,7 +577,7 @@ public class GameScene : MonoBehaviour
         InitializeTaskTracking();
         ConfigureReturnButton();
         ConfigureHintButton();
-        ConfigureTestCompleteButton();
+        ConfigureTestActionButtons();
         ConfigureRewardPanel();
         if (_shouldCompleteRestoredPuzzle)
         {
@@ -850,10 +854,7 @@ public class GameScene : MonoBehaviour
         bool waitForPackTransition)
     {
         _isEntranceAnimating = true;
-        if (_testCompleteButton != null)
-        {
-            _testCompleteButton.interactable = false;
-        }
+        SetTestActionButtonsInteractable(false);
         Canvas.ForceUpdateCanvases();
 
         var boardRect = _loadedCardBagRect;
@@ -1040,10 +1041,7 @@ public class GameScene : MonoBehaviour
         }
 
         _isEntranceAnimating = false;
-        if (_testCompleteButton != null)
-        {
-            _testCompleteButton.interactable = !_isGameFinished;
-        }
+        SetTestActionButtonsInteractable(!_isGameFinished);
         TryStartPiecePlacementTutorial();
     }
 
@@ -5865,6 +5863,7 @@ public class GameScene : MonoBehaviour
         _piecePlacementAnimationCount++;
         _piecePlacementDragBlockCount++;
         _isPiecePlacementAnimating = true;
+        SetTestActionButtonsInteractable(false);
     }
 
     private bool IsPiecePlacementDragBlocked => _piecePlacementDragBlockCount > 0;
@@ -5883,6 +5882,10 @@ public class GameScene : MonoBehaviour
 
         _piecePlacementAnimationCount = Mathf.Max(0, _piecePlacementAnimationCount - 1);
         _isPiecePlacementAnimating = _piecePlacementAnimationCount > 0;
+        if (!_isPiecePlacementAnimating)
+        {
+            SetTestActionButtonsInteractable(CanUseTestActionButtons());
+        }
     }
 
     private void RecordPlacedPiece(DraggablePieceState state)
@@ -6069,7 +6072,8 @@ public class GameScene : MonoBehaviour
 
     private IEnumerator PlayPieceSnapAnimation(
         DraggablePieceState state,
-        Vector3 groovePosition)
+        Vector3 groovePosition,
+        float duration = PieceSnapDuration)
     {
         var renderer = state?.PieceRenderer;
         if (renderer == null)
@@ -6077,16 +6081,17 @@ public class GameScene : MonoBehaviour
             yield break;
         }
 
+        duration = Mathf.Max(0.01f, duration);
         BeginPiecePlacementAnimation();
         var startPosition = renderer.transform.position;
         var startScale = renderer.transform.localScale;
         renderer.sortingOrder = PieceSortingOrder + 100;
 
         var elapsed = 0f;
-        while (elapsed < PieceSnapDuration && renderer != null)
+        while (elapsed < duration && renderer != null)
         {
             elapsed += Mathf.Min(Time.unscaledDeltaTime, GameEntranceMaxFrameDelta);
-            var progress = Mathf.Clamp01(elapsed / PieceSnapDuration);
+            var progress = Mathf.Clamp01(elapsed / duration);
             var eased = 1f - Mathf.Pow(1f - progress, 3f);
             renderer.transform.position = Vector3.LerpUnclamped(
                 startPosition,
@@ -7293,10 +7298,7 @@ public class GameScene : MonoBehaviour
     private IEnumerator PlayGroupTransition(int nextGroupIndex)
     {
         _isGroupTransitionAnimating = true;
-        if (_testCompleteButton != null)
-        {
-            _testCompleteButton.interactable = false;
-        }
+        SetTestActionButtonsInteractable(false);
         var wasTutorialActive = IsTutorialActive;
         var transitionHoldDuration = _tutorialStage == TutorialStage.StrongPlacement
             ? GroupTransitionStrongHoldDuration
@@ -7546,10 +7548,7 @@ public class GameScene : MonoBehaviour
         }
 
         _isGroupTransitionAnimating = false;
-        if (_testCompleteButton != null)
-        {
-            _testCompleteButton.interactable = !_isGameFinished;
-        }
+        SetTestActionButtonsInteractable(!_isGameFinished);
     }
 
     private static float SmootherStep01(float value)
@@ -8599,6 +8598,11 @@ public class GameScene : MonoBehaviour
         {
             _testCompleteButton.interactable = false;
             _testCompleteButton.gameObject.SetActive(false);
+        }
+        if (_testAutoPuzzleButton != null)
+        {
+            _testAutoPuzzleButton.interactable = false;
+            _testAutoPuzzleButton.gameObject.SetActive(false);
         }
         StopGameplayTimer();
         EndDragging();
@@ -10323,44 +10327,93 @@ public class GameScene : MonoBehaviour
         SetHintButtonTutorialState();
     }
 
-    private void ConfigureTestCompleteButton()
+    private void ConfigureTestActionButtons()
     {
-        var buttonObject = GameCommonUtility.FindSceneObject(TestCompleteButtonObjectName);
+        var completeButtonObject = GameCommonUtility.FindSceneObject(TestCompleteButtonObjectName);
+        var autoPuzzleButtonObject = GameCommonUtility.FindSceneObject(TestAutoPuzzleButtonObjectName);
         if (!AdminRuntimeSettingsUtility.ShouldShowTestCompleteButton)
         {
-            if (buttonObject != null)
+            if (completeButtonObject != null)
             {
-                buttonObject.SetActive(false);
+                completeButtonObject.SetActive(false);
+            }
+            if (autoPuzzleButtonObject != null)
+            {
+                autoPuzzleButtonObject.SetActive(false);
             }
 
             _testCompleteButton = null;
+            _testAutoPuzzleButton = null;
             return;
         }
 
-        if (buttonObject == null)
+        if (completeButtonObject == null)
         {
-            buttonObject = CreateTestCompleteButton();
+            completeButtonObject = CreateTestCompleteButton();
         }
 
-        if (buttonObject == null)
+        if (completeButtonObject == null)
         {
             Debug.LogWarning("GameScene: failed to create the test complete button.");
             return;
         }
 
-        buttonObject.SetActive(true);
-        _testCompleteButton = buttonObject.GetComponent<Button>();
+        if (autoPuzzleButtonObject == null)
+        {
+            autoPuzzleButtonObject = CreateTestAutoPuzzleButton(completeButtonObject);
+        }
+
+        if (autoPuzzleButtonObject == null)
+        {
+            Debug.LogWarning("GameScene: failed to create the test auto-puzzle button.");
+            return;
+        }
+
+        completeButtonObject.SetActive(true);
+        autoPuzzleButtonObject.SetActive(true);
+        _testCompleteButton = completeButtonObject.GetComponent<Button>();
+        _testAutoPuzzleButton = autoPuzzleButtonObject.GetComponent<Button>();
         if (_testCompleteButton == null)
         {
             Debug.LogWarning($"GameScene: {TestCompleteButtonObjectName} is missing Button component.");
             return;
         }
+        if (_testAutoPuzzleButton == null)
+        {
+            Debug.LogWarning($"GameScene: {TestAutoPuzzleButtonObjectName} is missing Button component.");
+            return;
+        }
 
-        _testCompleteButton.interactable = !_isGameFinished
-            && !_isEntranceAnimating
-            && !_isGroupTransitionAnimating;
+        RefreshTestActionButtonText(completeButtonObject, TestCompleteButtonTextKey);
+        RefreshTestActionButtonText(autoPuzzleButtonObject, TestAutoPuzzleButtonTextKey);
+        SetTestActionButtonsInteractable(CanUseTestActionButtons());
         _testCompleteButton.onClick.RemoveListener(OnTestCompleteAllClicked);
         _testCompleteButton.onClick.AddListener(OnTestCompleteAllClicked);
+        _testAutoPuzzleButton.onClick.RemoveListener(OnTestAutoPuzzleClicked);
+        _testAutoPuzzleButton.onClick.AddListener(OnTestAutoPuzzleClicked);
+    }
+
+    private bool CanUseTestActionButtons()
+    {
+        return !_isGameFinished
+               && !_isEntranceAnimating
+               && !_isGroupTransitionAnimating
+               && !_isPiecePlacementAnimating
+               && _drag.DraggingPiece == null
+               && !_isTrayScrolling
+               && !_isTrayPieceReflowAnimating;
+    }
+
+    private void SetTestActionButtonsInteractable(bool interactable)
+    {
+        if (_testCompleteButton != null)
+        {
+            _testCompleteButton.interactable = interactable;
+        }
+        if (_testAutoPuzzleButton != null)
+        {
+            _testAutoPuzzleButton.interactable = interactable;
+        }
     }
 
     private static GameObject CreateTestCompleteButton()
@@ -10459,13 +10512,146 @@ public class GameScene : MonoBehaviour
         return buttonObject;
     }
 
+    private static GameObject CreateTestAutoPuzzleButton(GameObject completeButtonObject)
+    {
+        var completeRect = completeButtonObject != null
+            ? completeButtonObject.GetComponent<RectTransform>()
+            : null;
+        if (completeRect == null || completeRect.parent == null)
+        {
+            return null;
+        }
+
+        var buttonObject = Instantiate(
+            completeButtonObject,
+            completeRect.parent,
+            worldPositionStays: false);
+        buttonObject.name = TestAutoPuzzleButtonObjectName;
+        var rect = buttonObject.GetComponent<RectTransform>();
+        var buttonWidth = Mathf.Max(1f, completeRect.rect.width);
+        rect.anchoredPosition = completeRect.anchoredPosition
+                                + Vector2.left * (buttonWidth + 20f);
+        rect.SetAsLastSibling();
+
+        var button = buttonObject.GetComponent<Button>();
+        if (button != null)
+        {
+            button.onClick.RemoveAllListeners();
+        }
+
+        RefreshTestActionButtonText(buttonObject, TestAutoPuzzleButtonTextKey);
+        return buttonObject;
+    }
+
+    private static void RefreshTestActionButtonText(GameObject buttonObject, string textKey)
+    {
+        var text = buttonObject != null
+            ? buttonObject.GetComponentInChildren<TMP_Text>(includeInactive: true)
+            : null;
+        if (text == null)
+        {
+            return;
+        }
+
+        text.text = GameLocalization.Get(textKey);
+        text.enableWordWrapping = false;
+        text.enableAutoSizing = true;
+        text.fontSizeMax = 28f;
+        text.fontSizeMin = 14f;
+    }
+
+    private void OnTestAutoPuzzleClicked()
+    {
+        if (!CanUseTestActionButtons())
+        {
+            return;
+        }
+
+        var state = FindTestAutoPuzzleTrayPiece();
+        var renderer = state?.PieceRenderer;
+        if (renderer == null || state.GrooveRect == null)
+        {
+            return;
+        }
+
+        SetTestActionButtonsInteractable(false);
+        StopLoosePieceReminderShake();
+        if ((_tutorialStage == TutorialStage.StrongPlacement && state == _tutorialPiece)
+            || _tutorialStage == TutorialStage.TwoPiecePractice)
+        {
+            HideTutorialFocusPresentation();
+        }
+        if (_hintedPieces.Contains(state))
+        {
+            ClearPieceHint();
+        }
+
+        state.DragScale = CalculatePieceScaleOnBoard(state.GrooveImage, renderer);
+        state.BoardScale = state.DragScale;
+        var trayPieceCount = CountUnplacedTrayPieces();
+        CompactFollowingTrayPieces(state);
+        if (trayPieceCount == 1)
+        {
+            SlidePieceTrayOutOfScreen();
+        }
+
+        state.IsOnTray = false;
+        var autoPlacedSet = new HashSet<DraggablePieceState> { state };
+        var displacedPieces = CollectLoosePiecesOverlappingGrooves(
+            autoPlacedSet.ToList(),
+            autoPlacedSet);
+        if (displacedPieces.Count > 0)
+        {
+            DetachPiecesFromLooseClusters(displacedPieces);
+            ReturnLoosePiecesToTray(displacedPieces);
+        }
+
+        ApplyPieceRendererShadow(renderer, PieceShadowStyle.Placed);
+        state.IsPlaced = true;
+        AudioManager.Instance.PlaySfx("SFX_PieceCorrect.mp3");
+        StartGameplayTimerIfNeeded();
+        RecordPlacedPiece(state);
+        if (IsCurrentPuzzleComplete())
+        {
+            AudioManager.Instance.PlaySfx("SFX_PuzzleComplete.mp3");
+        }
+
+        var groovePosition = GetGrooveSnapPosition(state.GrooveRect, Camera.main);
+        StartCoroutine(PlayPieceSnapAnimation(state, groovePosition, AutoPuzzleFlyDuration));
+    }
+
+    private DraggablePieceState FindTestAutoPuzzleTrayPiece()
+    {
+        if (_tutorialStage == TutorialStage.StrongPlacement
+            && IsAvailableTestAutoPuzzleTrayPiece(_tutorialPiece))
+        {
+            return _tutorialPiece;
+        }
+
+        for (var i = 0; i < _drag.CurrentGroupDraggables.Count; i++)
+        {
+            var state = _drag.CurrentGroupDraggables[i];
+            if (IsAvailableTestAutoPuzzleTrayPiece(state))
+            {
+                return state;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool IsAvailableTestAutoPuzzleTrayPiece(DraggablePieceState state)
+    {
+        return state != null
+               && !state.IsPlaced
+               && state.IsOnTray
+               && state.PieceRenderer != null
+               && state.GrooveRect != null;
+    }
+
     private void OnTestCompleteAllClicked()
     {
-        if (_isGameFinished
-            || _isEntranceAnimating
-            || _isGroupTransitionAnimating
-            || _isPiecePlacementAnimating
-            || _drag.DraggingPiece != null
+        if (!CanUseTestActionButtons()
             || _board.GrooveImagesByGroup == null)
         {
             return;
@@ -10499,7 +10685,7 @@ public class GameScene : MonoBehaviour
             return;
         }
 
-        _testCompleteButton.interactable = false;
+        SetTestActionButtonsInteractable(false);
         StopPiecePlacementTutorial(restoreLevelOutline: false);
         ClearPieceHint();
         StartGameplayTimerIfNeeded();
