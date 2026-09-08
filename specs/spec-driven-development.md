@@ -2165,3 +2165,33 @@
 - 目标凹槽被错误 Piece 占用时继续复用既有顶回托盘逻辑；自动 Piece 离开托盘后继续执行原有补位，并在最后一片离开时收起托盘。
 - `game.test_auto_puzzle` 已补齐现有 18 种语言，按钮文字为单行 `14~28` 自动字号。
 - Runtime 与 Editor 工程编译均通过，结果为 `0` 警告、`0` 错误；`git diff --check` 通过，仅有 LF/CRLF 工作区提示。仍需在 Unity Play Mode 验收按钮位置、飞入手感及完整流程。
+
+## 2026-09-08 - CardBag015 固定 Piece 分组描边
+
+### 需求
+
+1. WHEN CardBag Prefab 含有 `BoardFixedPieceNN` THEN 描边烘焙器 SHALL 将其视为进入关卡时已经完成的棋盘区域，使第一玩法组能够生成与固定区域相接的默认连接描边。
+2. `BoardFixedPieceNN` SHALL NOT 成为玩法分组，不得生成对应 Group，不得改变其发牌、拖拽、提示、完成计数或存档行为。
+3. WHEN 构建最终拼图 Alpha 并校验 `GameBoard` 透明缺口 THEN 系统 SHALL 同时包含正式 Piece 与固定 Piece，避免固定区域从最终拼图形状中丢失。
+4. IF CardBag 不含固定 Piece THEN 烘焙结果 SHALL 继续沿用现有算法，不得改变原有分组、连接边、关卡描边或贴纸描边。
+5. CardBag015 的 `Group01~07.png` 默认连接描边 SHALL 均包含有效 Alpha，不得再把空白 `Group01.png` 视为成功输出。
+
+### 设计与任务
+
+- [x] 独立收集并栅格化 `BoardFixedPieceNN`，不加入正式玩法分组字典。
+- [x] 将固定 Piece Mask 加入最终拼图 Alpha，并作为 `completedMask` 的初始值参与逐组连接边计算。
+- [x] 重新烘焙 CardBag015，核对七组默认、`_Level` 与 `_Stickers` 输出及运行时资源路径。
+- [x] 编译 Runtime/Editor、执行差异检查并记录 Play Mode 验收项。
+
+### 当前诊断
+
+- CardBag015 已存在 `Group01~07` 三套输出，但当前 `Group01.png` 为全透明图，`Group02~06.png` 也只有零散线段；`Group01_Level.png` 与 `Group01_Stickers.png` 本身有效，因此资源加载路径不是根因。
+- `PuzzleOutlineBakerEditor.CollectPieceGroups` 只识别 `PieceGGII`；`BoardFixedPiece01` 未进入 `pieceUnionMask`，也没有预填到逐组使用的空 `completedMask`，导致新结构的初始完成区域完全未参与默认连接描边。
+
+### 验证
+
+- Unity 重烘焙日志确认 CardBag015 识别 `fixedPieces=1`，生成 7 个玩法组，最终边界归属为 `assigned=6066 / unassigned=0 / ambiguous=0`。
+- 七组默认连接描边有效 Alpha 像素依次为 `512/1313/2785/8853/12388/13700/14624`；旧 `Group01.png` 的 `0` 像素空图已修复。`_Level` 与 `_Stickers` 输出保持有效。
+- 全量烘焙后只有 CardBag015 的 `Group01~03.png` 产生 Git 内容差异，说明没有固定 Piece 的卡包仍得到字节一致输出；一次性执行器及 Meta 已自行删除。
+- Runtime 与 Editor 工程编译均通过，结果为 `0` 警告、`0` 错误；`git diff --check` 通过，仅有 LF/CRLF 工作区提示。
+- 仍需在 CardBag015 Play Mode 依次目视确认默认连接、关卡和贴纸三种描边模式。
