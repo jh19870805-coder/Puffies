@@ -2131,8 +2131,8 @@ public class MainScene : MonoBehaviour
         {
             mSelectedPackageDisplayPosition = Vector2.zero;
             mSelectedPackageDisplaySize = new Vector2(
-                PackageOpenWidth * 0.85f,
-                PackageOpenHeight * 0.85f);
+                PackageOpenWidth,
+                PackageOpenHeight);
         }
 
         if (!CreateSelectedPackageVisual(selectedCard.Entry))
@@ -5911,8 +5911,8 @@ public class MainScene : MonoBehaviour
         {
             mSelectedPackageDisplayPosition = Vector2.zero;
             mSelectedPackageDisplaySize = new Vector2(
-                PackageOpenWidth * 0.85f,
-                PackageOpenHeight * 0.85f);
+                PackageOpenWidth,
+                PackageOpenHeight);
         }
 
         var didCreateSelectedVisual = CreateSelectedPackageVisual(selectedCard.Entry);
@@ -6103,7 +6103,15 @@ public class MainScene : MonoBehaviour
     private void BuildBagVolumeDots()
     {
         ClearBagVolumeDots();
-        if (mBagVolumeDotTemplate == null || mBagVolumeIndicatorsRoot == null)
+        var shouldShowIndicators = mBagVolumeCards.Count > 1;
+        if (mBagVolumeIndicatorsRoot != null)
+        {
+            mBagVolumeIndicatorsRoot.gameObject.SetActive(shouldShowIndicators);
+        }
+
+        if (!shouldShowIndicators
+            || mBagVolumeDotTemplate == null
+            || mBagVolumeIndicatorsRoot == null)
         {
             return;
         }
@@ -6255,7 +6263,7 @@ public class MainScene : MonoBehaviour
         var rightScale = Mathf.Abs(mBagVolumeRightTemplate.localScale.x);
         if (mBagVolumeIndicatorsRoot != null)
         {
-            mBagVolumeIndicatorsRoot.gameObject.SetActive(true);
+            mBagVolumeIndicatorsRoot.gameObject.SetActive(mBagVolumeCards.Count > 1);
         }
 
         if (mBagVolumeIndicatorsCanvasGroup != null)
@@ -6323,7 +6331,8 @@ public class MainScene : MonoBehaviour
     {
         if (mBagVolumeIndicatorsRoot != null)
         {
-            mBagVolumeIndicatorsRoot.gameObject.SetActive(visible);
+            mBagVolumeIndicatorsRoot.gameObject.SetActive(
+                visible && mBagVolumeCards.Count > 1);
         }
 
         if (mBagVolumePreviousButton != null)
@@ -6592,6 +6601,14 @@ public class MainScene : MonoBehaviour
         if (!TryGetSelectedOverlayRect(panelRect, out mSelectedPackageDisplayPosition, out _))
         {
             mSelectedPackageDisplayPosition = Vector2.zero;
+        }
+
+        if (TryGetSelectedOverlayRect(
+                mBagVolumeCenterTemplate,
+                out var bagVolumeCenterPosition,
+                out _))
+        {
+            mSelectedPackageDisplayPosition.y = bagVolumeCenterPosition.y;
         }
 
         mSelectedPackageDisplaySize = new Vector2(PackageOpenWidth, PackageOpenHeight);

@@ -2047,3 +2047,29 @@
 - 卡包范围开关仅改变 `GameDefine.MaximumAvailableCardPackId` 的有效上限：全部模式沿用当前构建上限，Demo 模式限制为前 18 个。批量解锁遍历当前可见配置，跳过已有已解锁/进行中/完成记录，只将 Locked 或不存在的记录写为 Unlocked，不清理拼图进度。
 - Unity 已将 `AdminScene.cs` 纳入生成的 Runtime 工程；`dotnet build Assembly-CSharp-Editor.csproj --no-restore -nologo` 连带编译 Runtime，结果 `0` 警告、`0` 错误。
 - 本次代码、Build Settings、spec 和记录文件没有行尾空格；全局 `git diff --check` 的现有报告仅来自用户新建的 `AdminScene.unity` 空 YAML 字段，本轮未修改该场景文件。
+
+## 2026-09-08 - 系列卡包圆点与选中尺寸统一
+
+### 需求
+
+1. WHEN 系列卡包当前只有 1 个可选择卡包 THEN 系统 SHALL 隐藏 `PanelBagVol/PageIndicators`，不得显示单独一个无意义的卡包圆点。
+2. WHEN 系列卡包当前至少有 2 个可选择卡包 THEN 系统 SHALL 保持现有分页圆点显示和选中状态刷新。
+3. WHEN 玩家从首页点开普通卡包或系列卡包 THEN 中心选中卡包 SHALL 使用相同的 `600 x 680` 显示尺寸；圆点是否存在不得改变卡包尺寸。
+4. 左右侧系列卡包继续使用现有 `0.6` 缩放，本次不得修改卡包动画时长、按钮、轮播间距或其他首页列表行为。
+5. 系列卡包与圆点需要留出明确间距；位置 SHALL 由编辑器 `PanelBagVol/PackCarousel` 的 RectTransform 统一控制，运行时代码继续读取该位置，不得增加额外硬编码 Y 偏移。
+6. WHEN 玩家点开普通卡包 THEN 普通卡包展开后的 Y 轴位置 SHALL 读取系列页 `PackCenter` 的同一编辑器位置，使普通卡包与只有一个成员的系列卡包保持相同高度；不得为两种入口分别维护数值偏移。
+
+### 设计与任务
+
+- [x] 圆点构建、进场和导航显隐统一增加“卡包数量大于 1”条件。
+- [x] 将 `MainScene/PanelBagVol/PackCarousel/PackCenter` 从 `0.85` 调整为 `1`，并同步修正代码回退尺寸。
+- [x] 在编辑器中将整个 `PackCarousel` 从 `Y=20` 上移到 `Y=140`；位置包含中心卡从 `0.85` 放大到 `1` 后增加的投影下沿补偿，让封面和同材质投影一起避开 `PageIndicators`。
+- [x] 将普通卡包展开目标位置改为复用系列页 `PackCenter` 的编辑器 Y 坐标，并验证两种入口共用同一高度来源。
+- [x] 编译 Runtime/Editor，执行差异检查并等待 Play Mode 视觉验收。
+
+### 验证
+
+- `MainScene.unity` 将 `PackCenter` 的本地缩放从 `0.85` 改为 `1`，并将三张卡共同父节点 `PackCarousel` 从 `Y=20` 上移到 `Y=140`；新增位移补偿放大后向下扩展的卡包投影，卡包 `600 x 680` RectTransform、左右卡 `0.6` 缩放、相对位置和层级均未修改。
+- `BuildBagVolumeDots` 在卡包数小于等于 1 时不创建圆点并关闭 `PageIndicators`；侧卡进场和导航显隐也使用相同的 `Count > 1` 条件，不会在后续阶段重新显示。
+- 两处系列选中矩形回退尺寸均为 `PackageOpenWidth x PackageOpenHeight`，与普通卡包相同；Runtime/Editor 编译结果为 `0` 警告、`0` 错误，相关差异检查通过。
+- 普通卡包展开终点保留 `PanelBagSelect` 的 X 坐标，并将 Y 坐标同步为 `PackCenter` 的实际 Overlay 坐标；普通与系列入口不再各自维护纵向位置。
