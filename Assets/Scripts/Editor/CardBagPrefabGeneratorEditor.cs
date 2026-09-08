@@ -58,6 +58,9 @@ public static class CardBagPrefabGeneratorEditor
     private static readonly Regex GameplayPieceRegex = new Regex(
         @"^pieces?(\d{4})$",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex BoardFixedPieceObjectRegex = new Regex(
+        @"^BoardFixedPiece(\d{2})$",
+        RegexOptions.CultureInvariant);
     private static readonly Regex CardBagFolderRegex = new Regex(
         @"^CardBag(\d{3})$",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
@@ -1182,7 +1185,20 @@ public static class CardBagPrefabGeneratorEditor
     private static bool IsPieceObjectName(string objectName)
     {
         return GameDefine.TryParsePieceObjectName(objectName, out _)
-               || IsSequentialPlaceholderName(objectName);
+               || IsSequentialPlaceholderName(objectName)
+               || IsBoardFixedPieceObjectName(objectName);
+    }
+
+    internal static bool IsBoardFixedPieceObjectName(string objectName)
+    {
+        var match = BoardFixedPieceObjectRegex.Match(objectName ?? string.Empty);
+        return match.Success
+               && int.TryParse(
+                   match.Groups[1].Value,
+                   NumberStyles.None,
+                   CultureInfo.InvariantCulture,
+                   out var index)
+               && index >= 1;
     }
 
     private static void ValidatePlacementOverlaps(
@@ -3572,6 +3588,13 @@ public static class CardBagHierarchyEditor
             .OrderBy(image => GetPieceNumber(image.gameObject.name))
             .Select(image => image.rectTransform)
             .ToList();
+        var fixedPieces = root
+            .GetComponentsInChildren<Image>(true)
+            .Where(image => CardBagPrefabGeneratorEditor.IsBoardFixedPieceObjectName(
+                image.gameObject.name))
+            .OrderBy(image => image.gameObject.name, StringComparer.Ordinal)
+            .Select(image => image.rectTransform)
+            .ToList();
         var oldBackgrounds = root
             .GetComponentsInChildren<Transform>(true)
             .Where(item => item != root.transform
@@ -3595,6 +3618,12 @@ public static class CardBagHierarchyEditor
 
         ReparentToRoot(gameBoard, rootRect);
         changedCount++;
+        for (var i = 0; i < fixedPieces.Count; i++)
+        {
+            ReparentToRoot(fixedPieces[i], rootRect);
+            changedCount++;
+        }
+
         for (var i = 0; i < pieces.Count; i++)
         {
             ReparentToRoot(pieces[i], rootRect);
@@ -3622,6 +3651,11 @@ public static class CardBagHierarchyEditor
         }
 
         gameBoard.SetSiblingIndex(siblingIndex++);
+        for (var i = 0; i < fixedPieces.Count; i++)
+        {
+            fixedPieces[i].SetSiblingIndex(siblingIndex++);
+        }
+
         for (var i = 0; i < pieces.Count; i++)
         {
             pieces[i].SetSiblingIndex(siblingIndex++);
@@ -3709,6 +3743,24 @@ public static class CardBagHierarchyEditor
 
         expectedChildren.AddRange(backgrounds.Select(image => image.transform));
         expectedChildren.Add(gameBoard.transform);
+        var fixedPieces = root
+            .GetComponentsInChildren<Image>(true)
+            .Where(image => CardBagPrefabGeneratorEditor.IsBoardFixedPieceObjectName(
+                image.gameObject.name))
+            .OrderBy(image => image.gameObject.name, StringComparer.Ordinal)
+            .ToArray();
+        for (var i = 0; i < fixedPieces.Length; i++)
+        {
+            if (fixedPieces[i].transform.parent != root.transform)
+            {
+                error = $"CardBag hierarchy validation: {root.name}/{fixedPieces[i].gameObject.name} "
+                        + "must be a direct child.";
+                return false;
+            }
+
+            expectedChildren.Add(fixedPieces[i].transform);
+        }
+
         var pieces = root
             .GetComponentsInChildren<Image>(true)
             .Where(image => GameDefine.TryParsePieceObjectName(image.gameObject.name, out _))
@@ -4161,7 +4213,9 @@ internal static class CardBagPrefabReferenceValidator
             .Where(image => image.gameObject.name == "BoardTitle")
             .ToArray();
         var pieces = images
-            .Where(image => GameDefine.TryParsePieceObjectName(image.gameObject.name, out _))
+            .Where(image => GameDefine.TryParsePieceObjectName(image.gameObject.name, out _)
+                            || CardBagPrefabGeneratorEditor.IsBoardFixedPieceObjectName(
+                                image.gameObject.name))
             .ToArray();
         var referencedSources = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var missingSlots = new List<string>();

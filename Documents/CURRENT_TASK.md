@@ -1,5 +1,16 @@
 # 当前任务
 
+## 2026-09-08 CardBag015 手绘分组与默认鸭子
+
+- 状态：Prefab 调整、描边重烘焙和静态验证完成，等待 Play Mode 验收。
+- 用户意图：按照 `C:\Users\Administrator\Desktop\微信图片_20260908112213_3374_9.png` 的红线区域重新整理 `CardBag015`；图中第 1 区的单只小鸭默认就在棋盘上，不进入托盘和拼图流程。
+- 修改：将 `piece_018` 从正式玩法 Piece 改为独立节点 `BoardFixedPiece01`，保留原位置、尺寸、Sprite、材质和投影组件，初始 Alpha 改为 `1` 并关闭射线；其余 33 片按手绘第 2~8 区整理为连续的运行时 `Piece01xx~Piece07xx` 七组，组内按棋盘中心从左到右、同 X 时从上到下编号，Hierarchy 同步按最终名称升序排列。未修改全局玩法、存档或首波完成逻辑。编辑器的现有布局更新、层级校验和跨设备 Sprite 引用诊断同步识别 `BoardFixedPieceNN`，允许后续更新固定 Piece 的位置、尺寸并将其保持在 GameBoard 与玩法 Piece 之间。
+- 修改文件：`Assets/Resources/CardBagPrefabs/CardBag015.prefab`、`Assets/Resources/Generated/PuzzleOutlines/CardBag015/Group01~07*.png`、新增 `Group06~07` 对应 `.meta`、`Assets/Scripts/Editor/CardBagPrefabGeneratorEditor.cs`、任务记录和项目上下文。
+- 描边：使用现有 `PuzzleOutlineBakerEditor` 仅重烘焙 `CardBag015`，得到 7 组默认、`_Level` 和 `_Stickers` 三套资源；原先只有 5 组，因此新增第 6、7 组。一次性执行器已自动移除，没有辅助代码残留。
+- 验证：确认 Prefab 包含 33 个唯一正式 Piece、组号连续为 `01~07`、各组片数依次为 `1/1/2/5/7/8/9`，全部 34 张源 Piece Sprite 各引用一次；`BoardFixedPiece01` 仍引用 `piece_018`，Alpha 为 `1`、Raycast Target 关闭；根节点顺序为标题、9 个背景块、GameBoard、固定鸭子、按编号升序的玩法 Piece。21 张描边 PNG 均为 `1300x1171`，关卡和贴纸输出均有有效 Alpha；Unity 烘焙日志成功，真实 `CardBagHierarchyEditor.ValidateHierarchy` 返回 `OK`，一次性执行器均已移除；Runtime 与 Editor C# 工程编译均为 `0` 警告、`0` 错误；`git diff --check` 通过。
+- 存档说明：旧的 `CardBag015` 进行中会话保存的是调整前 Piece 编号，测试新分组前应点击“重玩”清除旧会话并重新进入；不自动删除用户本地数据。
+- 下一步：在 Play Mode 重玩 `CardBag015`，确认小鸭进入关卡即显示且不可拖动，托盘依次发出手绘区域 2~8 的七组碎片，并核对三种描边模式。
+
 ## 2026-09-07 临时开放后续卡包到 022
 
 - 状态：代码和配置范围核对完成，等待 Play Mode 发包与列表验收。
