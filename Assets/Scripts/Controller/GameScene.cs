@@ -4421,6 +4421,7 @@ public class GameScene : MonoBehaviour
                 AudioManager.Instance.PlaySfx("SFX_PuzzleComplete.mp3");
             }
 
+            TryRewindTrayAfterLastPieceLeaves(state);
             ClearActiveDragMembers();
             return;
         }
@@ -4429,6 +4430,7 @@ public class GameScene : MonoBehaviour
         Physics2D.SyncTransforms();
         if (!IsTutorialActive && TryAttachLoosePieces(dragMembers))
         {
+            TryRewindTrayAfterLastPieceLeaves(state);
             ClearActiveDragMembers();
             return;
         }
@@ -4459,6 +4461,7 @@ public class GameScene : MonoBehaviour
 
         AudioManager.Instance.PlaySfx("SFX_PiecePlace.mp3");
         RestorePiecePlacementTutorialPresentation(state);
+        TryRewindTrayAfterLastPieceLeaves(state);
         ClearActiveDragMembers();
     }
 
@@ -7084,6 +7087,98 @@ public class GameScene : MonoBehaviour
             removedState.TrayScale) + horizontalSpacing;
         var states = new List<DraggablePieceState>();
         var targets = new List<Vector3>();
+
+        var currentLeftEdge = float.PositiveInfinity;
+        SpriteRenderer rightmostLeftRenderer = null;
+        for (var i = 0; i < removedIndex; i++)
+        {
+            var state = _drag.CurrentGroupDraggables[i];
+            if (state == null
+                || state.IsPlaced
+                || !state.IsOnTray
+                || state.PieceRenderer == null)
+            {
+                continue;
+            }
+
+            currentLeftEdge = Mathf.Min(
+                currentLeftEdge,
+                state.PieceRenderer.bounds.min.x);
+            if (rightmostLeftRenderer == null
+                || state.PieceRenderer.bounds.max.x
+                > rightmostLeftRenderer.bounds.max.x)
+            {
+                rightmostLeftRenderer = state.PieceRenderer;
+            }
+        }
+
+        var hasPieceBeyondLeftEdge = !float.IsPositiveInfinity(currentLeftEdge)
+                                     && currentLeftEdge
+                                     < trayBounds.min.x - TrayScrollBoundsEpsilon;
+        if (hasPieceBeyondLeftEdge)
+        {
+            SpriteRenderer leftmostRightRenderer = null;
+            for (var i = removedIndex + 1; i < _drag.CurrentGroupDraggables.Count; i++)
+            {
+                var state = _drag.CurrentGroupDraggables[i];
+                if (state == null
+                    || state.IsPlaced
+                    || !state.IsOnTray
+                    || state.PieceRenderer == null
+                    || state == _drag.DraggingPiece)
+                {
+                    continue;
+                }
+
+                if (leftmostRightRenderer == null
+                    || state.PieceRenderer.bounds.min.x
+                    < leftmostRightRenderer.bounds.min.x)
+                {
+                    leftmostRightRenderer = state.PieceRenderer;
+                }
+            }
+
+            var rightShift = shiftX;
+            if (rightmostLeftRenderer != null && leftmostRightRenderer != null)
+            {
+                rightShift = leftmostRightRenderer.bounds.min.x
+                             - horizontalSpacing
+                             - rightmostLeftRenderer.bounds.max.x;
+            }
+            else
+            {
+                var initialLeftEdge = trayBounds.min.x + DraggableLeftPadding;
+                rightShift = Mathf.Min(rightShift, initialLeftEdge - currentLeftEdge);
+            }
+
+            if (rightShift <= TrayScrollBoundsEpsilon)
+            {
+                return false;
+            }
+
+            for (var i = 0; i < removedIndex; i++)
+            {
+                var state = _drag.CurrentGroupDraggables[i];
+                if (state == null
+                    || state.IsPlaced
+                    || !state.IsOnTray
+                    || state.PieceRenderer == null
+                    || state == _drag.DraggingPiece)
+                {
+                    continue;
+                }
+
+                var target = state.PieceRenderer.transform.position;
+                target.x += rightShift;
+                state.StartPosition = target;
+                states.Add(state);
+                targets.Add(target);
+            }
+
+            StartTrayPieceReflow(states, targets);
+            return states.Count > 0;
+        }
+
         for (var i = removedIndex + 1; i < _drag.CurrentGroupDraggables.Count; i++)
         {
             var state = _drag.CurrentGroupDraggables[i];
@@ -7098,6 +7193,79 @@ public class GameScene : MonoBehaviour
 
             var target = state.PieceRenderer.transform.position;
             target.x -= shiftX;
+            state.StartPosition = target;
+            states.Add(state);
+            targets.Add(target);
+        }
+
+        StartTrayPieceReflow(states, targets);
+        return states.Count > 0;
+    }
+
+    private bool TryRewindTrayAfterLastPieceLeaves(DraggablePieceState removedState)
+    {
+        if (removedState == null
+            || removedState != _trayPickupRestorePiece
+            || _trayPickupRestoreStates.Count < 2
+            || _trayPickupRestoreStates[_trayPickupRestoreStates.Count - 1] != removedState)
+        {
+            return false;
+        }
+
+        var trayBounds = GetPieceTrayBounds();
+        var initialLeftEdge = trayBounds.min.x + DraggableLeftPadding;
+        var targetRightEdge = trayBounds.max.x - DraggableLeftPadding;
+        var currentLeftEdge = float.PositiveInfinity;
+        var currentRightEdge = float.NegativeInfinity;
+        for (var i = 0; i < _drag.CurrentGroupDraggables.Count; i++)
+        {
+            var state = _drag.CurrentGroupDraggables[i];
+            if (state == null
+                || state == removedState
+                || state.IsPlaced
+                || !state.IsOnTray
+                || state.PieceRenderer == null)
+            {
+                continue;
+            }
+
+            var pieceBounds = state.PieceRenderer.bounds;
+            currentLeftEdge = Mathf.Min(currentLeftEdge, pieceBounds.min.x);
+            currentRightEdge = Mathf.Max(currentRightEdge, pieceBounds.max.x);
+        }
+
+        if (float.IsPositiveInfinity(currentLeftEdge)
+            || float.IsNegativeInfinity(currentRightEdge))
+        {
+            return false;
+        }
+
+        var distanceToInitialPosition = initialLeftEdge - currentLeftEdge;
+        var distanceToRightEdge = targetRightEdge - currentRightEdge;
+        var rewindDistance = Mathf.Min(
+            distanceToInitialPosition,
+            Mathf.Max(0f, distanceToRightEdge));
+        if (rewindDistance <= TrayScrollBoundsEpsilon)
+        {
+            return false;
+        }
+
+        var states = new List<DraggablePieceState>();
+        var targets = new List<Vector3>();
+        for (var i = 0; i < _drag.CurrentGroupDraggables.Count; i++)
+        {
+            var state = _drag.CurrentGroupDraggables[i];
+            if (state == null
+                || state == removedState
+                || state.IsPlaced
+                || !state.IsOnTray
+                || state.PieceRenderer == null)
+            {
+                continue;
+            }
+
+            var target = state.PieceRenderer.transform.position;
+            target.x += rewindDistance;
             state.StartPosition = target;
             states.Add(state);
             targets.Add(target);
