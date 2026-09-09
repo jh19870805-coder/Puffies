@@ -381,6 +381,7 @@ public class MainScene : MonoBehaviour
         public Image VolumeImage;
         public PackCoverVisualSettings VisualSettings;
         public Animator PackAnimator;
+        public SeriesPackageShadow SeriesShadow;
         public GameObject ProgressPiecesRoot;
         public List<InProgressPackagePieceAnimation> ProgressPieceAnimations;
         public RectTransform RectTransform;
@@ -675,6 +676,7 @@ public class MainScene : MonoBehaviour
         }
 
         ReleaseUsablePanelPreviewSprites();
+        ReleaseSeriesPackageShadows();
         ReleasePackTornMaskResources();
         if (mOpeningStageBackgroundSprite != null)
         {
@@ -2793,6 +2795,7 @@ public class MainScene : MonoBehaviour
         ClearPackageRewardEntranceState(restorePositions: false);
         foreach (var pair in mPackageSlotsById)
         {
+            ReleaseSeriesPackageShadow(pair.Value);
             if (pair.Value.Root != null)
             {
                 pair.Value.Root.SetActive(false);
@@ -3137,6 +3140,10 @@ public class MainScene : MonoBehaviour
         backEntry.Root.transform.SetSiblingIndex(0);
         frontVisualRoot.SetParent(animationRoot, false);
         frontVisualRoot.SetSiblingIndex(1);
+
+        frontEntry.SeriesShadow = SeriesPackageShadow.Create(
+            frontEntry.Image,
+            backEntry.Image);
 
         DisablePackageAnimator(backEntry.PackAnimator);
         DisablePackageAnimator(frontAnimator);
@@ -3738,6 +3745,25 @@ public class MainScene : MonoBehaviour
         }
 
         SetPackageCoverVisible(entry.SecondaryEntry, visible);
+    }
+
+    private void ReleaseSeriesPackageShadows()
+    {
+        foreach (var pair in mPackageSlotsById)
+        {
+            ReleaseSeriesPackageShadow(pair.Value);
+        }
+    }
+
+    private static void ReleaseSeriesPackageShadow(PackageEntry entry)
+    {
+        if (entry?.SeriesShadow == null)
+        {
+            return;
+        }
+
+        entry.SeriesShadow.Dispose();
+        entry.SeriesShadow = null;
     }
 
     private static void SetPackageBackgroundVisible(PackageEntry entry, bool visible)
