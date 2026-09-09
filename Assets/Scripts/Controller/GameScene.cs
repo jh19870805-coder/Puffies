@@ -347,6 +347,7 @@ public class GameScene : MonoBehaviour
     private Collider2D _gameBoardOpaqueProbe;
     private Coroutine _pieceTraySlideCoroutine;
     private Coroutine _trayPieceReflowCoroutine;
+    private DraggablePieceState _elevatedTrayReflowPiece;
     private bool _isTrayPieceReflowAnimating;
     private readonly List<DraggablePieceState> _trayScrollStates =
         new List<DraggablePieceState>();
@@ -4275,7 +4276,10 @@ public class GameScene : MonoBehaviour
             }
         }
 
-        StartTrayPieceReflow(animatedStates, animatedTargets);
+        StartTrayPieceReflow(
+            animatedStates,
+            animatedTargets,
+            animatePickedSeparately ? null : pickedState);
         return foundPickedState;
     }
 
@@ -4357,7 +4361,6 @@ public class GameScene : MonoBehaviour
 
         _drag.DraggingPiece = null;
         var wasOnTray = state.IsOnTray;
-        SetPieceSortingOrders(dragMembers, PieceSortingOrder);
 
         if (releaseScreenPosition.HasValue
             && ShouldReturnPiecesToTray(releaseScreenPosition.Value, dragMembers))
@@ -4366,6 +4369,8 @@ public class GameScene : MonoBehaviour
             ClearActiveDragMembers();
             return;
         }
+
+        SetPieceSortingOrders(dragMembers, PieceSortingOrder);
 
         if (TryGetClusterBoardSnapTargets(dragMembers, out var groovePositions))
         {
@@ -7125,10 +7130,12 @@ public class GameScene : MonoBehaviour
 
     private void StartTrayPieceReflow(
         List<DraggablePieceState> states,
-        List<Vector3> targets)
+        List<Vector3> targets,
+        DraggablePieceState elevatedPiece = null)
     {
         if (states == null || targets == null || states.Count == 0 || states.Count != targets.Count)
         {
+            RestoreElevatedTrayReflowPiece(elevatedPiece);
             return;
         }
 
@@ -7138,6 +7145,7 @@ public class GameScene : MonoBehaviour
             starts.Add(states[i].PieceRenderer.transform.position);
         }
 
+        _elevatedTrayReflowPiece = elevatedPiece;
         _trayPieceReflowCoroutine = StartCoroutine(
             AnimateTrayPieceReflow(states, starts, targets));
     }
@@ -7182,6 +7190,7 @@ public class GameScene : MonoBehaviour
             }
         }
 
+        RestoreElevatedTrayReflowPiece(_elevatedTrayReflowPiece);
         _isTrayPieceReflowAnimating = false;
         _trayPieceReflowCoroutine = null;
     }
@@ -7194,7 +7203,21 @@ public class GameScene : MonoBehaviour
             _trayPieceReflowCoroutine = null;
         }
 
+        RestoreElevatedTrayReflowPiece(_elevatedTrayReflowPiece);
         _isTrayPieceReflowAnimating = false;
+    }
+
+    private void RestoreElevatedTrayReflowPiece(DraggablePieceState state)
+    {
+        if (state?.PieceRenderer != null)
+        {
+            state.PieceRenderer.sortingOrder = PieceSortingOrder;
+        }
+
+        if (_elevatedTrayReflowPiece == state)
+        {
+            _elevatedTrayReflowPiece = null;
+        }
     }
 
     private static Vector3 GetGrooveSnapPosition(RectTransform grooveRect, Camera camera)
