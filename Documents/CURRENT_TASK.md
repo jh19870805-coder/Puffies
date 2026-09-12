@@ -1,5 +1,16 @@
 # 当前任务
 
+## 2026-09-12 CardBag016 与 CardBag020 完整互换
+
+- 状态：资源和配置完整互换，Unity 引用与内容验证通过，待游戏内目视验收。
+- 用户意图：016 与 020 的资源、Prefab 布局位置、配置、卡包 Icon、包头和其他对应资源全部互换。
+- 范围：两个 `UI/CardBags` 源目录及其 Meta、对应完整预览、CardBag Prefab、三套分组描边目录、`UI/PackImages/PackIconNNN.png`、开包特效 `ModTextures/Packaging/Packaging_NNN.png` 和 StreamingAssets 图标副本。
+- 决策：新 016 承接原 020 的 Fairy（24 片、2 组），新 020 承接原 016 的 Jolly Holiday（25 片、5 组）。配置保留目标行 Index/PackId，其余字段完整对调，章节也跟随内容交换；Series 引用若涉及这两个编号则同步映射。通过 Unity AssetDatabase 搬移资源和 Meta 保持 GUID 引用，Prefab 根名同步新编号，内部 Piece 名称、坐标、分组、材质及描边内容保持原套内容。
+- 数据边界：不改动或删除本地玩家存档；既有 016/020 拼图进度仍按旧编号保存，验收建议使用新存档。
+- 验证：Unity 中逐字节核对 172 个交换文件并验证 88 个资源 GUID；Prefab 除根名外与交换前对应原件完全一致，包含坐标、大小、Piece 编号/分组和材质。两关的源图引用、所有组的默认/关卡/贴纸三套描边均有效，配置表 22 行成功载入，源 Icon 与 StreamingAssets 副本哈希一致。Git 对部分相同大小/时间戳 Meta 没有立即识别内容变化，已仅刷新这批交换 Meta 的时间戳，确保引用改动可正常提交。一次性执行器及 Meta 已清理，未修改运行时代码、场景或本地存档。
+- 差异检查：标准 `git diff --check` 只报告原 Prefab 自带的 Unity 空字段尾空格；保留原序列化内容，排除 `blank-at-eol` 后检查通过。
+- 下一步：用新存档或两关无旧拼图进度的存档检查首页 016/020 封面、开包及关卡布局。新 016 为 Fairy（第 2 章），新 020 为 Jolly Holiday（第 1 章）；这是本次“配置全部互换”的结果。
+
 ## 2026-09-12 卡包源图尺寸全局匹配
 
 - 状态：代码、现有资源修正和 Unity 编辑器验证完成，待 CardBag018 Play Mode 目视验收。

@@ -54,6 +54,7 @@ MainScene 卡包选中页与 GameScene 结算页共用 `Assets/Prefabs/PackPhoto
 
 - 任务配置来自 `Resources/Configs/TaskConfig.csv`。
 - 卡包配置来自 `Resources/Configs/CardPacks.csv`。
+- 2026-09-12 完成 CardBag016/020 整套编号交换：016 当前为 Fairy（24 片、2 组、第 2 章），020 当前为 Jolly Holiday（25 片、5 组、第 1 章）。Prefab 内部布局、源切图及包头、完整预览、首页 Icon、开包特效 Packaging 贴图、三套组描边和配置参数均随内容交换；所有 GUID 跟随原资源移动，主题命名的特效材质仍通过原 GUID 引用正确图案。旧本地存档未迁移，涉及这两关的旧拼图进度不应作为新编号内容的验收依据。
 - `CardPacks.csv/StickerCount` 紧跟在 `PackSize` 后面，记录卡包贴纸数量。`PackSize` 按该数量确定：`<20=XS`、`20..30=S`、`31..55=M`、`56..85=L`、`86..125=XL`、`126..170=XXL`、`>170=XXXL`。配置更新工具始终按实际片数更新 `StickerCount` 和 `PackSize`；`AutoUpdate=1` 时同时将 `BoardScale` 更新为：`XS=0.75`、`S=0.78`、`M=1.10`、`L=1.30`、`XL=1.00`、`XXL=1.15`、`XXXL=1.30`，`AutoUpdate=0` 时保留手工 `BoardScale`。工具只统计 `Assets/UI/CardBags/CardBagNNN` 顶层的标准碎片名 `piece_NNN.png`，不统计 `BoardTitle.png`、`GameBoard.png` 或其他 PNG。
 - `CardPacks.csv` 的字符串列 `Series` 位于 `BoardScale` 与 `AutoUpdate` 之间，默认留空并且只能手工维护。某行填写 `15|18` 时，以该行 `PackId` 为链首建立 `当前包 -> 15 -> 18`；后续包只有在完整前置链都为 `Completed` 后才进入现有发包候选池，仍继续受章节、持有数量和其他常规发包规则限制。系列同时限制任务奖励、首次完成奖励和直接解锁 API，不会自动发包。不存在的 PackId、默认首包作为后续包、冲突前置、重复或循环链会使卡包配置加载失败。
 - `CardPacks.csv` 最后一列 `AutoUpdate` 只允许 `0` 或 `1`，默认值为 `1`。配置更新工具遇到空值会补为 `1`；该字段只控制 `BoardScale`，设为 `0` 时保留手工棋盘缩放，但仍按实际碎片数更新 `PackSize` 和 `StickerCount`。无论 `AutoUpdate` 取值如何，工具都不修改已有 `Series` 内容；缺少该列时只在 `AutoUpdate` 前补一列空值。
