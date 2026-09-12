@@ -1462,7 +1462,8 @@ public static class CardBagPrefabGeneratorEditor
                 .ThenByDescending(GetPieceCenterY)
                 .ThenBy(placement => placement.AssetPath, StringComparer.OrdinalIgnoreCase)
                 .ToList();
-            var leftToRight = rowIndex % 2 == 0;
+            // Start at the upper-right group, then reverse direction on each lower row.
+            var leftToRight = rowIndex % 2 != 0;
             var rowPieceOffset = 0;
             for (var spatialGroupIndex = 0;
                  spatialGroupIndex < groupsInRow;
@@ -1497,7 +1498,7 @@ public static class CardBagPrefabGeneratorEditor
         Debug.Log(
             $"CardBag generator: automatically assigned {placements.Count} Pieces to " +
             $"{groupCount} spatial group(s), up to {AutomaticPieceGroupCapacity} Pieces per group, " +
-            "using top-to-bottom snake ordering.");
+            "using upper-right-first, top-to-bottom snake ordering.");
     }
 
     private static float GetPieceCenterX(PiecePlacement placement)
