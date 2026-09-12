@@ -1,5 +1,14 @@
 # 当前任务
 
+## 2026-09-12 首页 Admin 隐藏入口静音
+
+- 状态：代码修改和调用链静态核对完成，等待 Play Mode 验收；命令行编译受本机环境缺失阻断。
+- 用户意图：首页透明 `BtnAdmin` 点击时不发声，避免玩家通过音效发现隐藏入口。
+- 修改：`AudioManager` 自动绑定通用按钮点击音效时排除 `MainScene/BtnAdmin`；移除 `OnAdminButtonClicked` 第五次点击成功进入时的显式音效调用。保留原有两秒五连击、动画期间拦截和场景跳转规则。
+- 修改文件：`Assets/Scripts/Model/AudioManager.cs`、`Assets/Scripts/Controller/MainScene.cs`、任务记录和项目上下文。
+- 验证：场景 `BtnAdmin` 没有 Inspector 持久化点击回调，`EnterAdminScene` 仅加载场景；自动扫描排除该按钮且连击回调无音效调用。`git diff --check` 通过，仅有既有 LF/CRLF 提示。标准编译缺少 .NET Framework 4.7.1 引用程序集；临时指定本机 4.7.2 引用路径后，又因生成工程引用的 VS 2019 `Microsoft.Unity.Analyzers.dll` 不存在而失败，未改写生成的工程文件。实际听感尚未验收。
+- 下一步：在 MainScene 点击隐藏入口，确认单击、连击及第五次跳转均无点击声；确认普通菜单按钮仍正常发声。
+
 ## 2026-09-09 托盘取片后的方向性补位
 
 - 状态：代码修改和静态验证完成，等待 GameScene Play Mode 交互验收。

@@ -42,7 +42,7 @@ Unity **2022.3** / Built-in Render Pipeline 项目，使用 Linear 色彩空间�
 | GameScene | 根据选中 PackId 加载 `CardBagNNN` Prefab，并读取 `CardPacks.csv/BoardScale` 缩放棋盘；按照 `PieceGGII` 四位数字命名组织拼图分组；从正常开包流程进入时播放棋盘、托盘和当前组 Piece 入场；每次正确放置 Piece 后立即持久化，重新进入时恢复已放置 Piece 并从首个未完成分组继续；全部完成后显示 RewardPanel；Admin 的一键通关显隐设置同时控制“一键完成”和其左侧的“自动拼图”，后者每次把当前托盘的一片 Piece 飞入正确凹槽 |
 | RankScene | 仅占位；首个 Demo 不包含排行榜后端功能。当前模拟列表前三名的 `RankBg` 分别使用原生 `1646 x 148` 的 `RankCellBg_1.png`、`RankCellBg_2.png`、`RankCellBg_3.png`，第四名以后使用 `1636 x 136` 的 `RankCellBg.png`；`RankItem` 根高度为 `148`，列表纵向间距为 `5`，条目中心步距为 `153` |
 | AchieveScene | 当前显示 20 条模拟成就，前 5 条已达成、后 15 条未达成；接入 Steam 后替换数据源。成就网格固定为 6 列，单元尺寸 `240 x 332`，横纵间距均为 `40` |
-| AdminScene | 正式版调试页面；MainScene 主 Canvas 下透明的 `BtnAdmin` 在 `2s` 内连续点击 `5` 次进入，`BtnClose` 返回 MainScene。`BtnAdmin` 保持 Image `Alpha=0`、Raycast Target 开启；页面控制器运行时自动挂载，不要求在场景中序列化脚本。菜单 `BtnSet` 只负责即时打开原设置页。 |
+| AdminScene | 正式版调试页面；MainScene 主 Canvas 下透明的 `BtnAdmin` 在 `2s` 内连续点击 `5` 次进入，`BtnClose` 返回 MainScene。`BtnAdmin` 保持 Image `Alpha=0`、Raycast Target 开启；该隐藏入口排除通用按钮点击音效，所有点击（含第五次跳转）均不播放音效。页面控制器运行时自动挂载，不要求在场景中序列化脚本。菜单 `BtnSet` 只负责即时打开原设置页。 |
 
 AdminScene 左侧代码说明区使用 `TextCode101~118` 预留 18 行，每行沿用编辑器既有的 `代码 : 功能说明` 完整单行格式；运行时代码不得拆分内容，也不得查找、写入或切换右侧 `TextCode201~218`。代码、说明和命令类型由 `AdminScene.sCommandDefinitions` 集中维护，按定义顺序启用左侧已有行，左侧未使用行隐藏。首批记录为：`10001001=显示一键通关按钮`、`10001002=隐藏一键通关按钮`、`10002001=显示所有当前卡包`、`10002002=只显示Demo的前18个卡包`、`10002003=解锁当前所有可见卡包`。场景现有 `InputField` 使用标准 `TMP_InputField` 光标，运行时限制为单行最多 8 位数字；点击 `BtnConfirm` 后先执行并持久化匹配命令，成功才返回 MainScene，无效代码或保存失败时保留 AdminScene。Admin 显隐/范围设置存于当前存档 SQLite 的 `AdminSettings/Runtime`：一键完成按钮默认仅 Editor/Development 显示，但正式构建可由代码开启；卡包范围可在当前构建全部内容与前 18 个之间切换，范围切换不解锁卡包。批量解锁命令只补齐当前可见的 Locked/缺失记录，保留已有进行中、完成状态及拼图进度。
 

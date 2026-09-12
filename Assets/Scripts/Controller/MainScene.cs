@@ -4214,7 +4214,6 @@ public class MainScene : MonoBehaviour
 
         mAdminButtonClickCount = 0;
         mAdminButtonClickWindowStartTime = 0f;
-        AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
         GameManager.EnterAdminScene();
     }
 
