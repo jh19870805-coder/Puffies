@@ -747,6 +747,12 @@ public static class CardBagPrefabGeneratorEditor
 
         var request = File.ReadAllText(requestPath).Trim();
         File.Delete(requestPath);
+        if (request == "match-source-sizes")
+        {
+            MatchAllCardBagSourceSizes();
+            return;
+        }
+
         var packIds = new List<int>();
         var requestParts = request.Split(',');
         for (var i = 0; i < requestParts.Length; i++)
@@ -990,6 +996,7 @@ public static class CardBagPrefabGeneratorEditor
         var sourceFolder = $"{CardBagSourceRoot}/{bagName}";
         var boardPath = $"{sourceFolder}/{GameBoardFileName}";
         var previewPath = $"{PreviewRoot}/{bagName}.png";
+        var titlePath = $"{sourceFolder}/{BoardTitleFileName}";
         var prefabPath = $"{PrefabRoot}/{bagName}.prefab";
 
         RequireAsset(boardPath, "GameBoard image");
@@ -1005,6 +1012,11 @@ public static class CardBagPrefabGeneratorEditor
 
         ConfigureSpriteImporter(boardPath);
         ConfigureSpriteImporter(previewPath);
+        if (File.Exists(ToAbsolutePath(titlePath)))
+        {
+            ConfigureSpriteImporter(titlePath);
+        }
+
         for (var i = 0; i < piecePaths.Count; i++)
         {
             ConfigureSpriteImporter(piecePaths[i]);
@@ -1088,7 +1100,8 @@ public static class CardBagPrefabGeneratorEditor
                 changedCount++;
             }
 
-            if (changedCount > 0)
+            var titleChanged = MatchBoardTitleSourceSize(root, titlePath);
+            if (changedCount > 0 || titleChanged)
             {
                 PrefabUtility.SaveAsPrefabAsset(root, prefabPath, out var success);
                 if (!success)
@@ -1100,7 +1113,8 @@ public static class CardBagPrefabGeneratorEditor
 
             Debug.Log(
                 $"CardBag updater: {bagName} matched {placements.Count} existing Piece objects; " +
-                $"updated RectTransforms={changedCount}. Hierarchy, Image settings, shadows and outlines were unchanged.");
+                $"updated RectTransforms={changedCount}, title updated={titleChanged}. " +
+                "Hierarchy, Image settings, shadows and outlines were unchanged.");
             return changedCount;
         }
         finally
@@ -2607,7 +2621,7 @@ public static class CardBagPrefabGeneratorEditor
             {
                 var titleSprite = LoadSprite(titlePath);
                 var boardTitle = CreateImageObject("BoardTitle", root.transform, titleSprite, Color.white);
-                var titleSize = titleSprite.rect.size;
+                var titleSize = GetSourceTextureSize(titlePath);
                 SetRect(
                     boardTitle.rectTransform,
                     new Vector2(0f, boardHeight * 0.5f + titleSize.y * 0.5f),
@@ -2729,6 +2743,11 @@ public static class CardBagPrefabGeneratorEditor
                       || importer.mipmapEnabled
                       || !importer.alphaIsTransparency
                       || importer.wrapMode != TextureWrapMode.Clamp;
+        if (IsCardBagSourceTexture(assetPath))
+        {
+            changed |= EnsureSourceTextureSize(importer);
+        }
+
         if (!changed)
         {
             return;
@@ -2742,6 +2761,157 @@ public static class CardBagPrefabGeneratorEditor
         importer.filterMode = FilterMode.Bilinear;
         importer.wrapMode = TextureWrapMode.Clamp;
         importer.SaveAndReimport();
+    }
+
+    internal static bool IsCardBagSourceTexture(string assetPath)
+    {
+        if (!string.Equals(Path.GetExtension(assetPath), ".png", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var folder = Path.GetDirectoryName(assetPath)?.Replace('\\', '/');
+        return folder == PreviewRoot
+            ? CardBagFolderRegex.IsMatch(Path.GetFileNameWithoutExtension(assetPath))
+            : Path.GetDirectoryName(folder)?.Replace('\\', '/') == CardBagSourceRoot
+              && CardBagFolderRegex.IsMatch(Path.GetFileName(folder));
+    }
+
+    private static Vector2 GetSourceTextureSize(string assetPath)
+    {
+        var importer = AssetImporter.GetAtPath(assetPath) as TextureImporter;
+        if (importer == null)
+        {
+            throw new InvalidOperationException($"CardBag generator: no TextureImporter for {assetPath}.");
+        }
+
+        importer.GetSourceTextureWidthAndHeight(out var width, out var height);
+        if (width <= 0 || height <= 0)
+        {
+            throw new InvalidOperationException($"CardBag generator: invalid source dimensions for {assetPath}.");
+        }
+
+        return new Vector2(width, height);
+    }
+
+    internal static bool EnsureSourceTextureSize(TextureImporter importer)
+    {
+        importer.GetSourceTextureWidthAndHeight(out var width, out var height);
+        var longestSide = Mathf.Max(width, height);
+        if (longestSide <= 0 || longestSide > 16384)
+        {
+            throw new InvalidOperationException(
+                $"CardBag generator: unsupported source dimensions {width}x{height} for {importer.assetPath}.");
+        }
+
+        var requiredMaxSize = Mathf.Max(32, Mathf.NextPowerOfTwo(longestSide));
+        var changed = false;
+        if (importer.maxTextureSize < requiredMaxSize)
+        {
+            importer.maxTextureSize = requiredMaxSize;
+            changed = true;
+        }
+
+        if (importer.npotScale != TextureImporterNPOTScale.None)
+        {
+            importer.npotScale = TextureImporterNPOTScale.None;
+            changed = true;
+        }
+
+        foreach (var platform in new[] { "Standalone", "Android", "iPhone", "WebGL" })
+        {
+            var settings = importer.GetPlatformTextureSettings(platform);
+            if (settings.overridden && settings.maxTextureSize < requiredMaxSize)
+            {
+                settings.maxTextureSize = requiredMaxSize;
+                importer.SetPlatformTextureSettings(settings);
+                changed = true;
+            }
+        }
+
+        return changed;
+    }
+
+    public static void MatchAllCardBagSourceSizes()
+    {
+        var changedTextures = 0;
+        var changedTitles = 0;
+        foreach (var folder in Directory.GetDirectories(CardBagSourceRoot)
+                     .Where(path => CardBagFolderRegex.IsMatch(Path.GetFileName(path)))
+                     .OrderBy(path => path, StringComparer.Ordinal))
+        {
+            var bagName = Path.GetFileName(folder);
+            var titlePath = $"{CardBagSourceRoot}/{bagName}/{BoardTitleFileName}";
+            var sourcePaths = Directory.GetFiles(folder, "*.png", SearchOption.TopDirectoryOnly)
+                .Select(path => path.Replace('\\', '/'))
+                .Concat(new[] { $"{PreviewRoot}/{bagName}.png" })
+                .Where(File.Exists);
+            foreach (var path in sourcePaths)
+            {
+                var importer = AssetImporter.GetAtPath(path) as TextureImporter;
+                if (importer != null && EnsureSourceTextureSize(importer))
+                {
+                    importer.SaveAndReimport();
+                    changedTextures++;
+                }
+            }
+
+            var prefabPath = $"{PrefabRoot}/{bagName}.prefab";
+            if (!File.Exists(titlePath) || !File.Exists(prefabPath))
+            {
+                continue;
+            }
+
+            var root = PrefabUtility.LoadPrefabContents(prefabPath);
+            try
+            {
+                if (!MatchBoardTitleSourceSize(root, titlePath))
+                {
+                    continue;
+                }
+
+                PrefabUtility.SaveAsPrefabAsset(root, prefabPath, out var success);
+                if (!success)
+                {
+                    throw new InvalidOperationException($"CardBag generator: failed to save {prefabPath}.");
+                }
+
+                changedTitles++;
+            }
+            finally
+            {
+                PrefabUtility.UnloadPrefabContents(root);
+            }
+        }
+
+        Debug.Log($"CardBag source sizes: updated textures={changedTextures}, titles={changedTitles}.");
+    }
+
+    private static bool MatchBoardTitleSourceSize(GameObject root, string titlePath)
+    {
+        var title = root.transform.Find("BoardTitle")?.GetComponent<Image>();
+        if (title == null || !File.Exists(titlePath)
+            || AssetDatabase.GetAssetPath(title.sprite) != titlePath)
+        {
+            return false;
+        }
+
+        var rect = title.rectTransform;
+        var oldSize = rect.rect.size;
+        var sourceSize = GetSourceTextureSize(titlePath);
+        if (Approximately(oldSize, sourceSize))
+        {
+            return false;
+        }
+
+        // Keep the title's lower edge attached to the board, including authored rotation/scale.
+        var offset = rect.localRotation * Vector3.Scale(
+            new Vector3(0f, (sourceSize.y - oldSize.y) * rect.pivot.y, 0f), rect.localScale);
+        rect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, sourceSize.x);
+        rect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, sourceSize.y);
+        rect.localPosition += offset;
+        Debug.Log($"CardBag source sizes: {root.name}/BoardTitle {oldSize} -> {sourceSize}.");
+        return true;
     }
 
     private static Sprite LoadSprite(string assetPath)
@@ -4496,6 +4666,17 @@ internal static class CardBagPrefabReferenceValidator
         var relativePath = absolutePath.Substring(projectRoot.Length)
             .TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         return relativePath.Replace('\\', '/');
+    }
+}
+
+internal sealed class CardBagSourceTextureImportSettings : AssetPostprocessor
+{
+    private void OnPreprocessTexture()
+    {
+        if (CardBagPrefabGeneratorEditor.IsCardBagSourceTexture(assetPath))
+        {
+            CardBagPrefabGeneratorEditor.EnsureSourceTextureSize((TextureImporter)assetImporter);
+        }
     }
 }
 
