@@ -188,10 +188,10 @@ public class MainScene : MonoBehaviour
     private const string BagVolumeRightTemplateObjectName = "PackRight";
     private const string BagVolumePreviousButtonObjectName = "BtnPrevious";
     private const string BagVolumeNextButtonObjectName = "BtnNext";
-    private const string BagVolumeIndicatorsObjectName = "PageIndicators";
-    private const string BagVolumeDotTemplateObjectName = "DotTemplate";
-    private const string BagVolumeDotNormalObjectName = "DotNormal";
-    private const string BagVolumeDotSelectedObjectName = "DotSelected";
+    private const string PageIndicatorsObjectName = "PageIndicators";
+    private const string PageDotTemplateObjectName = "DotTemplate";
+    private const string PageDotNormalObjectName = "DotNormal";
+    private const string PageDotSelectedObjectName = "DotSelected";
     private const float BagVolumeSnapDuration = 0.25f;
     private const float BagVolumeSwipeThreshold = 60f;
     private const float BagVolumeVisibleRange = 1.65f;
@@ -244,6 +244,11 @@ public class MainScene : MonoBehaviour
     private RectTransform mPackagePageTemplate;
     private ScrollRect mPackageScrollRect;
     private Coroutine mPackagePageSnapCoroutine;
+    private Transform mPackageIndicatorsRoot;
+    private GameObject mPackageDotTemplate;
+    private readonly List<GameObject> mPackagePageDots = new List<GameObject>();
+    private int mPackageIndicatorPageCount;
+    private int mPackageSelectedPageIndex = -1;
     private GameObject mMenuPanelRoot;
     private GameObject mWishListPanelRoot;
     private Button mWishListAddButton;
@@ -655,6 +660,10 @@ public class MainScene : MonoBehaviour
         GameLocalization.LanguageChanged -= OnLanguageChanged;
         AudioManager.StopLoopingSfxIfActive();
         StopPackagePageSnap();
+        if (mPackageScrollRect != null)
+        {
+            mPackageScrollRect.onValueChanged.RemoveListener(OnPackagePagePositionChanged);
+        }
         StopOpeningHintAnimation();
         if (mSelectedPackageOverlayCanvas != null)
         {
@@ -1263,9 +1272,9 @@ public class MainScene : MonoBehaviour
             BagVolumeRightTemplateObjectName) as RectTransform;
         mBagVolumeIndicatorsRoot = FindChild(
             mBagVolumePanelRoot.transform,
-            BagVolumeIndicatorsObjectName) as RectTransform;
+            PageIndicatorsObjectName) as RectTransform;
         var dotTemplateTransform = mBagVolumeIndicatorsRoot != null
-            ? FindChild(mBagVolumeIndicatorsRoot, BagVolumeDotTemplateObjectName)
+            ? FindChild(mBagVolumeIndicatorsRoot, PageDotTemplateObjectName)
             : null;
         mBagVolumeDotTemplate = dotTemplateTransform != null
             ? dotTemplateTransform.gameObject
@@ -2422,6 +2431,7 @@ public class MainScene : MonoBehaviour
         mPackageScrollRect.horizontal = true;
         mPackageScrollRect.vertical = false;
         ConfigurePackagePageSnapInput(scrollViewObject);
+        ConfigurePackagePageIndicators(scrollViewObject.transform);
         mPackagePageTemplate.gameObject.SetActive(true);
         NormalizePagedPackageLayout();
         return true;
@@ -2511,7 +2521,32 @@ public class MainScene : MonoBehaviour
         eventTrigger.triggers.Add(endDragEntry);
     }
 
-    private IEnumerator SnapPackageListToNearestPage()
+    private void ConfigurePackagePageIndicators(Transform scrollView)
+    {
+        mPackageIndicatorsRoot = FindDirectChild(scrollView, PageIndicatorsObjectName);
+        var template = mPackageIndicatorsRoot != null
+            ? FindDirectChild(mPackageIndicatorsRoot, PageDotTemplateObjectName)
+            : null;
+        mPackageDotTemplate = template != null ? template.gameObject : null;
+        if (mPackageDotTemplate == null)
+        {
+            Debug.LogWarning("MainScene: configure PackageScrollView/PageIndicators/DotTemplate in the scene.");
+        }
+        else
+        {
+            mPackageDotTemplate.SetActive(false);
+        }
+
+        if (mPackageIndicatorsRoot != null)
+        {
+            mPackageIndicatorsRoot.gameObject.SetActive(false);
+        }
+
+        mPackageScrollRect.onValueChanged.RemoveListener(OnPackagePagePositionChanged);
+        mPackageScrollRect.onValueChanged.AddListener(OnPackagePagePositionChanged);
+    }
+
+    private int GetPackagePageCount()
     {
         var pageCount = 0;
         if (mPackageContentRoot != null)
@@ -2527,6 +2562,70 @@ public class MainScene : MonoBehaviour
             }
         }
 
+        return pageCount;
+    }
+
+    private void RefreshPackagePageIndicators()
+    {
+        mPackageIndicatorPageCount = GetPackagePageCount();
+        mPackageSelectedPageIndex = -1;
+        if (mPackageIndicatorsRoot == null || mPackageDotTemplate == null)
+        {
+            return;
+        }
+
+        var showIndicators = mPackageIndicatorPageCount > 1;
+        var dotCount = showIndicators ? mPackageIndicatorPageCount : 0;
+        while (mPackagePageDots.Count < dotCount)
+        {
+            var dot = Instantiate(mPackageDotTemplate, mPackageIndicatorsRoot, false);
+            dot.name = $"Dot_{mPackagePageDots.Count + 1}";
+            mPackagePageDots.Add(dot);
+        }
+
+        for (var i = 0; i < mPackagePageDots.Count; i++)
+        {
+            mPackagePageDots[i].SetActive(i < dotCount);
+        }
+
+        mPackageIndicatorsRoot.gameObject.SetActive(showIndicators);
+        OnPackagePagePositionChanged(new Vector2(mPackageScrollRect.horizontalNormalizedPosition, 0f));
+    }
+
+    private void OnPackagePagePositionChanged(Vector2 position)
+    {
+        if (mPackageIndicatorPageCount <= 1)
+        {
+            return;
+        }
+
+        var pageIndex = Mathf.FloorToInt(
+            Mathf.Clamp01(position.x) * (mPackageIndicatorPageCount - 1) + 0.5f);
+        if (pageIndex == mPackageSelectedPageIndex)
+        {
+            return;
+        }
+
+        mPackageSelectedPageIndex = pageIndex;
+        for (var i = 0; i < mPackagePageDots.Count; i++)
+        {
+            var normal = FindDirectChild(mPackagePageDots[i].transform, PageDotNormalObjectName);
+            var selected = FindDirectChild(mPackagePageDots[i].transform, PageDotSelectedObjectName);
+            if (normal != null)
+            {
+                normal.gameObject.SetActive(i != pageIndex);
+            }
+
+            if (selected != null)
+            {
+                selected.gameObject.SetActive(i == pageIndex);
+            }
+        }
+    }
+
+    private IEnumerator SnapPackageListToNearestPage()
+    {
+        var pageCount = GetPackagePageCount();
         var maximumPageIndex = Mathf.Max(0, pageCount - 1);
         var currentPosition = Mathf.Clamp01(mPackageScrollRect.horizontalNormalizedPosition);
         var pagePosition = currentPosition * maximumPageIndex;
@@ -3964,6 +4063,8 @@ public class MainScene : MonoBehaviour
         {
             LayoutRebuilder.ForceRebuildLayoutImmediate(mPackageContentRoot);
         }
+
+        RefreshPackagePageIndicators();
     }
 
     private void NormalizePagedPackageLayout()
@@ -6415,8 +6516,8 @@ public class MainScene : MonoBehaviour
         for (var i = 0; i < mBagVolumeDots.Count; i++)
         {
             var dot = mBagVolumeDots[i];
-            var normal = FindChild(dot.transform, BagVolumeDotNormalObjectName);
-            var selected = FindChild(dot.transform, BagVolumeDotSelectedObjectName);
+            var normal = FindChild(dot.transform, PageDotNormalObjectName);
+            var selected = FindChild(dot.transform, PageDotSelectedObjectName);
             if (normal != null)
             {
                 normal.gameObject.SetActive(i != mBagVolumeSelectedIndex);

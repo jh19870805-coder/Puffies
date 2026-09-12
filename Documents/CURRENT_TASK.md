@@ -1,5 +1,16 @@
 # 当前任务
 
+## 2026-09-12 首页卡包列表分页圆点
+
+- 状态：MainScene 场景节点及运行时代码完成，Unity 编译与隔离组件验证通过，待多页卡包列表实际拖动验收。
+- 用户意图：参考卡包圆点配置，在 `MainScene/PackageScrollView` 内直接配置编辑器节点；列表超过一页显示分页圆点，随页面切换。
+- 定位：现有圆点属于 `PanelBagVol/PageIndicators`，不在 `PackItem.prefab` 内。复用其普通态 `25 x 25`、选中态 `33 x 33` 的 Sprite、颜色和材质，横向间距 `18`。
+- 场景：新增 `Canvas/PackageScrollView/PageIndicators/DotTemplate/DotNormal|DotSelected`，位于 Viewport 外同级，底部居中 `Y=-32`、容器高 `40`；所有圆点 Image 关闭 Raycast Target，不拦截卡包和空白拖拽。编辑器保留一个可见选中态模板供美术调整，运行时隐藏模板。
+- 逻辑：以实际活动 `Page_N` 数量为准，与原吸附逻辑共用页数统计；0/1 页隐藏整个节点，多页按需创建并复用圆点；监听 ScrollRect 的 `onValueChanged`，按最近页切换普通/选中态。列表重建、奖励回首页和窗口布局刷新继续走共享布局入口，场景销毁解除监听。不改每页 18 个槽位、系列折叠、滑动吸附时长、卡包排序或 Demo 范围。
+- 修改文件：`Assets/Scenes/MainScene.unity`、`Assets/Scripts/Controller/MainScene.cs`、任务记录与项目上下文。用户原有 `PackItem.prefab` 的封面 Sprite 修改保持不变。
+- 验证：通过 Unity 场景 API 保存并验证节点、父级、尺寸、间距和输入配置；隔离的 MainScene/ScrollRect 组件模拟 `0/1/2/3/1/2/0` 页，验证显隐、圆点数量、复用及 `-0.2~1.2` 范围的滚动事件和半页切换阈值。未修改玩家存档、解锁状态或正式版编译符号，未进入实际 Play Mode。一次性配置验证器完成后移除；场景保存引起的无关 Page_1 自动布局字段变化已还原。
+- 下一步：在 MainScene 层级中查看新增节点并按需调美术；正式版或测试多页列表时确认拖动、吸附和窗口变化后的圆点显示。当前 Demo 最多 18 包且每页 18 个位置，正常单页时隐藏圆点是预期行为。
+
 ## 2026-09-12 默认英语与 Demo 前 18 包范围
 
 - 状态：范围修改、调用链核对及 Unity 编译完成，待首页实际显示验收。
