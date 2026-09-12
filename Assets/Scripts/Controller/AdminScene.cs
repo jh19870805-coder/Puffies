@@ -20,7 +20,7 @@ public sealed class AdminScene : MonoBehaviour
         new AdminCommandDefinition("10001002", "隐藏一键通关按钮", AdminCommand.HideTestCompleteButton),
         new AdminCommandDefinition("10002001", "显示所有当前卡包", AdminCommand.ShowAllCurrentCardPacks),
         new AdminCommandDefinition("10002002", "只显示Demo的前18个卡包", AdminCommand.ShowDemoCardPacksOnly),
-        new AdminCommandDefinition("10002003", "解锁当前所有可见卡包", AdminCommand.UnlockAllVisibleCardPacks)
+        new AdminCommandDefinition("10002003", "解锁所有卡包（测试）", AdminCommand.UnlockAllConfiguredCardPacks)
     };
 
     private enum AdminCommand
@@ -29,7 +29,7 @@ public sealed class AdminScene : MonoBehaviour
         HideTestCompleteButton,
         ShowAllCurrentCardPacks,
         ShowDemoCardPacksOnly,
-        UnlockAllVisibleCardPacks
+        UnlockAllConfiguredCardPacks
     }
 
     private readonly struct AdminCommandDefinition
@@ -246,8 +246,9 @@ public sealed class AdminScene : MonoBehaviour
                 return AdminRuntimeSettingsUtility.SetDemoCardPackLimitEnabled(false);
             case AdminCommand.ShowDemoCardPacksOnly:
                 return AdminRuntimeSettingsUtility.SetDemoCardPackLimitEnabled(true);
-            case AdminCommand.UnlockAllVisibleCardPacks:
-                return CardPackDataUtility.TryUnlockAllVisiblePacks(out _);
+            case AdminCommand.UnlockAllConfiguredCardPacks:
+                return AdminRuntimeSettingsUtility.SetDemoCardPackLimitEnabled(false)
+                       && CardPackDataUtility.TryUnlockAllVisiblePacks(out _);
             default:
                 return false;
         }
