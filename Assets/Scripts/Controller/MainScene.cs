@@ -6795,10 +6795,19 @@ public class MainScene : MonoBehaviour
 
         var wasCursorVisible = Cursor.visible;
         Texture2D screenshot;
+        var captureViewport = new Rect(0f, 0f, 1f, 1f);
         Cursor.visible = false;
         try
         {
             yield return new WaitForEndOfFrame();
+            var captureCamera = mBagSelectOverlayCanvas != null
+                ? mBagSelectOverlayCanvas.worldCamera
+                : null;
+            if (captureCamera != null)
+            {
+                captureViewport = captureCamera.rect;
+            }
+
             screenshot = ScreenCapture.CaptureScreenshotAsTexture();
         }
         finally
@@ -6811,8 +6820,8 @@ public class MainScene : MonoBehaviour
             yield break;
         }
 
-        var blurWidth = screenshot.width;
-        var blurHeight = screenshot.height;
+        var blurWidth = Mathf.Max(1, Mathf.RoundToInt(screenshot.width * captureViewport.width));
+        var blurHeight = Mathf.Max(1, Mathf.RoundToInt(screenshot.height * captureViewport.height));
         RenderTexture blurSource = null;
         RenderTexture horizontalBlur = null;
         try
@@ -6833,7 +6842,8 @@ public class MainScene : MonoBehaviour
             blurSource.wrapMode = TextureWrapMode.Clamp;
             horizontalBlur.filterMode = FilterMode.Bilinear;
             horizontalBlur.wrapMode = TextureWrapMode.Clamp;
-            Graphics.Blit(screenshot, blurSource);
+            // Exclude window bars before fitting the screenshot back into the camera Canvas.
+            Graphics.Blit(screenshot, blurSource, captureViewport.size, captureViewport.position);
 
             mBagSelectBackdropTexture = new RenderTexture(
                 blurWidth,
