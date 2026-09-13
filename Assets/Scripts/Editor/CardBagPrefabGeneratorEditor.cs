@@ -11,7 +11,7 @@ using UnityEditor.Callbacks;
 using UnityEngine;
 using UnityEngine.UI;
 
-public static class CardBagPrefabGeneratorEditor
+public static partial class CardBagPrefabGeneratorEditor
 {
     private const string CardBagSourceRoot = "Assets/UI/CardBags";
     private const string PreviewRoot = CardBagSourceRoot + "/Previews";
@@ -113,7 +113,7 @@ public static class CardBagPrefabGeneratorEditor
                 "CardBag generator: pass a positive pack ID with -cardBagId <number>.");
         }
 
-        Generate(packId, false, false);
+        Generate(packId, Array.IndexOf(arguments, "-bakeCardBagOutlines") >= 0, false);
     }
 
     public static void ValidateCardBagReferencesFromCommandLine()
@@ -843,13 +843,14 @@ public static class CardBagPrefabGeneratorEditor
         }
 
         AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+        var previewGroups = ReadPreviewGroups(previewPath);
         var placements = CalculatePlacements(
             boardPath,
-            previewPath,
+            previewGroups != null ? previewGroups.ReferencePath : previewPath,
             piecePaths,
             out var boardWidth,
             out var boardHeight);
-        AssignAndSortPieceObjectNames(placements);
+        AssignAndSortPieceObjectNames(placements, previewGroups);
         ValidateUniqueObjectNames(placements);
         CreatePrefab(
             bagName,
@@ -862,7 +863,7 @@ public static class CardBagPrefabGeneratorEditor
 
         if (bakeOutlines)
         {
-            PuzzleOutlineBakerEditor.BakeAll();
+            PuzzleOutlineBakerEditor.BakeCardBag(packId);
         }
         else
         {
@@ -1023,9 +1024,10 @@ public static class CardBagPrefabGeneratorEditor
         }
 
         AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+        var positioningPreviewPath = ResolvePreviewPositioningReference(previewPath, ReadPreviewGroupSettings(previewPath));
         var placements = CalculatePlacements(
             boardPath,
-            previewPath,
+            positioningPreviewPath,
             piecePaths,
             out var boardWidth,
             out var boardHeight);
@@ -1391,7 +1393,9 @@ public static class CardBagPrefabGeneratorEditor
         return null;
     }
 
-    private static void AssignAndSortPieceObjectNames(List<PiecePlacement> placements)
+    private static void AssignAndSortPieceObjectNames(
+        List<PiecePlacement> placements,
+        PreviewGroups previewGroups = null)
     {
         var explicitNameCount = placements.Count(placement => !string.IsNullOrEmpty(placement.ObjectName));
         if (explicitNameCount > 0 && explicitNameCount != placements.Count)
@@ -1402,7 +1406,11 @@ public static class CardBagPrefabGeneratorEditor
                 "every Piece an explicit gameplay name.");
         }
 
-        if (explicitNameCount == 0)
+        if (previewGroups != null)
+        {
+            AssignPreviewPieceGroups(placements, previewGroups);
+        }
+        else if (explicitNameCount == 0)
         {
             AssignAutomaticPieceObjectNames(placements);
         }
@@ -3380,7 +3388,8 @@ internal sealed class CardBagPrefabGeneratorWindow : EditorWindow
             "Scans Assets/UI/CardBags/CardBagNNN. New prefabs are selected by default. " +
             "GameBoard.png is required; a missing BoardTitle.png only shows a warning. " +
             "Generate creates the full prefab and automatically assigns standard piece_### files " +
-            "to spatial PieceGGII groups. Update Existing only refreshes current Piece " +
+            "to PieceGGII groups, preferring red outlined preview regions over spatial grouping. " +
+            "Update Existing only refreshes current Piece " +
             "positions and native sizes from the preview; it preserves hierarchy, grouping, " +
             "Image settings, shadows and baked outlines.",
             MessageType.Info);
@@ -3507,8 +3516,8 @@ internal sealed class CardBagPrefabGeneratorWindow : EditorWindow
             && !EditorUtility.DisplayDialog(
                 "Overwrite Existing Prefabs?",
                 $"{overwrite.Count} selected prefab(s) already exist. " +
-                "Generating them will replace their hierarchy and apply source-explicit or " +
-                "automatic spatial Piece grouping.",
+                "Generating them will replace their hierarchy and apply preview-marked, source-explicit " +
+                "or automatic spatial Piece grouping, in that priority order.",
                 "Generate and Overwrite",
                 "Cancel"))
         {
