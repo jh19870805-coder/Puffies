@@ -10,6 +10,8 @@ public sealed class CardPackPhoto : MonoBehaviour
     private const int FlashSortingOrder = short.MaxValue;
     private const int CaptureLayer = 30;
     private const int OutputSize = 1024;
+    private const int CaptureSupersample = 2;
+    private const int CaptureAntiAliasing = 4;
     private const float PuzzleRotation = 7f;
     private const float PuzzleMaxSize = 920f;
     private const float PuzzleOffsetY = 8f;
@@ -449,17 +451,29 @@ public sealed class CardPackPhoto : MonoBehaviour
         GameObject cameraObject = null;
         GameObject canvasObject = null;
         RenderTexture renderTexture = null;
+        RenderTexture outputRenderTexture = null;
         var previousRenderTexture = RenderTexture.active;
         try
         {
+            var captureSize = OutputSize * CaptureSupersample;
             renderTexture = RenderTexture.GetTemporary(
-                OutputSize,
-                OutputSize,
+                captureSize,
+                captureSize,
                 24,
                 RenderTextureFormat.ARGB32,
-                RenderTextureReadWrite.sRGB);
+                RenderTextureReadWrite.sRGB,
+                CaptureAntiAliasing);
             renderTexture.filterMode = FilterMode.Bilinear;
             renderTexture.wrapMode = TextureWrapMode.Clamp;
+
+            outputRenderTexture = RenderTexture.GetTemporary(
+                OutputSize,
+                OutputSize,
+                0,
+                RenderTextureFormat.ARGB32,
+                RenderTextureReadWrite.sRGB);
+            outputRenderTexture.filterMode = FilterMode.Bilinear;
+            outputRenderTexture.wrapMode = TextureWrapMode.Clamp;
 
             cameraObject = new GameObject("CardBagPhotoCamera", typeof(Camera));
             cameraObject.layer = CaptureLayer;
@@ -552,7 +566,8 @@ public sealed class CardPackPhoto : MonoBehaviour
             Canvas.ForceUpdateCanvases();
             photoCamera.Render();
             photoCamera.targetTexture = null;
-            RenderTexture.active = renderTexture;
+            Graphics.Blit(renderTexture, outputRenderTexture);
+            RenderTexture.active = outputRenderTexture;
             photoTexture = new Texture2D(
                 OutputSize,
                 OutputSize,
@@ -589,6 +604,11 @@ public sealed class CardPackPhoto : MonoBehaviour
             if (renderTexture != null)
             {
                 RenderTexture.ReleaseTemporary(renderTexture);
+            }
+
+            if (outputRenderTexture != null)
+            {
+                RenderTexture.ReleaseTemporary(outputRenderTexture);
             }
 
             if (cameraObject != null)

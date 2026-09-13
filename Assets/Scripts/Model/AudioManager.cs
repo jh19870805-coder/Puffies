@@ -182,6 +182,7 @@ public sealed class AudioManager : MonoBehaviour
             var button = buttons[i];
             if (button == null
                 || !button.gameObject.scene.IsValid()
+                || (button.gameObject.scene.name == GameDefine.SceneMain && button.name == "BtnAdmin")
                 || !_buttonClickBindings.Add(button))
             {
                 continue;

@@ -92,6 +92,37 @@ public static class PuzzleOutlineBakerEditor
             $"from {prefabPaths.Count} card bag(s).");
     }
 
+    internal static void BakeCardBag(int bagId)
+    {
+        if (bagId <= 0 || bagId > 999)
+        {
+            throw new ArgumentOutOfRangeException(nameof(bagId));
+        }
+
+        var bagName = $"{GameDefine.CardBagPrefabPrefix}{bagId:D3}";
+        var prefabPath = $"{PrefabFolder}/{bagName}.prefab";
+        if (!File.Exists(prefabPath))
+        {
+            throw new FileNotFoundException("CardBag prefab not found.", prefabPath);
+        }
+
+        int groupCount;
+        try
+        {
+            AssetDatabase.StartAssetEditing();
+            groupCount = BakePrefab(prefabPath);
+        }
+        finally
+        {
+            AssetDatabase.StopAssetEditing();
+            AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+        }
+
+        ConfigureGeneratedImporters($"{OutputRoot}/{bagName}");
+        AssetDatabase.SaveAssets();
+        Debug.Log($"Puzzle outline baker: baked {groupCount} group mask(s) from {bagName} only.");
+    }
+
     private static int BakePrefab(string prefabPath)
     {
         if (!TryParseBagId(prefabPath, out var bagId))
@@ -1874,9 +1905,14 @@ public static class PuzzleOutlineBakerEditor
         }
     }
 
-    private static void ConfigureGeneratedImporters()
+    private static void ConfigureGeneratedImporters(string folder = OutputRoot)
     {
-        var textureGuids = AssetDatabase.FindAssets("t:Texture2D", new[] { OutputRoot });
+        if (!AssetDatabase.IsValidFolder(folder))
+        {
+            return;
+        }
+
+        var textureGuids = AssetDatabase.FindAssets("t:Texture2D", new[] { folder });
         for (var i = 0; i < textureGuids.Length; i++)
         {
             var path = AssetDatabase.GUIDToAssetPath(textureGuids[i]);
