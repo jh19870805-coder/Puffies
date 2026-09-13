@@ -1,5 +1,14 @@
 # 当前任务
 
+## 2026-09-13 AdminScene 展示本地存储路径
+
+- 状态：代码与 Unity 编译验证完成，待进入 AdminScene 目视验收。
+- 用户意图：为用户新增的 `TextLocalPath` 补全实际存储路径，沿用编辑器中“数据存储路径：”换行后显示路径的格式。
+- 修改：`AdminScene.Start` 查找现有 `TextLocalPath/TMP_Text`，将第二行填为 `Path.GetFullPath(Application.persistentDataPath)`，显示三个存档所在的共同根目录；不硬编码设备用户名、公司名或盘符。不更改节点、字体、材质、字号、自动换行、尺寸、位置及其他 Admin 命令。
+- 用户已有修改：保留 `AdminScene.unity` 新节点和现有动态字体资源差异，不重写场景或字体。
+- 验证：当前 Unity `2022.3.62f2c1` 编译成功并完成程序集重载；`git diff --check` 通过。静态核对现有节点使用 `TMP_Text`，原文本为“数据存储路径：\nC:”，新代码保留同一个显式换行且只赋值 `.text`，不读写存档，也不修改排版属性。未进入 Play Mode。
+- 下一步：运行游戏进入 AdminScene，确认 `TextLocalPath` 的标题和完整根目录正确；长路径沿用编辑器现有自动换行设置。未提交或推送。
+
 ## 2026-09-13 首页选中卡包时虚化背景横向挤压
 
 - 状态：局部修复完成，Unity 编译和 6 组 GPU 裁切/模糊验证通过，待原视频窗口下的完整交互验收。

@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -11,6 +12,7 @@ public sealed class AdminScene : MonoBehaviour
     private const string CommandInputObjectName = "InputField";
     private const string ConfirmButtonObjectName = "BtnConfirm";
     private const string CommandTextPrefix = "TextCode1";
+    private const string LocalPathTextObjectName = "TextLocalPath";
     private const int CommandRowCapacity = 18;
     private const int CommandCodeLength = 8;
 
@@ -73,6 +75,7 @@ public sealed class AdminScene : MonoBehaviour
         }
 
         RefreshForWindowSizeChange();
+        ConfigureLocalPathText();
         ConfigureCommandList();
         ConfigureCommandInput();
         ConfigureConfirmButton();
@@ -111,6 +114,20 @@ public sealed class AdminScene : MonoBehaviour
 
         closeButton.onClick.RemoveListener(OnCloseButtonClicked);
         closeButton.onClick.AddListener(OnCloseButtonClicked);
+    }
+
+    private static void ConfigureLocalPathText()
+    {
+        var textObject = GameCommonUtility.FindSceneObject(LocalPathTextObjectName);
+        var pathText = textObject != null ? textObject.GetComponent<TMP_Text>() : null;
+        if (pathText == null)
+        {
+            Debug.LogWarning(
+                $"AdminScene: local path text not found or missing TMP_Text. Expected {LocalPathTextObjectName}.");
+            return;
+        }
+
+        pathText.text = $"数据存储路径：\n{Path.GetFullPath(Application.persistentDataPath)}";
     }
 
     private static void ConfigureCommandList()
