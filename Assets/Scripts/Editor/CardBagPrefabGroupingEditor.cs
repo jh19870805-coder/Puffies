@@ -112,10 +112,24 @@ public static partial class CardBagPrefabGeneratorEditor
 
             LabelPreviewRegions(red, preview.Width, preview.Height, true, out var marks);
             var minSpan = Mathf.Max(24, Mathf.Min(preview.Width, preview.Height) / 10);
-            var hasOutlines = marks.Any(region =>
-                region.Area >= 64
-                && Math.Max(region.MaxX - region.MinX, region.MaxY - region.MinY) >= minSpan
-                && region.Area < (region.MaxX - region.MinX + 1L) * (region.MaxY - region.MinY + 1L) * 0.4f);
+            var hasOutlines = marks.Any(region => IsPreviewOutline(region, minSpan, 0.4f));
+            if (!hasOutlines)
+            {
+                // Keep existing bright-red masks unchanged; broaden only when they found no outlines.
+                for (var i = 0; i < red.Length; i++)
+                {
+                    var color = preview.Pixels[i];
+                    red[i] |= color.a >= 128 && color.r >= 96
+                        && color.r >= color.g * 2 && color.r >= color.b * 2;
+                }
+
+                LabelPreviewRegions(red, preview.Width, preview.Height, true, out marks);
+                // Dark artwork is common. Unreviewed marks must form a large, thin outline.
+                var darkMinSpan = settings != null ? minSpan : Math.Max(minSpan, Math.Min(preview.Width, preview.Height) / 3);
+                var darkMaxFill = settings != null ? 0.4f : 0.1f;
+                hasOutlines = marks.Any(region => IsPreviewOutline(region, darkMinSpan, darkMaxFill));
+            }
+
             if (!hasOutlines)
             {
                 if (settings != null)
@@ -123,6 +137,8 @@ public static partial class CardBagPrefabGeneratorEditor
                     throw PreviewGroupError(previewPath, "reviewed grouping exists, but no red outlines were found.");
                 }
 
+                Debug.Log($"CardBag generator: no supported preview grouping outlines in {previewPath}; "
+                    + "using source-explicit or automatic spatial grouping.");
                 return null;
             }
 
@@ -136,9 +152,11 @@ public static partial class CardBagPrefabGeneratorEditor
                 throw PreviewGroupError(previewPath, "gapRadius must be 0..16; edgeInset must be 0..5% of the short side.");
             }
 
-            // Small isolated marks can be hand-written numbers. Never silently replace them with spatial order.
+            // Judge labels relative to the main outline too; large handwritten digits can exceed minSpan.
+            var labelSpan = Math.Max(minSpan, marks.Max(region =>
+                Math.Max(region.MaxX - region.MinX, region.MaxY - region.MinY)) / 4);
             if (settings == null && marks.Any(region => region.Area >= 64
-                && region.MaxX - region.MinX < minSpan && region.MaxY - region.MinY < minSpan))
+                && region.MaxX - region.MinX < labelSpan && region.MaxY - region.MinY < labelSpan))
             {
                 throw PreviewGroupError(previewPath,
                     "red labels or small separate marks need review. Add numbered region seeds in "
@@ -189,6 +207,13 @@ public static partial class CardBagPrefabGeneratorEditor
             Debug.Log($"CardBag generator: red preview grouping detected in {previewPath}; positioning reference={result.ReferencePath}.");
             return result;
         }
+    }
+
+    private static bool IsPreviewOutline(PreviewRegion region, int minSpan, float maxFill)
+    {
+        return region.Area >= 64
+            && Math.Max(region.MaxX - region.MinX, region.MaxY - region.MinY) >= minSpan
+            && region.Area < (region.MaxX - region.MinX + 1L) * (region.MaxY - region.MinY + 1L) * maxFill;
     }
 
     private static void AssignPreviewPieceGroups(List<PiecePlacement> placements, PreviewGroups map)

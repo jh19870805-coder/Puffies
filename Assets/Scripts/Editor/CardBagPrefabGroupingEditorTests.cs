@@ -115,14 +115,69 @@ public static partial class CardBagPrefabGeneratorEditor
             StringAssert.Contains("image changed", Assert.Throws<InvalidOperationException>(() => ReadPreviewGroups(path)).Message);
         }
 
-        [Test]
-        public void SeparateHandwrittenLabelsRequireReview()
+        [TestCase(255, 0, 0)]
+        [TestCase(179, 42, 0)]
+        [TestCase(222, 90, 60)]
+        public void SeparateHandwrittenLabelsRequireReview(int red, int green, int blue)
         {
+            Color stroke = new Color32((byte)red, (byte)green, (byte)blue, 255);
             var path = SaveImage("preview", 500, 500, (x, y) =>
                 (x >= 2 && x <= 497 && (y == 2 || y == 497))
                 || (y >= 2 && y <= 497 && (x == 2 || x == 497))
-                || (x >= 80 && x <= 83 && y >= 80 && y <= 105) ? Color.red : Color.white);
+                || (x >= 80 && x <= 83 && y >= 80 && y <= 105) ? stroke : Color.white);
             StringAssert.Contains("hand-written digits", Assert.Throws<InvalidOperationException>(() => ReadPreviewGroups(path)).Message);
+        }
+
+        [TestCase(179, 42, 0)]
+        [TestCase(128, 25, 5)]
+        [TestCase(222, 90, 60)]
+        public void DeepRedOutlinesUseReviewedAndUnnumberedGroups(int red, int green, int blue)
+        {
+            var path = SaveFourRegions(new Color32((byte)red, (byte)green, (byte)blue, 255));
+            var pieces = FourPieces();
+            var groups = ReadPreviewGroups(path);
+            Assert.IsNotNull(groups);
+            AssignAndSortPieceObjectNames(pieces, groups);
+            Assert.AreEqual("Piece0101", pieces.Single(p => p.OriginX == 80 && p.OriginY == 55).ObjectName);
+            WriteSettings(path, FourSeeds());
+            AssignAndSortPieceObjectNames(pieces, ReadPreviewGroups(path));
+            Assert.AreEqual("Piece0101", pieces.Single(p => p.OriginX == 20 && p.OriginY == 55).ObjectName);
+            Assert.AreEqual(4, pieces.Select(p => p.ObjectName.Substring(5, 2)).Distinct().Count());
+        }
+
+        [TestCase(255, 0, 0)]
+        [TestCase(179, 42, 0)]
+        public void LargeHandwrittenLabelRequiresReview(int red, int green, int blue)
+        {
+            Color stroke = new Color32((byte)red, (byte)green, (byte)blue, 255);
+            var path = SaveImage("preview", 500, 500, (x, y) =>
+                (x >= 2 && x <= 497 && (y == 2 || y == 497))
+                || (y >= 2 && y <= 497 && (x == 2 || x == 497))
+                || (x >= 200 && x <= 203 && y >= 100 && y <= 200) ? stroke : Color.white);
+            StringAssert.Contains("hand-written digits", Assert.Throws<InvalidOperationException>(() => ReadPreviewGroups(path)).Message);
+        }
+
+        [Test]
+        public void DarkRedArtworkDoesNotEnableGrouping()
+        {
+            Color artwork = new Color32(179, 42, 0, 255);
+            var path = SaveImage("preview", 500, 500, (x, y) =>
+                (x >= 30 && x < 450 && y >= 30 && y < 70)
+                || (x >= 30 && x < 70 && y >= 30 && y < 450) ? artwork : Color.white);
+            Assert.IsNull(ReadPreviewGroups(path));
+        }
+
+        [Test]
+        public void BrightRedOutlinesDoNotIncludeDarkArtworkInTheirMask()
+        {
+            Color artwork = new Color32(179, 42, 0, 255);
+            var path = SaveImage("preview", 120, 80, (x, y) =>
+                (x >= 2 && x <= 117 && (y == 2 || y == 40 || y == 77))
+                || (y >= 2 && y <= 77 && (x == 2 || x == 60 || x == 117)) ? Color.red
+                : x == 30 && y >= 3 && y < 40 ? artwork : Color.white);
+            var groups = ReadPreviewGroups(path);
+            Assert.IsNotNull(groups);
+            Assert.AreEqual(groups.Labels[20 * 120 + 20], groups.Labels[20 * 120 + 40]);
         }
 
         [Test]
@@ -175,11 +230,11 @@ public static partial class CardBagPrefabGeneratorEditor
             Assert.IsFalse(dilated[9]);
         }
 
-        private string SaveFourRegions()
+        private string SaveFourRegions(Color? stroke = null)
         {
             return SaveImage("preview", 120, 80, (x, y) =>
                 (x >= 2 && x <= 117 && (y == 2 || y == 40 || y == 77))
-                || (y >= 2 && y <= 77 && (x == 2 || x == 60 || x == 117)) ? Color.red : Color.white);
+                || (y >= 2 && y <= 77 && (x == 2 || x == 60 || x == 117)) ? stroke ?? Color.red : Color.white);
         }
 
         private List<PiecePlacement> FourPieces()
