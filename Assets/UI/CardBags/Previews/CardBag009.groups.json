@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "previewSha256": "9216a915c826643a50d5b55bd7f4223c7995c77f0fff0ec94e8859ce18b4be44",
+  "referenceSha256": "3b4ddd776ab31fa25635191f91b6e3884745bafdf28e451fd96867e504b99ed6",
+  "gapRadius": 10,
+  "edgeInset": 0,
+  "groups": [
+    { "number": 1, "x": 150, "y": 450 },
+    { "number": 2, "x": 700, "y": 950 },
+    { "number": 3, "x": 600, "y": 200 },
+    { "number": 4, "x": 1080, "y": 430 }
+  ]
+}
