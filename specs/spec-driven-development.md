@@ -2094,3 +2094,104 @@
 - `BuildBagVolumeDots` 在卡包数小于等于 1 时不创建圆点并关闭 `PageIndicators`；侧卡进场和导航显隐也使用相同的 `Count > 1` 条件，不会在后续阶段重新显示。
 - 两处系列选中矩形回退尺寸均为 `PackageOpenWidth x PackageOpenHeight`，与普通卡包相同；Runtime/Editor 编译结果为 `0` 警告、`0` 错误，相关差异检查通过。
 - 普通卡包展开终点保留 `PanelBagSelect` 的 X 坐标，并将 Y 坐标同步为 `PackCenter` 的实际 Overlay 坐标；普通与系列入口不再各自维护纵向位置。
+
+## 2026-09-08 - 拼图中心进入自身凹槽即可吸附
+
+### 需求
+
+1. WHEN 玩家松开拼图且该拼图的可见渲染中心点已经进入它自己的凹槽矩形 THEN 系统 SHALL 自动将拼图吸附到正确位置，不再要求中心点必须靠近凹槽中心。
+2. WHEN 玩家松开临时组合且至少一个成员的可见渲染中心点进入其自身凹槽矩形 THEN 系统 SHALL 使用该成员对齐组合；组合内其他成员平移后仍须满足原有正确位置校验，避免错误组合整体吸附。
+3. WHEN 没有成员中心进入自身凹槽矩形 THEN 系统 SHALL 保留原有按尺寸自适应距离吸附的手感。
+4. 托盘相交优先回归、错误块回弹、棋盘边缘判定、自由放置、组合关系、吸附动画和特效 SHALL 保持不变；本规则适用于全部卡包，不为 `CardBag018` 增加资源或关卡特例。
+
+### 设计与任务
+
+- [x] 使用 `SpriteRenderer.bounds.center` 获取不受 Sprite Pivot 影响的 Piece 可见渲染中心，并转换到屏幕坐标。
+- [x] 使用现有 `TryGetRectTransformScreenRect` 获取自身 Groove 的屏幕矩形，将中心进入作为正确吸附的优先条件。
+- [x] 保留旧距离判定作为未进入矩形时的兼容路径，并保留组合成员平移后的完整校验。
+- [x] 编译 Runtime/Editor 并执行静态差异检查。
+- [ ] 在 `CardBag018` Play Mode 验收中心进入、旧近距离吸附和托盘优先回归。
+
+### 验证
+
+- `TryGetClusterBoardSnapTargets` 优先选择中心已经进入自身 Groove 屏幕矩形的成员作为组合吸附锚点；没有此类成员时，仍以最近成员和 `CalculateSnapDistance` 决定是否吸附。
+- 单 Piece 以自身为锚点平移后精确落到原 Groove 位置；临时组合继续逐成员检查平移后距离，没有放宽错误组合关系。
+- Runtime 与 Editor 工程编译均通过，结果为 `0` 警告、`0` 错误；`git diff --check` 通过。
+
+## 2026-09-08 - 新手引导第一步箭头恢复
+
+### 需求
+
+1. WHEN 新手引导进入第一步 THEN 系统 SHALL 显示从当前指定 Piece 指向其目标凹槽的移动箭头。
+2. 箭头、第一步 Piece 高亮副本与第二步 Piece 高亮副本 SHALL 按教程 `Screen Space - Camera` Canvas 的实际相机和固定宽高比视口换算位置，在 Unity Game 视图及窗口尺寸变化后均不得落到可视区域外。
+3. 本次修复 SHALL NOT 修改箭头素材、尺寸、移动节奏、提示框位置、第三步箭头或教程流程。
+
+### 设计与任务
+
+- [x] 将教程 Piece 屏幕矩形转换统一改为使用教程 Canvas 的 Event Camera。
+- [x] 将第一步目标凹槽屏幕中心转换统一改为使用教程 Canvas 的 Event Camera。
+- [x] 编译 Runtime/Editor 并执行静态差异检查。
+- [ ] 在 CardBag001 新手引导第一步和第二步进行 Play Mode 验收。
+
+### 验证
+
+- 根因确认：教程 Canvas 从 Overlay 改为 `Screen Space - Camera` 后，第一步箭头的 Piece 矩形和凹槽中心仍传空 Event Camera 进行本地坐标转换；同一页面的提示框已使用 Canvas 相机，因此只有箭头坐标异常。
+- `RebuildTutorialFocusPresentation` 的第一、二步 Piece 矩形已统一调用 `TryScreenRectToCanvasRectUsingCanvasCamera`；第一步凹槽中心已统一调用新增的 `TryScreenPointToCanvasPositionUsingCanvasCamera`。
+- Runtime 与 Editor 工程编译均通过，结果为 `0` 警告、`0` 错误。
+
+## 2026-09-08 - 自动拼图调试按钮
+
+### 需求
+
+1. WHEN 一键通关调试按钮显示 THEN GameScene SHALL 在其左侧同时显示“自动拼图”按钮；WHEN 一键通关按钮因 Admin 设置或结算状态隐藏 THEN 自动拼图按钮 SHALL 同步隐藏。
+2. WHEN 玩家点击“自动拼图”且当前流程允许操作 THEN 系统 SHALL 从当前托盘选择一片尚未完成的 Piece，并用短暂可见的飞行动画把它放入自己的正确凹槽；每次有效点击只处理一片。
+3. 自动放置 SHALL 复用正常正确放置后的存档、正确音效、完成音效、棋盘 Image 提交、绿色反馈、切组和结算逻辑；若目标凹槽被错误 Piece 占用，仍按既有规则把错误 Piece 顶回托盘。
+4. WHEN 新手引导第一步仍在进行 THEN 自动拼图 SHALL 优先选择教程指定 Piece，避免绕过强引导目标；后续教程推进规则保持不变。
+5. WHEN 当前没有托盘 Piece、正在入场/切组/放置动画、正在拖拽或滚动托盘、正在托盘重排、或游戏已经结束 THEN 点击 SHALL 不启动新的自动放置。
+6. “自动拼图” SHALL 接入现有 18 种语言；按钮样式与一键通关一致，长文本须保持单行并自动缩小，不得与一键通关或提示按钮重叠。
+
+### 设计与任务
+
+- [x] 将一键通关按钮创建整理为可复用的测试操作按钮构建逻辑，并在其左侧创建自动拼图按钮。
+- [x] 让两个测试按钮共用 Admin 显隐设置以及入场、切组、结算时的交互状态。
+- [x] 实现单片托盘 Piece 的自动正确放置与独立飞入时长，复用正常放置后续流程。
+- [x] 增加 `game.test_auto_puzzle` 的 18 种语言文本和单行自适应。
+- [x] 编译 Runtime/Editor、执行差异检查并等待 Play Mode 验收。
+
+### 验证
+
+- “自动拼图”运行时复用“一键完成”的样式，在其左侧按按钮宽度加 `20px` 间距排列；两个按钮由同一个 Admin 显隐设置控制，并统一响应入场、拖拽、托盘滚动/补位、Piece 落位、切组和结算状态。
+- 每次有效点击按当前托盘顺序选择一片 Piece；新手引导第一阶段优先指定 Piece。Piece 使用 `0.36s` 缓动飞入正确凹槽，随后继续现有绿色反馈、棋盘提交、切组或结算流程。
+- 目标凹槽被错误 Piece 占用时继续复用既有顶回托盘逻辑；自动 Piece 离开托盘后继续执行原有补位，并在最后一片离开时收起托盘。
+- `game.test_auto_puzzle` 已补齐现有 18 种语言，按钮文字为单行 `14~28` 自动字号。
+- Runtime 与 Editor 工程编译均通过，结果为 `0` 警告、`0` 错误；`git diff --check` 通过，仅有 LF/CRLF 工作区提示。仍需在 Unity Play Mode 验收按钮位置、飞入手感及完整流程。
+
+## 2026-09-08 - CardBag015 固定 Piece 分组描边
+
+### 需求
+
+1. WHEN CardBag Prefab 含有 `BoardFixedPieceNN` THEN 描边烘焙器 SHALL 将其视为进入关卡时已经完成的棋盘区域，使第一玩法组能够生成与固定区域相接的默认连接描边。
+2. `BoardFixedPieceNN` SHALL NOT 成为玩法分组，不得生成对应 Group，不得改变其发牌、拖拽、提示、完成计数或存档行为。
+3. WHEN 构建最终拼图 Alpha 并校验 `GameBoard` 透明缺口 THEN 系统 SHALL 同时包含正式 Piece 与固定 Piece，避免固定区域从最终拼图形状中丢失。
+4. IF CardBag 不含固定 Piece THEN 烘焙结果 SHALL 继续沿用现有算法，不得改变原有分组、连接边、关卡描边或贴纸描边。
+5. CardBag015 的 `Group01~07.png` 默认连接描边 SHALL 均包含有效 Alpha，不得再把空白 `Group01.png` 视为成功输出。
+
+### 设计与任务
+
+- [x] 独立收集并栅格化 `BoardFixedPieceNN`，不加入正式玩法分组字典。
+- [x] 将固定 Piece Mask 加入最终拼图 Alpha，并作为 `completedMask` 的初始值参与逐组连接边计算。
+- [x] 重新烘焙 CardBag015，核对七组默认、`_Level` 与 `_Stickers` 输出及运行时资源路径。
+- [x] 编译 Runtime/Editor、执行差异检查并记录 Play Mode 验收项。
+
+### 当前诊断
+
+- CardBag015 已存在 `Group01~07` 三套输出，但当前 `Group01.png` 为全透明图，`Group02~06.png` 也只有零散线段；`Group01_Level.png` 与 `Group01_Stickers.png` 本身有效，因此资源加载路径不是根因。
+- `PuzzleOutlineBakerEditor.CollectPieceGroups` 只识别 `PieceGGII`；`BoardFixedPiece01` 未进入 `pieceUnionMask`，也没有预填到逐组使用的空 `completedMask`，导致新结构的初始完成区域完全未参与默认连接描边。
+
+### 验证
+
+- Unity 重烘焙日志确认 CardBag015 识别 `fixedPieces=1`，生成 7 个玩法组，最终边界归属为 `assigned=6066 / unassigned=0 / ambiguous=0`。
+- 七组默认连接描边有效 Alpha 像素依次为 `512/1313/2785/8853/12388/13700/14624`；旧 `Group01.png` 的 `0` 像素空图已修复。`_Level` 与 `_Stickers` 输出保持有效。
+- 全量烘焙后只有 CardBag015 的 `Group01~03.png` 产生 Git 内容差异，说明没有固定 Piece 的卡包仍得到字节一致输出；一次性执行器及 Meta 已自行删除。
+- Runtime 与 Editor 工程编译均通过，结果为 `0` 警告、`0` 错误；`git diff --check` 通过，仅有 LF/CRLF 工作区提示。
+- 仍需在 CardBag015 Play Mode 依次目视确认默认连接、关卡和贴纸三种描边模式。

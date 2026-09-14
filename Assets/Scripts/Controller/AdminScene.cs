@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -11,6 +12,7 @@ public sealed class AdminScene : MonoBehaviour
     private const string CommandInputObjectName = "InputField";
     private const string ConfirmButtonObjectName = "BtnConfirm";
     private const string CommandTextPrefix = "TextCode1";
+    private const string LocalPathTextObjectName = "TextLocalPath";
     private const int CommandRowCapacity = 18;
     private const int CommandCodeLength = 8;
 
@@ -20,7 +22,7 @@ public sealed class AdminScene : MonoBehaviour
         new AdminCommandDefinition("10001002", "隐藏一键通关按钮", AdminCommand.HideTestCompleteButton),
         new AdminCommandDefinition("10002001", "显示所有当前卡包", AdminCommand.ShowAllCurrentCardPacks),
         new AdminCommandDefinition("10002002", "只显示Demo的前18个卡包", AdminCommand.ShowDemoCardPacksOnly),
-        new AdminCommandDefinition("10002003", "解锁当前所有可见卡包", AdminCommand.UnlockAllVisibleCardPacks)
+        new AdminCommandDefinition("10002003", "解锁所有卡包（测试）", AdminCommand.UnlockAllConfiguredCardPacks)
     };
 
     private enum AdminCommand
@@ -29,7 +31,7 @@ public sealed class AdminScene : MonoBehaviour
         HideTestCompleteButton,
         ShowAllCurrentCardPacks,
         ShowDemoCardPacksOnly,
-        UnlockAllVisibleCardPacks
+        UnlockAllConfiguredCardPacks
     }
 
     private readonly struct AdminCommandDefinition
@@ -73,6 +75,7 @@ public sealed class AdminScene : MonoBehaviour
         }
 
         RefreshForWindowSizeChange();
+        ConfigureLocalPathText();
         ConfigureCommandList();
         ConfigureCommandInput();
         ConfigureConfirmButton();
@@ -111,6 +114,20 @@ public sealed class AdminScene : MonoBehaviour
 
         closeButton.onClick.RemoveListener(OnCloseButtonClicked);
         closeButton.onClick.AddListener(OnCloseButtonClicked);
+    }
+
+    private static void ConfigureLocalPathText()
+    {
+        var textObject = GameCommonUtility.FindSceneObject(LocalPathTextObjectName);
+        var pathText = textObject != null ? textObject.GetComponent<TMP_Text>() : null;
+        if (pathText == null)
+        {
+            Debug.LogWarning(
+                $"AdminScene: local path text not found or missing TMP_Text. Expected {LocalPathTextObjectName}.");
+            return;
+        }
+
+        pathText.text = $"数据存储路径：\n{Path.GetFullPath(Application.persistentDataPath)}";
     }
 
     private static void ConfigureCommandList()
@@ -246,8 +263,9 @@ public sealed class AdminScene : MonoBehaviour
                 return AdminRuntimeSettingsUtility.SetDemoCardPackLimitEnabled(false);
             case AdminCommand.ShowDemoCardPacksOnly:
                 return AdminRuntimeSettingsUtility.SetDemoCardPackLimitEnabled(true);
-            case AdminCommand.UnlockAllVisibleCardPacks:
-                return CardPackDataUtility.TryUnlockAllVisiblePacks(out _);
+            case AdminCommand.UnlockAllConfiguredCardPacks:
+                return AdminRuntimeSettingsUtility.SetDemoCardPackLimitEnabled(false)
+                       && CardPackDataUtility.TryUnlockAllVisiblePacks(out _);
             default:
                 return false;
         }

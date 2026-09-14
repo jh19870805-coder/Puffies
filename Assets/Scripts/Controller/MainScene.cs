@@ -63,6 +63,8 @@ public class MainScene : MonoBehaviour
                                                          * GameDefine.NonDealTransitionDurationMultiplier;
     private const float TearGestureTravelRatio = 0.06f;
     private const float TearGestureMinTravelPixels = 18f;
+    private const float TearGestureBorderInsetRatio = 0.06f;
+    private const float TearGestureTargetHeightRatio = 1f / 3f;
     private const float InProgressGameTransitionHoldDuration = 0.17f * GameTransitionDurationScale;
     private const float InProgressGameTransitionPreloadTimeout = 5f;
     private const float InProgressPackExitDuration = 0.46f
@@ -186,10 +188,10 @@ public class MainScene : MonoBehaviour
     private const string BagVolumeRightTemplateObjectName = "PackRight";
     private const string BagVolumePreviousButtonObjectName = "BtnPrevious";
     private const string BagVolumeNextButtonObjectName = "BtnNext";
-    private const string BagVolumeIndicatorsObjectName = "PageIndicators";
-    private const string BagVolumeDotTemplateObjectName = "DotTemplate";
-    private const string BagVolumeDotNormalObjectName = "DotNormal";
-    private const string BagVolumeDotSelectedObjectName = "DotSelected";
+    private const string PageIndicatorsObjectName = "PageIndicators";
+    private const string PageDotTemplateObjectName = "DotTemplate";
+    private const string PageDotNormalObjectName = "DotNormal";
+    private const string PageDotSelectedObjectName = "DotSelected";
     private const float BagVolumeSnapDuration = 0.25f;
     private const float BagVolumeSwipeThreshold = 60f;
     private const float BagVolumeVisibleRange = 1.65f;
@@ -242,6 +244,11 @@ public class MainScene : MonoBehaviour
     private RectTransform mPackagePageTemplate;
     private ScrollRect mPackageScrollRect;
     private Coroutine mPackagePageSnapCoroutine;
+    private Transform mPackageIndicatorsRoot;
+    private GameObject mPackageDotTemplate;
+    private readonly List<GameObject> mPackagePageDots = new List<GameObject>();
+    private int mPackageIndicatorPageCount;
+    private int mPackageSelectedPageIndex = -1;
     private GameObject mMenuPanelRoot;
     private GameObject mWishListPanelRoot;
     private Button mWishListAddButton;
@@ -362,6 +369,7 @@ public class MainScene : MonoBehaviour
     private bool mIsWindowResizeLayoutPending;
     private Vector2 mTearSwipeStartScreenPosition;
     private Rect mTearSwipeScreenRect;
+    private Rect mTearTargetScreenRect;
 
     private enum PackageDisplayState
     {
@@ -381,6 +389,7 @@ public class MainScene : MonoBehaviour
         public Image VolumeImage;
         public PackCoverVisualSettings VisualSettings;
         public Animator PackAnimator;
+        public SeriesPackageShadow SeriesShadow;
         public GameObject ProgressPiecesRoot;
         public List<InProgressPackagePieceAnimation> ProgressPieceAnimations;
         public RectTransform RectTransform;
@@ -651,6 +660,10 @@ public class MainScene : MonoBehaviour
         GameLocalization.LanguageChanged -= OnLanguageChanged;
         AudioManager.StopLoopingSfxIfActive();
         StopPackagePageSnap();
+        if (mPackageScrollRect != null)
+        {
+            mPackageScrollRect.onValueChanged.RemoveListener(OnPackagePagePositionChanged);
+        }
         StopOpeningHintAnimation();
         if (mSelectedPackageOverlayCanvas != null)
         {
@@ -675,6 +688,7 @@ public class MainScene : MonoBehaviour
         }
 
         ReleaseUsablePanelPreviewSprites();
+        ReleaseSeriesPackageShadows();
         ReleasePackTornMaskResources();
         if (mOpeningStageBackgroundSprite != null)
         {
@@ -1258,9 +1272,9 @@ public class MainScene : MonoBehaviour
             BagVolumeRightTemplateObjectName) as RectTransform;
         mBagVolumeIndicatorsRoot = FindChild(
             mBagVolumePanelRoot.transform,
-            BagVolumeIndicatorsObjectName) as RectTransform;
+            PageIndicatorsObjectName) as RectTransform;
         var dotTemplateTransform = mBagVolumeIndicatorsRoot != null
-            ? FindChild(mBagVolumeIndicatorsRoot, BagVolumeDotTemplateObjectName)
+            ? FindChild(mBagVolumeIndicatorsRoot, PageDotTemplateObjectName)
             : null;
         mBagVolumeDotTemplate = dotTemplateTransform != null
             ? dotTemplateTransform.gameObject
@@ -2417,6 +2431,7 @@ public class MainScene : MonoBehaviour
         mPackageScrollRect.horizontal = true;
         mPackageScrollRect.vertical = false;
         ConfigurePackagePageSnapInput(scrollViewObject);
+        ConfigurePackagePageIndicators(scrollViewObject.transform);
         mPackagePageTemplate.gameObject.SetActive(true);
         NormalizePagedPackageLayout();
         return true;
@@ -2506,7 +2521,32 @@ public class MainScene : MonoBehaviour
         eventTrigger.triggers.Add(endDragEntry);
     }
 
-    private IEnumerator SnapPackageListToNearestPage()
+    private void ConfigurePackagePageIndicators(Transform scrollView)
+    {
+        mPackageIndicatorsRoot = FindDirectChild(scrollView, PageIndicatorsObjectName);
+        var template = mPackageIndicatorsRoot != null
+            ? FindDirectChild(mPackageIndicatorsRoot, PageDotTemplateObjectName)
+            : null;
+        mPackageDotTemplate = template != null ? template.gameObject : null;
+        if (mPackageDotTemplate == null)
+        {
+            Debug.LogWarning("MainScene: configure PackageScrollView/PageIndicators/DotTemplate in the scene.");
+        }
+        else
+        {
+            mPackageDotTemplate.SetActive(false);
+        }
+
+        if (mPackageIndicatorsRoot != null)
+        {
+            mPackageIndicatorsRoot.gameObject.SetActive(false);
+        }
+
+        mPackageScrollRect.onValueChanged.RemoveListener(OnPackagePagePositionChanged);
+        mPackageScrollRect.onValueChanged.AddListener(OnPackagePagePositionChanged);
+    }
+
+    private int GetPackagePageCount()
     {
         var pageCount = 0;
         if (mPackageContentRoot != null)
@@ -2522,6 +2562,70 @@ public class MainScene : MonoBehaviour
             }
         }
 
+        return pageCount;
+    }
+
+    private void RefreshPackagePageIndicators()
+    {
+        mPackageIndicatorPageCount = GetPackagePageCount();
+        mPackageSelectedPageIndex = -1;
+        if (mPackageIndicatorsRoot == null || mPackageDotTemplate == null)
+        {
+            return;
+        }
+
+        var showIndicators = mPackageIndicatorPageCount > 1;
+        var dotCount = showIndicators ? mPackageIndicatorPageCount : 0;
+        while (mPackagePageDots.Count < dotCount)
+        {
+            var dot = Instantiate(mPackageDotTemplate, mPackageIndicatorsRoot, false);
+            dot.name = $"Dot_{mPackagePageDots.Count + 1}";
+            mPackagePageDots.Add(dot);
+        }
+
+        for (var i = 0; i < mPackagePageDots.Count; i++)
+        {
+            mPackagePageDots[i].SetActive(i < dotCount);
+        }
+
+        mPackageIndicatorsRoot.gameObject.SetActive(showIndicators);
+        OnPackagePagePositionChanged(new Vector2(mPackageScrollRect.horizontalNormalizedPosition, 0f));
+    }
+
+    private void OnPackagePagePositionChanged(Vector2 position)
+    {
+        if (mPackageIndicatorPageCount <= 1)
+        {
+            return;
+        }
+
+        var pageIndex = Mathf.FloorToInt(
+            Mathf.Clamp01(position.x) * (mPackageIndicatorPageCount - 1) + 0.5f);
+        if (pageIndex == mPackageSelectedPageIndex)
+        {
+            return;
+        }
+
+        mPackageSelectedPageIndex = pageIndex;
+        for (var i = 0; i < mPackagePageDots.Count; i++)
+        {
+            var normal = FindDirectChild(mPackagePageDots[i].transform, PageDotNormalObjectName);
+            var selected = FindDirectChild(mPackagePageDots[i].transform, PageDotSelectedObjectName);
+            if (normal != null)
+            {
+                normal.gameObject.SetActive(i != pageIndex);
+            }
+
+            if (selected != null)
+            {
+                selected.gameObject.SetActive(i == pageIndex);
+            }
+        }
+    }
+
+    private IEnumerator SnapPackageListToNearestPage()
+    {
+        var pageCount = GetPackagePageCount();
         var maximumPageIndex = Mathf.Max(0, pageCount - 1);
         var currentPosition = Mathf.Clamp01(mPackageScrollRect.horizontalNormalizedPosition);
         var pagePosition = currentPosition * maximumPageIndex;
@@ -2793,6 +2897,7 @@ public class MainScene : MonoBehaviour
         ClearPackageRewardEntranceState(restorePositions: false);
         foreach (var pair in mPackageSlotsById)
         {
+            ReleaseSeriesPackageShadow(pair.Value);
             if (pair.Value.Root != null)
             {
                 pair.Value.Root.SetActive(false);
@@ -3137,6 +3242,10 @@ public class MainScene : MonoBehaviour
         backEntry.Root.transform.SetSiblingIndex(0);
         frontVisualRoot.SetParent(animationRoot, false);
         frontVisualRoot.SetSiblingIndex(1);
+
+        frontEntry.SeriesShadow = SeriesPackageShadow.Create(
+            frontEntry.Image,
+            backEntry.Image);
 
         DisablePackageAnimator(backEntry.PackAnimator);
         DisablePackageAnimator(frontAnimator);
@@ -3740,6 +3849,25 @@ public class MainScene : MonoBehaviour
         SetPackageCoverVisible(entry.SecondaryEntry, visible);
     }
 
+    private void ReleaseSeriesPackageShadows()
+    {
+        foreach (var pair in mPackageSlotsById)
+        {
+            ReleaseSeriesPackageShadow(pair.Value);
+        }
+    }
+
+    private static void ReleaseSeriesPackageShadow(PackageEntry entry)
+    {
+        if (entry?.SeriesShadow == null)
+        {
+            return;
+        }
+
+        entry.SeriesShadow.Dispose();
+        entry.SeriesShadow = null;
+    }
+
     private static void SetPackageBackgroundVisible(PackageEntry entry, bool visible)
     {
         if (entry == null)
@@ -3935,6 +4063,8 @@ public class MainScene : MonoBehaviour
         {
             LayoutRebuilder.ForceRebuildLayoutImmediate(mPackageContentRoot);
         }
+
+        RefreshPackagePageIndicators();
     }
 
     private void NormalizePagedPackageLayout()
@@ -4185,7 +4315,6 @@ public class MainScene : MonoBehaviour
 
         mAdminButtonClickCount = 0;
         mAdminButtonClickWindowStartTime = 0f;
-        AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
         GameManager.EnterAdminScene();
     }
 
@@ -6387,8 +6516,8 @@ public class MainScene : MonoBehaviour
         for (var i = 0; i < mBagVolumeDots.Count; i++)
         {
             var dot = mBagVolumeDots[i];
-            var normal = FindChild(dot.transform, BagVolumeDotNormalObjectName);
-            var selected = FindChild(dot.transform, BagVolumeDotSelectedObjectName);
+            var normal = FindChild(dot.transform, PageDotNormalObjectName);
+            var selected = FindChild(dot.transform, PageDotSelectedObjectName);
             if (normal != null)
             {
                 normal.gameObject.SetActive(i != mBagVolumeSelectedIndex);
@@ -6666,10 +6795,19 @@ public class MainScene : MonoBehaviour
 
         var wasCursorVisible = Cursor.visible;
         Texture2D screenshot;
+        var captureViewport = new Rect(0f, 0f, 1f, 1f);
         Cursor.visible = false;
         try
         {
             yield return new WaitForEndOfFrame();
+            var captureCamera = mBagSelectOverlayCanvas != null
+                ? mBagSelectOverlayCanvas.worldCamera
+                : null;
+            if (captureCamera != null)
+            {
+                captureViewport = captureCamera.rect;
+            }
+
             screenshot = ScreenCapture.CaptureScreenshotAsTexture();
         }
         finally
@@ -6682,8 +6820,8 @@ public class MainScene : MonoBehaviour
             yield break;
         }
 
-        var blurWidth = screenshot.width;
-        var blurHeight = screenshot.height;
+        var blurWidth = Mathf.Max(1, Mathf.RoundToInt(screenshot.width * captureViewport.width));
+        var blurHeight = Mathf.Max(1, Mathf.RoundToInt(screenshot.height * captureViewport.height));
         RenderTexture blurSource = null;
         RenderTexture horizontalBlur = null;
         try
@@ -6704,7 +6842,8 @@ public class MainScene : MonoBehaviour
             blurSource.wrapMode = TextureWrapMode.Clamp;
             horizontalBlur.filterMode = FilterMode.Bilinear;
             horizontalBlur.wrapMode = TextureWrapMode.Clamp;
-            Graphics.Blit(screenshot, blurSource);
+            // Exclude window bars before fitting the screenshot back into the camera Canvas.
+            Graphics.Blit(screenshot, blurSource, captureViewport.size, captureViewport.position);
 
             mBagSelectBackdropTexture = new RenderTexture(
                 blurWidth,
@@ -7511,6 +7650,17 @@ public class MainScene : MonoBehaviour
             return false;
         }
 
+        var contentMinY = mTearSwipeScreenRect.yMin
+                          + mTearSwipeScreenRect.height * TearGestureBorderInsetRatio;
+        var contentMaxY = mTearSwipeScreenRect.yMax
+                          - mTearSwipeScreenRect.height * TearGestureBorderInsetRatio;
+        var targetHeight = (contentMaxY - contentMinY) * TearGestureTargetHeightRatio;
+        mTearTargetScreenRect = new Rect(
+            mTearSwipeScreenRect.xMin,
+            contentMaxY - targetHeight,
+            mTearSwipeScreenRect.width,
+            targetHeight);
+
         return true;
     }
 
@@ -7522,13 +7672,8 @@ public class MainScene : MonoBehaviour
             return;
         }
 
-        mIsTrackingTearTap = mTearSwipeScreenRect.Contains(screenPosition);
-        mIsTrackingTearSwipe = mIsTrackingTearTap;
-        if (!mIsTrackingTearTap)
-        {
-            return;
-        }
-
+        mIsTrackingTearTap = mTearTargetScreenRect.Contains(screenPosition);
+        mIsTrackingTearSwipe = true;
         mTearSwipeStartScreenPosition = screenPosition;
     }
 
@@ -7536,13 +7681,6 @@ public class MainScene : MonoBehaviour
     {
         if (!mIsTrackingTearSwipe)
         {
-            return;
-        }
-
-        if (!mTearSwipeScreenRect.Contains(screenPosition))
-        {
-            mIsTrackingTearSwipe = false;
-            mIsTrackingTearTap = false;
             return;
         }
 
@@ -7565,23 +7703,83 @@ public class MainScene : MonoBehaviour
             return;
         }
 
-        OnTearSwipeMove(screenPosition);
         if (!mIsAwaitingTearSwipe)
         {
             return;
         }
 
-        var shouldOpenFromTap = mIsTrackingTearTap
-            && mTearSwipeScreenRect.Contains(screenPosition);
-        var shouldOpenFromSwipe = mIsTrackingTearSwipe
-            && !mIsTrackingTearTap
-            && mTearSwipeScreenRect.Contains(screenPosition);
+        var minimumSwipeTravel = Mathf.Max(
+            TearGestureMinTravelPixels,
+            Mathf.Min(mTearSwipeScreenRect.width, mTearSwipeScreenRect.height)
+                * TearGestureTravelRatio);
+        var swipeDistance = Vector2.Distance(
+            screenPosition,
+            mTearSwipeStartScreenPosition);
+        var shouldOpenFromTap = swipeDistance < minimumSwipeTravel
+                                && mIsTrackingTearTap
+                                && mTearTargetScreenRect.Contains(screenPosition);
+        var shouldOpenFromSwipe = swipeDistance >= minimumSwipeTravel
+                                  && DoesScreenSegmentIntersectRect(
+                                      mTearSwipeStartScreenPosition,
+                                      screenPosition,
+                                      mTearTargetScreenRect);
         mIsTrackingTearSwipe = false;
         mIsTrackingTearTap = false;
         if (shouldOpenFromTap || shouldOpenFromSwipe)
         {
             CompleteTearSwipe();
         }
+    }
+
+    private static bool DoesScreenSegmentIntersectRect(
+        Vector2 start,
+        Vector2 end,
+        Rect targetRect)
+    {
+        var minimumT = 0f;
+        var maximumT = 1f;
+        var delta = end - start;
+        return ClipScreenSegmentAxis(
+                   start.x,
+                   delta.x,
+                   targetRect.xMin,
+                   targetRect.xMax,
+                   ref minimumT,
+                   ref maximumT)
+               && ClipScreenSegmentAxis(
+                   start.y,
+                   delta.y,
+                   targetRect.yMin,
+                   targetRect.yMax,
+                   ref minimumT,
+                   ref maximumT);
+    }
+
+    private static bool ClipScreenSegmentAxis(
+        float origin,
+        float direction,
+        float axisMinimum,
+        float axisMaximum,
+        ref float minimumT,
+        ref float maximumT)
+    {
+        if (Mathf.Abs(direction) <= Mathf.Epsilon)
+        {
+            return origin >= axisMinimum && origin <= axisMaximum;
+        }
+
+        var firstT = (axisMinimum - origin) / direction;
+        var secondT = (axisMaximum - origin) / direction;
+        if (firstT > secondT)
+        {
+            var swap = firstT;
+            firstT = secondT;
+            secondT = swap;
+        }
+
+        minimumT = Mathf.Max(minimumT, firstT);
+        maximumT = Mathf.Min(maximumT, secondT);
+        return minimumT <= maximumT;
     }
 
     private void CompleteTearSwipe()

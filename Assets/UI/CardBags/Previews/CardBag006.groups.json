@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "previewSha256": "454f304998faecfb554b9094e5b72a8c78ac4b01a60d6d19a1f2bde19b25dace",
+  "referenceSha256": "b2e4ff77e68a9d82312514a13ccef2434b51d402a0417acd95804589c0dba328",
+  "gapRadius": 8,
+  "edgeInset": 0,
+  "groups": [
+    { "number": 1, "x": 430, "y": 150 },
+    { "number": 2, "x": 150, "y": 700 },
+    { "number": 3, "x": 600, "y": 1030 },
+    { "number": 4, "x": 1100, "y": 180 },
+    { "number": 5, "x": 700, "y": 700 },
+    { "number": 6, "x": 400, "y": 430 }
+  ]
+}

@@ -761,6 +761,7 @@ public sealed class AdminRuntimeSettingsData
 {
     public bool ShowTestCompleteButton;
     public bool LimitVisibleCardPacksToDemo;
+    public bool IgnoreBuildCardPackLimit;
 }
 
 public static class AdminRuntimeSettingsUtility
@@ -784,9 +785,12 @@ public static class AdminRuntimeSettingsUtility
     public static int GetMaximumVisibleCardPackId(int buildMaximumCardPackId)
     {
         EnsureLoaded();
-        return sSettings.LimitVisibleCardPacksToDemo
-            ? Math.Min(DemoVisibleCardPackLimit, buildMaximumCardPackId)
-            : buildMaximumCardPackId;
+        if (sSettings.LimitVisibleCardPacksToDemo)
+        {
+            return Math.Min(DemoVisibleCardPackLimit, buildMaximumCardPackId);
+        }
+
+        return sSettings.IgnoreBuildCardPackLimit ? int.MaxValue : buildMaximumCardPackId;
     }
 
     public static bool SetTestCompleteButtonVisible(bool visible)
@@ -815,13 +819,16 @@ public static class AdminRuntimeSettingsUtility
         }
 
         var previousValue = sSettings.LimitVisibleCardPacksToDemo;
+        var previousIgnoreBuildLimit = sSettings.IgnoreBuildCardPackLimit;
         sSettings.LimitVisibleCardPacksToDemo = enabled;
+        sSettings.IgnoreBuildCardPackLimit = !enabled;
         if (Save())
         {
             return true;
         }
 
         sSettings.LimitVisibleCardPacksToDemo = previousValue;
+        sSettings.IgnoreBuildCardPackLimit = previousIgnoreBuildLimit;
         return false;
     }
 

@@ -104,3 +104,75 @@ public sealed class PackCoverShadowEffect : BaseMeshEffect
         }
     }
 }
+
+public sealed class SeriesPackageShadow
+{
+    private static readonly int ShadowColorId = Shader.PropertyToID("_ShadowColor");
+
+    private Image mFrontCover;
+    private Material mFrontOriginalMaterial;
+    private Material mFrontCoverOnlyMaterial;
+    private bool mIsDisposed;
+
+    public static SeriesPackageShadow Create(
+        Image frontCover,
+        Image backCover)
+    {
+        if (frontCover == null
+            || backCover == null
+            || frontCover.material == null
+            || backCover.material == null
+            || !frontCover.material.HasProperty(ShadowColorId)
+            || !backCover.material.HasProperty(ShadowColorId))
+        {
+            return null;
+        }
+
+        var controller = new SeriesPackageShadow
+        {
+            mFrontCover = frontCover,
+            mFrontOriginalMaterial = frontCover.material
+        };
+        controller.mFrontCoverOnlyMaterial = new Material(controller.mFrontOriginalMaterial)
+        {
+            name = "SeriesFrontCoverOnly (Runtime)",
+            hideFlags = HideFlags.DontSave
+        };
+        var shadowColor = controller.mFrontCoverOnlyMaterial.GetColor(ShadowColorId);
+        shadowColor.a = 0f;
+        controller.mFrontCoverOnlyMaterial.SetColor(ShadowColorId, shadowColor);
+        frontCover.material = controller.mFrontCoverOnlyMaterial;
+        return controller;
+    }
+
+    public void Dispose()
+    {
+        if (mIsDisposed)
+        {
+            return;
+        }
+
+        mIsDisposed = true;
+        RestoreOriginalMaterial(mFrontCover, mFrontCoverOnlyMaterial, mFrontOriginalMaterial);
+        DestroyRuntimeMaterial(mFrontCoverOnlyMaterial);
+    }
+
+    private static void RestoreOriginalMaterial(
+        Image image,
+        Material runtimeMaterial,
+        Material originalMaterial)
+    {
+        if (image != null && image.material == runtimeMaterial)
+        {
+            image.material = originalMaterial;
+        }
+    }
+
+    private static void DestroyRuntimeMaterial(Material material)
+    {
+        if (material != null)
+        {
+            Object.Destroy(material);
+        }
+    }
+}

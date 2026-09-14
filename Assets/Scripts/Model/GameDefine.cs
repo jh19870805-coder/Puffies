@@ -203,7 +203,7 @@ public static class GameDefine
 
     // Default runtime values
     public const int DefaultBagId = 1;
-    public const int DemoMaximumBagId = 22;
+    public const int DemoMaximumBagId = 18;
     public const int InvalidId = -1;
 
     public static int MaximumAvailableCardPackId
