@@ -267,6 +267,7 @@ public class MainScene : MonoBehaviour
     private GameObject mLanguagePanelRoot;
     private Button mSaveDeleteButton;
     private int mSelectedSaveSlotId = 1;
+    private bool mDeletedActiveSaveSlotRequiresReload;
     private Color mSaveSelectedTitleColor;
     private Color mSaveSelectedContentColor;
     private Color mSaveUnselectedTitleColor;
@@ -4819,8 +4820,10 @@ public class MainScene : MonoBehaviour
         {
             var slotId = mPendingDeleteSaveSlotId;
             mPendingDeleteSaveSlotId = 0;
+            var deletedActiveSlot = slotId == LocalSaveSlotUtility.ActiveSlotId;
             if (LocalSaveSlotUtility.DeleteSlot(slotId))
             {
+                mDeletedActiveSaveSlotRequiresReload |= deletedActiveSlot;
                 RefreshSavePanel();
             }
 
@@ -5596,6 +5599,11 @@ public class MainScene : MonoBehaviour
         }
 
         AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
+        ReloadAfterSaveSlotChange();
+    }
+
+    private void ReloadAfterSaveSlotChange()
+    {
         CardPackRewardFlyTransition.CancelPending();
         SetPanelVisible(mSavePanelRoot, false);
         SceneManager.LoadScene(GameDefine.SceneLoading);
@@ -5618,6 +5626,12 @@ public class MainScene : MonoBehaviour
     private void OnSaveCloseButtonClicked()
     {
         AudioManager.Instance.PlaySfx("SFX_ButtonClick.mp3");
+        if (mDeletedActiveSaveSlotRequiresReload)
+        {
+            ReloadAfterSaveSlotChange();
+            return;
+        }
+
         SetPanelVisible(mSavePanelRoot, false);
     }
 

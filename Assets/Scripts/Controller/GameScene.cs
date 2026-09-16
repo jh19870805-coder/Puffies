@@ -289,6 +289,14 @@ public class GameScene : MonoBehaviour
         public Vector2 Scale;
     }
 
+    private sealed class TutorialPieceCopyState
+    {
+        public SpriteRenderer SourceRenderer;
+        public Image CopyImage;
+        public RectTransform CanvasRect;
+        public Camera Camera;
+    }
+
     private sealed class LoosePieceCluster
     {
         public long CreatedOrder;
@@ -497,6 +505,8 @@ public class GameScene : MonoBehaviour
     private DraggablePieceState _tutorialPiece;
     private GameObject _tutorialCanvasRoot;
     private GameObject _tutorialFocusRoot;
+    private readonly List<TutorialPieceCopyState> _tutorialPieceCopies =
+        new List<TutorialPieceCopyState>();
     private Sprite _tutorialArrowSprite;
     private Sprite _tutorialTipBackgroundSprite;
     private int _appliedScreenWidth;
@@ -680,6 +690,11 @@ public class GameScene : MonoBehaviour
             OnPointerEnd);
         UpdateLooseClusterShadows();
         RefreshCursorForPointer(Input.mousePosition);
+    }
+
+    private void LateUpdate()
+    {
+        RefreshTutorialPieceCopies();
     }
 
     private void RefreshForWindowSizeChange()
@@ -9741,7 +9756,11 @@ public class GameScene : MonoBehaviour
                 return false;
             }
 
-            CreateTutorialPieceCopy(focusRect, _tutorialPiece, pieceCanvasRect);
+            CreateTutorialPieceCopy(
+                focusRect,
+                _tutorialPiece,
+                canvasRect,
+                camera);
             CreateTutorialArrow(focusRect, pieceCanvasRect, grooveCanvasCenter);
             CreatePieceHintOutline(_tutorialPiece, TutorialTargetOutlineColor);
             return true;
@@ -9752,27 +9771,31 @@ public class GameScene : MonoBehaviour
             var state = _drag.CurrentGroupDraggables[i];
             if (state == null
                 || state.IsPlaced
-                || state.PieceRenderer == null
-                || !TryGetRendererScreenRect(state.PieceRenderer, camera, out var pieceScreenRect)
-                || !TryScreenRectToCanvasRectUsingCanvasCamera(
-                    canvasRect,
-                    pieceScreenRect,
-                    out var pieceCanvasRect))
+                || state.PieceRenderer == null)
             {
                 continue;
             }
 
-            CreateTutorialPieceCopy(focusRect, state, pieceCanvasRect);
+            CreateTutorialPieceCopy(focusRect, state, canvasRect, camera);
         }
 
         return true;
     }
 
-    private static void CreateTutorialPieceCopy(
+    private bool CreateTutorialPieceCopy(
         RectTransform parent,
         DraggablePieceState state,
-        Rect pieceRect)
+        RectTransform canvasRect,
+        Camera camera)
     {
+        if (parent == null
+            || state?.PieceRenderer == null
+            || canvasRect == null
+            || camera == null)
+        {
+            return false;
+        }
+
         var pieceObject = new GameObject(
             TutorialPieceObjectName,
             typeof(RectTransform),
@@ -9783,13 +9806,104 @@ public class GameScene : MonoBehaviour
         pieceImage.rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
         pieceImage.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
         pieceImage.rectTransform.pivot = new Vector2(0.5f, 0.5f);
-        pieceImage.rectTransform.anchoredPosition = pieceRect.center;
-        pieceImage.rectTransform.sizeDelta = pieceRect.size;
-        pieceImage.rectTransform.localRotation = state.PieceRenderer.transform.rotation;
         pieceImage.sprite = state.PieceRenderer.sprite;
         pieceImage.color = state.PieceRenderer.color;
         pieceImage.preserveAspect = false;
         pieceImage.raycastTarget = false;
+
+        var copyState = new TutorialPieceCopyState
+        {
+            SourceRenderer = state.PieceRenderer,
+            CopyImage = pieceImage,
+            CanvasRect = canvasRect,
+            Camera = camera
+        };
+        if (!TryRefreshTutorialPieceCopy(copyState))
+        {
+            pieceObject.SetActive(false);
+            Destroy(pieceObject);
+            return false;
+        }
+
+        _tutorialPieceCopies.Add(copyState);
+        return true;
+    }
+
+    private void RefreshTutorialPieceCopies()
+    {
+        for (var i = _tutorialPieceCopies.Count - 1; i >= 0; i--)
+        {
+            var copyState = _tutorialPieceCopies[i];
+            if (!TryRefreshTutorialPieceCopy(copyState))
+            {
+                if (copyState?.CopyImage != null)
+                {
+                    copyState.CopyImage.gameObject.SetActive(false);
+                }
+
+                _tutorialPieceCopies.RemoveAt(i);
+            }
+        }
+    }
+
+    private static bool TryRefreshTutorialPieceCopy(TutorialPieceCopyState copyState)
+    {
+        var source = copyState?.SourceRenderer;
+        var image = copyState?.CopyImage;
+        var canvasRect = copyState?.CanvasRect;
+        var camera = copyState?.Camera;
+        if (source == null
+            || source.sprite == null
+            || image == null
+            || canvasRect == null
+            || camera == null)
+        {
+            return false;
+        }
+
+        var spriteBounds = source.sprite.bounds;
+        var sourceTransform = source.transform;
+        var worldCenter = sourceTransform.TransformPoint(spriteBounds.center);
+        var worldRight = sourceTransform.TransformPoint(
+            spriteBounds.center + Vector3.right * spriteBounds.extents.x);
+        var worldUp = sourceTransform.TransformPoint(
+            spriteBounds.center + Vector3.up * spriteBounds.extents.y);
+        var screenCenter = (Vector2)camera.WorldToScreenPoint(worldCenter);
+        var screenRight = (Vector2)camera.WorldToScreenPoint(worldRight);
+        var screenUp = (Vector2)camera.WorldToScreenPoint(worldUp);
+        if (!TryScreenPointToCanvasPositionUsingCanvasCamera(
+                canvasRect,
+                screenCenter,
+                out var canvasCenter)
+            || !TryScreenPointToCanvasPositionUsingCanvasCamera(
+                canvasRect,
+                screenRight,
+                out var canvasRight)
+            || !TryScreenPointToCanvasPositionUsingCanvasCamera(
+                canvasRect,
+                screenUp,
+                out var canvasUp))
+        {
+            return false;
+        }
+
+        var right = canvasRight - canvasCenter;
+        var up = canvasUp - canvasCenter;
+        if (right.sqrMagnitude <= 0.0001f || up.sqrMagnitude <= 0.0001f)
+        {
+            return false;
+        }
+
+        var imageRect = image.rectTransform;
+        imageRect.anchoredPosition = canvasCenter;
+        imageRect.sizeDelta = new Vector2(right.magnitude * 2f, up.magnitude * 2f);
+        imageRect.localRotation = Quaternion.Euler(
+            0f,
+            0f,
+            Mathf.Atan2(right.y, right.x) * Mathf.Rad2Deg);
+        image.sprite = source.sprite;
+        image.color = source.color;
+        return true;
     }
 
     private void CreateTutorialInstruction(RectTransform parent, TutorialStage stage)
@@ -10210,6 +10324,7 @@ public class GameScene : MonoBehaviour
 
     private void HideTutorialFocusPresentation()
     {
+        _tutorialPieceCopies.Clear();
         if (_tutorialFocusRoot != null)
         {
             _tutorialFocusRoot.SetActive(false);

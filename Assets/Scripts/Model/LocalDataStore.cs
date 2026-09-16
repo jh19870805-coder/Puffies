@@ -882,11 +882,7 @@ public static class AdminRuntimeSettingsUtility
     {
         return new AdminRuntimeSettingsData
         {
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-            ShowTestCompleteButton = true,
-#else
             ShowTestCompleteButton = false,
-#endif
             LimitVisibleCardPacksToDemo = false
         };
     }

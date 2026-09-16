@@ -1,5 +1,34 @@
 # 当前任务
 
+## 2026-09-16 新存档默认隐藏测试按钮
+
+- 状态：代码修改和静态检查完成，等待当前已打开的 Unity 编辑器完成编译及 Play Mode 验收。
+- 用户意图：开启全新存档时不能默认显示“一键完成”“自动拼图”等测试按钮。
+- 根因：空存档首次创建 `AdminSettings/Runtime` 时使用 `CreateDefaultSettings()`，旧逻辑在 `UNITY_EDITOR` 或 `DEVELOPMENT_BUILD` 下把 `ShowTestCompleteButton` 默认设为 `true`；两个测试按钮共用该开关，因此新槽首次进入关卡时全部出现。
+- 修改：移除构建类型分支，所有新存档统一以 `ShowTestCompleteButton=false` 初始化；需要测试时继续使用 Admin 指令 `10001001` 显式开启。已有存档中已经持久化的显隐设置保持不变。
+- 修改文件：`Assets/Scripts/Model/LocalDataStore.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`。保留工作区中既有的新手引导残影和删除当前存档后重载修改，未提交或推送。
+- 验证：`git diff --check` 通过。尝试启动 Unity 批处理编译时，检测到用户已有 Unity 实例打开当前工程，批处理按 Unity 的单实例保护中止；未关闭或干预用户编辑器，本轮不把该结果记为代码编译失败或编译成功。
+- 下一步：用空存档进入 GameScene，确认两个测试按钮均隐藏；输入 `10001001` 后再次进入关卡，确认两者同时显示。
+
+## 2026-09-16 删除当前存档后强制重载
+
+- 状态：代码修改及 Unity 编译验证完成，等待 Play Mode 交互验收。
+- 用户意图：在“我的保存”中删除当前正在使用的存档后，无论点击“继续”、右上角关闭还是“返回”，都必须经过 `LoadingScene` 重新加载数据，不能回到仍保留已删除进度运行时缓存的首页。
+- 实现：删除确认成功前记录被删槽位是否为 `LocalSaveSlotUtility.ActiveSlotId`；删除当前活动槽时设置待重载标记。“继续”保持原有激活所选槽位并进入 Loading 的流程；关闭和返回共用入口，在存在该标记时取消待处理的结算卡包飞入状态、关闭存档面板并进入 `LoadingScene`。删除非当前活动槽时，关闭和返回仍只关闭面板，不改变当前活动档位。
+- 修改文件：`Assets/Scripts/Controller/MainScene.cs`、`Documents/CURRENT_TASK.md`、`Documents/PROJECT_CONTEXT.md`。保留工作区中既有的新手引导第二步残影修复，不修改存档文件、场景或 Prefab，未提交或推送。
+- 验证：`git diff --check` 通过；Unity `2022.3.62f2c1` 批处理编译成功，日志显示 `Tundra build success` 且以返回码 0 正常退出；待 MainScene Play Mode 交互验收。
+- 下一步：分别验证删除当前活动槽后点击继续、返回、关闭均经过 Loading 并显示空档数据；再验证删除非当前槽后返回不会切档或重载。
+
+## 2026-09-16 新手引导第二步拼图残影修复
+
+- 状态：运行时代码修改和 Unity 编译验证完成，等待 CardBag001 Play Mode 视觉验收。
+- 用户意图：修复新手引导第二步同一拼图在画面中出现真实对象与偏移残影、看起来同时存在两个的问题。
+- 根因：第二步为两块待拼 Piece 创建高层 `TutorialPiece` 高亮副本时，只在创建瞬间读取 `SpriteRenderer.bounds` 的轴对齐外框，再把该外框作为 UI Image 尺寸并重新应用旋转；这不等价于源 Sprite 的真实本地矩形，并且副本创建后不会继续跟随真实 Piece。异形块、旋转或后续位置刷新时，高亮副本会与真实 Piece 分离形成残影。
+- 修改：高亮副本改为读取源 Sprite 本地边界的中心、横轴端点和纵轴端点，分别投影到教程 Canvas，精确计算 UI 副本的位置、宽高和角度；引导焦点显示期间在 `LateUpdate` 持续同步源 Sprite、颜色和 Transform，源对象失效时立即隐藏并移除副本记录。第一步箭头、第二步两块高亮、提示框、描边和交互流程保持不变。
+- 修改文件：`Assets/Scripts/Controller/GameScene.cs`、`Documents/CURRENT_TASK.md`。未修改场景、Prefab、卡包资源或玩家存档，未提交或推送。
+- 验证：`git diff --check` 通过；Unity `2022.3.62f2c1` 批处理打开工程并成功编译 `Assembly-CSharp.dll` 与 `Assembly-CSharp-Editor.dll`，日志显示 `Tundra build success`，进程正常以返回码 0 退出。普通 `dotnet build` 因本机缺少旧 `.NET Framework 4.7.1` targeting pack 不适用于本工程，本轮未修改 Unity 生成的 csproj。
+- 下一步：重新开始 CardBag001 进入新手引导第二步，确认两块高亮各自与托盘真实 Piece 完全重合、不再出现偏移残影；分别拿起、放错回弹和正确拼入一块，确认焦点层隐藏/重建后仍只有一份视觉，并顺带回归第一步箭头位置。
+
 ## 2026-09-13 CardBag003/006/009 新效果图分组核对
 
 - 状态：三包分组配置、干净定位参考图和全部 Meta 已完成，静态区域及 Piece 归属核对通过；等待 Unity 刷新后执行实际生成与描边烘焙。
