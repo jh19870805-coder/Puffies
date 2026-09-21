@@ -1,5 +1,16 @@
 # 当前任务
 
+## 2026-09-21 交换 CardBag003/006 与 CardBag004/008
+
+- 状态：资源、Prefab、描边、配置和美术源文件交换完成；Unity 全量 CardBag 引用验证与编译通过，等待 Play Mode 视觉验收。
+- 用户意图：完整交换 `CardBag003 <-> CardBag006`、`CardBag004 <-> CardBag008`，所有对应资源必须随卡包内容一起调整。
+- 修改：成对交换 `Assets/UI/CardBags/CardBagXXX`、`Assets/Resources/CardBagPrefabs/CardBagXXX.prefab`、`Assets/Resources/Generated/PuzzleOutlines/CardBagXXX`、`Assets/UI/CardBags/Previews/CardBagXXX.*`、`Assets/UI/PackImages/PackIconXXX.png`、忽略目录中的运行时图标副本、`Packaging_XXX.png`、`美术切图/游戏内包头/PackTitleXXX.png`，以及已有的 `美术切图/顺序优化/003.png` 与 `006.png`。Unity 资源及 `.meta` 成对移动，原主题 GUID 跟随内容；还原后的原 `PackIcon006.png.meta` 与 `PackIcon007.png.meta` 错误共用 GUID，交换后恢复该图标此前稳定的独立 GUID `9a9e8eabe9eb40948be387e5a451a418`，避免 Unity 在不同设备随机重新分配。四个 Prefab 根名称已改回目标编号。
+- 配置：`CardPacks.csv` 的 `Index`、`PackId` 和章节位置保持编号不变，主题相关的 `PackSize`、`StickerCount`、`BoardScale`、`Series`、`AutoUpdate` 随内容交换。新 003 为原 006：`2/29/0.78/空/1`；新 004 为原 008：`3/33/1.1/空/1`；新 006 为原 003：`3/32/1/18/0`；新 008 为原 004：`3/31/1.1/空/1`。原 `003 -> 018` 系列关系因此改为 `006 -> 018`。
+- 结果：新 003 为 29 张源 Piece、6 组；新 004 为 33 张源 Piece、6 组；新 006 为 31 张源 Piece、7 组；新 008 为 31 张源 Piece、5 组。003/006 的 `.groups.json` 与 `.reference.png` 随主题交换后，Preview 和 Reference SHA-256 均与记录匹配。四个 `StreamingAssets` 图标已与主 `PackIcon` 同步，但该目录按仓库规则被 Git 忽略。
+- 验证：Unity `2022.3.62f2c1` 批处理重新导入并编译成功，日志包含 `Tundra build success`，全量 `ValidateCardBagReferencesFromCommandLine` 正常退出；目标结果为 003 `Expected=31, Missing=0`、004 `Expected=35, Missing=0`、006 `Expected=33, Missing=0`、008 `Expected=33, Missing=0`。全工程 2447 个 `.meta` GUID 均存在且无重复，最终导入没有 GUID 冲突；日志位于忽略的 `Logs/CardBagSwap003006004008-final.log`。未修改运行时代码、场景或玩家存档，未提交或推送。
+- 存档边界：玩家进度按 PackId 保存，本次只交换编号下的内容，不迁移旧开发存档；四包验收应使用新存档或清除对应进度，避免旧 ID 进度映射到交换后的主题。
+- 下一步：在 Play Mode 用新存档检查四包的首页封面、包头、包装纹理、展开状态、棋盘、Piece、分组和描边；完成新 006 后确认 018 才进入常规可获取状态。
+
 ## 2026-09-16 新存档默认隐藏测试按钮
 
 - 状态：代码修改和静态检查完成，等待当前已打开的 Unity 编辑器完成编译及 Play Mode 验收。
